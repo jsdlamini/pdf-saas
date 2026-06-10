@@ -226,6 +226,129 @@ html[data-theme="dark"] .bg-slate-900 {
   color: var(--muted);
 }
 
+.tool-shell {
+  border-color: color-mix(in srgb, var(--border) 78%, white 22%);
+}
+
+.tool-shell > p.text-sm {
+  line-height: 1.65;
+  color: color-mix(in srgb, var(--foreground) 82%, var(--muted) 18%);
+}
+
+.tool-shell input[type="text"],
+.tool-shell input[type="password"],
+.tool-shell input[type="search"],
+.tool-shell input[type="email"],
+.tool-shell input[type="number"],
+.tool-shell select,
+.tool-shell textarea {
+  border-color: color-mix(in srgb, var(--border) 86%, white 14%) !important;
+  background: color-mix(in srgb, var(--surface-soft) 84%, white 16%) !important;
+  color: color-mix(in srgb, var(--foreground) 88%, black 12%) !important;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.82);
+}
+
+.tool-shell input[type="text"]:focus,
+.tool-shell input[type="password"]:focus,
+.tool-shell input[type="search"]:focus,
+.tool-shell input[type="email"]:focus,
+.tool-shell input[type="number"]:focus,
+.tool-shell select:focus,
+.tool-shell textarea:focus {
+  outline: none;
+  border-color: color-mix(in srgb, var(--accent) 52%, var(--border) 48%) !important;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.82),
+    0 0 0 3px color-mix(in srgb, var(--accent) 20%, transparent);
+}
+
+.tool-shell input[type="file"] {
+  border-color: color-mix(in srgb, var(--border) 84%, white 16%) !important;
+  background: color-mix(in srgb, var(--surface-soft) 86%, white 14%) !important;
+}
+
+.tool-shell label {
+  letter-spacing: 0.08em;
+}
+
+.tool-shell .field-help {
+  font-size: 0.78rem;
+  line-height: 1.45;
+}
+
+.tool-shell button {
+  border-radius: 0.65rem;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+  transition: background-color 170ms ease, border-color 170ms ease, color 170ms ease, box-shadow 170ms ease;
+}
+
+.tool-shell button:disabled {
+  opacity: 0.6;
+}
+
+.tool-shell .btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid transparent;
+}
+
+.tool-shell .btn-primary {
+  border-color: color-mix(in srgb, #0f172a 82%, white 18%);
+  background: linear-gradient(180deg, #1f2937 0%, #0f172a 100%);
+  color: #f8fafc;
+  box-shadow: 0 1px 0 rgba(255, 255, 255, 0.15) inset;
+}
+
+.tool-shell .btn-primary:hover {
+  background: linear-gradient(180deg, #334155 0%, #1e293b 100%);
+}
+
+.tool-shell .btn-secondary {
+  border-color: color-mix(in srgb, var(--border) 88%, white 12%);
+  background: color-mix(in srgb, var(--surface-soft) 82%, white 18%);
+  color: color-mix(in srgb, var(--foreground) 86%, black 14%);
+}
+
+.tool-shell .btn-secondary:hover {
+  border-color: color-mix(in srgb, var(--accent) 28%, var(--border) 72%);
+  background: color-mix(in srgb, var(--accent) 8%, var(--surface-soft) 92%);
+}
+
+.tool-shell .btn-destructive {
+  border-color: rgba(225, 29, 72, 0.42);
+  background: rgba(244, 63, 94, 0.1);
+  color: #be123c;
+}
+
+.tool-shell .btn-destructive:hover {
+  background: rgba(244, 63, 94, 0.18);
+  border-color: rgba(225, 29, 72, 0.56);
+}
+
+html[data-theme="dark"] .tool-shell input[type="text"],
+html[data-theme="dark"] .tool-shell input[type="password"],
+html[data-theme="dark"] .tool-shell input[type="search"],
+html[data-theme="dark"] .tool-shell input[type="email"],
+html[data-theme="dark"] .tool-shell input[type="number"],
+html[data-theme="dark"] .tool-shell select,
+html[data-theme="dark"] .tool-shell textarea {
+  background: color-mix(in srgb, var(--surface-soft) 90%, black 10%) !important;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.08);
+}
+
+html[data-theme="dark"] .tool-shell .btn-primary {
+  border-color: rgba(148, 163, 184, 0.45);
+  background: linear-gradient(180deg, #1e293b 0%, #0f172a 100%);
+}
+
+html[data-theme="dark"] .tool-shell .btn-secondary {
+  border-color: rgba(148, 163, 184, 0.38);
+  background: color-mix(in srgb, var(--surface-soft) 92%, black 8%);
+  color: #e2e8f0;
+}
+
 .nav-link {
   border-radius: 9999px;
   padding: 0.4rem 0.65rem;

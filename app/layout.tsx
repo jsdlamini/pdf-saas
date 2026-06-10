@@ -65,10 +65,6 @@ export default function RootLayout({
               </span>
             </Link>
 
-            <div className="hidden items-center gap-2 text-xs font-semibold uppercase tracking-[0.14em] text-slate-500 md:flex">
-              <span>Hover a category</span>
-            </div>
-
             <div className="flex items-center gap-2">
               <ThemeToggle />
               <Link
@@ -128,7 +124,7 @@ export default function RootLayout({
           </div>
         </header>
 
-        <section className="mx-auto mt-3 w-full max-w-7xl px-6 md:px-10">
+        <section className="mx-auto mt-3 hidden w-full max-w-7xl px-6 md:block md:px-10">
           <div className="glass-3d rounded-2xl border border-slate-200/90 p-3 mb-2">
             <div className="mb-2 flex items-center justify-between gap-2">
               <h2 className="font-display text-sm font-semibold tracking-tight text-slate-900">Quick Actions</h2>

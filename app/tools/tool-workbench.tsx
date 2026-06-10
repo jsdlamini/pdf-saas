@@ -2069,12 +2069,9 @@ export default function ToolWorkbench({ tool }: WorkbenchProps) {
   }
 
   return (
-    <section className="card-3d space-y-4 rounded-3xl p-6">
-      <div className="flex items-center justify-between gap-4">
+    <section className="tool-shell glass-3d space-y-4 rounded-3xl p-6">
+      <div className="flex items-center gap-4">
         <h2 className="font-display text-2xl font-semibold text-slate-950">{tool.name}</h2>
-        <span className="rounded-full bg-cyan-100 px-3 py-1 text-xs font-semibold uppercase tracking-wide text-cyan-800">
-          Live in browser
-        </span>
       </div>
 
       <p className="text-sm text-slate-700">{tool.description}</p>
@@ -2096,7 +2093,7 @@ export default function ToolWorkbench({ tool }: WorkbenchProps) {
               type="button"
               onClick={startCamera}
               disabled={cameraBusy}
-              className="rounded-md border border-slate-300 px-3 py-1 text-xs font-semibold text-slate-700 hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-70"
+              className="btn btn-secondary rounded-md px-3 py-1 text-xs disabled:cursor-not-allowed disabled:opacity-70"
             >
               {cameraActive ? "Restart camera" : cameraBusy ? "Starting camera..." : "Use device camera"}
             </button>
@@ -2104,7 +2101,7 @@ export default function ToolWorkbench({ tool }: WorkbenchProps) {
               type="button"
               onClick={captureFromCamera}
               disabled={!cameraActive}
-              className="rounded-md border border-cyan-300 bg-cyan-50 px-3 py-1 text-xs font-semibold text-cyan-800 hover:bg-cyan-100 disabled:cursor-not-allowed disabled:opacity-60"
+              className="btn btn-primary rounded-md px-3 py-1 text-xs disabled:cursor-not-allowed disabled:opacity-60"
             >
               Capture photo
             </button>
@@ -2112,7 +2109,7 @@ export default function ToolWorkbench({ tool }: WorkbenchProps) {
               type="button"
               onClick={stopCamera}
               disabled={!cameraActive}
-              className="rounded-md border border-slate-300 px-3 py-1 text-xs font-semibold text-slate-700 hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-60"
+              className="btn btn-secondary rounded-md px-3 py-1 text-xs disabled:cursor-not-allowed disabled:opacity-60"
             >
               Stop camera
             </button>
@@ -2213,7 +2210,7 @@ export default function ToolWorkbench({ tool }: WorkbenchProps) {
                     <button
                       type="button"
                       onClick={() => removeMergePage(page.id)}
-                      className="mt-2 w-full rounded-md border border-rose-200 px-2 py-1 text-xs font-semibold text-rose-700 hover:bg-rose-50"
+                      className="btn btn-destructive mt-2 w-full rounded-md px-2 py-1 text-xs"
                     >
                       Remove page
                     </button>
@@ -2542,10 +2539,10 @@ export default function ToolWorkbench({ tool }: WorkbenchProps) {
                 <button
                   type="button"
                   onClick={() => setSignatureMode("text")}
-                  className={`rounded-full border px-3 py-1 text-xs font-semibold uppercase tracking-wide ${
+                  className={`btn rounded-full px-3 py-1 text-xs font-semibold uppercase tracking-wide ${
                     signatureMode === "text"
-                      ? "border-cyan-500 bg-cyan-100 text-cyan-800"
-                      : "border-slate-300 bg-slate-50 text-slate-700"
+                      ? "btn-primary"
+                      : "btn-secondary"
                   }`}
                 >
                   Type signature
@@ -2553,10 +2550,10 @@ export default function ToolWorkbench({ tool }: WorkbenchProps) {
                 <button
                   type="button"
                   onClick={() => setSignatureMode("draw")}
-                  className={`rounded-full border px-3 py-1 text-xs font-semibold uppercase tracking-wide ${
+                  className={`btn rounded-full px-3 py-1 text-xs font-semibold uppercase tracking-wide ${
                     signatureMode === "draw"
-                      ? "border-cyan-500 bg-cyan-100 text-cyan-800"
-                      : "border-slate-300 bg-slate-50 text-slate-700"
+                      ? "btn-primary"
+                      : "btn-secondary"
                   }`}
                 >
                   Draw signature
@@ -2581,7 +2578,7 @@ export default function ToolWorkbench({ tool }: WorkbenchProps) {
                   <button
                     type="button"
                     onClick={clearSignatureCanvas}
-                    className="rounded-md border border-slate-300 px-3 py-1 text-xs font-semibold text-slate-700 hover:bg-slate-100"
+                    className="btn btn-secondary rounded-md px-3 py-1 text-xs"
                   >
                     Clear signature
                   </button>
@@ -2683,10 +2680,10 @@ export default function ToolWorkbench({ tool }: WorkbenchProps) {
                       <button
                         type="button"
                         onClick={() => setEditMode("draw")}
-                        className={`rounded-md border px-3 py-1.5 text-xs font-semibold ${
+                        className={`btn rounded-md px-3 py-1.5 text-xs font-semibold ${
                           editMode === "draw"
-                            ? "border-cyan-500 bg-cyan-100 text-cyan-800"
-                            : "border-slate-300 bg-white text-slate-700"
+                            ? "btn-primary"
+                            : "btn-secondary"
                         }`}
                       >
                         Draw Ink
@@ -2694,10 +2691,10 @@ export default function ToolWorkbench({ tool }: WorkbenchProps) {
                       <button
                         type="button"
                         onClick={() => setEditMode("text")}
-                        className={`rounded-md border px-3 py-1.5 text-xs font-semibold ${
+                        className={`btn rounded-md px-3 py-1.5 text-xs font-semibold ${
                           editMode === "text"
-                            ? "border-cyan-500 bg-cyan-100 text-cyan-800"
-                            : "border-slate-300 bg-white text-slate-700"
+                            ? "btn-primary"
+                            : "btn-secondary"
                         }`}
                       >
                         Text Box
@@ -2744,7 +2741,7 @@ export default function ToolWorkbench({ tool }: WorkbenchProps) {
                       <button
                         type="button"
                         onClick={() => setEditMode("text")}
-                        className="rounded-md border border-slate-300 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700"
+                        className="btn btn-secondary rounded-md px-3 py-1.5 text-xs"
                       >
                         Insert text box
                       </button>
@@ -2769,7 +2766,7 @@ export default function ToolWorkbench({ tool }: WorkbenchProps) {
                           void loadEditPreview(files[0], Math.max(1, editPageNumber - 1));
                         }}
                         disabled={!files[0] || editPageNumber <= 1 || editCanvasLoading}
-                        className="rounded-md border border-slate-300 bg-white px-3 py-1 text-xs font-semibold text-slate-700 disabled:cursor-not-allowed disabled:opacity-60"
+                        className="btn btn-secondary rounded-md px-3 py-1 text-xs disabled:cursor-not-allowed disabled:opacity-60"
                       >
                         Prev
                       </button>
@@ -2795,7 +2792,7 @@ export default function ToolWorkbench({ tool }: WorkbenchProps) {
                           void loadEditPreview(files[0], Math.min(editPageCount, editPageNumber + 1));
                         }}
                         disabled={!files[0] || editPageNumber >= editPageCount || editCanvasLoading}
-                        className="rounded-md border border-slate-300 bg-white px-3 py-1 text-xs font-semibold text-slate-700 disabled:cursor-not-allowed disabled:opacity-60"
+                        className="btn btn-secondary rounded-md px-3 py-1 text-xs disabled:cursor-not-allowed disabled:opacity-60"
                       >
                         Next
                       </button>
@@ -2808,21 +2805,21 @@ export default function ToolWorkbench({ tool }: WorkbenchProps) {
                       <button
                         type="button"
                         onClick={undoEditAction}
-                        className="rounded-md border border-slate-300 bg-white px-3 py-1 text-xs font-semibold text-slate-700 hover:bg-slate-100"
+                        className="btn btn-secondary rounded-md px-3 py-1 text-xs"
                       >
                         Undo
                       </button>
                       <button
                         type="button"
                         onClick={clearEditCanvasActions}
-                        className="rounded-md border border-amber-300 bg-amber-50 px-3 py-1 text-xs font-semibold text-amber-800 hover:bg-amber-100"
+                        className="btn btn-destructive rounded-md px-3 py-1 text-xs"
                       >
                         Clear page
                       </button>
                       <button
                         type="button"
                         onClick={clearEditDocumentActions}
-                        className="rounded-md border border-rose-300 bg-rose-50 px-3 py-1 text-xs font-semibold text-rose-800 hover:bg-rose-100"
+                        className="btn btn-destructive rounded-md px-3 py-1 text-xs"
                       >
                         Clear document
                       </button>
@@ -2918,7 +2915,7 @@ export default function ToolWorkbench({ tool }: WorkbenchProps) {
         type="button"
         onClick={runTool}
         disabled={busy}
-        className="rounded-full bg-slate-900 px-5 py-2 text-sm font-semibold text-white transition hover:bg-slate-700 disabled:cursor-not-allowed disabled:bg-slate-500"
+        className="btn btn-primary rounded-full px-5 py-2 text-sm disabled:cursor-not-allowed disabled:bg-slate-500"
       >
         {busy ? "Processing..." : `Run ${tool.name}`}
       </button>
@@ -2943,7 +2940,7 @@ export default function ToolWorkbench({ tool }: WorkbenchProps) {
               type="button"
               onClick={handleDownloadOutput}
               disabled={downloadingOutput}
-              className={`${downloadingOutput ? "" : "animate-pulse"} rounded-full bg-cyan-400 px-4 py-2 text-xs font-semibold uppercase tracking-wide text-slate-950 shadow-[0_0_0_0_rgba(8,145,178,0.45)] transition hover:bg-cyan-300 disabled:cursor-not-allowed disabled:bg-cyan-200`}
+              className={`${downloadingOutput ? "" : "animate-pulse"} btn btn-primary rounded-full px-4 py-2 text-xs uppercase tracking-wide shadow-[0_0_0_0_rgba(8,145,178,0.45)] disabled:cursor-not-allowed disabled:bg-cyan-200`}
             >
               {downloadingOutput ? "Downloading..." : "Download output"}
             </button>

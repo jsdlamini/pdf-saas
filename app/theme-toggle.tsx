@@ -23,7 +23,18 @@ function applyTheme(theme: ThemeMode) {
 }
 
 export default function ThemeToggle() {
-  const [theme, setTheme] = useState<ThemeMode>(() => resolveInitialTheme());
+  const [theme, setTheme] = useState<ThemeMode>("light");
+
+  useEffect(() => {
+    const resolved = resolveInitialTheme();
+    applyTheme(resolved);
+
+    const frame = window.requestAnimationFrame(() => {
+      setTheme(resolved);
+    });
+
+    return () => window.cancelAnimationFrame(frame);
+  }, []);
 
   useEffect(() => {
     applyTheme(theme);
