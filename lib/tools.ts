@@ -70,7 +70,7 @@ export const TOOL_ITEMS: ToolItem[] = [
     name: "OCR PDF",
     description: "Detect text from scanned pages to make files searchable.",
     category: "Optimize",
-    runtime: "client",
+    runtime: "server",
   },
   {
     slug: "pdf-to-word",

@@ -16,7 +16,8 @@ The dashboard includes all major expected PDF workflow functions in one searchab
 ## Runtime behavior
 
 - Client-executed now: Merge PDF, Split PDF, Rotate PDF, JPG to PDF, Watermark PDF, Page Numbers
-- Server pipeline placeholders: conversion, OCR, encryption, signature, and deep editing operations that require backend services
+- Server-executed now: OCR PDF, which runs OCRmyPDF and returns a searchable PDF with an embedded text layer
+- Other server pipeline placeholders: conversion, encryption, signature, and deep editing operations that require backend services
 
 ## Run locally
 
@@ -33,6 +34,13 @@ Open http://localhost:3000.
 npm run lint
 npm run build
 ```
+
+## OCR requirements
+
+- The OCR route depends on OCRmyPDF plus `tesseract-ocr`, `ghostscript`, and `qpdf` on the server.
+- The provided Dockerfile installs those packages for the production container.
+- The UI currently exposes English, German, French, Spanish, Italian, Portuguese, Dutch, and Polish OCR profiles and passes the selected language to OCRmyPDF with `-l`.
+- OCR uploads larger than 50 MB are rejected in the UI before processing and by the API route as a server-side backstop.
 
 ## Notes
 

@@ -1,0 +1,1 @@
+{"error":"OCR backend is unavailable. Install OCRmyPDF and its runtime dependencies on the server."}

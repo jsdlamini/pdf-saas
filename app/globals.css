@@ -248,6 +248,46 @@ html[data-theme="dark"] .bg-slate-900 {
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.82);
 }
 
+.tool-shell input[type="file"] {
+  color: color-mix(in srgb, var(--foreground) 76%, var(--muted) 24%);
+}
+
+.tool-shell input[type="file"]::file-selector-button {
+  margin-right: 0.75rem;
+  border: 1px solid color-mix(in srgb, var(--border) 88%, black 12%);
+  border-radius: 0.6rem;
+  background: color-mix(in srgb, var(--surface) 30%, var(--border) 70%);
+  color: color-mix(in srgb, var(--foreground) 90%, black 10%);
+  font-size: 0.86rem;
+  font-weight: 700;
+  line-height: 1.2;
+  padding: 0.42rem 0.78rem;
+  cursor: pointer;
+}
+
+.tool-shell input[type="file"]::-webkit-file-upload-button {
+  margin-right: 0.75rem;
+  border: 1px solid color-mix(in srgb, var(--border) 88%, black 12%);
+  border-radius: 0.6rem;
+  background: color-mix(in srgb, var(--surface) 30%, var(--border) 70%);
+  color: color-mix(in srgb, var(--foreground) 90%, black 10%);
+  font-size: 0.86rem;
+  font-weight: 700;
+  line-height: 1.2;
+  padding: 0.42rem 0.78rem;
+  cursor: pointer;
+}
+
+.tool-shell input[type="file"]:hover::file-selector-button,
+.tool-shell input[type="file"]:focus::file-selector-button {
+  background: color-mix(in srgb, var(--surface) 18%, var(--border) 82%);
+}
+
+.tool-shell input[type="file"]:hover::-webkit-file-upload-button,
+.tool-shell input[type="file"]:focus::-webkit-file-upload-button {
+  background: color-mix(in srgb, var(--surface) 18%, var(--border) 82%);
+}
+
 .tool-shell input[type="text"]:focus,
 .tool-shell input[type="password"]:focus,
 .tool-shell input[type="search"]:focus,

@@ -33,8 +33,10 @@ export default function Home() {
 
           <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
             {TOOL_ITEMS.map((tool) => (
-              <article
+              <Link
                 key={tool.slug}
+                href={`/tools/${tool.slug}`}
+                aria-label={`Open ${tool.name}`}
                 className="group relative overflow-hidden rounded-2xl border border-slate-200 bg-white/90 p-5 shadow-[0_14px_32px_-24px_rgba(15,23,42,0.45)] transition hover:-translate-y-0.5 hover:shadow-[0_18px_36px_-24px_rgba(15,23,42,0.5)]"
               >
                 <div className="absolute inset-x-0 top-0 h-[2px] bg-gradient-to-r from-slate-300 via-cyan-300 to-slate-300 opacity-70" />
@@ -49,13 +51,13 @@ export default function Home() {
                 </h3>
                 <p className="mt-2 text-sm leading-relaxed text-slate-700">{tool.description}</p>
 
-                <Link
-                  href={`/tools/${tool.slug}`}
-                  className="mt-5 inline-flex items-center rounded-lg border border-slate-300 bg-slate-50 px-3 py-1.5 text-sm font-semibold text-slate-800 transition hover:border-slate-400 hover:bg-slate-100"
+                <span
+                  className="mt-5 inline-flex items-center rounded-lg border border-slate-300 bg-slate-50 px-3 py-1.5 text-sm font-semibold text-slate-800 transition group-hover:border-slate-400 group-hover:bg-slate-100"
+                  aria-hidden
                 >
                   Open tool
-                </Link>
-              </article>
+                </span>
+              </Link>
             ))}
           </div>
         </section>

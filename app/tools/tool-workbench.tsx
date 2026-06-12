@@ -8,6 +8,7 @@ import { PDFDocument, StandardFonts, degrees, rgb } from "pdf-lib";
 import { useEffect, useMemo, useRef, useState } from "react";
 import PptxGenJS from "pptxgenjs";
 import * as XLSX from "xlsx";
+import { MAX_OCR_UPLOAD_BYTES, OCR_LANGUAGE_OPTIONS } from "@/lib/ocr";
 import type { ToolItem } from "@/lib/tools";
 
 type WorkbenchProps = {
@@ -56,6 +57,56 @@ type CompressionOptions = {
   stripMetadata: boolean;
 };
 
+type OcrQualityOptions = {
+  deskew: boolean;
+  cleanFinal: boolean;
+  rotatePages: boolean;
+  redoOcr: boolean;
+};
+
+const OCR_PRESETS = ["fast", "balanced", "accuracy"] as const;
+type OcrPreset = (typeof OCR_PRESETS)[number];
+
+const OCR_PRESET_LABELS: Record<OcrPreset, string> = {
+  fast: "Fast",
+  balanced: "Balanced",
+  accuracy: "Accuracy",
+};
+
+const OCR_PRESET_OPTIONS: Record<OcrPreset, OcrQualityOptions> = {
+  fast: {
+    deskew: false,
+    cleanFinal: false,
+    rotatePages: false,
+    redoOcr: false,
+  },
+  balanced: {
+    deskew: true,
+    cleanFinal: false,
+    rotatePages: true,
+    redoOcr: false,
+  },
+  accuracy: {
+    deskew: true,
+    cleanFinal: true,
+    rotatePages: true,
+    redoOcr: true,
+  },
+};
+
+function sameOcrOptions(left: OcrQualityOptions, right: OcrQualityOptions) {
+  return (
+    left.deskew === right.deskew &&
+    left.cleanFinal === right.cleanFinal &&
+    left.rotatePages === right.rotatePages &&
+    left.redoOcr === right.redoOcr
+  );
+}
+
+function getPresetFromOcrOptions(options: OcrQualityOptions) {
+  return OCR_PRESETS.find((preset) => sameOcrOptions(options, OCR_PRESET_OPTIONS[preset])) || null;
+}
+
 const FILE_TONE_CLASSES = [
   "border-cyan-200 bg-cyan-50/70",
   "border-amber-200 bg-amber-50/70",
@@ -97,6 +148,25 @@ function asPdfBlob(bytes: Uint8Array) {
 
 function normalizeFileName(fileName: string) {
   return fileName.replace(/\.[^/.]+$/, "");
+}
+
+function getFileNameFromDisposition(header: string | null) {
+  if (!header) return null;
+
+  const encodedMatch = header.match(/filename\*=UTF-8''([^;]+)/i);
+  if (encodedMatch?.[1]) {
+    try {
+      return decodeURIComponent(encodedMatch[1]);
+    } catch {
+      return encodedMatch[1];
+    }
+  }
+
+  const quotedMatch = header.match(/filename="([^"]+)"/i);
+  if (quotedMatch?.[1]) return quotedMatch[1];
+
+  const plainMatch = header.match(/filename=([^;]+)/i);
+  return plainMatch?.[1]?.trim() ?? null;
 }
 
 function formatBytes(bytes: number) {
@@ -549,6 +619,12 @@ export default function ToolWorkbench({ tool }: WorkbenchProps) {
   const [cameraPermissionStatus, setCameraPermissionStatus] = useState<
     "unknown" | "prompt" | "granted" | "denied"
   >("unknown");
+  const [ocrLanguage, setOcrLanguage] = useState("eng");
+  const [ocrPreset, setOcrPreset] = useState<OcrPreset>("balanced");
+  const [ocrQualityOptions, setOcrQualityOptions] = useState<OcrQualityOptions>({
+    ...OCR_PRESET_OPTIONS.balanced,
+  });
+  const [ocrUploadWarning, setOcrUploadWarning] = useState("");
   const [lastRunSummary, setLastRunSummary] = useState<{
     message: string;
     inputCount: number;
@@ -571,6 +647,7 @@ export default function ToolWorkbench({ tool }: WorkbenchProps) {
   const isMergeTool = tool.slug === "merge-pdf";
   const isScanTool = tool.slug === "scan-to-pdf";
   const isEditTool = tool.slug === "edit-pdf";
+  const isOcrTool = tool.slug === "ocr-pdf";
   const supportsOrderDrag =
     tool.slug === "organize-pdf" || tool.slug === "split-pdf" || tool.slug === "extract-pages";
 
@@ -608,6 +685,22 @@ export default function ToolWorkbench({ tool }: WorkbenchProps) {
 
   function getFileToneClass(fileIndex: number) {
     return FILE_TONE_CLASSES[fileIndex % FILE_TONE_CLASSES.length];
+  }
+
+  function updateOcrQualityOption(option: keyof OcrQualityOptions, value: boolean) {
+    setOcrQualityOptions((current) => {
+      const next = { ...current, [option]: value };
+      const matchedPreset = getPresetFromOcrOptions(next);
+      if (matchedPreset) {
+        setOcrPreset(matchedPreset);
+      }
+      return next;
+    });
+  }
+
+  function applyOcrPreset(preset: OcrPreset) {
+    setOcrPreset(preset);
+    setOcrQualityOptions({ ...OCR_PRESET_OPTIONS[preset] });
   }
 
   function stageOutput(
@@ -1332,6 +1425,7 @@ export default function ToolWorkbench({ tool }: WorkbenchProps) {
     if (!selected) return;
     setError("");
     setStatus("");
+    setOcrUploadWarning("");
     setOutputPreview((current) => {
       if (current) URL.revokeObjectURL(current.url);
       return null;
@@ -1341,6 +1435,18 @@ export default function ToolWorkbench({ tool }: WorkbenchProps) {
     setMergeDraggedId(null);
     setMergeDragOverId(null);
     const nextFiles = Array.from(selected);
+
+    if (isOcrTool) {
+      const oversizedFile = nextFiles.find((file) => file.size > MAX_OCR_UPLOAD_BYTES);
+      if (oversizedFile) {
+        const message = `OCR uploads are limited to ${formatBytes(MAX_OCR_UPLOAD_BYTES)}. ${oversizedFile.name} is ${formatBytes(oversizedFile.size)}.`;
+        setFiles([]);
+        setOcrUploadWarning(message);
+        setError(message);
+        return;
+      }
+    }
+
     setFiles((current) => (isScanTool ? [...current, ...nextFiles] : nextFiles));
 
     setPageThumbnails([]);
@@ -1443,6 +1549,7 @@ export default function ToolWorkbench({ tool }: WorkbenchProps) {
   async function runTool() {
     setError("");
     setStatus("");
+    setOcrUploadWarning("");
     let completionMessage = "";
 
     const complete = (message: string) => {
@@ -1724,13 +1831,36 @@ export default function ToolWorkbench({ tool }: WorkbenchProps) {
 
       if (tool.slug === "ocr-pdf") {
         if (!firstFile) throw new Error("Missing PDF file.");
-        const pages = await loadPdfPagesText(new Uint8Array(await readAsArrayBuffer(firstFile)));
+        const formData = new FormData();
+        formData.append("file", firstFile, firstFile.name);
+        formData.append("language", ocrLanguage);
+        formData.append("deskew", String(ocrQualityOptions.deskew));
+        formData.append("cleanFinal", String(ocrQualityOptions.cleanFinal));
+        formData.append("rotatePages", String(ocrQualityOptions.rotatePages));
+        formData.append("redoOcr", String(ocrQualityOptions.redoOcr));
+
+        const response = await fetch("/api/ocr-pdf", {
+          method: "POST",
+          body: formData,
+        });
+
+        if (!response.ok) {
+          const isJson = response.headers.get("content-type")?.includes("application/json");
+          const payload = isJson ? await response.json().catch(() => null) : null;
+          const fallback = await response.text().catch(() => "");
+          throw new Error(payload?.error || fallback || "OCR processing failed.");
+        }
+
+        const pdfBlob = await response.blob();
+        const outputName =
+          getFileNameFromDisposition(response.headers.get("content-disposition")) ||
+          `${normalizeFileName(firstFile.name)}-searchable.pdf`;
         stageOutput(
-          new Blob([pages.map((text, i) => `Page ${i + 1}\n${text}`).join("\n\n")], { type: "text/plain" }),
-          `${normalizeFileName(firstFile.name)}-ocr.txt`,
-          "Review extracted text before downloading."
+          pdfBlob.type ? pdfBlob : new Blob([await pdfBlob.arrayBuffer()], { type: "application/pdf" }),
+          outputName,
+          "Preview searchable PDF before downloading."
         );
-        complete("OCR text ready for preview.");
+        complete("Searchable PDF ready for preview.");
         return;
       }
 
@@ -2083,8 +2213,106 @@ export default function ToolWorkbench({ tool }: WorkbenchProps) {
         accept={inputAccept}
         multiple={acceptsMultiple}
         onChange={(event) => onSelect(event.target.files)}
-        className="w-full rounded-xl border border-slate-300 bg-slate-50 px-3 py-2 text-sm text-slate-800"
+        className="w-full rounded-xl border border-slate-300 bg-slate-50 px-3 py-2 text-sm text-slate-700 file:mr-3 file:rounded-md file:border-0 file:bg-slate-200 file:px-3 file:py-1.5 file:text-sm file:font-semibold file:text-slate-800 hover:file:bg-slate-300"
       />
+
+      {isOcrTool ? (
+        <div className="space-y-3">
+          <div className="rounded-2xl border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">
+            <p className="font-medium">Server OCR produces a searchable PDF with an embedded text layer.</p>
+            <p className="mt-1 text-amber-800">Maximum upload size: {formatBytes(MAX_OCR_UPLOAD_BYTES)}.</p>
+          </div>
+
+          <div className="space-y-1">
+            <label htmlFor="ocr-language" className="text-xs font-semibold uppercase tracking-wide text-slate-600">
+              OCR language
+            </label>
+            <select
+              id="ocr-language"
+              value={ocrLanguage}
+              onChange={(event) => setOcrLanguage(event.target.value)}
+              className="w-full rounded-xl border border-slate-300 bg-slate-50 px-3 py-2 text-sm text-slate-800"
+            >
+              {OCR_LANGUAGE_OPTIONS.map((option) => (
+                <option key={option.value} value={option.value}>
+                  {option.label}
+                </option>
+              ))}
+            </select>
+            <p className="field-help">
+              {OCR_LANGUAGE_OPTIONS.find((option) => option.value === ocrLanguage)?.hint} Matching Tesseract language data must be installed on the server.
+            </p>
+          </div>
+
+          <div className="space-y-2 rounded-2xl border border-slate-200 bg-slate-50 p-3">
+            <div className="space-y-1">
+              <label htmlFor="ocr-preset" className="text-xs font-semibold uppercase tracking-wide text-slate-600">
+                OCR preset
+              </label>
+              <select
+                id="ocr-preset"
+                value={ocrPreset}
+                onChange={(event) => applyOcrPreset(event.target.value as OcrPreset)}
+                className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm text-slate-800"
+              >
+                {OCR_PRESETS.map((preset) => (
+                  <option key={preset} value={preset}>
+                    {OCR_PRESET_LABELS[preset]}
+                  </option>
+                ))}
+              </select>
+              <p className="field-help">
+                Choose a starting profile, then fine-tune with advanced toggles below.
+              </p>
+            </div>
+
+            <p className="text-xs font-semibold uppercase tracking-wide text-slate-600">OCR quality controls</p>
+            <div className="grid gap-2 sm:grid-cols-2">
+              <label className="flex items-center gap-2 text-sm text-slate-700">
+                <input
+                  type="checkbox"
+                  checked={ocrQualityOptions.deskew}
+                  onChange={(event) => updateOcrQualityOption("deskew", event.target.checked)}
+                />
+                Deskew pages
+              </label>
+              <label className="flex items-center gap-2 text-sm text-slate-700">
+                <input
+                  type="checkbox"
+                  checked={ocrQualityOptions.rotatePages}
+                  onChange={(event) => updateOcrQualityOption("rotatePages", event.target.checked)}
+                />
+                Auto-rotate pages
+              </label>
+              <label className="flex items-center gap-2 text-sm text-slate-700">
+                <input
+                  type="checkbox"
+                  checked={ocrQualityOptions.cleanFinal}
+                  onChange={(event) => updateOcrQualityOption("cleanFinal", event.target.checked)}
+                />
+                Cleanup noisy scans
+              </label>
+              <label className="flex items-center gap-2 text-sm text-slate-700">
+                <input
+                  type="checkbox"
+                  checked={ocrQualityOptions.redoOcr}
+                  onChange={(event) => updateOcrQualityOption("redoOcr", event.target.checked)}
+                />
+                Force redo OCR
+              </label>
+            </div>
+            <p className="field-help">
+              Enable redo OCR when documents already contain inaccurate text layers. This can increase processing time.
+            </p>
+          </div>
+
+          {ocrUploadWarning ? (
+            <div className="rounded-2xl border border-rose-200 bg-rose-50 p-3 text-sm font-medium text-rose-700">
+              {ocrUploadWarning}
+            </div>
+          ) : null}
+        </div>
+      ) : null}
 
       {isScanTool ? (
         <div className="space-y-2 rounded-2xl border border-slate-200 bg-slate-50 p-3">
