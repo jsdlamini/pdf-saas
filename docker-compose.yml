@@ -20,6 +20,10 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
+      args:
+        # Passed into the build so next build can inline it into the client bundle.
+        # Compose substitutes this from the project .env file.
+        NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY: ${NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY:-}
     container_name: pdf-saas
     user: "0:0"
     depends_on:
