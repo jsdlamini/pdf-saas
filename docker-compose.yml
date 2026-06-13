@@ -6,8 +6,8 @@ services:
       POSTGRES_DB: ${POSTGRES_DB:-papertrail}
       POSTGRES_USER: ${POSTGRES_USER:-papertrail}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-papertrail}
-    ports:
-      - "5432:5432"
+    expose:
+      - "5432"
     volumes:
       - postgres-data:/var/lib/postgresql/data
     healthcheck:
@@ -32,7 +32,7 @@ services:
       NODE_ENV: production
       PORT: 3000
       HOSTNAME: 0.0.0.0
-      DATABASE_URL: ${DATABASE_URL:-postgresql://papertrail:papertrail@host.docker.internal:5432/papertrail}
+      DATABASE_URL: ${DATABASE_URL:-postgresql://papertrail:papertrail@db:5432/papertrail}
       NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY: ${NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY:-}
       CLERK_SECRET_KEY: ${CLERK_SECRET_KEY:-}
       # DeepSeek configuration is read from host environment or project .env.
