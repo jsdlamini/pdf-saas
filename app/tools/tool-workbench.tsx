@@ -927,6 +927,7 @@ export default function ToolWorkbench({ tool }: WorkbenchProps) {
         .filter((entry, index, all) => index === all.findIndex((item) => item.slug === entry.slug))
         .slice(0, 6);
       localStorage.setItem("papertrail-recent-workflows", JSON.stringify(next));
+      window.dispatchEvent(new Event("papertrail-recent-workflows-change"));
     } catch {
       // Ignore localStorage failures in restricted contexts.
     }

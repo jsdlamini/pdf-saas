@@ -2,7 +2,8 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useMemo, useRef, useState } from "react";
+import { useMemo, useRef, useState, useSyncExternalStore } from "react";
+import ProjectSessionCta from "./project-session-cta";
 import { rankToolsByIntent } from "@/lib/tool-intent-search";
 import { TOOL_ITEMS } from "@/lib/tools";
 import { WORKFLOW_RECIPES } from "@/lib/workflow-recipes";
@@ -14,6 +15,40 @@ type RecentWorkflow = {
   at: string;
 };
 
+const EMPTY_RECENT_WORKFLOWS: RecentWorkflow[] = [];
+const RECENT_WORKFLOWS_CHANGED_EVENT = "papertrail-recent-workflows-change";
+let recentWorkflowsCache = EMPTY_RECENT_WORKFLOWS;
+let recentWorkflowsCacheLoaded = false;
+
+function readRecentWorkflowsSnapshot() {
+  if (typeof window === "undefined") return EMPTY_RECENT_WORKFLOWS;
+  if (!recentWorkflowsCacheLoaded) {
+    try {
+      const value = JSON.parse(localStorage.getItem("papertrail-recent-workflows") || "[]") as RecentWorkflow[];
+      recentWorkflowsCache = value.slice(0, 4);
+    } catch {
+      recentWorkflowsCache = EMPTY_RECENT_WORKFLOWS;
+    }
+    recentWorkflowsCacheLoaded = true;
+  }
+
+  return recentWorkflowsCache;
+}
+
+function subscribeToRecentWorkflowsChange(onStoreChange: () => void) {
+  const handleChange = () => {
+    recentWorkflowsCacheLoaded = false;
+    onStoreChange();
+  };
+
+  window.addEventListener("storage", handleChange);
+  window.addEventListener(RECENT_WORKFLOWS_CHANGED_EVENT, handleChange);
+  return () => {
+    window.removeEventListener("storage", handleChange);
+    window.removeEventListener(RECENT_WORKFLOWS_CHANGED_EVENT, handleChange);
+  };
+}
+
 function getWorkflowCreatedAt() {
   return Date.now();
 }
@@ -23,15 +58,7 @@ export default function Home() {
   const workflowFileInputRef = useRef<HTMLInputElement | null>(null);
   const pendingWorkflowRecipeRef = useRef<(typeof WORKFLOW_RECIPES)[number] | null>(null);
   const [intentQuery, setIntentQuery] = useState("");
-  const [recent] = useState<RecentWorkflow[]>(() => {
-    if (typeof window === "undefined") return [];
-    try {
-      const value = JSON.parse(localStorage.getItem("papertrail-recent-workflows") || "[]") as RecentWorkflow[];
-      return value.slice(0, 4);
-    } catch {
-      return [];
-    }
-  });
+  const recent = useSyncExternalStore(subscribeToRecentWorkflowsChange, readRecentWorkflowsSnapshot, () => EMPTY_RECENT_WORKFLOWS);
 
   const intentMatches = useMemo(() => {
     return rankToolsByIntent(TOOL_ITEMS, intentQuery)
@@ -208,6 +235,8 @@ export default function Home() {
               Convert PDF to LaTeX
             </Link>
           </div>
+
+          <ProjectSessionCta compact />
         </section>
 
         <section className="space-y-3">

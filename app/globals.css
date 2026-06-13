@@ -459,6 +459,8 @@ html[data-theme="dark"] .tool-shell .btn-secondary {
 
 .latex-editor-input::selection {
   color: transparent;
+  background: rgba(14, 116, 144, 0.28);
+  -webkit-text-fill-color: transparent;
 }
 
 .latex-token-command {
@@ -506,6 +508,12 @@ html[data-theme="dark"] .latex-editor-input {
   color: transparent !important;
   -webkit-text-fill-color: transparent !important;
   caret-color: #ecfeff;
+}
+
+html[data-theme="dark"] .latex-editor-input::selection {
+  color: transparent;
+  background: rgba(34, 211, 238, 0.32);
+  -webkit-text-fill-color: transparent;
 }
 
 html[data-theme="dark"] .latex-highlight-layer {

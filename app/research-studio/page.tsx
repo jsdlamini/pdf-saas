@@ -1,8 +1,9 @@
 "use client";
 
+import { SignInButton, SignUpButton, useAuth } from "@clerk/nextjs";
 import JSZip from "jszip";
 import Link from "next/link";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useEffectEvent, useMemo, useRef, useState } from "react";
 import Swal from "sweetalert2";
 
 type ProjectEntry = {
@@ -33,6 +34,7 @@ type InitialResearchStudioState = {
   projectEntries: ProjectEntry[];
   selectedPath: string;
   lastCompileAt: string;
+  workspaceScreen: "projects" | "editor";
 };
 
 type AiFixSuggestion = {
@@ -58,9 +60,7 @@ function isValidAiPatchSnippet(raw: string) {
   return /\\[a-zA-Z]+|\\begin\{|\\end\{|\$\$|\$[^$]/.test(snippet) || snippet.length > 24;
 }
 
-const SAVED_PROJECTS_INDEX_KEY = "papertrail-research-projects";
-const ACTIVE_PROJECT_KEY = "papertrail-research-active-project";
-const PROJECT_DATA_PREFIX = "papertrail-research-project:";
+const GUEST_PROJECT_LIMIT = 5;
 
 const DEFAULT_LATEX = String.raw`\documentclass[11pt]{article}
 \usepackage[margin=1in]{geometry}
@@ -597,82 +597,15 @@ function renderTreeContextIcon(action: TreeContextAction) {
   );
 }
 
-function safeReadJson<T>(raw: string | null, fallback: T): T {
-  if (!raw) return fallback;
-  try {
-    return JSON.parse(raw) as T;
-  } catch {
-    return fallback;
-  }
-}
-
-function getProjectStorageKey(projectId: string) {
-  return `${PROJECT_DATA_PREFIX}${projectId}`;
-}
-
-function loadSavedProjectIndex(): SavedProjectMeta[] {
-  if (typeof window === "undefined") return [];
-  const parsed = safeReadJson<SavedProjectMeta[]>(window.localStorage.getItem(SAVED_PROJECTS_INDEX_KEY), []);
-  if (!Array.isArray(parsed)) return [];
-
-  return parsed.filter(
-    (item) => Boolean(item) && typeof item.id === "string" && typeof item.name === "string"
-  );
-}
-
-function loadSavedProjectData(projectId: string): SavedProjectData | null {
-  if (typeof window === "undefined") return null;
-  const parsed = safeReadJson<SavedProjectData | null>(
-    window.localStorage.getItem(getProjectStorageKey(projectId)),
-    null
-  );
-  if (!parsed || typeof parsed !== "object") return null;
-  if (parsed.id !== projectId) return null;
-  if (!Array.isArray(parsed.entries) || !parsed.entries.length) return null;
-  return parsed;
-}
-
 function loadInitialResearchStudioState(): InitialResearchStudioState {
-  const fallback: InitialResearchStudioState = {
+  return {
     savedProjects: [],
     activeProjectId: "starter-project",
     projectName: "PaperTrail Research Draft",
     projectEntries: STARTER_PROJECT,
     selectedPath: "main.tex",
     lastCompileAt: "Not compiled yet",
-  };
-
-  if (typeof window === "undefined") {
-    return fallback;
-  }
-
-  const savedProjects = loadSavedProjectIndex();
-  if (!savedProjects.length) {
-    return fallback;
-  }
-
-  const rememberedActiveId = window.localStorage.getItem(ACTIVE_PROJECT_KEY);
-  const activeId =
-    rememberedActiveId && savedProjects.some((project) => project.id === rememberedActiveId)
-      ? rememberedActiveId
-      : savedProjects[0].id;
-
-  const activeProject = loadSavedProjectData(activeId);
-  if (!activeProject) {
-    return {
-      ...fallback,
-      savedProjects,
-      activeProjectId: activeId,
-    };
-  }
-
-  return {
-    savedProjects,
-    activeProjectId: activeId,
-    projectName: activeProject.name,
-    projectEntries: activeProject.entries,
-    selectedPath: activeProject.selectedPath,
-    lastCompileAt: activeProject.lastCompileAt || "Not compiled yet",
+    workspaceScreen: "projects",
   };
 }
 
@@ -685,9 +618,12 @@ function makeProjectId() {
 
 export default function ResearchStudioPage() {
   const initialState = useMemo(() => loadInitialResearchStudioState(), []);
+  const { isLoaded: authLoaded, userId } = useAuth();
+  const hasHydratedServerProjectsRef = useRef(false);
 
-  const [workspaceScreen, setWorkspaceScreen] = useState<"projects" | "editor">("projects");
+  const [workspaceScreen, setWorkspaceScreen] = useState<"projects" | "editor">(initialState.workspaceScreen);
   const [savedProjects, setSavedProjects] = useState<SavedProjectMeta[]>(initialState.savedProjects);
+  const [savedProjectSnapshots, setSavedProjectSnapshots] = useState<SavedProjectData[]>([]);
   const [activeProjectId, setActiveProjectId] = useState(initialState.activeProjectId);
   const [projectName, setProjectName] = useState(initialState.projectName);
   const [projectEntries, setProjectEntries] = useState<ProjectEntry[]>(initialState.projectEntries);
@@ -733,6 +669,8 @@ export default function ResearchStudioPage() {
   const editorRef = useRef<HTMLTextAreaElement | null>(null);
   const findInputRef = useRef<HTMLInputElement | null>(null);
   const treeContextMenuRef = useRef<HTMLDivElement | null>(null);
+
+  const usesAccountStorage = authLoaded && Boolean(userId);
 
   const editableFiles = useMemo(
     () => projectEntries.filter((entry) => entry.kind === "file"),
@@ -1142,20 +1080,130 @@ export default function ResearchStudioPage() {
     };
   }, [compiledPdfUrl]);
 
-  useEffect(() => {
-    if (typeof window === "undefined") return;
-    window.localStorage.setItem(SAVED_PROJECTS_INDEX_KEY, JSON.stringify(savedProjects));
-  }, [savedProjects]);
-
-  useEffect(() => {
-    if (typeof window === "undefined") return;
-    window.localStorage.setItem(ACTIVE_PROJECT_KEY, activeProjectId);
-  }, [activeProjectId]);
-
   function persistProjectSnapshot(snapshot: SavedProjectData) {
-    if (typeof window === "undefined") return;
-    window.localStorage.setItem(getProjectStorageKey(snapshot.id), JSON.stringify(snapshot));
+    setSavedProjectSnapshots((current) => [snapshot, ...current.filter((item) => item.id !== snapshot.id)].slice(0, 20));
+    setSavedProjects((current) => {
+      const meta: SavedProjectMeta = {
+        id: snapshot.id,
+        name: snapshot.name,
+        updatedAt: snapshot.updatedAt,
+      };
+      return [meta, ...current.filter((item) => item.id !== snapshot.id)].slice(0, 20);
+    });
   }
+
+  async function fetchProjectsFromServer() {
+    const response = await fetch("/api/research-projects", { cache: "no-store" });
+    if (!response.ok) {
+      const payload = (await response.json().catch(() => null)) as { error?: string } | null;
+      throw new Error(payload?.error || "Could not load projects from your account.");
+    }
+
+    const payload = (await response.json()) as { projects?: SavedProjectData[] };
+    return Array.isArray(payload.projects) ? payload.projects : [];
+  }
+
+  async function upsertProjectSnapshotToServer(snapshot: SavedProjectData) {
+    const response = await fetch("/api/research-projects", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(snapshot),
+    });
+
+    if (!response.ok) {
+      const payload = (await response.json().catch(() => null)) as { error?: string } | null;
+      throw new Error(payload?.error || "Could not save the project to your account.");
+    }
+  }
+
+  async function deleteProjectSnapshotFromServer(projectId: string) {
+    const response = await fetch(`/api/research-projects/${encodeURIComponent(projectId)}`, {
+      method: "DELETE",
+    });
+
+    if (!response.ok) {
+      const payload = (await response.json().catch(() => null)) as { error?: string } | null;
+      throw new Error(payload?.error || "Could not delete the project from your account.");
+    }
+  }
+
+  function queueServerProjectSync(snapshot: SavedProjectData) {
+    if (!userId) return;
+    void upsertProjectSnapshotToServer(snapshot).catch((error) => {
+      const message = error instanceof Error ? error.message : "Could not sync this project.";
+      appendPreviewError(`Account sync failed: ${message}`);
+      setCompileNotice("Saved locally, but account sync failed.");
+    });
+  }
+
+  function queueServerProjectDeletion(projectId: string) {
+    if (!userId) return;
+    void deleteProjectSnapshotFromServer(projectId).catch((error) => {
+      const message = error instanceof Error ? error.message : "Could not delete this project from your account.";
+      appendPreviewError(`Account delete failed: ${message}`);
+    });
+  }
+
+  const applySyncedProjects = useEffectEvent((projects: SavedProjectData[], notice: string) => {
+    if (!projects.length) return;
+    const nextActive = projects.find((project) => project.id === activeProjectId) ?? projects[0];
+
+    if (compiledPdfUrl) URL.revokeObjectURL(compiledPdfUrl);
+
+    closeIntellisense();
+    setSavedProjectSnapshots(projects.slice(0, 20));
+    setSavedProjects(
+      projects.map((project) => ({ id: project.id, name: project.name, updatedAt: project.updatedAt })).slice(0, 20)
+    );
+    setActiveProjectId(nextActive.id);
+    setProjectName(nextActive.name);
+    setProjectEntries(nextActive.entries);
+    setSelectedPath(nextActive.selectedPath || "main.tex");
+    setAddFileError("");
+    setCompileBusy(false);
+    setCompiledPdfBlob(null);
+    setCompiledPdfUrl("");
+    setCompiledPdfFileName("compiled-main.pdf");
+    setCompileMainLog("");
+    setCompileMainLogFileName("main.log");
+    setAiFixBusy(false);
+    setAiFixError("");
+    setAiFixSummary("");
+    setAiFixSuggestions([]);
+    setLastCompileAt(nextActive.lastCompileAt || "Not compiled yet");
+    setCompileNotice(notice);
+  });
+
+  useEffect(() => {
+    if (!authLoaded || !userId || hasHydratedServerProjectsRef.current) return;
+    hasHydratedServerProjectsRef.current = true;
+
+    let cancelled = false;
+
+    async function hydrateFromServer() {
+      try {
+        const projects = await fetchProjectsFromServer();
+
+        if (cancelled) return;
+
+        if (!projects.length) {
+          setCompileNotice("Create a project to start syncing this workspace to your account.");
+          return;
+        }
+
+        applySyncedProjects(projects, "Projects synced from your account.");
+      } catch (error) {
+        const message = error instanceof Error ? error.message : "Could not sync your account projects.";
+        appendPreviewError(`Account sync failed: ${message}`);
+      }
+    }
+
+    void hydrateFromServer();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [authLoaded, userId]);
 
   function buildCurrentProjectSnapshot(overrides?: Partial<SavedProjectData>): SavedProjectData {
     const now = new Date().toISOString();
@@ -1173,19 +1221,13 @@ export default function ResearchStudioPage() {
     try {
       const snapshot = buildCurrentProjectSnapshot();
       persistProjectSnapshot(snapshot);
+      queueServerProjectSync(snapshot);
 
-      setSavedProjects((current) => {
-        const nextMeta: SavedProjectMeta = {
-          id: snapshot.id,
-          name: snapshot.name,
-          updatedAt: snapshot.updatedAt,
-        };
-
-        const withoutCurrent = current.filter((item) => item.id !== snapshot.id);
-        return [nextMeta, ...withoutCurrent].slice(0, 20);
-      });
-
-      setCompileNotice("Project saved. You can reopen it from Saved Projects.");
+      setCompileNotice(
+        usesAccountStorage
+          ? "Project saved to your account-backed workspace."
+          : "Project saved. You can reopen it from Saved Projects."
+      );
     } catch (saveError) {
       const message = saveError instanceof Error ? saveError.message : "Project save failed.";
       setCompileNotice(message);
@@ -1194,7 +1236,7 @@ export default function ResearchStudioPage() {
   }
 
   function loadSavedProject(projectId: string) {
-    const saved = loadSavedProjectData(projectId);
+    const saved = savedProjectSnapshots.find((project) => project.id === projectId) || null;
     if (!saved) {
       setCompileNotice("Could not load this project. It may be corrupted or removed.");
       return;
@@ -1233,23 +1275,22 @@ export default function ResearchStudioPage() {
     );
     if (!confirmed) return;
 
-    if (typeof window !== "undefined") {
-      window.localStorage.removeItem(getProjectStorageKey(projectId));
-    }
+    queueServerProjectDeletion(projectId);
+
+    const nextSnapshots = savedProjectSnapshots.filter((project) => project.id !== projectId);
+    setSavedProjectSnapshots(nextSnapshots);
 
     setSavedProjects((current) => {
       const nextProjects = current.filter((item) => item.id !== projectId);
 
       if (projectId === activeProjectId) {
-        if (nextProjects.length) {
-          const fallback = loadSavedProjectData(nextProjects[0].id);
-          if (fallback) {
-            setActiveProjectId(fallback.id);
-            setProjectName(fallback.name);
-            setProjectEntries(fallback.entries);
-            setSelectedPath(fallback.selectedPath || "main.tex");
-            setLastCompileAt(fallback.lastCompileAt || "Not compiled yet");
-          }
+        if (nextSnapshots.length) {
+          const fallback = nextSnapshots[0];
+          setActiveProjectId(fallback.id);
+          setProjectName(fallback.name);
+          setProjectEntries(fallback.entries);
+          setSelectedPath(fallback.selectedPath || "main.tex");
+          setLastCompileAt(fallback.lastCompileAt || "Not compiled yet");
         } else {
           setActiveProjectId("starter-project");
           setProjectName("PaperTrail Research Draft");
@@ -1280,13 +1321,15 @@ export default function ResearchStudioPage() {
       current.map((item) => (item.id === projectId ? { ...item, name: nextName, updatedAt } : item))
     );
 
-    const snapshot = loadSavedProjectData(projectId);
+    const snapshot = savedProjectSnapshots.find((project) => project.id === projectId) || null;
     if (snapshot) {
-      persistProjectSnapshot({
+      const nextSnapshot = {
         ...snapshot,
         name: nextName,
         updatedAt,
-      });
+      };
+      persistProjectSnapshot(nextSnapshot);
+      queueServerProjectSync(nextSnapshot);
     }
 
     if (projectId === activeProjectId) {
@@ -1351,6 +1394,19 @@ export default function ResearchStudioPage() {
   }
 
   async function createNewProject() {
+    if (!userId && savedProjects.length >= GUEST_PROJECT_LIMIT) {
+      setCompileNotice("Guest limit reached: sign in to create more than 5 projects.");
+      await Swal.fire({
+        title: "Project limit reached",
+        text: "Guest users can save up to 5 projects. Sign in or create an account to continue creating projects.",
+        icon: "info",
+        confirmButtonText: "OK",
+        confirmButtonColor: "#0f766e",
+        background: "#ffffff",
+      });
+      return;
+    }
+
     const name = await promptModal("New project", "Project name", "", "Create");
     if (!name) return;
 
@@ -1367,6 +1423,7 @@ export default function ResearchStudioPage() {
     };
 
     persistProjectSnapshot(snapshot);
+    queueServerProjectSync(snapshot);
     setSavedProjects((current) => [
       { id: nextProjectId, name, updatedAt: createdAt },
       ...current.filter((item) => item.id !== nextProjectId),
@@ -1510,11 +1567,14 @@ export default function ResearchStudioPage() {
     });
 
     try {
-      setCompileBusy(true);
-      setCompileNotice("Compiling project on server...");
+      setCompileMainLog("");
+      setCompileMainLogFileName("main.log");
+      setPreviewErrorLogs([]);
       setAiFixError("");
       setAiFixSummary("");
       setAiFixSuggestions([]);
+      setCompileBusy(true);
+      setCompileNotice("Compiling project on server...");
       const response = await fetch("/api/latex-compile", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -1560,6 +1620,7 @@ export default function ResearchStudioPage() {
 
       const snapshot = buildCurrentProjectSnapshot({ lastCompileAt: compiledAt });
       persistProjectSnapshot(snapshot);
+      queueServerProjectSync(snapshot);
       setSavedProjects((current) => {
         const meta: SavedProjectMeta = {
           id: snapshot.id,
@@ -1642,14 +1703,17 @@ export default function ResearchStudioPage() {
 
     const source = activeEntry.content;
     const textarea = editorRef.current;
-    const insertionPoint = textarea ? textarea.selectionStart : source.length;
+    const hasSelection = Boolean(textarea && textarea.selectionStart !== textarea.selectionEnd);
+    const selectionStart = textarea ? textarea.selectionStart : source.length;
+    const selectionEnd = textarea ? textarea.selectionEnd : source.length;
+    const replaceStart = hasSelection ? selectionStart : source.lastIndexOf("\n", Math.max(0, selectionStart - 1)) + 1;
+    const lineEndIndex = source.indexOf("\n", hasSelection ? selectionEnd : selectionStart);
+    const replaceEnd = hasSelection ? selectionEnd : lineEndIndex === -1 ? source.length : lineEndIndex;
+    const needsTrailingNewline = !hasSelection && replaceEnd < source.length && !snippet.endsWith("\n");
+    const replacementText = needsTrailingNewline ? `${snippet}\n` : snippet;
 
-    const needsPrefixNewline = insertionPoint > 0 && source[insertionPoint - 1] !== "\n";
-    const needsSuffixNewline = insertionPoint < source.length && source[insertionPoint] !== "\n";
-    const insertedText = `${needsPrefixNewline ? "\n" : ""}${snippet}${needsSuffixNewline ? "\n" : ""}`;
-
-    const nextText = `${source.slice(0, insertionPoint)}${insertedText}${source.slice(insertionPoint)}`;
-    const cursor = insertionPoint + insertedText.length;
+    const nextText = `${source.slice(0, replaceStart)}${replacementText}${source.slice(replaceEnd)}`;
+    const cursor = replaceStart + replacementText.length;
 
     setAiFixError("");
     setCompileNotice("Applied AI suggestion to the active file.");
@@ -2012,6 +2076,42 @@ export default function ResearchStudioPage() {
               <p className="mt-1 max-w-3xl text-sm text-slate-700 md:text-base">
                 Create, reopen, rename, and delete projects here. Open one to enter the file editor.
               </p>
+              <div className="mt-3 flex flex-wrap items-center gap-2 rounded-2xl border border-cyan-200 bg-cyan-50/80 px-3 py-2">
+                {usesAccountStorage ? (
+                  <>
+                    <span className="rounded-full border border-cyan-300 bg-white px-2 py-1 text-[10px] font-semibold uppercase tracking-[0.12em] text-cyan-900">
+                      Account sync active
+                    </span>
+                    <p className="text-xs text-cyan-900">
+                      Projects now persist to your signed-in workspace on the server.
+                    </p>
+                  </>
+                ) : authLoaded ? (
+                  <>
+                    <p className="text-xs text-cyan-900">
+                      Sign in or create an account to keep projects synced beyond this browser.
+                    </p>
+                    <SignUpButton mode="modal">
+                      <button
+                        type="button"
+                        className="rounded-full bg-slate-900 px-3 py-1.5 text-[11px] font-semibold text-white transition hover:bg-slate-700"
+                      >
+                        Create account
+                      </button>
+                    </SignUpButton>
+                    <SignInButton mode="modal">
+                      <button
+                        type="button"
+                        className="rounded-full border border-cyan-300 bg-white px-3 py-1.5 text-[11px] font-semibold text-cyan-900 transition hover:bg-cyan-100"
+                      >
+                        Sign in
+                      </button>
+                    </SignInButton>
+                  </>
+                ) : (
+                  <p className="text-xs text-cyan-900">Checking account sync status...</p>
+                )}
+              </div>
               </div>
           </div>
         </header>
@@ -2151,6 +2251,11 @@ export default function ResearchStudioPage() {
             </p>
             <p className="mt-2 text-xs font-semibold uppercase tracking-[0.12em] text-cyan-900">
               Project: {projectName}
+            </p>
+            <p className="mt-2 text-xs text-slate-600">
+              {usesAccountStorage
+                ? "Signed in: projects are synced to your account-backed workspace."
+                : "Guest mode: projects stay in this browser until you sign in."}
             </p>
           </div>
           </div>
