@@ -20,6 +20,7 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
+    container_name: pdf-saas
     user: "0:0"
     depends_on:
       db:
@@ -39,6 +40,17 @@ services:
       DEEPSEEK_API_KEY: ${DEEPSEEK_API_KEY:-}
       DEEPSEEK_MODEL: ${DEEPSEEK_MODEL:-deepseek-chat}
       DEEPSEEK_API_URL: ${DEEPSEEK_API_URL:-https://api.deepseek.com/chat/completions}
+    networks:
+      - default
+      - webnet
+
+networks:
+  # Shared external network (created outside this project). nginx-proxy lives
+  # here and reverse-proxies pdf.idealsoftwaresolutions.com to the "pdf-saas"
+  # container by name, so the web service MUST join it.
+  webnet:
+    external: true
+    name: docker_webnet
 
 volumes:
   postgres-data:
