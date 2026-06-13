@@ -94,6 +94,13 @@ export const TOOL_ITEMS: ToolItem[] = [
     runtime: "client",
   },
   {
+    slug: "pdf-to-latex",
+    name: "PDF to LaTeX",
+    description: "Extract text from PDF and generate a LaTeX source file.",
+    category: "Convert",
+    runtime: "client",
+  },
+  {
     slug: "word-to-pdf",
     name: "Word to PDF",
     description: "Convert DOC and DOCX into PDF format.",

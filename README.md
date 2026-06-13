@@ -42,6 +42,58 @@ npm run build
 - The UI currently exposes English, German, French, Spanish, Italian, Portuguese, Dutch, and Polish OCR profiles and passes the selected language to OCRmyPDF with `-l`.
 - OCR uploads larger than 50 MB are rejected in the UI before processing and by the API route as a server-side backstop.
 
+## LaTeX compile requirements
+
+- Research Studio server compile (`/api/latex-compile`) now tries `texliveonfly` first, then falls back to `tectonic` and `latexmk`.
+- The compile route attempts `tlmgr` auto-install for missing `.sty` dependencies; on Debian/Ubuntu it detects TeX Live year mismatch and retries with the matching historic TeX Live repository (for example `.../texlive/2023/tlnet-final`).
+- If `tlmgr` still fails, it tries an `apt-get` install using known package mappings (for example `siunitx.sty` -> `texlive-science`) and retries compile.
+- `apt-get` auto-install is attempted only when the server process runs as root (common in containers). If the process is non-root, `apt-get` fallback is skipped and the response includes the exact reason plus a manual install hint.
+- The provided Dockerfile installs `texlive-extra-utils` (for `texliveonfly`), `latexmk`, `texlive-latex-base`, `texlive-latex-recommended`, and `texlive-fonts-recommended`.
+- For local (non-Docker) development on Debian/Ubuntu, install:
+
+```bash
+sudo apt-get update
+sudo apt-get install -y texlive-extra-utils latexmk texlive-latex-base texlive-latex-recommended texlive-fonts-recommended
+```
+
+- If you are running via Docker, rebuild and restart after dependency changes:
+
+```bash
+docker compose build --no-cache
+docker compose up -d
+```
+
+## DeepSeek AI compile suggestions
+
+- Research Studio can request AI-assisted compile-log fixes from `/api/latex-fix-suggestions` and render suggestions in the preview pane.
+- Configure server environment variables before using this feature:
+
+```bash
+DEEPSEEK_API_KEY=your_api_key
+# Optional overrides
+DEEPSEEK_MODEL=deepseek-chat
+DEEPSEEK_API_URL=https://api.deepseek.com/chat/completions
+```
+
+- The API sends the current compile log plus editable project files to DeepSeek and expects structured JSON fix suggestions.
+
+### Docker Compose env wiring
+
+- `docker-compose.yml` forwards DeepSeek vars into the `web` service using `${...}` substitution.
+- Create a root `.env` file (gitignored) before `docker compose up`.
+- A template is provided at `env.compose.example`:
+
+```bash
+cp env.compose.example .env
+docker compose up -d --build
+```
+
+- You can also override at runtime without editing files:
+
+```bash
+DEEPSEEK_API_KEY=your_key docker compose up -d --build
+```
+
 ## Notes
 
 - The tool hub is fully accessible from the home dashboard via search, category filters, and direct links.

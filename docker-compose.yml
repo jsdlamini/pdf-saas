@@ -3,9 +3,14 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
+    user: "0:0"
     ports:
       - "3000:3000"
     environment:
       NODE_ENV: production
       PORT: 3000
       HOSTNAME: 0.0.0.0
+      # DeepSeek configuration is read from host environment or project .env.
+      DEEPSEEK_API_KEY: ${DEEPSEEK_API_KEY:-}
+      DEEPSEEK_MODEL: ${DEEPSEEK_MODEL:-deepseek-chat}
+      DEEPSEEK_API_URL: ${DEEPSEEK_API_URL:-https://api.deepseek.com/chat/completions}

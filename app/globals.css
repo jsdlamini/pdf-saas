@@ -316,6 +316,47 @@ html[data-theme="dark"] .bg-slate-900 {
   line-height: 1.45;
 }
 
+/* ── Pipeline step tracker animations ───────────────────────────── */
+
+@keyframes pipeline-step-pulse {
+  0%, 100% { box-shadow: 0 0 0 0 color-mix(in srgb, var(--accent) 55%, transparent); }
+  50%       { box-shadow: 0 0 0 7px color-mix(in srgb, var(--accent) 0%, transparent); }
+}
+
+@keyframes pipeline-line-fill {
+  from { transform: scaleX(0); }
+  to   { transform: scaleX(1); }
+}
+
+@keyframes pipeline-step-arrive {
+  from { opacity: 0; transform: scale(0.72) translateY(4px); }
+  to   { opacity: 1; transform: scale(1) translateY(0); }
+}
+
+@keyframes pipeline-banner-slide {
+  from { opacity: 0; transform: translateY(-6px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+.pipeline-step-active-ring {
+  animation: pipeline-step-pulse 1.7s ease-in-out infinite;
+}
+
+.pipeline-step-arrive {
+  animation: pipeline-step-arrive 0.35s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+.pipeline-line-fill {
+  transform-origin: left center;
+  animation: pipeline-line-fill 0.55s ease-out both;
+}
+
+.pipeline-banner {
+  animation: pipeline-banner-slide 0.3s ease-out both;
+}
+
+/* ───────────────────────────────────────────────────────────────── */
+
 .tool-shell button {
   border-radius: 0.65rem;
   font-weight: 600;
@@ -387,6 +428,125 @@ html[data-theme="dark"] .tool-shell .btn-secondary {
   border-color: rgba(148, 163, 184, 0.38);
   background: color-mix(in srgb, var(--surface-soft) 92%, black 8%);
   color: #e2e8f0;
+}
+
+.latex-editor-field {
+  background: #ffffff;
+  color: #0f172a;
+}
+
+.latex-editor-shell {
+  background: #ffffff;
+}
+
+.latex-highlight-layer {
+  position: absolute;
+  z-index: 1;
+  white-space: pre;
+  color: #0f172a;
+  opacity: 1;
+}
+
+.latex-editor-input {
+  position: relative;
+  z-index: 2;
+  background-color: transparent !important;
+  background: transparent !important;
+  color: transparent !important;
+  -webkit-text-fill-color: transparent !important;
+  caret-color: #0f172a;
+}
+
+.latex-editor-input::selection {
+  color: transparent;
+}
+
+.latex-token-command {
+  color: #0e7490;
+  font-weight: 600;
+}
+
+.latex-token-brace {
+  color: #b45309;
+}
+
+.latex-token-option {
+  color: #0f766e;
+}
+
+.latex-token-math {
+  color: #be185d;
+}
+
+.latex-token-comment {
+  color: #64748b;
+  font-style: italic;
+}
+
+.latex-editor-field::selection {
+  background: rgba(14, 116, 144, 0.2);
+}
+
+html[data-theme="dark"] .latex-editor-field {
+  background: #020617;
+  color: #d1fae5;
+  border-color: var(--border) !important;
+}
+
+html[data-theme="dark"] .latex-editor-shell {
+  background: #020617;
+  border-color: var(--border) !important;
+}
+
+html[data-theme="dark"] .latex-highlight-layer {
+  color: #d1fae5;
+}
+
+html[data-theme="dark"] .latex-editor-input {
+  color: transparent !important;
+  -webkit-text-fill-color: transparent !important;
+  caret-color: #ecfeff;
+}
+
+html[data-theme="dark"] .latex-highlight-layer {
+  opacity: 1;
+}
+
+html[data-theme="dark"] .latex-token-command {
+  color: #22d3ee;
+}
+
+html[data-theme="dark"] .latex-token-brace {
+  color: #f59e0b;
+}
+
+html[data-theme="dark"] .latex-token-option {
+  color: #34d399;
+}
+
+html[data-theme="dark"] .latex-token-math {
+  color: #f472b6;
+}
+
+html[data-theme="dark"] .latex-token-comment {
+  color: #94a3b8;
+}
+
+html[data-theme="dark"] .latex-editor-field::selection {
+  background: rgba(34, 211, 238, 0.24);
+}
+
+html[data-theme="dark"] .latex-intellisense-panel {
+  background: var(--surface) !important;
+  border-color: var(--border) !important;
+}
+
+html[data-theme="dark"] .latex-intellisense-option {
+  color: var(--foreground) !important;
+}
+
+html[data-theme="dark"] .latex-intellisense-option:hover {
+  background: color-mix(in srgb, var(--accent) 16%, transparent) !important;
 }
 
 .nav-link {

@@ -1,3 +1,4 @@
+import { Suspense } from "react";
 import { notFound } from "next/navigation";
 import ToolWorkbench from "../tool-workbench";
 import { getToolBySlug, TOOL_ITEMS } from "@/lib/tools";
@@ -20,7 +21,9 @@ export default async function ToolPage({ params }: ToolPageProps) {
 
   return (
     <main className="depth-stage mx-auto flex w-full max-w-5xl flex-1 flex-col gap-8 px-6 py-10 md:px-10">
-      <ToolWorkbench tool={tool} />
+      <Suspense>
+        <ToolWorkbench tool={tool} />
+      </Suspense>
     </main>
   );
 }

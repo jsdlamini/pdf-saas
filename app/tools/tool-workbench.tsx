@@ -4,12 +4,17 @@ import { Document as DocxDocument, Packer, Paragraph } from "docx";
 import { jsPDF } from "jspdf";
 import JSZip from "jszip";
 import * as mammoth from "mammoth";
+import { useRouter, useSearchParams } from "next/navigation";
 import { PDFDocument, StandardFonts, degrees, rgb } from "pdf-lib";
 import { useEffect, useMemo, useRef, useState } from "react";
 import PptxGenJS from "pptxgenjs";
 import * as XLSX from "xlsx";
+import { analyzeDocumentSelection } from "@/lib/document-preflight";
 import { MAX_OCR_UPLOAD_BYTES, OCR_LANGUAGE_OPTIONS } from "@/lib/ocr";
-import type { ToolItem } from "@/lib/tools";
+import { formatDurationMs, hashBlob, hashFile, summarizeRunConfidence, type RunReport } from "@/lib/run-report";
+import { TOOL_ITEMS, type ToolItem } from "@/lib/tools";
+import { consumeWorkflowPipeline, stageWorkflowPipeline } from "@/lib/workflow-pipeline";
+import { getNextRecipeStep, getRecipesForTool } from "@/lib/workflow-recipes";
 
 type WorkbenchProps = {
   tool: ToolItem;
@@ -25,10 +30,37 @@ type OutputPreview = {
   fileName: string;
   url: string;
   mime: string;
+  createdAt: number;
+  expiresAt: number;
   note?: string;
   imagePreviewDataUrl?: string;
   pdfPreviewDataUrl?: string;
 };
+
+type ProcessingLogEntry = {
+  at: string;
+  message: string;
+};
+
+function isFileCompatibleForTool(toolSlug: string, file: File) {
+  const lower = file.name.toLowerCase();
+  if (toolSlug === "jpg-to-pdf" || toolSlug === "scan-to-pdf") {
+    return file.type.startsWith("image/") || /\.(png|jpe?g|webp)$/.test(lower);
+  }
+  if (toolSlug === "word-to-pdf") {
+    return /\.(doc|docx)$/.test(lower);
+  }
+  if (toolSlug === "powerpoint-to-pdf") {
+    return /\.(ppt|pptx)$/.test(lower);
+  }
+  if (toolSlug === "excel-to-pdf") {
+    return /\.(xls|xlsx)$/.test(lower);
+  }
+  if (toolSlug === "html-to-pdf") {
+    return /\.(html?|txt)$/.test(lower);
+  }
+  return file.type === "application/pdf" || lower.endsWith(".pdf");
+}
 
 const OFFICE_PREVIEW_MIME_PATTERN =
   /application\/vnd\.openxmlformats-officedocument\.(wordprocessingml|spreadsheetml|presentationml)\./;
@@ -271,6 +303,43 @@ function decodeXmlText(value: string) {
   return doc.documentElement.textContent ?? value;
 }
 
+function escapeLatex(value: string) {
+  return value
+    .replace(/\\/g, "\\textbackslash{}")
+    .replace(/([{}$&#_%])/g, "\\$1")
+    .replace(/\^/g, "\\textasciicircum{}")
+    .replace(/~/g, "\\textasciitilde{}");
+}
+
+function pagesToLatex(pages: string[], sourceFileName: string) {
+  const body = pages
+    .map((page, index) => {
+      const text = escapeLatex(page.replace(/\s+/g, " ").trim() || `(No text detected on page ${index + 1})`);
+      return `\\section*{Page ${index + 1}}\n${text}`;
+    })
+    .join("\n\n");
+
+  const safeSource = escapeLatex(sourceFileName);
+  return [
+    "\\documentclass[11pt]{article}",
+    "\\usepackage[margin=1in]{geometry}",
+    "\\usepackage[T1]{fontenc}",
+    "\\usepackage[utf8]{inputenc}",
+    "\\usepackage{lmodern}",
+    "\\usepackage{microtype}",
+    "\\title{Converted PDF Source}",
+    `\\author{Generated from ${safeSource}}`,
+    "\\date{\\today}",
+    "\\begin{document}",
+    "\\maketitle",
+    "\\tableofcontents",
+    "\\clearpage",
+    body,
+    "\\end{document}",
+    "",
+  ].join("\n");
+}
+
 function configurePdfJsWorker(pdfjs: { GlobalWorkerOptions?: { workerSrc: string } }) {
   if (!pdfjs.GlobalWorkerOptions) return;
   const workerSrc = new URL("pdfjs-dist/legacy/build/pdf.worker.min.mjs", import.meta.url).toString();
@@ -297,6 +366,35 @@ async function loadPdfPagesText(bytes: Uint8Array, password?: string) {
   }
 
   return pages;
+}
+
+async function samplePdfTextCoverage(bytes: Uint8Array, password?: string) {
+  const pdfjs = await import("pdfjs-dist/legacy/build/pdf.mjs");
+  configurePdfJsWorker(pdfjs);
+  const task = pdfjs.getDocument({ data: bytes, password: password || undefined });
+  const pdf = await task.promise;
+  const sampledPages = Math.min(pdf.numPages, 6);
+  let pagesWithText = 0;
+  let totalCharacters = 0;
+
+  for (let index = 1; index <= sampledPages; index += 1) {
+    const page = await pdf.getPage(index);
+    const content = await page.getTextContent();
+    const text = content.items
+      .map((item) => ("str" in item ? item.str : ""))
+      .join(" ")
+      .replace(/\s+/g, " ")
+      .trim();
+
+    if (text.length > 12) pagesWithText += 1;
+    totalCharacters += text.length;
+  }
+
+  return {
+    sampledPages,
+    pagesWithText,
+    totalCharacters,
+  };
 }
 
 async function renderPdfToImages(bytes: Uint8Array, password?: string) {
@@ -563,7 +661,20 @@ async function buildOfficePreviewText(blob: Blob, mime: string) {
 }
 
 export default function ToolWorkbench({ tool }: WorkbenchProps) {
-  const [files, setFiles] = useState<File[]>([]);
+  const router = useRouter();
+  const searchParams = useSearchParams();
+  const [pipelineBootstrap] = useState(() => {
+    const payload = consumeWorkflowPipeline(tool.slug);
+    if (!payload) return null;
+
+    const file = new File([payload.blob], payload.fileName, {
+      type: payload.mime || "application/octet-stream",
+    });
+    const accepted = isFileCompatibleForTool(tool.slug, file);
+    return { payload, file, accepted };
+  });
+
+  const [files, setFiles] = useState<File[]>(() => (pipelineBootstrap?.accepted ? [pipelineBootstrap.file] : []));
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [status, setStatus] = useState("");
@@ -624,12 +735,29 @@ export default function ToolWorkbench({ tool }: WorkbenchProps) {
   const [ocrQualityOptions, setOcrQualityOptions] = useState<OcrQualityOptions>({
     ...OCR_PRESET_OPTIONS.balanced,
   });
+  const [ocrBatchMode, setOcrBatchMode] = useState(false);
+  const [ocrWebhookUrl, setOcrWebhookUrl] = useState("");
+  const [ocrQueueStatus, setOcrQueueStatus] = useState<Array<{ fileName: string; state: "queued" | "processing" | "done" | "failed" }>>([]);
   const [ocrUploadWarning, setOcrUploadWarning] = useState("");
   const [lastRunSummary, setLastRunSummary] = useState<{
     message: string;
     inputCount: number;
     timestamp: string;
   } | null>(null);
+  const [runReport, setRunReport] = useState<RunReport | null>(null);
+  const [processingLog, setProcessingLog] = useState<ProcessingLogEntry[]>([]);
+  const [retentionTick, setRetentionTick] = useState(0);
+  const [fileNamePrefix, setFileNamePrefix] = useState("pt");
+  const [selectedRecipeSlug, setSelectedRecipeSlug] = useState(() => searchParams.get("recipe") ?? "");
+  const [pipelineNotice, setPipelineNotice] = useState(() => {
+    if (!pipelineBootstrap) return "";
+    if (!pipelineBootstrap.accepted) {
+      return `Pipeline output from ${pipelineBootstrap.payload.fromToolSlug} is incompatible with ${tool.name}. Upload a new file for this step.`;
+    }
+    return `Pipeline input received from ${pipelineBootstrap.payload.fromToolSlug}. No re-upload needed for this step.`;
+  });
+  const [preflightSummary, setPreflightSummary] = useState<ReturnType<typeof analyzeDocumentSelection> | null>(null);
+  const [preflightLoading, setPreflightLoading] = useState(false);
   const signatureCanvasRef = useRef<HTMLCanvasElement | null>(null);
   const cameraVideoRef = useRef<HTMLVideoElement | null>(null);
   const cameraCanvasRef = useRef<HTMLCanvasElement | null>(null);
@@ -638,7 +766,11 @@ export default function ToolWorkbench({ tool }: WorkbenchProps) {
   const signaturePointerState = useRef<{ drawing: boolean }>({ drawing: false });
   const signatureStrokesRef = useRef<Array<Array<{ x: number; y: number }>>>([]);
   const signatureActiveStrokeRef = useRef<Array<{ x: number; y: number }>>([]);
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
+  const autoWorkflowUploadPromptedRef = useRef(false);
   const previewJobRef = useRef(0);
+  const preflightJobRef = useRef(0);
+  const latestOutputRef = useRef<{ blob: Blob; fileName: string; mime: string } | null>(null);
 
   const pageEditSlugs = ["split-pdf", "extract-pages", "remove-pages", "organize-pdf"];
   const usesThumbnailEditor = pageEditSlugs.includes(tool.slug);
@@ -671,6 +803,155 @@ export default function ToolWorkbench({ tool }: WorkbenchProps) {
     return { originalBytes, estimatedBytes, reductionPercent };
   }, [compressionOptions, files, tool.slug]);
 
+  const applicableRecipes = useMemo(() => getRecipesForTool(tool.slug), [tool.slug]);
+  const effectiveRecipeSlug = selectedRecipeSlug || applicableRecipes[0]?.slug || "";
+  const selectedRecipe = useMemo(
+    () => applicableRecipes.find((recipe) => recipe.slug === effectiveRecipeSlug) || null,
+    [applicableRecipes, effectiveRecipeSlug]
+  );
+
+  const currentRecipeNextStep = useMemo(() => {
+    if (!selectedRecipe) return null;
+    return getNextRecipeStep(selectedRecipe, tool.slug);
+  }, [selectedRecipe, tool.slug]);
+
+  const currentRecipeStepIndex = useMemo(() => {
+    if (!selectedRecipe) return -1;
+    return selectedRecipe.steps.findIndex((step) => step.toolSlug === tool.slug);
+  }, [selectedRecipe, tool.slug]);
+
+  const currentRecipePreviousStep = useMemo(() => {
+    if (!selectedRecipe) return null;
+    if (currentRecipeStepIndex <= 0) return null;
+    return selectedRecipe.steps[currentRecipeStepIndex - 1] ?? null;
+  }, [selectedRecipe, currentRecipeStepIndex]);
+
+  const hasChosenWorkflow = Boolean(selectedRecipeSlug && selectedRecipe);
+  const isFirstWorkflowStep = hasChosenWorkflow && currentRecipeStepIndex === 0;
+  const shouldShowFileInput = !hasChosenWorkflow || isFirstWorkflowStep;
+  const shouldShowNamingPrefix = !hasChosenWorkflow;
+  const shouldShowPreflight = !hasChosenWorkflow;
+
+  const retentionSecondsLeft = useMemo(() => {
+    if (!outputPreview) return null;
+    const now = Date.now() + retentionTick * 0;
+    return Math.max(0, Math.ceil((outputPreview.expiresAt - now) / 1000));
+  }, [outputPreview, retentionTick]);
+
+  function logProcessing(message: string) {
+    const at = new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" });
+    setProcessingLog((current) => [{ at, message }, ...current].slice(0, 30));
+  }
+
+  function buildOutputName(defaultName: string) {
+    const trimmed = fileNamePrefix.trim().replace(/[^a-zA-Z0-9-_]+/g, "-").replace(/-+/g, "-").replace(/^-|-$/g, "");
+    if (!trimmed) return defaultName;
+    return `${trimmed}-${defaultName}`;
+  }
+
+  function summarizeToolTransforms() {
+    if (tool.slug === "compress-pdf") {
+      return [
+        `Reduce resolution: ${compressionOptions.reduceResolution ? "on" : "off"}`,
+        `Reduce quality: ${compressionOptions.reduceQuality ? "on" : "off"}`,
+        `Grayscale: ${compressionOptions.grayscale ? "on" : "off"}`,
+        `Black and white: ${compressionOptions.blackWhite ? "on" : "off"}`,
+        `Remove images: ${compressionOptions.removeImages ? "on" : "off"}`,
+      ];
+    }
+
+    if (tool.slug === "ocr-pdf") {
+      return [
+        `Language: ${ocrLanguage}`,
+        `Deskew: ${ocrQualityOptions.deskew ? "on" : "off"}`,
+        `Rotate pages: ${ocrQualityOptions.rotatePages ? "on" : "off"}`,
+        `Clean final: ${ocrQualityOptions.cleanFinal ? "on" : "off"}`,
+        `Redo OCR: ${ocrQualityOptions.redoOcr ? "on" : "off"}`,
+      ];
+    }
+
+    if (tool.slug === "compare-pdf") {
+      return ["Text-based comparison", "Materiality scoring", "Line uniqueness analysis"];
+    }
+
+    return ["Standard transformation pipeline", `Tool: ${tool.name}`];
+  }
+
+  async function persistRunReport(startedAtMs: number, completionMessage: string) {
+    const confidence = summarizeRunConfidence(tool.slug);
+    const finishedAt = new Date();
+    const transforms = summarizeToolTransforms();
+
+    const inputEntries = await Promise.all(
+      files.map(async (file) => ({
+        name: file.name,
+        size: file.size,
+        sha256: await hashFile(file),
+      }))
+    );
+
+    const outputEntry = latestOutputRef.current
+      ? {
+          name: latestOutputRef.current.fileName,
+          size: latestOutputRef.current.blob.size,
+          sha256: await hashBlob(latestOutputRef.current.blob),
+          mime: latestOutputRef.current.mime,
+        }
+      : undefined;
+
+    const report: RunReport = {
+      runId: `${tool.slug}-${Date.now()}`,
+      toolSlug: tool.slug,
+      toolName: tool.name,
+      mode: tool.runtime,
+      startedAt: new Date(startedAtMs).toISOString(),
+      finishedAt: finishedAt.toISOString(),
+      durationMs: finishedAt.getTime() - startedAtMs,
+      confidence: confidence.confidence,
+      confidenceReason: confidence.reason,
+      transforms,
+      inputFiles: inputEntries,
+      outputFile: outputEntry,
+    };
+
+    setRunReport(report);
+    logProcessing(`Completed: ${completionMessage} (${formatDurationMs(report.durationMs)})`);
+
+    try {
+      const previous = JSON.parse(localStorage.getItem("papertrail-recent-workflows") || "[]") as Array<{
+        slug: string;
+        name: string;
+        at: string;
+      }>;
+      const next = [{ slug: tool.slug, name: tool.name, at: finishedAt.toISOString() }, ...previous]
+        .filter((entry, index, all) => index === all.findIndex((item) => item.slug === entry.slug))
+        .slice(0, 6);
+      localStorage.setItem("papertrail-recent-workflows", JSON.stringify(next));
+    } catch {
+      // Ignore localStorage failures in restricted contexts.
+    }
+  }
+
+  function downloadProcessingLog() {
+    const lines = processingLog.map((entry) => `[${entry.at}] ${entry.message}`).join("\n");
+    const blob = new Blob([lines || "No processing events yet."], { type: "text/plain" });
+    downloadBlob(blob, `processing-log-${tool.slug}.txt`);
+  }
+
+  function downloadRunReport() {
+    if (!runReport) return;
+    const blob = new Blob([JSON.stringify(runReport, null, 2)], { type: "application/json" });
+    downloadBlob(blob, `run-report-${runReport.runId}.json`);
+  }
+
+  function formatRetention(seconds: number | null) {
+    if (seconds === null) return "Not staged";
+    if (seconds <= 0) return "Expired";
+    const minutes = Math.floor(seconds / 60);
+    const remaining = seconds % 60;
+    return `${minutes}m ${remaining.toString().padStart(2, "0")}s`;
+  }
+
   function updateCompressionOption(option: keyof CompressionOptions, value: boolean) {
     setCompressionOptions((current) => {
       if (option === "blackWhite") {
@@ -698,6 +979,129 @@ export default function ToolWorkbench({ tool }: WorkbenchProps) {
     });
   }
 
+  async function hydrateSelectionContext(nextFiles: File[]) {
+    setPageThumbnails([]);
+    setSelectedPages([]);
+    setPageOrder([]);
+    setSignaturePlacementPreview("");
+    setEditPreview("");
+    setEditCanvasSize({ width: 0, height: 0 });
+    setEditPageNumber(1);
+    setEditPageCount(1);
+    setEditRibbonTab("Home");
+    setEditZoom(100);
+    setEditLayersByPage({});
+    setEditStrokes([]);
+    setEditTextNotes([]);
+    setActiveEditStroke([]);
+    setDraggedPage(null);
+    setDragOverPage(null);
+    if (usesThumbnailEditor) {
+      setRanges("");
+    }
+
+    const first = nextFiles[0];
+    if (!first) return;
+    const isPdf = first.type === "application/pdf" || first.name.toLowerCase().endsWith(".pdf");
+    if (!isPdf) return;
+    if (!usesThumbnailEditor && !isSignTool && !isMergeTool && !isEditTool) return;
+
+    try {
+      setThumbnailLoading(true);
+      if (isMergeTool) {
+        setMergeLoading(true);
+      }
+      const firstBytes = new Uint8Array(await readAsArrayBuffer(first));
+
+      if (usesThumbnailEditor) {
+        const thumbs = await renderPdfThumbnails(firstBytes);
+        setPageThumbnails(thumbs);
+        if (isOrganizeTool) {
+          const order = thumbs.map((thumb) => thumb.pageNumber);
+          setPageOrder(order);
+          setRanges(compactPageSequence(order));
+        }
+      }
+
+      if (isSignTool) {
+        setSignaturePlacementPreview(await renderPdfFirstPagePreview(firstBytes));
+      }
+
+      if (isEditTool) {
+        await loadEditPreview(first, 1);
+      }
+
+      if (isMergeTool) {
+        const allPages: MergePageNode[] = [];
+        for (let fileIndex = 0; fileIndex < nextFiles.length; fileIndex += 1) {
+          const file = nextFiles[fileIndex];
+          const thumbs = await renderPdfThumbnails(new Uint8Array(await readAsArrayBuffer(file)));
+          for (const thumb of thumbs) {
+            allPages.push({
+              id: `${fileIndex}-${thumb.pageNumber}-${Math.random().toString(36).slice(2, 7)}`,
+              fileIndex,
+              fileName: file.name,
+              pageIndex: thumb.pageNumber - 1,
+              pageNumber: thumb.pageNumber,
+              dataUrl: thumb.dataUrl,
+            });
+          }
+        }
+
+        setMergePages(allPages);
+        setMergePageOrder(allPages.map((item) => item.id));
+      }
+    } catch (thumbnailError) {
+      const message = thumbnailError instanceof Error ? thumbnailError.message : "";
+      if (/password|encrypted|PasswordException/i.test(message)) {
+        setError("This PDF is password-protected. Unlock it first, then try again.");
+      } else {
+        setError(
+          message
+            ? `Could not generate page thumbnails for this document: ${message}`
+            : "Could not generate page thumbnails for this document."
+        );
+      }
+    } finally {
+      setThumbnailLoading(false);
+      setMergeLoading(false);
+    }
+  }
+
+  async function runPreflightAnalysis(nextFiles: File[]) {
+    if (!nextFiles.length) {
+      setPreflightSummary(null);
+      setPreflightLoading(false);
+      return;
+    }
+
+    const currentJob = preflightJobRef.current + 1;
+    preflightJobRef.current = currentJob;
+    setPreflightLoading(true);
+
+    try {
+      const firstPdf = nextFiles.find(
+        (file) => file.type === "application/pdf" || file.name.toLowerCase().endsWith(".pdf")
+      );
+
+      let pdfSample: Awaited<ReturnType<typeof samplePdfTextCoverage>> | null = null;
+      if (firstPdf) {
+        try {
+          pdfSample = await samplePdfTextCoverage(new Uint8Array(await readAsArrayBuffer(firstPdf)));
+        } catch {
+          pdfSample = null;
+        }
+      }
+
+      if (preflightJobRef.current !== currentJob) return;
+      setPreflightSummary(analyzeDocumentSelection(nextFiles, TOOL_ITEMS, pdfSample));
+    } finally {
+      if (preflightJobRef.current === currentJob) {
+        setPreflightLoading(false);
+      }
+    }
+  }
+
   function applyOcrPreset(preset: OcrPreset) {
     setOcrPreset(preset);
     setOcrQualityOptions({ ...OCR_PRESET_OPTIONS[preset] });
@@ -709,23 +1113,35 @@ export default function ToolWorkbench({ tool }: WorkbenchProps) {
     note?: string,
     imagePreviewDataUrl?: string
   ) {
+    const finalFileName = buildOutputName(fileName);
     previewJobRef.current += 1;
     const previewJob = previewJobRef.current;
     setPreviewText("");
     setDownloadingOutput(false);
     const url = URL.createObjectURL(blob);
+    const createdAt = Date.now();
+    const expiresAt = createdAt + 30 * 60 * 1000;
+    latestOutputRef.current = {
+      blob,
+      fileName: finalFileName,
+      mime: blob.type || "application/octet-stream",
+    };
     setOutputPreview((current) => {
       if (current) URL.revokeObjectURL(current.url);
       return {
         blob,
-        fileName,
+        fileName: finalFileName,
         url,
         mime: blob.type || "application/octet-stream",
+        createdAt,
+        expiresAt,
         note,
         imagePreviewDataUrl,
         pdfPreviewDataUrl: undefined,
       };
     });
+
+    logProcessing(`Output staged: ${finalFileName} (${formatBytes(blob.size)})`);
 
     if (blob.type.startsWith("text/")) {
       blob
@@ -779,6 +1195,53 @@ export default function ToolWorkbench({ tool }: WorkbenchProps) {
       if (outputPreview) URL.revokeObjectURL(outputPreview.url);
     };
   }, [outputPreview]);
+
+  useEffect(() => {
+    if (!outputPreview) return;
+
+    const tick = () => {
+      setRetentionTick((current) => current + 1);
+    };
+
+    const timer = window.setInterval(tick, 1000);
+    return () => window.clearInterval(timer);
+  }, [outputPreview]);
+
+  useEffect(() => {
+    const shouldAutoPromptUpload =
+      hasChosenWorkflow &&
+      isFirstWorkflowStep &&
+      !pipelineBootstrap?.accepted &&
+      files.length === 0;
+
+    if (!shouldAutoPromptUpload) {
+      autoWorkflowUploadPromptedRef.current = false;
+      return;
+    }
+
+    if (autoWorkflowUploadPromptedRef.current) return;
+    autoWorkflowUploadPromptedRef.current = true;
+
+    const timer = window.setTimeout(() => {
+      fileInputRef.current?.click();
+    }, 120);
+
+    return () => window.clearTimeout(timer);
+  }, [hasChosenWorkflow, isFirstWorkflowStep, pipelineBootstrap, files.length]);
+
+  useEffect(() => {
+    if (!pipelineBootstrap?.accepted) return;
+    const timer = window.setTimeout(() => {
+      if (shouldShowPreflight) {
+        void runPreflightAnalysis([pipelineBootstrap.file]);
+      }
+      void hydrateSelectionContext([pipelineBootstrap.file]);
+    }, 0);
+
+    return () => window.clearTimeout(timer);
+    // hydrateSelectionContext/runPreflightAnalysis are intentionally not deps to avoid reruns.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pipelineBootstrap, shouldShowPreflight]);
 
   useEffect(() => {
     if (!isScanTool) {
@@ -840,6 +1303,9 @@ export default function ToolWorkbench({ tool }: WorkbenchProps) {
     if (tool.slug === "remove-pages") return "Upload one PDF and click page thumbnails to remove pages.";
     if (tool.slug === "jpg-to-pdf" || tool.slug === "scan-to-pdf") {
       return "Upload one or more images to generate a PDF.";
+    }
+    if (tool.slug === "pdf-to-latex") {
+      return "Upload one PDF to generate a .tex source file for scientific editing.";
     }
     return "Upload your file to begin processing.";
   }, [tool.slug]);
@@ -1426,15 +1892,21 @@ export default function ToolWorkbench({ tool }: WorkbenchProps) {
     setError("");
     setStatus("");
     setOcrUploadWarning("");
+    setRunReport(null);
     setOutputPreview((current) => {
       if (current) URL.revokeObjectURL(current.url);
       return null;
     });
+    latestOutputRef.current = null;
     setMergePages([]);
     setMergePageOrder([]);
     setMergeDraggedId(null);
     setMergeDragOverId(null);
+    setOcrQueueStatus([]);
+    setPreflightSummary(null);
+    setPipelineNotice("");
     const nextFiles = Array.from(selected);
+    logProcessing(`Selected ${nextFiles.length} file(s) for ${tool.name}.`);
 
     if (isOcrTool) {
       const oversizedFile = nextFiles.find((file) => file.size > MAX_OCR_UPLOAD_BYTES);
@@ -1443,113 +1915,101 @@ export default function ToolWorkbench({ tool }: WorkbenchProps) {
         setFiles([]);
         setOcrUploadWarning(message);
         setError(message);
+        setPreflightLoading(false);
         return;
       }
     }
 
     setFiles((current) => (isScanTool ? [...current, ...nextFiles] : nextFiles));
-
-    setPageThumbnails([]);
-    setSelectedPages([]);
-    setPageOrder([]);
-    setSignaturePlacementPreview("");
-    setEditPreview("");
-    setEditCanvasSize({ width: 0, height: 0 });
-    setEditPageNumber(1);
-    setEditPageCount(1);
-    setEditRibbonTab("Home");
-    setEditZoom(100);
-    setEditLayersByPage({});
-    setEditStrokes([]);
-    setEditTextNotes([]);
-    setActiveEditStroke([]);
-    setDraggedPage(null);
-    setDragOverPage(null);
-    if (usesThumbnailEditor) {
-      setRanges("");
+    const selectedFilesForAnalysis = isScanTool ? [...files, ...nextFiles] : nextFiles;
+    if (shouldShowPreflight) {
+      void runPreflightAnalysis(selectedFilesForAnalysis);
     }
+    await hydrateSelectionContext(nextFiles);
+  }
 
-    const first = nextFiles[0];
-    if (!first) {
+  function stageRecipeHandoff(targetToolSlug: string) {
+    if (latestOutputRef.current && outputPreview) {
+      stageWorkflowPipeline({
+        fromToolSlug: tool.slug,
+        toToolSlug: targetToolSlug,
+        recipeSlug: selectedRecipe?.slug,
+        fileName: outputPreview.fileName,
+        mime: outputPreview.mime,
+        blob: outputPreview.blob,
+        createdAt: Date.now(),
+      });
+      logProcessing(`Staged pipeline handoff to ${targetToolSlug}.`);
       return;
     }
 
-    const isPdf =
-      first.type === "application/pdf" || first.name.toLowerCase().endsWith(".pdf");
-    if (!isPdf) {
-      return;
+    if (files[0]) {
+      stageWorkflowPipeline({
+        fromToolSlug: tool.slug,
+        toToolSlug: targetToolSlug,
+        recipeSlug: selectedRecipe?.slug,
+        fileName: files[0].name,
+        mime: files[0].type || "application/octet-stream",
+        blob: files[0],
+        createdAt: Date.now(),
+      });
+      logProcessing(`Staged current input handoff to ${targetToolSlug}.`);
+    }
+  }
+
+  function continueRecipe() {
+    if (!currentRecipeNextStep) return;
+    stageRecipeHandoff(currentRecipeNextStep.toolSlug);
+
+    const recipeSlug = selectedRecipe?.slug || selectedRecipeSlug;
+    router.push(`/tools/${currentRecipeNextStep.toolSlug}${recipeSlug ? `?recipe=${encodeURIComponent(recipeSlug)}` : ""}`);
+  }
+
+  function goToPreviousRecipeStage() {
+    if (!currentRecipePreviousStep) return;
+    stageRecipeHandoff(currentRecipePreviousStep.toolSlug);
+
+    const recipeSlug = selectedRecipe?.slug || selectedRecipeSlug;
+    router.push(`/tools/${currentRecipePreviousStep.toolSlug}${recipeSlug ? `?recipe=${encodeURIComponent(recipeSlug)}` : ""}`);
+  }
+
+  async function runOcrForFile(file: File) {
+    const formData = new FormData();
+    formData.append("file", file, file.name);
+    formData.append("language", ocrLanguage);
+    formData.append("deskew", String(ocrQualityOptions.deskew));
+    formData.append("cleanFinal", String(ocrQualityOptions.cleanFinal));
+    formData.append("rotatePages", String(ocrQualityOptions.rotatePages));
+    formData.append("redoOcr", String(ocrQualityOptions.redoOcr));
+
+    const response = await fetch("/api/ocr-pdf", {
+      method: "POST",
+      body: formData,
+    });
+
+    if (!response.ok) {
+      const isJson = response.headers.get("content-type")?.includes("application/json");
+      const payload = isJson ? await response.json().catch(() => null) : null;
+      const fallback = await response.text().catch(() => "");
+      throw new Error(payload?.error || fallback || `OCR processing failed for ${file.name}.`);
     }
 
-    if (!usesThumbnailEditor && !isSignTool && !isMergeTool && !isEditTool) {
-      return;
-    }
+    const pdfBlob = await response.blob();
+    const outputName =
+      getFileNameFromDisposition(response.headers.get("content-disposition")) ||
+      `${normalizeFileName(file.name)}-searchable.pdf`;
 
-    try {
-      setThumbnailLoading(true);
-      if (isMergeTool) {
-        setMergeLoading(true);
-      }
-      const firstBytes = new Uint8Array(await readAsArrayBuffer(first));
-
-      if (usesThumbnailEditor) {
-        const thumbs = await renderPdfThumbnails(firstBytes);
-        setPageThumbnails(thumbs);
-        if (isOrganizeTool) {
-          const order = thumbs.map((thumb) => thumb.pageNumber);
-          setPageOrder(order);
-          setRanges(compactPageSequence(order));
-        }
-      }
-
-      if (isSignTool) {
-        setSignaturePlacementPreview(await renderPdfFirstPagePreview(firstBytes));
-      }
-
-      if (isEditTool) {
-        await loadEditPreview(first, 1);
-      }
-
-      if (isMergeTool) {
-        const allPages: MergePageNode[] = [];
-        for (let fileIndex = 0; fileIndex < nextFiles.length; fileIndex += 1) {
-          const file = nextFiles[fileIndex];
-          const thumbs = await renderPdfThumbnails(new Uint8Array(await readAsArrayBuffer(file)));
-          for (const thumb of thumbs) {
-            allPages.push({
-              id: `${fileIndex}-${thumb.pageNumber}-${Math.random().toString(36).slice(2, 7)}`,
-              fileIndex,
-              fileName: file.name,
-              pageIndex: thumb.pageNumber - 1,
-              pageNumber: thumb.pageNumber,
-              dataUrl: thumb.dataUrl,
-            });
-          }
-        }
-
-        setMergePages(allPages);
-        setMergePageOrder(allPages.map((item) => item.id));
-      }
-    } catch (thumbnailError) {
-      const message = thumbnailError instanceof Error ? thumbnailError.message : "";
-      if (/password|encrypted|PasswordException/i.test(message)) {
-        setError("This PDF is password-protected. Unlock it first, then try again.");
-      } else {
-        setError(
-          message
-            ? `Could not generate page thumbnails for this document: ${message}`
-            : "Could not generate page thumbnails for this document."
-        );
-      }
-    } finally {
-      setThumbnailLoading(false);
-      setMergeLoading(false);
-    }
+    return {
+      blob: pdfBlob.type ? pdfBlob : new Blob([await pdfBlob.arrayBuffer()], { type: "application/pdf" }),
+      outputName,
+    };
   }
 
   async function runTool() {
     setError("");
     setStatus("");
     setOcrUploadWarning("");
+    const runStartedAt = Date.now();
     let completionMessage = "";
 
     const complete = (message: string) => {
@@ -1564,6 +2024,7 @@ export default function ToolWorkbench({ tool }: WorkbenchProps) {
 
     try {
       setBusy(true);
+      logProcessing(`Running ${tool.name} in ${tool.runtime} mode.`);
       const firstFile = files[0];
 
       if (tool.slug === "merge-pdf") {
@@ -1831,35 +2292,61 @@ export default function ToolWorkbench({ tool }: WorkbenchProps) {
 
       if (tool.slug === "ocr-pdf") {
         if (!firstFile) throw new Error("Missing PDF file.");
-        const formData = new FormData();
-        formData.append("file", firstFile, firstFile.name);
-        formData.append("language", ocrLanguage);
-        formData.append("deskew", String(ocrQualityOptions.deskew));
-        formData.append("cleanFinal", String(ocrQualityOptions.cleanFinal));
-        formData.append("rotatePages", String(ocrQualityOptions.rotatePages));
-        formData.append("redoOcr", String(ocrQualityOptions.redoOcr));
+        if (ocrBatchMode && files.length > 1) {
+          setOcrQueueStatus(files.map((file) => ({ fileName: file.name, state: "queued" })));
+          const archive = new JSZip();
 
-        const response = await fetch("/api/ocr-pdf", {
-          method: "POST",
-          body: formData,
-        });
+          for (const file of files) {
+            setOcrQueueStatus((current) =>
+              current.map((item) =>
+                item.fileName === file.name ? { ...item, state: "processing" } : item
+              )
+            );
 
-        if (!response.ok) {
-          const isJson = response.headers.get("content-type")?.includes("application/json");
-          const payload = isJson ? await response.json().catch(() => null) : null;
-          const fallback = await response.text().catch(() => "");
-          throw new Error(payload?.error || fallback || "OCR processing failed.");
+            try {
+              const result = await runOcrForFile(file);
+              archive.file(result.outputName, result.blob);
+              setOcrQueueStatus((current) =>
+                current.map((item) => (item.fileName === file.name ? { ...item, state: "done" } : item))
+              );
+            } catch {
+              setOcrQueueStatus((current) =>
+                current.map((item) =>
+                  item.fileName === file.name ? { ...item, state: "failed" } : item
+                )
+              );
+            }
+          }
+
+          const zipBlob = await archive.generateAsync({ type: "blob" });
+          stageOutput(
+            zipBlob,
+            "ocr-batch-output.zip",
+            "Batch OCR queue completed. Download the archive of searchable PDFs."
+          );
+
+          if (ocrWebhookUrl.trim()) {
+            fetch(ocrWebhookUrl.trim(), {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                event: "papertrail.ocr.batch.completed",
+                tool: tool.slug,
+                files: files.map((file) => file.name),
+                completedAt: new Date().toISOString(),
+              }),
+            }).catch(() => {
+              logProcessing("Webhook callback failed after OCR batch completion.");
+            });
+          }
+
+          complete("Batch OCR archive ready for preview.");
+          return;
         }
 
-        const pdfBlob = await response.blob();
-        const outputName =
-          getFileNameFromDisposition(response.headers.get("content-disposition")) ||
-          `${normalizeFileName(firstFile.name)}-searchable.pdf`;
-        stageOutput(
-          pdfBlob.type ? pdfBlob : new Blob([await pdfBlob.arrayBuffer()], { type: "application/pdf" }),
-          outputName,
-          "Preview searchable PDF before downloading."
-        );
+        const result = await runOcrForFile(firstFile);
+        stageOutput(result.blob, result.outputName, "Preview searchable PDF before downloading.");
+        setOcrQueueStatus([]);
         complete("Searchable PDF ready for preview.");
         return;
       }
@@ -1914,6 +2401,19 @@ export default function ToolWorkbench({ tool }: WorkbenchProps) {
           "Binary XLSX preview is metadata-only. Download to inspect workbook."
         );
         complete("XLSX file ready for preview.");
+        return;
+      }
+
+      if (tool.slug === "pdf-to-latex") {
+        if (!firstFile) throw new Error("Missing PDF file.");
+        const pages = await loadPdfPagesText(new Uint8Array(await readAsArrayBuffer(firstFile)));
+        const tex = pagesToLatex(pages, firstFile.name);
+        stageOutput(
+          new Blob([tex], { type: "text/x-tex" }),
+          `${normalizeFileName(firstFile.name)}.tex`,
+          "Review the generated LaTeX source and download for editing in your TeX workflow."
+        );
+        complete("LaTeX source file ready for preview.");
         return;
       }
 
@@ -2163,14 +2663,42 @@ export default function ToolWorkbench({ tool }: WorkbenchProps) {
       if (tool.slug === "compare-pdf") {
         if (files.length < 2) throw new Error("Upload two PDF files to compare.");
         const [first, second] = files;
-        const textA = (await loadPdfPagesText(new Uint8Array(await readAsArrayBuffer(first)))).join("\n");
-        const textB = (await loadPdfPagesText(new Uint8Array(await readAsArrayBuffer(second)))).join("\n");
+        const pagesA = await loadPdfPagesText(new Uint8Array(await readAsArrayBuffer(first)));
+        const pagesB = await loadPdfPagesText(new Uint8Array(await readAsArrayBuffer(second)));
+        const textA = pagesA.join("\n");
+        const textB = pagesB.join("\n");
         const linesA = splitLines(textA);
         const linesB = splitLines(textB);
         const onlyA = linesA.filter((line) => !linesB.includes(line));
         const onlyB = linesB.filter((line) => !linesA.includes(line));
+        const overlap = linesA.filter((line) => linesB.includes(line)).length;
+        const denominator = new Set([...linesA, ...linesB]).size || 1;
+        const similarity = overlap / denominator;
+        const changeMagnitude = (onlyA.length + onlyB.length) / Math.max(1, denominator);
+        const materiality =
+          changeMagnitude > 0.45 ? "high" : changeMagnitude > 0.2 ? "medium" : "low";
+
+        const pageDiff: string[] = [];
+        const pageCount = Math.max(pagesA.length, pagesB.length);
+        for (let i = 0; i < pageCount; i += 1) {
+          const pageLinesA = splitLines(pagesA[i] || "");
+          const pageLinesB = splitLines(pagesB[i] || "");
+          const uniqueA = pageLinesA.filter((line) => !pageLinesB.includes(line)).length;
+          const uniqueB = pageLinesB.filter((line) => !pageLinesA.includes(line)).length;
+          if (uniqueA || uniqueB) {
+            pageDiff.push(`Page ${i + 1}: +${uniqueB} / -${uniqueA}`);
+          }
+        }
+
         const report = [
           `Compare Report: ${first.name} vs ${second.name}`,
+          "",
+          `Similarity score: ${(similarity * 100).toFixed(1)}%`,
+          `Materiality score: ${materiality}`,
+          `Total changed lines: ${onlyA.length + onlyB.length}`,
+          "",
+          "Page-level change summary",
+          ...(pageDiff.slice(0, 30).length ? pageDiff.slice(0, 30) : ["No page-level differences detected."]),
           "",
           `Unique lines in ${first.name}: ${onlyA.length}`,
           ...onlyA.slice(0, 120),
@@ -2186,8 +2714,10 @@ export default function ToolWorkbench({ tool }: WorkbenchProps) {
       complete("Tool execution completed.");
     } catch (runError) {
       setError(runError instanceof Error ? runError.message : "Unexpected tool error.");
+      logProcessing(`Failed: ${runError instanceof Error ? runError.message : "Unexpected tool error."}`);
     } finally {
       if (completionMessage) {
+        await persistRunReport(runStartedAt, completionMessage);
         setLastRunSummary({
           message: completionMessage,
           inputCount: files.length,
@@ -2206,15 +2736,237 @@ export default function ToolWorkbench({ tool }: WorkbenchProps) {
 
       <p className="text-sm text-slate-700">{tool.description}</p>
 
+      <div className="flex flex-wrap items-center gap-2">
+        <span className={`status-chip ${tool.runtime === "server" ? "status-chip-server" : "status-chip-live"}`}>
+          {tool.runtime === "server" ? "Server processing" : "Local browser processing"}
+        </span>
+        <span className="status-chip status-chip-ok">Zero-retention preview buffer</span>
+      </div>
+
       <p className="field-help">{uploadHint}</p>
 
-      <input
-        type="file"
-        accept={inputAccept}
-        multiple={acceptsMultiple}
-        onChange={(event) => onSelect(event.target.files)}
-        className="w-full rounded-xl border border-slate-300 bg-slate-50 px-3 py-2 text-sm text-slate-700 file:mr-3 file:rounded-md file:border-0 file:bg-slate-200 file:px-3 file:py-1.5 file:text-sm file:font-semibold file:text-slate-800 hover:file:bg-slate-300"
-      />
+      {pipelineNotice ? (
+        <div className="pipeline-banner flex flex-wrap items-center justify-between gap-2 rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2">
+          <p className="text-sm font-medium text-emerald-800">{pipelineNotice}</p>
+          {pipelineNotice.includes("received") && shouldShowFileInput ? (
+            <button
+              type="button"
+              onClick={() => {
+                setFiles([]);
+                setPipelineNotice("");
+                logProcessing("Pipeline handoff dismissed. Manual file upload required.");
+              }}
+              className="rounded-full border border-emerald-300 bg-white px-3 py-1 text-xs font-semibold text-emerald-800 transition hover:bg-emerald-100"
+            >
+              Use original file instead
+            </button>
+          ) : null}
+        </div>
+      ) : null}
+
+      {applicableRecipes.length ? (
+        <div className="space-y-3 rounded-2xl border border-slate-200 bg-slate-50 p-3">
+          <div className="flex items-center justify-between gap-3">
+            <p className="text-xs font-semibold uppercase tracking-[0.14em] text-slate-600">Workflow in progress</p>
+            {applicableRecipes.length > 1 ? (
+              <select
+                value={effectiveRecipeSlug}
+                onChange={(event) => setSelectedRecipeSlug(event.target.value)}
+                className="rounded-lg border border-slate-300 bg-white px-2 py-1 text-xs text-slate-700"
+              >
+                {applicableRecipes.map((recipe) => (
+                  <option key={recipe.slug} value={recipe.slug}>
+                    {recipe.name}
+                  </option>
+                ))}
+              </select>
+            ) : selectedRecipe ? (
+              <span className="text-xs font-semibold text-slate-700">{selectedRecipe.name}</span>
+            ) : null}
+          </div>
+
+          {selectedRecipe ? (
+            <>
+              <p className="text-xs text-slate-600">{selectedRecipe.description}</p>
+
+              {/* ── Animated step track ── */}
+              <div className="overflow-x-auto pb-1">
+                <div className="flex min-w-max items-start gap-0">
+                  {selectedRecipe.steps.map((step, index) => {
+                    const activeIndex = selectedRecipe.steps.findIndex((s) => s.toolSlug === tool.slug);
+                    const isCompleted = index < activeIndex;
+                    const isActive = step.toolSlug === tool.slug;
+
+                    return (
+                      <div key={`${selectedRecipe.slug}-track-${step.toolSlug}`} className="flex items-start gap-0">
+                        {/* step node */}
+                        <div className="pipeline-step-arrive flex flex-col items-center" style={{ animationDelay: `${index * 80}ms` }}>
+                          <div
+                            className={`relative flex h-8 w-8 shrink-0 items-center justify-center rounded-full border-2 transition-all duration-500 ${
+                              isCompleted
+                                ? "border-emerald-400 bg-emerald-400 text-white"
+                                : isActive
+                                  ? "border-cyan-500 bg-cyan-500 text-white pipeline-step-active-ring"
+                                  : "border-slate-300 bg-white text-slate-400"
+                            }`}
+                          >
+                            {isCompleted ? (
+                              <svg viewBox="0 0 12 12" className="h-4 w-4" fill="none">
+                                <path d="M2 6l3 3 5-5" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
+                              </svg>
+                            ) : (
+                              <span className="text-[11px] font-bold leading-none">{index + 1}</span>
+                            )}
+                          </div>
+                          <span
+                            className={`mt-1.5 max-w-[68px] text-center text-[10px] leading-tight ${
+                              isActive ? "font-semibold text-cyan-900" : isCompleted ? "text-emerald-700" : "text-slate-500"
+                            }`}
+                          >
+                            {step.label}
+                          </span>
+                        </div>
+
+                        {/* connector line */}
+                        {index < selectedRecipe.steps.length - 1 ? (
+                          <div className="relative mx-1 mt-3.5 h-0.5 w-10 overflow-hidden rounded-full bg-slate-200">
+                            {isCompleted ? (
+                              <span className="pipeline-line-fill absolute inset-0 rounded-full bg-emerald-400" />
+                            ) : isActive ? (
+                              <span
+                                className="absolute inset-y-0 left-0 rounded-full bg-cyan-400"
+                                style={{ width: "50%", opacity: 0.7 }}
+                              />
+                            ) : null}
+                          </div>
+                        ) : null}
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {(currentRecipeNextStep || currentRecipePreviousStep) && !busy ? (
+                <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+                  <button
+                    type="button"
+                    onClick={goToPreviousRecipeStage}
+                    disabled={!currentRecipePreviousStep}
+                    className="rounded-xl border border-slate-300 bg-white py-2 text-xs font-semibold text-slate-700 transition hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-50"
+                  >
+                    {currentRecipePreviousStep
+                      ? `← Previous step: ${currentRecipePreviousStep.label}`
+                      : "No previous stage"}
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={continueRecipe}
+                    disabled={!currentRecipeNextStep || !outputPreview}
+                    className="rounded-xl border border-cyan-300 bg-cyan-50 py-2 text-xs font-semibold text-cyan-900 transition hover:bg-cyan-100 disabled:cursor-not-allowed disabled:opacity-50"
+                  >
+                    {currentRecipeNextStep
+                      ? outputPreview
+                        ? `Continue to step ${(selectedRecipe.steps.findIndex((s) => s.toolSlug === currentRecipeNextStep.toolSlug) + 1)}: ${currentRecipeNextStep.label} →`
+                        : `Run ${tool.name} first, then continue to: ${currentRecipeNextStep.label}`
+                      : "No next stage"}
+                  </button>
+                </div>
+              ) : !currentRecipeNextStep ? (
+                <p className="rounded-xl bg-emerald-50 px-3 py-2 text-xs font-semibold text-emerald-700">
+                  ✓ Final step complete — workflow finished.
+                </p>
+              ) : null}
+            </>
+          ) : null}
+        </div>
+      ) : null}
+
+      {shouldShowNamingPrefix ? (
+        <div className="space-y-1">
+          <label htmlFor="file-prefix" className="text-xs font-semibold uppercase tracking-wide text-slate-600">
+            Output naming prefix
+          </label>
+          <input
+            id="file-prefix"
+            type="text"
+            value={fileNamePrefix}
+            onChange={(event) => setFileNamePrefix(event.target.value)}
+            placeholder="Example: acme-q2"
+            className="w-full rounded-xl border border-slate-300 bg-slate-50 px-3 py-2 text-sm text-slate-800"
+          />
+          <p className="field-help">Applied to every generated output to standardize batch naming conventions.</p>
+        </div>
+      ) : null}
+
+      {shouldShowFileInput ? (
+        <input
+          ref={fileInputRef}
+          type="file"
+          accept={inputAccept}
+          multiple={acceptsMultiple}
+          onChange={(event) => onSelect(event.target.files)}
+          className="w-full rounded-xl border border-slate-300 bg-slate-50 px-3 py-2 text-sm text-slate-700 file:mr-3 file:rounded-md file:border-0 file:bg-slate-200 file:px-3 file:py-1.5 file:text-sm file:font-semibold file:text-slate-800 hover:file:bg-slate-300"
+        />
+      ) : null}
+
+      {shouldShowPreflight && files.length ? (
+        <div className="space-y-2 rounded-2xl border border-cyan-200 bg-cyan-50/70 p-3">
+          <div className="flex items-center justify-between gap-3">
+            <p className="text-xs font-semibold uppercase tracking-[0.14em] text-cyan-900">Smart Preflight</p>
+            {preflightLoading ? <span className="text-xs font-medium text-cyan-800">Analyzing...</span> : null}
+          </div>
+
+          {preflightSummary ? (
+            <>
+              <p className="text-sm text-cyan-950">
+                {preflightSummary.fileCount} file(s), {(preflightSummary.totalBytes / (1024 * 1024)).toFixed(1)} MB total, input type: {preflightSummary.estimatedInputType}.
+              </p>
+              <p className="text-sm text-cyan-900">
+                Scan likelihood: <span className="font-semibold uppercase">{preflightSummary.scanLikelihood}</span>
+              </p>
+
+              <ul className="space-y-1 text-sm text-cyan-900">
+                {preflightSummary.findings.slice(0, 3).map((finding) => (
+                  <li key={finding}>- {finding}</li>
+                ))}
+              </ul>
+
+              {preflightSummary.recommendations.length ? (
+                <div className="space-y-2 rounded-xl border border-cyan-200 bg-white/80 p-2">
+                  <p className="text-xs font-semibold uppercase tracking-[0.12em] text-cyan-900">Suggested next tools</p>
+                  <div className="space-y-2">
+                    {preflightSummary.recommendations.slice(0, 3).map((recommendation) => {
+                      const suggestedTool = TOOL_ITEMS.find((item) => item.slug === recommendation.toolSlug);
+                      if (!suggestedTool) return null;
+                      const isCurrentTool = suggestedTool.slug === tool.slug;
+
+                      return (
+                        <div key={suggestedTool.slug} className="flex items-center justify-between gap-3 rounded-lg border border-cyan-100 bg-white p-2">
+                          <div>
+                            <p className="text-sm font-semibold text-slate-900">
+                              {suggestedTool.name} ({recommendation.confidence})
+                            </p>
+                            <p className="text-xs text-slate-700">{recommendation.reason}</p>
+                          </div>
+                          <button
+                            type="button"
+                            disabled={isCurrentTool}
+                            onClick={() => router.push(`/tools/${suggestedTool.slug}`)}
+                            className="rounded-full border border-cyan-300 bg-cyan-100 px-3 py-1 text-xs font-semibold text-cyan-900 transition hover:bg-cyan-200 disabled:cursor-default disabled:opacity-60"
+                          >
+                            {isCurrentTool ? "Current" : "Open"}
+                          </button>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              ) : null}
+            </>
+          ) : null}
+        </div>
+      ) : null}
 
       {isOcrTool ? (
         <div className="space-y-3">
@@ -2304,6 +3056,35 @@ export default function ToolWorkbench({ tool }: WorkbenchProps) {
             <p className="field-help">
               Enable redo OCR when documents already contain inaccurate text layers. This can increase processing time.
             </p>
+          </div>
+
+          <div className="space-y-2 rounded-2xl border border-slate-200 bg-slate-50 p-3">
+            <label className="flex items-center gap-2 text-sm text-slate-700">
+              <input
+                type="checkbox"
+                checked={ocrBatchMode}
+                onChange={(event) => setOcrBatchMode(event.target.checked)}
+              />
+              Enable OCR batch queue (multi-file zip output)
+            </label>
+            <input
+              type="url"
+              value={ocrWebhookUrl}
+              onChange={(event) => setOcrWebhookUrl(event.target.value)}
+              placeholder="Optional webhook URL after queue completion"
+              className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm text-slate-800"
+            />
+            <p className="field-help">If provided, a JSON callback is posted when the batch queue completes.</p>
+
+            {ocrQueueStatus.length ? (
+              <ul className="space-y-1 rounded-xl border border-slate-200 bg-white p-2 text-xs text-slate-700">
+                {ocrQueueStatus.map((item) => (
+                  <li key={item.fileName}>
+                    {item.fileName}: {item.state}
+                  </li>
+                ))}
+              </ul>
+            ) : null}
           </div>
 
           {ocrUploadWarning ? (
@@ -3163,6 +3944,7 @@ export default function ToolWorkbench({ tool }: WorkbenchProps) {
               <p className="type-eyebrow text-slate-600">Output Preview</p>
               <p className="text-sm font-medium text-slate-800">{outputPreview.fileName}</p>
               {outputPreview.note ? <p className="field-help mt-1">{outputPreview.note}</p> : null}
+              <p className="field-help mt-1">Auto-delete in browser buffer: {formatRetention(retentionSecondsLeft)}</p>
             </div>
             <button
               type="button"
@@ -3234,6 +4016,48 @@ export default function ToolWorkbench({ tool }: WorkbenchProps) {
           <p className="field-help mt-1">
             Processed {lastRunSummary.inputCount} file(s) at {lastRunSummary.timestamp}
           </p>
+        </div>
+      ) : null}
+
+      {runReport ? (
+        <div className="space-y-2 rounded-xl border border-slate-200 bg-slate-50 p-3">
+          <p className="type-eyebrow text-slate-600">Quality and Trust Report</p>
+          <p className="text-sm font-medium text-slate-800">
+            Confidence: {runReport.confidence.toUpperCase()} ({runReport.confidenceReason})
+          </p>
+          <p className="field-help">Runtime: {runReport.mode} | Duration: {formatDurationMs(runReport.durationMs)}</p>
+          <ul className="space-y-1 text-sm text-slate-700">
+            {runReport.transforms.slice(0, 6).map((item) => (
+              <li key={item}>- {item}</li>
+            ))}
+          </ul>
+          <div className="flex flex-wrap gap-2">
+            <button
+              type="button"
+              onClick={downloadRunReport}
+              className="rounded-full border border-slate-300 bg-white px-3 py-1 text-xs font-semibold text-slate-700 transition hover:bg-slate-100"
+            >
+              Download run report
+            </button>
+            <button
+              type="button"
+              onClick={downloadProcessingLog}
+              className="rounded-full border border-slate-300 bg-white px-3 py-1 text-xs font-semibold text-slate-700 transition hover:bg-slate-100"
+            >
+              Download processing log
+            </button>
+          </div>
+        </div>
+      ) : null}
+
+      {processingLog.length ? (
+        <div className="rounded-xl border border-slate-200 bg-slate-50 p-3">
+          <p className="type-eyebrow text-slate-600">Recent Processing Events</p>
+          <ul className="mt-2 space-y-1 text-xs text-slate-700">
+            {processingLog.slice(0, 6).map((entry) => (
+              <li key={`${entry.at}-${entry.message}`}>[{entry.at}] {entry.message}</li>
+            ))}
+          </ul>
         </div>
       ) : null}
 
