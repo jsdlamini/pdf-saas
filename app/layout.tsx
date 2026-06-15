@@ -1,4 +1,5 @@
 import { ClerkProvider } from "@clerk/nextjs";
+import { auth } from "@clerk/nextjs/server";
 import type { Metadata } from "next";
 import { DM_Sans, Space_Grotesk } from "next/font/google";
 import Link from "next/link";
@@ -37,11 +38,12 @@ export const metadata: Metadata = {
     "Upload, annotate, and automate your PDF workflows in one modern SaaS workspace.",
 };
 
-export default function RootLayout({
+export default async function RootLayout({
   children,
 }: Readonly<{
   children: React.ReactNode;
 }>) {
+  const { userId } = await auth();
   const quickActions = QUICK_ACTION_SLUGS.map((slug) => TOOL_ITEMS.find((tool) => tool.slug === slug)).filter(
     (tool) => tool !== undefined
   );
@@ -70,12 +72,14 @@ export default function RootLayout({
 
               <div className="flex items-center gap-2">
                 <ThemeToggle />
-                <Link
-                  href="/tools/sign-pdf"
-                  className="rounded-full border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-800 transition hover:border-cyan-300 hover:bg-cyan-50 hover:text-cyan-900"
-                >
-                  Open Workspace
-                </Link>
+                {userId ? (
+                  <Link
+                    href="/research-studio"
+                    className="rounded-full border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-800 transition hover:border-cyan-300 hover:bg-cyan-50 hover:text-cyan-900"
+                  >
+                    Open Workspace
+                  </Link>
+                ) : null}
                 <AccountControls />
               </div>
             </div>

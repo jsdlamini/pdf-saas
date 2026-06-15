@@ -95,7 +95,7 @@ export default function Home() {
     <div className="relative isolate flex flex-1 overflow-hidden bg-[#f4f6f8]">
       <div className="pointer-events-none absolute inset-0 -z-10 bg-[linear-gradient(120deg,#f8fafc_0%,#f1f5f9_58%,#f8fafc_100%)]" />
 
-      <main className="depth-stage mx-auto flex w-full max-w-7xl flex-col gap-6 px-6 py-10 md:gap-7 md:px-10 md:py-12">
+      <main className="depth-stage mx-auto flex w-full max-w-7xl flex-col gap-4 px-6 py-6 md:gap-5 md:px-10 md:py-8">
         <header className="space-y-3 rounded-3xl border border-slate-200 bg-white/85 p-6 md:p-8">
           <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">
             PaperTrail Workspace
@@ -218,7 +218,7 @@ export default function Home() {
           </div>
 
           <p className="max-w-3xl text-sm text-slate-700">
-            Work in an Overleaf-style research layout with file tree, editor, and preview. Import PDFs into LaTeX source and continue writing in one focused workspace.
+            Work in a research-first layout with file tree, editor, and preview. Import PDFs into LaTeX source and continue writing in one focused workspace.
           </p>
 
           <div className="grid gap-2 sm:grid-cols-2">

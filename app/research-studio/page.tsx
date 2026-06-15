@@ -637,6 +637,7 @@ export default function ResearchStudioPage() {
   const [compiledPdfFileName, setCompiledPdfFileName] = useState("compiled-main.pdf");
   const [compileMainLog, setCompileMainLog] = useState("");
   const [compileMainLogFileName, setCompileMainLogFileName] = useState("main.log");
+  const [accountSyncUnavailable, setAccountSyncUnavailable] = useState(false);
   const [aiFixBusy, setAiFixBusy] = useState(false);
   const [aiFixError, setAiFixError] = useState("");
   const [aiFixSummary, setAiFixSummary] = useState("");
@@ -670,7 +671,8 @@ export default function ResearchStudioPage() {
   const findInputRef = useRef<HTMLInputElement | null>(null);
   const treeContextMenuRef = useRef<HTMLDivElement | null>(null);
 
-  const usesAccountStorage = authLoaded && Boolean(userId);
+  const isSignedIn = authLoaded && Boolean(userId);
+  const usesAccountStorage = isSignedIn && !accountSyncUnavailable;
 
   const editableFiles = useMemo(
     () => projectEntries.filter((entry) => entry.kind === "file"),
@@ -829,6 +831,14 @@ export default function ResearchStudioPage() {
   function appendPreviewError(message: string) {
     const stamped = `[${new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" })}] ${message}`;
     setPreviewErrorLogs((current) => [stamped, ...current].slice(0, 8));
+  }
+
+  function isAccountSyncUnavailableMessage(message: string) {
+    const normalized = message.toLowerCase();
+    return (
+      normalized.includes("database_url is not configured") ||
+      normalized.includes("account sync storage is not available")
+    );
   }
 
   function closeIntellisense() {
@@ -1128,18 +1138,27 @@ export default function ResearchStudioPage() {
   }
 
   function queueServerProjectSync(snapshot: SavedProjectData) {
-    if (!userId) return;
+    if (!userId || accountSyncUnavailable) return;
     void upsertProjectSnapshotToServer(snapshot).catch((error) => {
       const message = error instanceof Error ? error.message : "Could not sync this project.";
+      if (isAccountSyncUnavailableMessage(message)) {
+        setAccountSyncUnavailable(true);
+        setCompileNotice("Saved locally. Account sync is unavailable on this deployment.");
+        return;
+      }
       appendPreviewError(`Account sync failed: ${message}`);
       setCompileNotice("Saved locally, but account sync failed.");
     });
   }
 
   function queueServerProjectDeletion(projectId: string) {
-    if (!userId) return;
+    if (!userId || accountSyncUnavailable) return;
     void deleteProjectSnapshotFromServer(projectId).catch((error) => {
       const message = error instanceof Error ? error.message : "Could not delete this project from your account.";
+      if (isAccountSyncUnavailableMessage(message)) {
+        setAccountSyncUnavailable(true);
+        return;
+      }
       appendPreviewError(`Account delete failed: ${message}`);
     });
   }
@@ -1194,6 +1213,11 @@ export default function ResearchStudioPage() {
         applySyncedProjects(projects, "Projects synced from your account.");
       } catch (error) {
         const message = error instanceof Error ? error.message : "Could not sync your account projects.";
+        if (isAccountSyncUnavailableMessage(message)) {
+          setAccountSyncUnavailable(true);
+          setCompileNotice("Account sync is unavailable on this deployment. Projects stay local in this browser.");
+          return;
+        }
         appendPreviewError(`Account sync failed: ${message}`);
       }
     }
@@ -2065,8 +2089,8 @@ export default function ResearchStudioPage() {
 
   if (workspaceScreen === "projects") {
     return (
-      <main className="depth-stage mx-auto flex w-full max-w-6xl flex-1 flex-col gap-4 px-6 py-8 md:px-10 md:py-10">
-        <header className="rounded-3xl border border-slate-200 bg-white/90 p-5">
+      <main className="depth-stage mx-auto flex w-full max-w-6xl flex-1 flex-col gap-3 px-6 py-5 md:px-10 md:py-6">
+        <header className="rounded-3xl border border-slate-200 bg-white/90 p-4">
           <div className="flex flex-wrap items-start justify-between gap-3">
             <div>
               <p className="text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">Projects</p>
@@ -2086,6 +2110,10 @@ export default function ResearchStudioPage() {
                       Projects now persist to your signed-in workspace on the server.
                     </p>
                   </>
+                ) : isSignedIn ? (
+                  <p className="text-xs text-cyan-900">
+                    Signed in. Account sync is unavailable on this deployment, so projects stay local in this browser.
+                  </p>
                 ) : authLoaded ? (
                   <>
                     <p className="text-xs text-cyan-900">
@@ -2117,7 +2145,7 @@ export default function ResearchStudioPage() {
         </header>
 
         <section className="rounded-2xl border border-slate-200 bg-white/90 p-3">
-          <div className="mb-3 flex items-center justify-between gap-2">
+          <div className="mb-2 flex items-center justify-between gap-2">
             <button
               type="button"
               onClick={createNewProject}
@@ -2131,7 +2159,11 @@ export default function ResearchStudioPage() {
                 Create project
               </span>
             </button>
-            <p className="text-[11px] text-slate-500">Projects are stored locally in this browser.</p>
+            <p className="text-[11px] text-slate-500">
+              {usesAccountStorage
+                ? "Projects sync to your signed-in account and are also cached in this browser."
+                : "Projects are stored locally in this browser."}
+            </p>
           </div>
 
             {savedProjects.length ? (
@@ -2255,7 +2287,9 @@ export default function ResearchStudioPage() {
             <p className="mt-2 text-xs text-slate-600">
               {usesAccountStorage
                 ? "Signed in: projects are synced to your account-backed workspace."
-                : "Guest mode: projects stay in this browser until you sign in."}
+                : isSignedIn
+                  ? "Signed in: account sync storage is unavailable here, so projects stay in this browser."
+                  : "Guest mode: projects stay in this browser until you sign in."}
             </p>
           </div>
           </div>
@@ -2264,7 +2298,7 @@ export default function ResearchStudioPage() {
 
       <section
         ref={panesRef}
-        className="grid grid-cols-1 gap-2 lg:gap-0 lg:[grid-template-columns:var(--left-pane-width)_10px_minmax(0,1fr)_10px_var(--right-pane-width)]"
+        className="grid grid-cols-1 gap-1.5 lg:gap-0 lg:[grid-template-columns:var(--left-pane-width)_10px_minmax(0,1fr)_10px_var(--right-pane-width)]"
         style={
           {
             "--left-pane-width": `${effectiveLeftPaneWidth}px`,
@@ -2273,7 +2307,7 @@ export default function ResearchStudioPage() {
         }
       >
         <aside
-          className={`rounded-xl border border-slate-200 bg-white/90 transition-[padding] ${leftPaneCollapsed ? "cursor-pointer p-1" : "p-2"}`}
+          className={`rounded-xl border border-slate-200 bg-white/90 transition-[padding] ${leftPaneCollapsed ? "cursor-pointer p-1" : "p-1.5"}`}
           onClick={() => {
             if (leftPaneCollapsed) setLeftPaneCollapsed(false);
           }}
@@ -2320,7 +2354,7 @@ export default function ResearchStudioPage() {
 
           {!leftPaneCollapsed ? (
             <>
-              <div className="mt-2 grid gap-1.5">
+              <div className="mt-1.5 grid gap-1">
                 <div className="grid grid-cols-4 gap-1">
                   <button
                     type="button"
@@ -2382,7 +2416,7 @@ export default function ResearchStudioPage() {
                 </div>
               </div>
 
-              <div className="mt-2 flex gap-1">
+              <div className="mt-1.5 flex gap-1">
                 <input
                   value={newPath}
                   onChange={(event) => setNewPath(event.target.value)}
@@ -2417,12 +2451,12 @@ export default function ResearchStudioPage() {
                 </button>
               </div>
               {addFileError ? <p className="mt-1 text-xs text-rose-700">{addFileError}</p> : null}
-              <ul className="mt-3 space-y-1 text-sm text-slate-700">{renderProjectTree(projectTree)}</ul>
-              <div className="mt-4 rounded-xl border border-slate-200 bg-slate-50 p-2">
+              <ul className="mt-2 space-y-1 text-sm text-slate-700">{renderProjectTree(projectTree)}</ul>
+              <div className="mt-2.5 rounded-xl border border-slate-200 bg-slate-50 p-1.5">
                 <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-slate-500">
                   Section Outline (active file)
                 </p>
-                <ul className="mt-2 space-y-1 text-xs text-slate-700">
+                <ul className="mt-1.5 space-y-1 text-xs text-slate-700">
                   {preview.sections.length ? (
                     preview.sections.map((section) => {
                       const isCollapsed = Boolean(collapsedOutlineSections[section.title]);
@@ -2450,7 +2484,7 @@ export default function ResearchStudioPage() {
                   )}
                 </ul>
               </div>
-              <div className="mt-4 rounded-xl border border-amber-200 bg-amber-50 p-2 text-xs text-amber-900">
+              <div className="mt-2.5 rounded-xl border border-amber-200 bg-amber-50 p-1.5 text-xs text-amber-900">
                 Navigate folders with expand/collapse controls. Use + buttons on folders to add nested files and subfolders.
               </div>
             </>
@@ -2469,14 +2503,14 @@ export default function ResearchStudioPage() {
           <span className="h-20 w-1 rounded-full bg-slate-300" />
         </div>
 
-          <div className="rounded-xl border border-slate-200 bg-white/90 p-2">
-            <div className="mb-2 border-b border-slate-200 pb-1.5">
+          <div className="rounded-xl border border-slate-200 bg-white/90 p-1.5">
+            <div className="mb-1.5 border-b border-slate-200 pb-1">
               <p className="text-xs font-semibold uppercase tracking-[0.12em] text-slate-500">Editor</p>
             </div>
 
             <p className="text-xs uppercase tracking-[0.12em] text-slate-500">{activeEntry?.path || "No file selected"}</p>
 
-          <div className="mb-2 space-y-2 rounded-lg border border-slate-200 bg-slate-50 p-2 text-[11px] text-slate-600">
+          <div className="mb-1.5 space-y-1.5 rounded-lg border border-slate-200 bg-slate-50 p-1.5 text-[11px] text-slate-600">
             <div className="flex flex-wrap items-center justify-between gap-2">
               <span className="font-semibold uppercase tracking-[0.12em] text-slate-500">Document</span>
               <span className="font-semibold uppercase tracking-[0.12em] text-slate-500">
@@ -2532,8 +2566,8 @@ export default function ResearchStudioPage() {
                 </button>
               </div>
             </div>
-            <div className="grid gap-2">
-              <div className="flex flex-wrap items-start gap-2">
+            <div className="grid gap-1.5">
+              <div className="flex flex-wrap items-start gap-1.5">
                 <div className="rounded-md border border-slate-200 bg-white px-2 py-1.5">
                   <p className="mb-1 text-[10px] font-semibold uppercase tracking-[0.12em] text-slate-500">Text</p>
                   <div className="flex flex-wrap items-center gap-1">
@@ -2815,7 +2849,7 @@ export default function ResearchStudioPage() {
           </div>
 
           {findPanelOpen ? (
-            <div className="mb-3 space-y-2 rounded-lg border border-slate-200 bg-slate-50 p-2">
+            <div className="mb-2 space-y-1.5 rounded-lg border border-slate-200 bg-slate-50 p-1.5">
               <div className="flex flex-wrap items-center gap-2">
                 <input
                   ref={findInputRef}
@@ -2913,10 +2947,10 @@ export default function ResearchStudioPage() {
             </div>
           ) : null}
 
-          <div className={`grid gap-2 ${showMatchGutter ? "lg:grid-cols-[140px_minmax(0,1fr)]" : ""}`}>
+          <div className={`grid gap-1.5 ${showMatchGutter ? "lg:grid-cols-[140px_minmax(0,1fr)]" : ""}`}>
             {showMatchGutter ? (
-              <div className="max-h-[520px] overflow-auto rounded-xl border border-slate-200 bg-slate-50 p-2">
-                <p className="mb-2 text-[11px] font-semibold uppercase tracking-[0.12em] text-slate-500">Match gutter</p>
+              <div className="max-h-[520px] overflow-auto rounded-xl border border-slate-200 bg-slate-50 p-1.5">
+                <p className="mb-1.5 text-[11px] font-semibold uppercase tracking-[0.12em] text-slate-500">Match gutter</p>
                 {matchLines.length ? (
                   <ul className="space-y-1">
                     {matchLines.map((line) => (
@@ -3006,7 +3040,7 @@ export default function ResearchStudioPage() {
         </div>
 
         <aside
-          className={`rounded-xl border border-slate-200 bg-white/90 transition-[padding] ${rightPaneCollapsed ? "cursor-pointer p-1" : "p-2"}`}
+          className={`rounded-xl border border-slate-200 bg-white/90 transition-[padding] ${rightPaneCollapsed ? "cursor-pointer p-1" : "p-1.5"}`}
           onClick={() => {
             if (rightPaneCollapsed) setRightPaneCollapsed(false);
           }}
@@ -3046,17 +3080,17 @@ export default function ResearchStudioPage() {
           </div>
 
           {!rightPaneCollapsed ? (
-            <div className="mt-3 h-[68vh] rounded-xl border border-slate-200 bg-slate-50 p-2">
-              <p className="mb-2 text-[11px] font-semibold uppercase tracking-[0.12em] text-slate-600">
+            <div className="mt-2 h-[68vh] rounded-xl border border-slate-200 bg-slate-50 p-1.5">
+              <p className="mb-1.5 text-[11px] font-semibold uppercase tracking-[0.12em] text-slate-600">
                 {compileBusy ? "Compiling project..." : compileNotice}
               </p>
 
               {compileMainLog ? (
-                <details className="mb-2 rounded-md border border-slate-300 bg-white p-2">
+                <details className="mb-1.5 rounded-md border border-slate-300 bg-white p-1.5">
                   <summary className="cursor-pointer text-[11px] font-semibold uppercase tracking-[0.12em] text-slate-700">
                     View {compileMainLogFileName}
                   </summary>
-                  <div className="mt-2 flex items-center justify-end">
+                  <div className="mt-1.5 flex items-center justify-end">
                     <button
                       type="button"
                       onClick={() =>
@@ -3070,14 +3104,14 @@ export default function ResearchStudioPage() {
                       Download log
                     </button>
                   </div>
-                  <pre className="mt-2 max-h-48 overflow-auto rounded border border-slate-200 bg-slate-50 p-2 text-[11px] leading-5 text-slate-700">
+                  <pre className="mt-1.5 max-h-48 overflow-auto rounded border border-slate-200 bg-slate-50 p-1.5 text-[11px] leading-5 text-slate-700">
                     {compileMainLog}
                   </pre>
                 </details>
               ) : null}
 
               {compileMainLog ? (
-                <div className="mb-2 rounded-md border border-slate-300 bg-white p-2">
+                <div className="mb-1.5 rounded-md border border-slate-300 bg-white p-1.5">
                   <div className="flex items-center justify-between gap-2">
                     <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-slate-700">
                       AI Compile Fix Suggestions
@@ -3092,13 +3126,13 @@ export default function ResearchStudioPage() {
                     </button>
                   </div>
 
-                  {aiFixSummary ? <p className="mt-2 text-[11px] text-slate-700">{aiFixSummary}</p> : null}
-                  {aiFixError ? <p className="mt-2 text-[11px] text-rose-700">{aiFixError}</p> : null}
+                  {aiFixSummary ? <p className="mt-1.5 text-[11px] text-slate-700">{aiFixSummary}</p> : null}
+                  {aiFixError ? <p className="mt-1.5 text-[11px] text-rose-700">{aiFixError}</p> : null}
 
                   {aiFixSuggestions.length ? (
-                    <ul className="mt-2 max-h-52 space-y-2 overflow-auto">
+                    <ul className="mt-1.5 max-h-52 space-y-1.5 overflow-auto">
                       {aiFixSuggestions.map((suggestion, index) => (
-                        <li key={`${suggestion.title}-${index}`} className="rounded border border-slate-200 bg-slate-50 p-2">
+                        <li key={`${suggestion.title}-${index}`} className="rounded border border-slate-200 bg-slate-50 p-1.5">
                           <p className="text-[11px] font-semibold text-slate-900">{suggestion.title}</p>
                           <p className="mt-1 text-[11px] text-slate-700">{suggestion.why}</p>
 
@@ -3118,7 +3152,7 @@ export default function ResearchStudioPage() {
 
                           {suggestion.patch ? (
                             <>
-                              <div className="mt-2 flex items-center justify-end">
+                              <div className="mt-1.5 flex items-center justify-end">
                                 <button
                                   type="button"
                                   onClick={() => applyAiPatchToActiveFile(suggestion.patch || "")}
@@ -3128,7 +3162,7 @@ export default function ResearchStudioPage() {
                                   Apply to active file
                                 </button>
                               </div>
-                              <pre className="mt-2 max-h-32 overflow-auto rounded border border-slate-200 bg-white p-2 text-[11px] leading-5 text-slate-700">
+                              <pre className="mt-1.5 max-h-32 overflow-auto rounded border border-slate-200 bg-white p-1.5 text-[11px] leading-5 text-slate-700">
                                 {suggestion.patch}
                               </pre>
                             </>
@@ -3141,7 +3175,7 @@ export default function ResearchStudioPage() {
               ) : null}
 
               {previewErrorLogs.length ? (
-                <div className="mb-2 rounded-md border border-rose-200 bg-rose-50 p-2">
+                <div className="mb-1.5 rounded-md border border-rose-200 bg-rose-50 p-1.5">
                   <div className="mb-1 flex items-center justify-between gap-2">
                     <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-rose-800">Error log</p>
                     <button
@@ -3161,7 +3195,7 @@ export default function ResearchStudioPage() {
               ) : null}
 
               {compiledPdfUrl ? (
-                <div className="flex h-full flex-col gap-2">
+                <div className="flex h-full flex-col gap-1.5">
                   <div className="flex justify-end">
                     <a
                       href={compiledPdfUrl}

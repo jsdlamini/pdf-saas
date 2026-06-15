@@ -8,8 +8,8 @@ import {
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-function jsonError(message: string, status: number) {
-  return Response.json({ error: message }, { status });
+function jsonError(message: string, status: number, code?: string) {
+  return Response.json(code ? { error: message, code } : { error: message }, { status });
 }
 
 export async function GET() {
@@ -21,6 +21,9 @@ export async function GET() {
     return Response.json({ projects });
   } catch (error) {
     const message = error instanceof Error ? error.message : "Could not load projects.";
+    if (message.includes("DATABASE_URL is not configured")) {
+      return jsonError("Account sync storage is not available on this deployment.", 503, "ACCOUNT_SYNC_UNAVAILABLE");
+    }
     return jsonError(message, 500);
   }
 }
@@ -44,6 +47,9 @@ export async function POST(request: Request) {
     return Response.json({ project: saved });
   } catch (error) {
     const message = error instanceof Error ? error.message : "Could not save project.";
+    if (message.includes("DATABASE_URL is not configured")) {
+      return jsonError("Account sync storage is not available on this deployment.", 503, "ACCOUNT_SYNC_UNAVAILABLE");
+    }
     return jsonError(message, 500);
   }
 }
