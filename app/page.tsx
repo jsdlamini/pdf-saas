@@ -2,55 +2,75 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useMemo, useRef, useState, useSyncExternalStore } from "react";
+import { useMemo, useRef, useState } from "react";
 import ProjectSessionCta from "./project-session-cta";
 import { rankToolsByIntent } from "@/lib/tool-intent-search";
 import { TOOL_ITEMS } from "@/lib/tools";
 import { WORKFLOW_RECIPES } from "@/lib/workflow-recipes";
 import { stageWorkflowPipeline } from "@/lib/workflow-pipeline";
 
-type RecentWorkflow = {
-  slug: string;
-  name: string;
-  at: string;
-};
-
-const EMPTY_RECENT_WORKFLOWS: RecentWorkflow[] = [];
-const RECENT_WORKFLOWS_CHANGED_EVENT = "papertrail-recent-workflows-change";
-let recentWorkflowsCache = EMPTY_RECENT_WORKFLOWS;
-let recentWorkflowsCacheLoaded = false;
-
-function readRecentWorkflowsSnapshot() {
-  if (typeof window === "undefined") return EMPTY_RECENT_WORKFLOWS;
-  if (!recentWorkflowsCacheLoaded) {
-    try {
-      const value = JSON.parse(localStorage.getItem("papertrail-recent-workflows") || "[]") as RecentWorkflow[];
-      recentWorkflowsCache = value.slice(0, 4);
-    } catch {
-      recentWorkflowsCache = EMPTY_RECENT_WORKFLOWS;
-    }
-    recentWorkflowsCacheLoaded = true;
-  }
-
-  return recentWorkflowsCache;
-}
-
-function subscribeToRecentWorkflowsChange(onStoreChange: () => void) {
-  const handleChange = () => {
-    recentWorkflowsCacheLoaded = false;
-    onStoreChange();
-  };
-
-  window.addEventListener("storage", handleChange);
-  window.addEventListener(RECENT_WORKFLOWS_CHANGED_EVENT, handleChange);
-  return () => {
-    window.removeEventListener("storage", handleChange);
-    window.removeEventListener(RECENT_WORKFLOWS_CHANGED_EVENT, handleChange);
-  };
-}
-
 function getWorkflowCreatedAt() {
   return Date.now();
+}
+
+const HERO_QUICK_ACTIONS = [
+  {
+    label: "Merge PDF",
+    href: "/tools/merge-pdf",
+    icon: (
+      <svg viewBox="0 0 20 20" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="1.8">
+        <path d="M4 6h5l7 4-7 4H4l7-4-7-4z" strokeLinecap="round" strokeLinejoin="round" />
+      </svg>
+    ),
+  },
+  {
+    label: "OCR PDF",
+    href: "/tools/ocr-pdf",
+    icon: (
+      <svg viewBox="0 0 20 20" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="1.8">
+        <rect x="3" y="5" width="14" height="10" rx="1.5" />
+        <path d="M7 9h6M7 12h4" strokeLinecap="round" />
+      </svg>
+    ),
+  },
+  {
+    label: "Sign PDF",
+    href: "/tools/sign-pdf",
+    icon: (
+      <svg viewBox="0 0 20 20" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="1.8">
+        <path d="M4 14.5V16h1.5L15 6.5 13.5 5 4 14.5z" strokeLinecap="round" strokeLinejoin="round" />
+      </svg>
+    ),
+  },
+  {
+    label: "Research Studio",
+    href: "/research-studio",
+    badge: "New",
+    icon: (
+      <svg viewBox="0 0 20 20" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="1.8">
+        <path d="M6 3h6l3 3v11H6V3z" strokeLinecap="round" strokeLinejoin="round" />
+        <path d="M12 3v3h3M8 11h4M8 14h2" strokeLinecap="round" strokeLinejoin="round" />
+      </svg>
+    ),
+  },
+] as const;
+
+const DASHBOARD_METRICS = [
+  { label: "Tools Available", value: `${TOOL_ITEMS.length}`, trend: "Updated daily" },
+  { label: "Workflow Recipes", value: `${WORKFLOW_RECIPES.length}`, trend: "Ready to launch" },
+  { label: "AI Search", value: "Instant", trend: "Intent ranked" },
+] as const;
+
+function getCategoryColor(category: string) {
+  const colors: Record<string, string> = {
+    Organize: "from-sky-100 to-cyan-100 text-sky-800 border-sky-200",
+    Optimize: "from-indigo-100 to-fuchsia-100 text-indigo-800 border-indigo-200",
+    Convert: "from-emerald-100 to-teal-100 text-emerald-800 border-emerald-200",
+    Security: "from-rose-100 to-orange-100 text-rose-800 border-rose-200",
+    Edit: "from-amber-100 to-yellow-100 text-amber-800 border-amber-200",
+    Sign: "from-green-100 to-lime-100 text-green-800 border-green-200",
+  };
+  return colors[category] || "from-slate-100 to-slate-50 text-slate-700 border-slate-200";
 }
 
 export default function Home() {
@@ -58,13 +78,19 @@ export default function Home() {
   const workflowFileInputRef = useRef<HTMLInputElement | null>(null);
   const pendingWorkflowRecipeRef = useRef<(typeof WORKFLOW_RECIPES)[number] | null>(null);
   const [intentQuery, setIntentQuery] = useState("");
-  const recent = useSyncExternalStore(subscribeToRecentWorkflowsChange, readRecentWorkflowsSnapshot, () => EMPTY_RECENT_WORKFLOWS);
 
-  const intentMatches = useMemo(() => {
+  const searchResults = useMemo(() => {
+    if (!intentQuery.trim()) return null;
     return rankToolsByIntent(TOOL_ITEMS, intentQuery)
       .filter((entry) => entry.score > 0)
-      .slice(0, 4);
+      .slice(0, 12)
+      .map((entry) => entry.tool);
   }, [intentQuery]);
+
+  const visibleTools = useMemo(() => {
+    if (searchResults) return searchResults;
+    return TOOL_ITEMS;
+  }, [searchResults]);
 
   function startWorkflow(recipe: (typeof WORKFLOW_RECIPES)[number]) {
     pendingWorkflowRecipeRef.current = recipe;
@@ -74,9 +100,7 @@ export default function Home() {
   function handleWorkflowFileSelect(file: File | null) {
     const recipe = pendingWorkflowRecipeRef.current;
     pendingWorkflowRecipeRef.current = null;
-
     if (!recipe || !file) return;
-
     const firstStep = recipe.steps[0];
     stageWorkflowPipeline({
       fromToolSlug: "workflow-home",
@@ -87,59 +111,149 @@ export default function Home() {
       blob: file,
       createdAt: getWorkflowCreatedAt(),
     });
-
     router.push(`/tools/${firstStep.toolSlug}?recipe=${encodeURIComponent(recipe.slug)}`);
   }
 
   return (
-    <div className="relative isolate flex flex-1 overflow-hidden bg-[#f4f6f8]">
-      <div className="pointer-events-none absolute inset-0 -z-10 bg-[linear-gradient(120deg,#f8fafc_0%,#f1f5f9_58%,#f8fafc_100%)]" />
+    <div className="ai-home-bg relative isolate flex w-full flex-1 flex-col">
+      <div className="pointer-events-none absolute -left-16 top-12 -z-10 h-64 w-64 rounded-full bg-cyan-300/25 blur-3xl" />
+      <div className="pointer-events-none absolute right-0 top-24 -z-10 h-72 w-72 rounded-full bg-sky-400/20 blur-3xl" />
+      <div className="pointer-events-none absolute bottom-0 left-1/3 -z-10 h-64 w-64 rounded-full bg-amber-300/20 blur-3xl" />
 
-      <main className="depth-stage mx-auto flex w-full max-w-7xl flex-col gap-4 px-6 py-6 md:gap-5 md:px-10 md:py-8">
-        <header className="space-y-3 rounded-3xl border border-slate-200 bg-white/85 p-6 md:p-8">
+      <main className="relative z-10 mx-auto flex w-full max-w-7xl flex-col gap-4 px-6 py-6 md:gap-5 md:px-10 md:py-8">
+
+        {/* ── Zone 1: Hero ─────────────────────────────────────────── */}
+        <header className="ai-hero-panel rounded-3xl px-6 py-7 md:px-10 md:py-9">
           <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">
             PaperTrail Workspace
           </p>
-          <h1 className="font-display text-4xl font-semibold leading-tight tracking-tight text-slate-950 md:text-4xl lg:text-5xl">
-            Professional PDF tools in one focused workspace.
+          <h1 className="mt-2 font-display text-4xl font-semibold leading-tight tracking-tight text-slate-950 lg:text-5xl">
+            Professional PDF tools,<br className="hidden sm:block" /> one focused workspace.
           </h1>
-          <p className="type-body max-w-3xl text-base text-slate-700 md:text-lg">
-            Organize, convert, secure, and sign documents with a cleaner workflow built for teams.
+          <p className="mt-2 max-w-2xl text-base text-slate-600">
+            Organize, convert, secure, and sign documents — or open the Research Studio for LaTeX editing.
           </p>
 
-          <div className="mt-4 space-y-3 rounded-2xl border border-cyan-200 bg-cyan-50/70 p-4">
-            <p className="text-xs font-semibold uppercase tracking-[0.14em] text-cyan-900">Adaptive onboarding</p>
-            <label htmlFor="intent-input" className="text-sm font-medium text-cyan-900">
-              Tell PaperTrail what you want to do
-            </label>
-            <input
-              id="intent-input"
-              type="text"
-              value={intentQuery}
-              onChange={(event) => setIntentQuery(event.target.value)}
-              placeholder="Example: remove sensitive text from scanned contracts"
-              className="w-full rounded-xl border border-cyan-300 bg-white px-3 py-2 text-sm text-slate-800"
-            />
+          <div className="mt-5 grid gap-3 sm:grid-cols-3">
+            {DASHBOARD_METRICS.map((metric) => (
+              <div key={metric.label} className="invoice-kpi-card rounded-2xl px-4 py-3">
+                <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-slate-500">{metric.label}</p>
+                <p className="mt-1 font-display text-2xl font-semibold leading-none text-slate-950">{metric.value}</p>
+                <p className="mt-1 text-xs text-cyan-700">{metric.trend}</p>
+              </div>
+            ))}
+          </div>
 
-            {intentQuery.trim() && intentMatches.length ? (
-              <div className="flex flex-wrap gap-2">
-                {intentMatches.map(({ tool, score }) => (
+          {/* Quick-action chips */}
+          <div className="mt-5 flex flex-wrap gap-2">
+            {HERO_QUICK_ACTIONS.map((action) => (
+              <Link
+                key={action.href}
+                href={action.href}
+                className="ai-pill group inline-flex items-center gap-2 rounded-full px-4 py-2 text-sm font-semibold text-slate-800"
+              >
+                <span className="text-slate-500 transition group-hover:text-cyan-700">{action.icon}</span>
+                {action.label}
+                {"badge" in action && action.badge ? (
+                  <span className="rounded-full bg-cyan-100 px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide text-cyan-800">
+                    {action.badge}
+                  </span>
+                ) : null}
+              </Link>
+            ))}
+          </div>
+
+          {/* Search bar */}
+          <div className="mt-5 flex items-center gap-2">
+            <div className="relative flex-1">
+              <svg
+                viewBox="0 0 20 20"
+                className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="1.8"
+              >
+                <circle cx="9" cy="9" r="4.5" />
+                <path d="M13 13l3 3" strokeLinecap="round" />
+              </svg>
+              <input
+                id="intent-input"
+                type="text"
+                value={intentQuery}
+                onChange={(event) => setIntentQuery(event.target.value)}
+                placeholder="Search tools — e.g. remove sensitive text from contracts"
+                className="ai-search-input w-full rounded-xl py-2.5 pl-9 pr-3 text-sm text-slate-800 placeholder:text-slate-400 focus:outline-none"
+              />
+              {intentQuery ? (
+                <button
+                  type="button"
+                  onClick={() => setIntentQuery("")}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
+                  aria-label="Clear search"
+                >
+                  <svg viewBox="0 0 20 20" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="1.8">
+                    <path d="M5 5l10 10M15 5L5 15" strokeLinecap="round" />
+                  </svg>
+                </button>
+              ) : null}
+            </div>
+          </div>
+          {intentQuery.trim() && searchResults !== null && (
+            <p className="mt-2 text-xs text-slate-500">
+              {searchResults.length} result{searchResults.length !== 1 ? "s" : ""} — shown below
+            </p>
+          )}
+        </header>
+
+        {/* ── Zone 2: Tool Directory ────────────────────────────────── */}
+        <section className="ai-panel rounded-2xl">
+          {/* Header row: title + count */}
+          <div className="flex items-center justify-between border-b border-slate-100 px-4 pt-4 pb-3">
+            <h2 className="font-display text-lg font-semibold tracking-tight text-slate-950">
+              {searchResults ? "Search results" : "Tools"}
+            </h2>
+            <span className="text-xs text-slate-500">
+              {visibleTools.length} tool{visibleTools.length !== 1 ? "s" : ""}
+            </span>
+          </div>
+
+          {/* Tool balls clusters by category */}
+          <div className="px-4 py-6">
+            {visibleTools.length === 0 ? (
+              <div className="py-8 text-center text-sm text-slate-500">
+                No tools match your search.
+              </div>
+            ) : (
+              <div className="flex flex-wrap items-center justify-center gap-3">
+                {visibleTools.map((tool) => (
                   <Link
                     key={tool.slug}
                     href={`/tools/${tool.slug}`}
-                    className="rounded-full border border-cyan-300 bg-white px-3 py-1 text-xs font-semibold text-cyan-900 transition hover:bg-cyan-100"
+                    title={`${tool.name}: ${tool.description}`}
+                    className={`ai-tool-pill group inline-flex items-center justify-center rounded-full border bg-gradient-to-r px-4 py-2 text-sm font-semibold transition-all duration-200 hover:scale-105 hover:shadow-lg ${getCategoryColor(tool.category)} cursor-pointer`}
                   >
-                    {tool.name} ({score})
+                    <span className="flex items-center gap-1.5">
+                      {tool.name}
+                      {tool.runtime === "server" ? (
+                        <span className="text-[10px] font-bold opacity-75">⚙</span>
+                      ) : null}
+                    </span>
                   </Link>
                 ))}
               </div>
-            ) : null}
+            )}
           </div>
-        </header>
 
-        <section className="space-y-3 rounded-2xl border border-slate-200 bg-white/90 p-4">
-          <div className="flex items-center justify-between">
-            <h2 className="font-display text-2xl font-semibold tracking-tight text-slate-950">Workflow Recipes</h2>
+          {/* Research Studio CTA at foot of tools section */}
+          <div className="border-t border-slate-100 px-4 py-3">
+            <ProjectSessionCta compact />
+          </div>
+        </section>
+
+        {/* ── Zone 3: Workflow Recipes ──────────────────────────────── */}
+        <section className="ai-panel rounded-2xl p-4">
+          <div className="mb-3 flex items-center justify-between">
+            <h2 className="font-display text-lg font-semibold tracking-tight text-slate-950">Workflow Recipes</h2>
             <p className="text-xs uppercase tracking-[0.12em] text-slate-500">Click to start</p>
           </div>
           <input
@@ -152,13 +266,13 @@ export default function Home() {
               event.currentTarget.value = "";
             }}
           />
-          <div className="grid gap-3 md:grid-cols-2">
+          <div className="grid gap-2 md:grid-cols-2">
             {WORKFLOW_RECIPES.slice(0, 4).map((recipe) => (
               <button
                 key={recipe.slug}
                 type="button"
                 onClick={() => startWorkflow(recipe)}
-                className="group rounded-xl border border-slate-200 bg-slate-50 p-3 transition hover:-translate-y-0.5 hover:border-cyan-300 hover:bg-cyan-50 hover:shadow-[0_8px_24px_-12px_rgba(6,182,212,0.35)]"
+                className="ai-workflow-card group rounded-xl p-3 text-left transition hover:-translate-y-0.5 hover:border-cyan-300 hover:bg-cyan-50"
               >
                 <div className="flex items-start justify-between gap-2">
                   <p className="text-sm font-semibold text-slate-900 group-hover:text-cyan-900">{recipe.name}</p>
@@ -166,15 +280,15 @@ export default function Home() {
                     Start ›
                   </span>
                 </div>
-                <p className="mt-1 text-xs text-slate-600">{recipe.description}</p>
-                <div className="mt-3 flex items-center gap-0">
+                <p className="mt-0.5 text-xs text-slate-600">{recipe.description}</p>
+                <div className="mt-2 flex items-center gap-0">
                   {recipe.steps.map((step, index) => (
                     <div key={`${recipe.slug}-${step.toolSlug}`} className="flex items-center">
                       <span className="inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-slate-200 text-[10px] font-bold text-slate-600 group-hover:bg-cyan-200 group-hover:text-cyan-900">
                         {index + 1}
                       </span>
                       {index < recipe.steps.length - 1 ? (
-                        <span className="mx-1 block h-px w-5 bg-slate-300 group-hover:bg-cyan-300" />
+                        <span className="mx-1 block h-px w-4 bg-slate-300 group-hover:bg-cyan-300" />
                       ) : null}
                     </div>
                   ))}
@@ -187,98 +301,6 @@ export default function Home() {
           </div>
         </section>
 
-        {recent.length ? (
-          <section className="space-y-3 rounded-2xl border border-slate-200 bg-white/90 p-4">
-            <div className="flex items-center justify-between">
-              <h2 className="font-display text-2xl font-semibold tracking-tight text-slate-950">Recent Workflows</h2>
-              <p className="text-xs uppercase tracking-[0.12em] text-slate-500">One-click repeat</p>
-            </div>
-            <div className="flex flex-wrap gap-2">
-              {recent.map((item) => (
-                <Link
-                  key={`${item.slug}-${item.at}`}
-                  href={`/tools/${item.slug}`}
-                  className="rounded-full border border-slate-300 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 transition hover:bg-slate-100"
-                >
-                  {item.name}
-                </Link>
-              ))}
-            </div>
-          </section>
-        ) : null}
-
-        <section className="space-y-3 rounded-2xl border border-slate-200 bg-white/90 p-4">
-          <div className="flex items-center justify-between gap-3">
-            <h2 className="font-display text-2xl font-semibold tracking-tight text-slate-950">
-              Scientific Research Editing
-            </h2>
-            <span className="rounded-full border border-cyan-200 bg-cyan-50 px-2 py-1 text-[11px] font-semibold uppercase tracking-[0.12em] text-cyan-800">
-              New
-            </span>
-          </div>
-
-          <p className="max-w-3xl text-sm text-slate-700">
-            Work in a research-first layout with file tree, editor, and preview. Import PDFs into LaTeX source and continue writing in one focused workspace.
-          </p>
-
-          <div className="grid gap-2 sm:grid-cols-2">
-            <Link
-              href="/research-studio"
-              className="rounded-xl border border-slate-300 bg-white px-4 py-3 text-sm font-semibold text-slate-900 transition hover:border-cyan-300 hover:bg-cyan-50 hover:text-cyan-900"
-            >
-              Open Research Studio
-            </Link>
-            <Link
-              href="/tools/pdf-to-latex"
-              className="rounded-xl border border-slate-300 bg-white px-4 py-3 text-sm font-semibold text-slate-900 transition hover:border-cyan-300 hover:bg-cyan-50 hover:text-cyan-900"
-            >
-              Convert PDF to LaTeX
-            </Link>
-          </div>
-
-          <ProjectSessionCta compact />
-        </section>
-
-        <section className="space-y-3">
-          <div className="flex items-center justify-between">
-            <h2 className="font-display text-3xl font-semibold tracking-tight text-slate-950">
-              Tool Directory
-            </h2>
-            <p className="text-sm font-medium text-slate-600">
-              {TOOL_ITEMS.length} / {TOOL_ITEMS.length} visible
-            </p>
-          </div>
-
-          <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
-            {TOOL_ITEMS.map((tool) => (
-              <Link
-                key={tool.slug}
-                href={`/tools/${tool.slug}`}
-                aria-label={`Open ${tool.name}`}
-                className="group relative overflow-hidden rounded-2xl border border-slate-200 bg-white/90 p-5 shadow-[0_14px_32px_-24px_rgba(15,23,42,0.45)] transition hover:-translate-y-0.5 hover:shadow-[0_18px_36px_-24px_rgba(15,23,42,0.5)]"
-              >
-                <div className="absolute inset-x-0 top-0 h-[2px] bg-gradient-to-r from-slate-300 via-cyan-300 to-slate-300 opacity-70" />
-                <div className="mb-3 flex items-start gap-3">
-                  <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-slate-500">
-                    {tool.category}
-                  </p>
-                </div>
-
-                <h3 className="font-display text-2xl font-semibold text-slate-950">
-                  {tool.name}
-                </h3>
-                <p className="mt-2 text-sm leading-relaxed text-slate-700">{tool.description}</p>
-
-                <span
-                  className="mt-5 inline-flex items-center rounded-lg border border-slate-300 bg-slate-50 px-3 py-1.5 text-sm font-semibold text-slate-800 transition group-hover:border-slate-400 group-hover:bg-slate-100"
-                  aria-hidden
-                >
-                  Open tool
-                </span>
-              </Link>
-            ))}
-          </div>
-        </section>
       </main>
     </div>
   );

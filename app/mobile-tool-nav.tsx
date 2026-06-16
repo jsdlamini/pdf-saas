@@ -11,60 +11,80 @@ export default function MobileToolNav() {
   const [open, setOpen] = useState(false);
 
   return (
-    <div className="fixed left-2 top-2 z-[80] md:hidden">
+    <div className="fixed left-0 top-0 z-[80] md:hidden">
       <button
         type="button"
         onClick={() => setOpen((current) => !current)}
-        className="inline-flex h-11 w-11 items-center justify-center rounded-xl border border-slate-300 bg-white text-slate-700 shadow-[0_10px_24px_-18px_rgba(15,23,42,0.75)]"
+        className="flex h-14 w-12 items-center justify-center border-r border-slate-200/60 bg-transparent text-slate-700 transition active:scale-95 dark:border-slate-700/60"
         aria-expanded={open}
         aria-controls="mobile-tool-navbar"
         aria-label={open ? "Close tools menu" : "Open tools menu"}
       >
-        <span className="inline-flex h-8 w-8 items-center justify-center rounded-md border border-slate-300 bg-slate-50">
+        {open ? (
+          <svg viewBox="0 0 20 20" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden="true">
+            <path d="M5 5l10 10M15 5L5 15" strokeLinecap="round" />
+          </svg>
+        ) : (
           <svg viewBox="0 0 20 20" className="h-5 w-5 text-slate-700" aria-hidden="true">
             <path d="M3 5h14M3 10h14M3 15h14" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
           </svg>
-        </span>
+        )}
       </button>
 
       {open ? (
-        <div
-          id="mobile-tool-navbar"
-          className="fixed left-0 top-14 z-[79] w-screen space-y-2 border-y border-slate-200 bg-white p-3 shadow-[0_16px_32px_-22px_rgba(15,23,42,0.55)]"
-        >
-          <ToolNavSearch className="max-w-none" onNavigate={() => setOpen(false)} />
+        <>
+          {/* Backdrop */}
+          <div
+            className="fixed inset-0 top-14 z-[78] bg-slate-900/20 backdrop-blur-sm"
+            onClick={() => setOpen(false)}
+            aria-hidden="true"
+          />
 
-          {MOBILE_NAV_PARENTS.map((parent) => {
-            const subgroupTools =
-              parent === "All"
-                ? TOOL_ITEMS
-                : TOOL_ITEMS.filter((tool) => tool.category === parent);
+          <div
+            id="mobile-tool-navbar"
+            className="fixed left-0 top-14 z-[79] flex max-h-[calc(100dvh-3.5rem)] w-screen flex-col overflow-hidden border-t border-slate-200/80 bg-white/95 shadow-[0_20px_40px_-24px_rgba(15,23,42,0.5)] backdrop-blur-xl dark:bg-slate-950/95 dark:border-slate-700/80"
+          >
+            <div className="overflow-y-auto overscroll-contain p-3 pb-safe space-y-2">
+              <ToolNavSearch className="max-w-none" onNavigate={() => setOpen(false)} />
 
-            return (
-              <details key={parent} className="group rounded-xl border border-slate-200 bg-slate-50 px-3 py-2">
-                <summary className="cursor-pointer list-none text-xs font-semibold uppercase tracking-[0.12em] text-slate-700">
-                  <span className="inline-flex items-center justify-between w-full">
-                    <span>{parent}</span>
-                    <span className="text-[10px] font-medium text-slate-500">{subgroupTools.length}</span>
-                  </span>
-                </summary>
+              {MOBILE_NAV_PARENTS.map((parent) => {
+                const subgroupTools =
+                  parent === "All"
+                    ? TOOL_ITEMS
+                    : TOOL_ITEMS.filter((tool) => tool.category === parent);
 
-                <div className="mt-2 grid grid-cols-1 gap-1.5">
-                  {subgroupTools.map((tool) => (
-                    <Link
-                      key={`mobile-sub-${tool.slug}`}
-                      href={`/tools/${tool.slug}`}
-                      className="rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-xs font-medium text-slate-700 transition hover:border-cyan-300 hover:bg-cyan-50 hover:text-cyan-900"
-                      onClick={() => setOpen(false)}
-                    >
-                      {tool.name}
-                    </Link>
-                  ))}
-                </div>
-              </details>
-            );
-          })}
-        </div>
+                return (
+                  <details key={parent} className="group rounded-2xl border border-slate-200/80 bg-slate-50/80 px-3 py-2.5 dark:border-slate-700/80 dark:bg-slate-900/80">
+                    <summary className="flex cursor-pointer list-none items-center justify-between text-xs font-semibold uppercase tracking-[0.12em] text-slate-700 dark:text-slate-300">
+                      <span>{parent}</span>
+                      <span className="flex items-center gap-2">
+                        <span className="rounded-full bg-slate-200 px-1.5 py-0.5 text-[10px] font-bold text-slate-600 dark:bg-slate-700 dark:text-slate-400">
+                          {subgroupTools.length}
+                        </span>
+                        <svg viewBox="0 0 20 20" className="h-3.5 w-3.5 text-slate-400 transition-transform group-open:rotate-180" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
+                          <path d="M5 8l5 5 5-5" strokeLinecap="round" strokeLinejoin="round" />
+                        </svg>
+                      </span>
+                    </summary>
+
+                    <div className="mt-2.5 grid grid-cols-2 gap-1.5">
+                      {subgroupTools.map((tool) => (
+                        <Link
+                          key={`mobile-sub-${tool.slug}`}
+                          href={`/tools/${tool.slug}`}
+                          className="rounded-xl border border-slate-200/80 bg-white px-2.5 py-2 text-xs font-semibold text-slate-700 transition active:scale-95 hover:border-cyan-300 hover:bg-cyan-50 hover:text-cyan-900 dark:border-slate-700/80 dark:bg-slate-900 dark:text-slate-200 dark:hover:border-cyan-500/50 dark:hover:bg-cyan-500/10 dark:hover:text-cyan-300"
+                          onClick={() => setOpen(false)}
+                        >
+                          {tool.name}
+                        </Link>
+                      ))}
+                    </div>
+                  </details>
+                );
+              })}
+            </div>
+          </div>
+        </>
       ) : null}
     </div>
   );
