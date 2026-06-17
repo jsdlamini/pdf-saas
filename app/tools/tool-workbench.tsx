@@ -42,6 +42,22 @@ type ProcessingLogEntry = {
   message: string;
 };
 
+type SmartIntakeResult = {
+  documentType: string;
+  intakeSummary: string;
+  confidence: "high" | "medium" | "low";
+  recommendedWorkflow: RecommendedWorkflow | null;
+  warnings: string[];
+  source: "ai" | "fallback";
+};
+
+type RecommendedWorkflow = {
+  recipeSlug: string;
+  recipeName: string;
+  description: string;
+  steps: Array<{ toolSlug: string; label: string }>;
+};
+
 type LocalStoredFileEntry = {
   id: string;
   fileName: string;
@@ -387,6 +403,7 @@ async function samplePdfTextCoverage(bytes: Uint8Array, password?: string) {
   const sampledPages = Math.min(pdf.numPages, 6);
   let pagesWithText = 0;
   let totalCharacters = 0;
+  let previewText = "";
 
   for (let index = 1; index <= sampledPages; index += 1) {
     const page = await pdf.getPage(index);
@@ -399,12 +416,16 @@ async function samplePdfTextCoverage(bytes: Uint8Array, password?: string) {
 
     if (text.length > 12) pagesWithText += 1;
     totalCharacters += text.length;
+    if (previewText.length < 1600 && text) {
+      previewText = `${previewText} ${text}`.trim();
+    }
   }
 
   return {
     sampledPages,
     pagesWithText,
     totalCharacters,
+    previewText: previewText.slice(0, 1600),
   };
 }
 
@@ -735,6 +756,9 @@ export default function ToolWorkbench({ tool }: WorkbenchProps) {
   const [outputPreview, setOutputPreview] = useState<OutputPreview | null>(null);
   const [previewText, setPreviewText] = useState<string>("");
   const [downloadingOutput, setDownloadingOutput] = useState(false);
+  const [pdfPreviewPage, setPdfPreviewPage] = useState(1);
+  const [pdfPreviewPageCount, setPdfPreviewPageCount] = useState(1);
+  const [pdfPreviewLoading, setPdfPreviewLoading] = useState(false);
   const [cameraActive, setCameraActive] = useState(false);
   const [cameraBusy, setCameraBusy] = useState(false);
   const [cameraError, setCameraError] = useState("");
@@ -758,8 +782,9 @@ export default function ToolWorkbench({ tool }: WorkbenchProps) {
   const [runReport, setRunReport] = useState<RunReport | null>(null);
   const [processingLog, setProcessingLog] = useState<ProcessingLogEntry[]>([]);
   const [retentionTick, setRetentionTick] = useState(0);
-  const [fileNamePrefix, setFileNamePrefix] = useState("pt");
-  const [selectedRecipeSlug, setSelectedRecipeSlug] = useState(() => searchParams.get("recipe") ?? "");
+  const fileNamePrefix = "pt";
+  const [autoRunEpoch, setAutoRunEpoch] = useState(0);
+  const selectedRecipeSlug = searchParams.get("recipe") ?? "";
   const [pipelineNotice, setPipelineNotice] = useState(() => {
     if (!pipelineBootstrap) return "";
     if (!pipelineBootstrap.accepted) {
@@ -767,8 +792,12 @@ export default function ToolWorkbench({ tool }: WorkbenchProps) {
     }
     return `Pipeline input received from ${pipelineBootstrap.payload.fromToolSlug}. No re-upload needed for this step.`;
   });
+  // preflightSummary feeds the smart-intake API payload (findings/scanLikelihood)
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   const [preflightSummary, setPreflightSummary] = useState<ReturnType<typeof analyzeDocumentSelection> | null>(null);
   const [preflightLoading, setPreflightLoading] = useState(false);
+  const [smartIntake, setSmartIntake] = useState<SmartIntakeResult | null>(null);
+  const [smartIntakeLoading, setSmartIntakeLoading] = useState(false);
   const [localStoredFiles, setLocalStoredFiles] = useState<LocalStoredFileEntry[]>(() => {
     if (typeof window === "undefined") return [];
     try {
@@ -789,7 +818,10 @@ export default function ToolWorkbench({ tool }: WorkbenchProps) {
   const signatureActiveStrokeRef = useRef<Array<{ x: number; y: number }>>([]);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const autoWorkflowUploadPromptedRef = useRef(false);
+  const autoRunHandledRef = useRef(0);
+  const autoRunReasonRef = useRef("");
   const previewJobRef = useRef(0);
+  const pdfPreviewRequestRef = useRef(0);
   const preflightJobRef = useRef(0);
   const latestOutputRef = useRef<{ blob: Blob; fileName: string; mime: string } | null>(null);
 
@@ -825,10 +857,11 @@ export default function ToolWorkbench({ tool }: WorkbenchProps) {
   }, [compressionOptions, files, tool.slug]);
 
   const applicableRecipes = useMemo(() => getRecipesForTool(tool.slug), [tool.slug]);
-  const effectiveRecipeSlug = selectedRecipeSlug || applicableRecipes[0]?.slug || "";
+  // Only activate workflow mode when the user explicitly started one via ?recipe= URL param.
+  // Never auto-select a recipe — individual tools must always start fresh.
   const selectedRecipe = useMemo(
-    () => applicableRecipes.find((recipe) => recipe.slug === effectiveRecipeSlug) || null,
-    [applicableRecipes, effectiveRecipeSlug]
+    () => (selectedRecipeSlug ? applicableRecipes.find((recipe) => recipe.slug === selectedRecipeSlug) || null : null),
+    [applicableRecipes, selectedRecipeSlug]
   );
 
   const currentRecipeNextStep = useMemo(() => {
@@ -847,11 +880,17 @@ export default function ToolWorkbench({ tool }: WorkbenchProps) {
     return selectedRecipe.steps[currentRecipeStepIndex - 1] ?? null;
   }, [selectedRecipe, currentRecipeStepIndex]);
 
+  const continueBlockedReason = useMemo(() => {
+    if (!currentRecipeNextStep) return "";
+    if (!files.length) return `Upload a file to ${tool.name} before continuing to ${currentRecipeNextStep.label}.`;
+    return "";
+  }, [currentRecipeNextStep, files.length, tool.name]);
+
   const hasChosenWorkflow = Boolean(selectedRecipeSlug && selectedRecipe);
   const isFirstWorkflowStep = hasChosenWorkflow && currentRecipeStepIndex === 0;
   const shouldShowFileInput = !hasChosenWorkflow || isFirstWorkflowStep;
-  const shouldShowNamingPrefix = !hasChosenWorkflow;
   const shouldShowPreflight = !hasChosenWorkflow;
+  const suggestedWorkflow = smartIntake?.recommendedWorkflow ?? null;
 
   const retentionSecondsLeft = useMemo(() => {
     if (!outputPreview) return null;
@@ -864,6 +903,19 @@ export default function ToolWorkbench({ tool }: WorkbenchProps) {
     setProcessingLog((current) => [{ at, message }, ...current].slice(0, 30));
   }
 
+  function shouldAutoRunAfterSelection(nextFiles: File[]) {
+    if (!nextFiles.length) return false;
+    if (usesThumbnailEditor || isEditTool || isSignTool) return false;
+    if (tool.slug === "protect-pdf" || tool.slug === "unlock-pdf") return false;
+    if (tool.slug === "compare-pdf") return nextFiles.length >= 2;
+    return true;
+  }
+
+  function requestAutoRun(reason: string) {
+    autoRunReasonRef.current = reason;
+    setAutoRunEpoch((current) => current + 1);
+  }
+
   function persistLocalFileHistory(entries: LocalStoredFileEntry[]) {
     try {
       localStorage.setItem(LOCAL_FILE_HISTORY_KEY, JSON.stringify(entries.slice(0, 40)));
@@ -871,25 +923,6 @@ export default function ToolWorkbench({ tool }: WorkbenchProps) {
     } catch {
       // Ignore localStorage failures in restricted contexts.
     }
-  }
-
-  function refreshLocalFileHistory() {
-    try {
-      const raw = localStorage.getItem(LOCAL_FILE_HISTORY_KEY);
-      const parsed = raw ? JSON.parse(raw) : [];
-      setLocalStoredFiles(Array.isArray(parsed) ? parsed : []);
-    } catch {
-      setLocalStoredFiles([]);
-    }
-  }
-
-  function clearLocalFileHistory() {
-    try {
-      localStorage.removeItem(LOCAL_FILE_HISTORY_KEY);
-    } catch {
-      // Ignore localStorage failures in restricted contexts.
-    }
-    setLocalStoredFiles([]);
   }
 
   function addLocalStoredFiles(nextFiles: File[], note?: string) {
@@ -1153,6 +1186,8 @@ export default function ToolWorkbench({ tool }: WorkbenchProps) {
   async function runPreflightAnalysis(nextFiles: File[]) {
     if (!nextFiles.length) {
       setPreflightSummary(null);
+      setSmartIntake(null);
+      setSmartIntakeLoading(false);
       setPreflightLoading(false);
       return;
     }
@@ -1160,6 +1195,8 @@ export default function ToolWorkbench({ tool }: WorkbenchProps) {
     const currentJob = preflightJobRef.current + 1;
     preflightJobRef.current = currentJob;
     setPreflightLoading(true);
+    setSmartIntake(null);
+    setSmartIntakeLoading(true);
 
     try {
       const firstPdf = nextFiles.find(
@@ -1176,10 +1213,41 @@ export default function ToolWorkbench({ tool }: WorkbenchProps) {
       }
 
       if (preflightJobRef.current !== currentJob) return;
-      setPreflightSummary(analyzeDocumentSelection(nextFiles, TOOL_ITEMS, pdfSample));
+      const summary = analyzeDocumentSelection(nextFiles, TOOL_ITEMS, pdfSample);
+      setPreflightSummary(summary);
+
+      const intakeResponse = await fetch("/api/smart-intake", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          files: nextFiles.map((file) => ({
+            name: file.name,
+            mime: file.type,
+            sizeBytes: file.size,
+          })),
+          estimatedInputType: summary.estimatedInputType,
+          scanLikelihood: summary.scanLikelihood,
+          findings: summary.findings,
+          textPreview: pdfSample?.previewText || "",
+          currentToolSlug: tool.slug,
+        }),
+      });
+
+      if (preflightJobRef.current !== currentJob) return;
+
+      if (!intakeResponse.ok) {
+        setSmartIntake(null);
+      } else {
+        const intakePayload = (await intakeResponse.json()) as SmartIntakeResult;
+        setSmartIntake(intakePayload);
+      }
+    } catch {
+      if (preflightJobRef.current !== currentJob) return;
+      setSmartIntake(null);
     } finally {
       if (preflightJobRef.current === currentJob) {
         setPreflightLoading(false);
+        setSmartIntakeLoading(false);
       }
     }
   }
@@ -1245,19 +1313,18 @@ export default function ToolWorkbench({ tool }: WorkbenchProps) {
     }
 
     if (blob.type.includes("pdf")) {
-      blob
-        .arrayBuffer()
-        .then((buffer) => renderPdfFirstPagePreview(new Uint8Array(buffer)))
-        .then((dataUrl) => {
-          if (previewJobRef.current !== previewJob) return;
-          setOutputPreview((current) => {
-            if (!current || current.url !== url) return current;
-            return { ...current, pdfPreviewDataUrl: dataUrl };
-          });
-        })
-        .catch(() => {
-          // Keep iframe preview fallback when generated preview fails.
-        });
+      setPdfPreviewPage(1);
+      setPdfPreviewPageCount(1);
+      void loadOutputPdfPreviewPage(1, {
+        blob,
+        fileName: finalFileName,
+        url,
+        mime: blob.type || "application/octet-stream",
+        createdAt,
+        expiresAt,
+        note,
+        imagePreviewDataUrl,
+      });
     }
   }
 
@@ -1271,6 +1338,128 @@ export default function ToolWorkbench({ tool }: WorkbenchProps) {
     setDownloadingOutput(true);
     downloadPreparedOutput();
   }
+
+  async function loadOutputPdfPreviewPage(targetPage: number, currentOutput = outputPreview) {
+    if (!currentOutput || !currentOutput.mime.includes("pdf")) return;
+
+    const requestId = pdfPreviewRequestRef.current + 1;
+    pdfPreviewRequestRef.current = requestId;
+    setPdfPreviewLoading(true);
+
+    try {
+      const buffer = await currentOutput.blob.arrayBuffer();
+      const rendered = await renderPdfPagePreview(new Uint8Array(buffer), targetPage);
+      if (pdfPreviewRequestRef.current !== requestId) return;
+
+      setPdfPreviewPage(rendered.safePage);
+      setPdfPreviewPageCount(rendered.pageCount);
+      setOutputPreview((current) => {
+        if (!current || current.url !== currentOutput.url) return current;
+        return { ...current, pdfPreviewDataUrl: rendered.dataUrl };
+      });
+    } catch {
+      // Keep existing preview if rendering fails.
+    } finally {
+      if (pdfPreviewRequestRef.current === requestId) {
+        setPdfPreviewLoading(false);
+      }
+    }
+  }
+
+  const outputPreviewPanel = outputPreview ? (
+    <div className="space-y-3 rounded-xl border border-slate-200 bg-slate-50 p-3">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <div>
+          <p className="type-eyebrow text-slate-600">Output Preview</p>
+          <p className="field-help mt-1">Auto-delete in browser buffer: {formatRetention(retentionSecondsLeft)}</p>
+        </div>
+        <button
+          type="button"
+          onClick={handleDownloadOutput}
+          disabled={downloadingOutput}
+          className={`${downloadingOutput ? "" : "animate-pulse"} btn btn-primary rounded-full px-4 py-2 text-xs uppercase tracking-wide shadow-[0_0_0_0_rgba(8,145,178,0.45)] disabled:cursor-not-allowed disabled:bg-cyan-200`}
+        >
+          {downloadingOutput ? "Downloading..." : "Download output"}
+        </button>
+      </div>
+
+      {outputPreview.mime.includes("pdf") ? (
+        <div className="space-y-2">
+          {outputPreview.pdfPreviewDataUrl ? (
+            <div className="relative inline-block overflow-hidden rounded-lg border border-slate-300 bg-white">
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img
+                src={outputPreview.pdfPreviewDataUrl}
+                alt={`Processed PDF preview page ${pdfPreviewPage}`}
+                className="max-h-72 w-auto bg-white"
+              />
+
+              <div className="pointer-events-none absolute inset-0 flex items-center justify-between px-2">
+                <button
+                  type="button"
+                  onClick={() => void loadOutputPdfPreviewPage(pdfPreviewPage - 1)}
+                  disabled={pdfPreviewLoading || pdfPreviewPage <= 1}
+                  className="pointer-events-auto rounded-full border border-slate-400/45 bg-slate-900/20 px-2 py-1 text-[11px] font-semibold text-slate-100 shadow-sm backdrop-blur-[1px] transition hover:bg-slate-900/30 disabled:cursor-not-allowed disabled:opacity-35"
+                >
+                  Prev
+                </button>
+                <button
+                  type="button"
+                  onClick={() => void loadOutputPdfPreviewPage(pdfPreviewPage + 1)}
+                  disabled={pdfPreviewLoading || pdfPreviewPage >= pdfPreviewPageCount}
+                  className="pointer-events-auto rounded-full border border-slate-400/45 bg-slate-900/20 px-2 py-1 text-[11px] font-semibold text-slate-100 shadow-sm backdrop-blur-[1px] transition hover:bg-slate-900/30 disabled:cursor-not-allowed disabled:opacity-35"
+                >
+                  Next
+                </button>
+              </div>
+
+              <div className="absolute bottom-2 left-1/2 -translate-x-1/2 rounded-full border border-slate-300 bg-white/95 px-2 py-0.5 text-[11px] font-semibold text-slate-800 shadow-sm">
+                Page {pdfPreviewPage} / {pdfPreviewPageCount}
+              </div>
+            </div>
+          ) : (
+            <div className="rounded-lg border border-slate-300 bg-white p-3 text-xs text-slate-700">
+              Generating PDF preview...
+            </div>
+          )}
+          <p className="field-help">PDF preview is shown before download to verify quality.</p>
+        </div>
+      ) : null}
+
+      {outputPreview.mime.startsWith("image/") || outputPreview.imagePreviewDataUrl ? (
+        // eslint-disable-next-line @next/next/no-img-element
+        <img
+          src={outputPreview.imagePreviewDataUrl || outputPreview.url}
+          alt="Processed output preview"
+          className="max-h-72 w-auto rounded-lg border border-slate-300 bg-white"
+        />
+      ) : null}
+
+      {outputPreview.mime.startsWith("text/") || OFFICE_PREVIEW_MIME_PATTERN.test(outputPreview.mime) ? (
+        <pre className="max-h-72 overflow-auto whitespace-pre-wrap rounded-lg border border-slate-300 bg-white p-3 text-xs text-slate-800">
+          {previewText || "Loading preview..."}
+        </pre>
+      ) : null}
+
+      {!outputPreview.mime.includes("pdf") &&
+      !outputPreview.mime.startsWith("image/") &&
+      !outputPreview.mime.startsWith("text/") &&
+      !OFFICE_PREVIEW_MIME_PATTERN.test(outputPreview.mime) &&
+      !outputPreview.imagePreviewDataUrl ? (
+        <div className="rounded-lg border border-slate-300 bg-white p-3 text-xs text-slate-700">
+          <p>Inline rendering is not available for this format in-browser.</p>
+          <p className="mt-1">File type: {outputPreview.mime || "Unknown"}</p>
+          <p className="mt-1">Size: {(outputPreview.blob.size / 1024).toFixed(1)} KB</p>
+        </div>
+      ) : null}
+    </div>
+  ) : (
+    <div className="rounded-xl border border-dashed border-slate-300 bg-slate-50/60 p-4">
+      <p className="type-eyebrow text-slate-600">Output Preview</p>
+      <p className="mt-1 text-sm text-slate-700">Processed output appears here immediately after upload or run.</p>
+      <p className="field-help mt-2">Use the run button anytime to re-run with current settings.</p>
+    </div>
+  );
 
   useEffect(() => {
     return () => {
@@ -1318,12 +1507,26 @@ export default function ToolWorkbench({ tool }: WorkbenchProps) {
         void runPreflightAnalysis([pipelineBootstrap.file]);
       }
       void hydrateSelectionContext([pipelineBootstrap.file]);
+      if (shouldAutoRunAfterSelection([pipelineBootstrap.file])) {
+        requestAutoRun("Auto-run triggered from workflow pipeline handoff.");
+      }
     }, 0);
 
     return () => window.clearTimeout(timer);
     // hydrateSelectionContext/runPreflightAnalysis are intentionally not deps to avoid reruns.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [pipelineBootstrap, shouldShowPreflight]);
+
+  useEffect(() => {
+    if (!autoRunEpoch || autoRunHandledRef.current === autoRunEpoch) return;
+    if (busy || !files.length) return;
+
+    autoRunHandledRef.current = autoRunEpoch;
+    logProcessing(autoRunReasonRef.current || "Auto-run triggered after upload.");
+    void runTool();
+    // runTool/logProcessing are intentionally omitted because runTool is not memoized.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [autoRunEpoch, busy, files.length]);
 
   useEffect(() => {
     if (!isScanTool) {
@@ -1986,6 +2189,7 @@ export default function ToolWorkbench({ tool }: WorkbenchProps) {
     setMergeDragOverId(null);
     setOcrQueueStatus([]);
     setPreflightSummary(null);
+    setSmartIntake(null);
     setPipelineNotice("");
     logProcessing(`Selected ${nextFiles.length} file(s) for ${tool.name}.`);
 
@@ -1997,17 +2201,23 @@ export default function ToolWorkbench({ tool }: WorkbenchProps) {
         setOcrUploadWarning(message);
         setError(message);
         setPreflightLoading(false);
+        setSmartIntakeLoading(false);
         return;
       }
     }
 
-    setFiles((current) => (isScanTool ? [...current, ...nextFiles] : nextFiles));
+    const finalSelectedFiles = isScanTool ? [...files, ...nextFiles] : nextFiles;
+    setFiles(finalSelectedFiles);
     addLocalStoredFiles(nextFiles, `Uploaded for ${tool.name}`);
-    const selectedFilesForAnalysis = isScanTool ? [...files, ...nextFiles] : nextFiles;
+    const selectedFilesForAnalysis = finalSelectedFiles;
     if (shouldShowPreflight) {
       void runPreflightAnalysis(selectedFilesForAnalysis);
     }
     await hydrateSelectionContext(nextFiles);
+
+    if (shouldAutoRunAfterSelection(finalSelectedFiles)) {
+      requestAutoRun("Auto-run triggered after file upload.");
+    }
   }
 
   async function onSelect(selected: FileList | null) {
@@ -2015,12 +2225,13 @@ export default function ToolWorkbench({ tool }: WorkbenchProps) {
     await applySelectedFiles(Array.from(selected));
   }
 
-  function stageRecipeHandoff(targetToolSlug: string) {
+  function stageRecipeHandoff(targetToolSlug: string, recipeSlugOverride?: string) {
+    const recipeSlug = recipeSlugOverride ?? selectedRecipe?.slug ?? selectedRecipeSlug;
     if (latestOutputRef.current && outputPreview) {
       stageWorkflowPipeline({
         fromToolSlug: tool.slug,
         toToolSlug: targetToolSlug,
-        recipeSlug: selectedRecipe?.slug,
+        recipeSlug,
         fileName: outputPreview.fileName,
         mime: outputPreview.mime,
         blob: outputPreview.blob,
@@ -2034,7 +2245,7 @@ export default function ToolWorkbench({ tool }: WorkbenchProps) {
       stageWorkflowPipeline({
         fromToolSlug: tool.slug,
         toToolSlug: targetToolSlug,
-        recipeSlug: selectedRecipe?.slug,
+        recipeSlug,
         fileName: files[0].name,
         mime: files[0].type || "application/octet-stream",
         blob: files[0],
@@ -2044,10 +2255,18 @@ export default function ToolWorkbench({ tool }: WorkbenchProps) {
     }
   }
 
-  function continueRecipe() {
+  async function continueRecipe() {
     if (!currentRecipeNextStep) return;
-    stageRecipeHandoff(currentRecipeNextStep.toolSlug);
 
+    // If there is no output yet but we have a file, auto-run the current tool
+    // first, then hand off to the next step once it completes.
+    if (!outputPreview && files.length) {
+      await runTool();
+      // runTool stages outputPreview via stageOutput; give React one tick to flush.
+      await new Promise<void>((resolve) => setTimeout(resolve, 0));
+    }
+
+    stageRecipeHandoff(currentRecipeNextStep.toolSlug);
     const recipeSlug = selectedRecipe?.slug || selectedRecipeSlug;
     router.push(`/tools/${currentRecipeNextStep.toolSlug}${recipeSlug ? `?recipe=${encodeURIComponent(recipeSlug)}` : ""}`);
   }
@@ -2058,6 +2277,49 @@ export default function ToolWorkbench({ tool }: WorkbenchProps) {
 
     const recipeSlug = selectedRecipe?.slug || selectedRecipeSlug;
     router.push(`/tools/${currentRecipePreviousStep.toolSlug}${recipeSlug ? `?recipe=${encodeURIComponent(recipeSlug)}` : ""}`);
+  }
+
+  function setRecipeSlug(recipeSlug: string) {
+    const params = new URLSearchParams(searchParams.toString());
+    if (recipeSlug) {
+      params.set("recipe", recipeSlug);
+    } else {
+      params.delete("recipe");
+    }
+    const nextQuery = params.toString();
+    router.replace(`/tools/${tool.slug}${nextQuery ? `?${nextQuery}` : ""}`);
+  }
+
+  function startSuggestedWorkflow(workflow: RecommendedWorkflow) {
+    // If the AI suggested a workflow that doesn't include the current tool,
+    // try to fall back to an applicable recipe that does.
+    const workflowToUse: RecommendedWorkflow = (() => {
+      if (workflow.steps.some((s) => s.toolSlug === tool.slug)) return workflow;
+      const fallback = applicableRecipes.find((r) =>
+        r.steps.some((s) => s.toolSlug === tool.slug)
+      );
+      if (!fallback) return workflow;
+      return {
+        recipeSlug: fallback.slug,
+        recipeName: fallback.name,
+        description: fallback.description,
+        steps: fallback.steps,
+      };
+    })();
+
+    const firstStep = workflowToUse.steps[0];
+    if (!firstStep) return;
+
+    // If the current tool is already one of the workflow steps, activate it here.
+    if (workflowToUse.steps.some((s) => s.toolSlug === tool.slug)) {
+      setRecipeSlug(workflowToUse.recipeSlug);
+      setError("");
+      setStatus(`Workflow "${workflowToUse.recipeName}" started at this step. Complete it, then continue to the next stage.`);
+      return;
+    }
+
+    stageRecipeHandoff(firstStep.toolSlug, workflowToUse.recipeSlug);
+    router.push(`/tools/${firstStep.toolSlug}?recipe=${encodeURIComponent(workflowToUse.recipeSlug)}`);
   }
 
   async function runOcrForFile(file: File) {
@@ -2670,14 +2932,14 @@ export default function ToolWorkbench({ tool }: WorkbenchProps) {
               });
             } else {
               const signatureText = editText || "Signed electronically";
-              const textSize = 10;
+              const textSize = 22;
               const textWidth = font.widthOfTextAtSize(signatureText, textSize);
               page.drawText(signatureText, {
                 x: clamp(anchorX - textWidth / 2, 12, width - textWidth - 12),
                 y: clamp(anchorY - textSize / 2, 12, height - textSize - 12),
                 size: textSize,
                 font,
-                color: rgb(0.1, 0.1, 0.1),
+                color: rgb(0.06, 0.06, 0.35),
               });
             }
           } else {
@@ -2816,244 +3078,259 @@ export default function ToolWorkbench({ tool }: WorkbenchProps) {
   }
 
   return (
-    <section className="tool-shell glass-3d space-y-4 rounded-3xl p-6">
-      <div className="flex items-center gap-4">
-        <h2 className="font-display text-2xl font-semibold text-slate-950">{tool.name}</h2>
-      </div>
+    <section className="tool-shell glass-3d mx-auto max-w-[2300px] space-y-3 rounded-3xl p-4 xl:p-5">
+      {/* ── Full-width top banner ── */}
+      <div className="space-y-2">
+        <div className="flex flex-wrap items-baseline gap-x-3 gap-y-0.5">
+          <h2 className="font-display text-2xl font-semibold text-slate-950">{tool.name}</h2>
+          {(() => {
+            const hasAiIntake = smartIntake?.source === "ai";
+            if (hasAiIntake && smartIntake) {
+              return (
+                <span className="text-sm text-slate-500">
+                  {smartIntake.documentType}
+                  {smartIntake.intakeSummary ? ` — ${smartIntake.intakeSummary}` : ""}
+                  {smartIntakeLoading ? <span className="ml-2 text-xs text-cyan-700">Analyzing…</span> : null}
+                </span>
+              );
+            }
+            if (preflightLoading) {
+              return <span className="text-xs text-slate-400">Analyzing…</span>;
+            }
+            return null;
+          })()}
+        </div>
 
-      <p className="text-sm text-slate-700">{tool.description}</p>
+        <p className="text-sm text-slate-700">{tool.description}</p>
 
-      <div className="flex flex-wrap items-center gap-2">
-        <span className={`status-chip ${tool.runtime === "server" ? "status-chip-server" : "status-chip-live"}`}>
-          {tool.runtime === "server" ? "Server processing" : "Local browser processing"}
-        </span>
-        <span className="status-chip status-chip-ok">Zero-retention preview buffer</span>
-      </div>
+        {(() => {
+          if (suggestedWorkflow) {
+            return (
+              <div className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2">
+                <div className="flex flex-wrap items-center gap-1.5">
+                  {suggestedWorkflow.steps.map((step, index) => (
+                    <span key={step.toolSlug} className="flex items-center gap-1.5">
+                      <span className="rounded-full bg-cyan-100 px-2.5 py-0.5 text-xs font-medium text-cyan-900">{step.label}</span>
+                      {index < suggestedWorkflow.steps.length - 1 ? <span className="text-xs text-slate-400">→</span> : null}
+                    </span>
+                  ))}
+                </div>
+                <p className="mt-1 text-[11px] text-slate-500">{suggestedWorkflow.description}</p>
+              </div>
+            );
+          }
+          return null;
+        })()}
 
-      <p className="field-help">{uploadHint}</p>
+        <p className="field-help">{uploadHint}</p>
 
-      {pipelineNotice ? (
-        <div className="pipeline-banner flex flex-wrap items-center justify-between gap-2 rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2">
-          <p className="text-sm font-medium text-emerald-800">{pipelineNotice}</p>
-          {pipelineNotice.includes("received") && shouldShowFileInput ? (
+        {shouldShowFileInput ? (
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept={inputAccept}
+            multiple={acceptsMultiple}
+            onChange={(event) => onSelect(event.target.files)}
+            className="w-full rounded-xl border border-slate-300 bg-slate-50 px-3 py-2 text-sm text-slate-700 file:mr-3 file:rounded-md file:border-0 file:bg-slate-200 file:px-3 file:py-1.5 file:text-sm file:font-semibold file:text-slate-800 hover:file:bg-slate-300"
+          />
+        ) : null}
+
+        <div className="flex flex-wrap items-center gap-2">
+          <button
+            type="button"
+            onClick={runTool}
+            disabled={busy}
+            className="btn btn-primary rounded-full px-5 py-2 text-sm disabled:cursor-not-allowed disabled:bg-slate-500"
+          >
+            {busy ? "Processing..." : outputPreview ? `Re-run ${tool.name}` : `Run ${tool.name}`}
+          </button>
+          {suggestedWorkflow ? (
             <button
               type="button"
-              onClick={() => {
-                setFiles([]);
-                setPipelineNotice("");
-                logProcessing("Pipeline handoff dismissed. Manual file upload required.");
-              }}
-              className="rounded-full border border-emerald-300 bg-white px-3 py-1 text-xs font-semibold text-emerald-800 transition hover:bg-emerald-100"
+              onClick={() => startSuggestedWorkflow(suggestedWorkflow)}
+              disabled={busy}
+              className="rounded-full border border-cyan-300 bg-white px-4 py-2 text-sm font-semibold text-cyan-900 transition hover:bg-cyan-50 disabled:cursor-not-allowed disabled:opacity-50"
             >
-              Use original file instead
+              Start suggested workflow
             </button>
           ) : null}
+          {busy ? <span className="status-chip status-chip-busy">Processing</span> : null}
+          {status ? <span className="status-chip status-chip-ok">Ready</span> : null}
+          {error ? <span className="status-chip status-chip-error">Failed</span> : null}
         </div>
-      ) : null}
 
-      {applicableRecipes.length ? (
-        <div className="space-y-3 rounded-2xl border border-slate-200 bg-slate-50 p-3">
-          <div className="flex items-center justify-between gap-3">
-            <p className="text-xs font-semibold uppercase tracking-[0.14em] text-slate-600">Workflow in progress</p>
-            {applicableRecipes.length > 1 ? (
-              <select
-                value={effectiveRecipeSlug}
-                onChange={(event) => setSelectedRecipeSlug(event.target.value)}
-                className="rounded-lg border border-slate-300 bg-white px-2 py-1 text-xs text-slate-700"
-              >
-                {applicableRecipes.map((recipe) => (
-                  <option key={recipe.slug} value={recipe.slug}>
-                    {recipe.name}
-                  </option>
-                ))}
-              </select>
-            ) : selectedRecipe ? (
-              <span className="text-xs font-semibold text-slate-700">{selectedRecipe.name}</span>
-            ) : null}
-          </div>
+        {error ? <p className="text-sm font-medium text-rose-700">{error}</p> : null}
+        {status ? <p className="text-sm font-medium text-emerald-700">{status}</p> : null}
+      </div>
 
-          {selectedRecipe ? (
-            <>
-              <p className="text-xs text-slate-600">{selectedRecipe.description}</p>
+      <div className="grid gap-3 xl:grid-cols-[minmax(240px,0.95fr)_minmax(0,3.05fr)_minmax(240px,1fr)] xl:items-start">
+        <div className="space-y-2">
 
-              {/* ── Animated step track ── */}
-              <div className="overflow-x-auto pb-1">
-                <div className="flex min-w-max items-start gap-0">
-                  {selectedRecipe.steps.map((step, index) => {
-                    const activeIndex = selectedRecipe.steps.findIndex((s) => s.toolSlug === tool.slug);
-                    const isCompleted = index < activeIndex;
-                    const isActive = step.toolSlug === tool.slug;
+          {pipelineNotice ? (
+            <div className="pipeline-banner flex flex-wrap items-center justify-between gap-2 rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2">
+              <p className="text-sm font-medium text-emerald-800">{pipelineNotice}</p>
+              {pipelineNotice.includes("received") && shouldShowFileInput ? (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setFiles([]);
+                    setPipelineNotice("");
+                    logProcessing("Pipeline handoff dismissed. Manual file upload required.");
+                  }}
+                  className="rounded-full border border-emerald-300 bg-white px-3 py-1 text-xs font-semibold text-emerald-800 transition hover:bg-emerald-100"
+                >
+                  Use original file instead
+                </button>
+              ) : null}
+            </div>
+          ) : null}
 
-                    return (
-                      <div key={`${selectedRecipe.slug}-track-${step.toolSlug}`} className="flex items-start gap-0">
-                        {/* step node */}
-                        <div className="pipeline-step-arrive flex flex-col items-center" style={{ animationDelay: `${index * 80}ms` }}>
-                          <div
-                            className={`relative flex h-8 w-8 shrink-0 items-center justify-center rounded-full border-2 transition-all duration-500 ${
-                              isCompleted
-                                ? "border-emerald-400 bg-emerald-400 text-white"
-                                : isActive
-                                  ? "border-cyan-500 bg-cyan-500 text-white pipeline-step-active-ring"
-                                  : "border-slate-300 bg-white text-slate-400"
-                            }`}
-                          >
-                            {isCompleted ? (
-                              <svg viewBox="0 0 12 12" className="h-4 w-4" fill="none">
-                                <path d="M2 6l3 3 5-5" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
-                              </svg>
-                            ) : (
-                              <span className="text-[11px] font-bold leading-none">{index + 1}</span>
-                            )}
-                          </div>
-                          <span
-                            className={`mt-1.5 max-w-[68px] text-center text-[10px] leading-tight ${
-                              isActive ? "font-semibold text-cyan-900" : isCompleted ? "text-emerald-700" : "text-slate-500"
-                            }`}
-                          >
-                            {step.label}
-                          </span>
-                        </div>
-
-                        {/* connector line */}
-                        {index < selectedRecipe.steps.length - 1 ? (
-                          <div className="relative mx-1 mt-3.5 h-0.5 w-10 overflow-hidden rounded-full bg-slate-200">
-                            {isCompleted ? (
-                              <span className="pipeline-line-fill absolute inset-0 rounded-full bg-emerald-400" />
-                            ) : isActive ? (
-                              <span
-                                className="absolute inset-y-0 left-0 rounded-full bg-cyan-400"
-                                style={{ width: "50%", opacity: 0.7 }}
-                              />
-                            ) : null}
-                          </div>
-                        ) : null}
-                      </div>
-                    );
-                  })}
-                </div>
+          {hasChosenWorkflow && applicableRecipes.length ? (
+            <div className="space-y-3 rounded-2xl border border-slate-200 bg-slate-50 p-3">
+              <div className="flex items-center justify-between gap-3">
+                <p className="text-xs font-semibold uppercase tracking-[0.14em] text-slate-600">Workflow in progress</p>
+                {applicableRecipes.length > 1 ? (
+                  <select
+                    value={selectedRecipeSlug}
+                    onChange={(event) => setRecipeSlug(event.target.value)}
+                    className="rounded-lg border border-slate-300 bg-white px-2 py-1 text-xs text-slate-700"
+                  >
+                    {applicableRecipes.map((recipe) => (
+                      <option key={recipe.slug} value={recipe.slug}>
+                        {recipe.name}
+                      </option>
+                    ))}
+                  </select>
+                ) : selectedRecipe ? (
+                  <span className="text-xs font-semibold text-slate-700">{selectedRecipe.name}</span>
+                ) : null}
               </div>
 
-              {(currentRecipeNextStep || currentRecipePreviousStep) && !busy ? (
-                <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
-                  <button
-                    type="button"
-                    onClick={goToPreviousRecipeStage}
-                    disabled={!currentRecipePreviousStep}
-                    className="rounded-xl border border-slate-300 bg-white py-2 text-xs font-semibold text-slate-700 transition hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-50"
-                  >
-                    {currentRecipePreviousStep
-                      ? `← Previous step: ${currentRecipePreviousStep.label}`
-                      : "No previous stage"}
-                  </button>
+              {selectedRecipe ? (
+                <>
+                  <p className="text-xs text-slate-600">{selectedRecipe.description}</p>
 
-                  <button
-                    type="button"
-                    onClick={continueRecipe}
-                    disabled={!currentRecipeNextStep || !outputPreview}
-                    className="rounded-xl border border-cyan-300 bg-cyan-50 py-2 text-xs font-semibold text-cyan-900 transition hover:bg-cyan-100 disabled:cursor-not-allowed disabled:opacity-50"
-                  >
-                    {currentRecipeNextStep
-                      ? outputPreview
-                        ? `Continue to step ${(selectedRecipe.steps.findIndex((s) => s.toolSlug === currentRecipeNextStep.toolSlug) + 1)}: ${currentRecipeNextStep.label} →`
-                        : `Run ${tool.name} first, then continue to: ${currentRecipeNextStep.label}`
-                      : "No next stage"}
-                  </button>
-                </div>
-              ) : !currentRecipeNextStep ? (
-                <p className="rounded-xl bg-emerald-50 px-3 py-2 text-xs font-semibold text-emerald-700">
-                  ✓ Final step complete — workflow finished.
-                </p>
-              ) : null}
-            </>
-          ) : null}
-        </div>
-      ) : null}
+                  {/* ── Animated step track ── */}
+                  <div className="overflow-x-auto pb-1">
+                    <div className="flex min-w-max items-start gap-0">
+                      {selectedRecipe.steps.map((step, index) => {
+                        const activeIndex = selectedRecipe.steps.findIndex((s) => s.toolSlug === tool.slug);
+                        const isCompleted = index < activeIndex;
+                        const isActive = step.toolSlug === tool.slug;
 
-      {shouldShowNamingPrefix ? (
-        <div className="space-y-1">
-          <label htmlFor="file-prefix" className="text-xs font-semibold uppercase tracking-wide text-slate-600">
-            Output naming prefix
-          </label>
-          <input
-            id="file-prefix"
-            type="text"
-            value={fileNamePrefix}
-            onChange={(event) => setFileNamePrefix(event.target.value)}
-            placeholder="Example: acme-q2"
-            className="w-full rounded-xl border border-slate-300 bg-slate-50 px-3 py-2 text-sm text-slate-800"
-          />
-          <p className="field-help">Applied to every generated output to standardize batch naming conventions.</p>
-        </div>
-      ) : null}
+                        return (
+                          <div key={`${selectedRecipe.slug}-track-${step.toolSlug}`} className="flex items-start gap-0">
+                            {/* step node */}
+                            <div className="pipeline-step-arrive flex flex-col items-center" style={{ animationDelay: `${index * 80}ms` }}>
+                              <div
+                                className={`relative flex h-8 w-8 shrink-0 items-center justify-center rounded-full border-2 transition-all duration-500 ${
+                                  isCompleted
+                                    ? "border-emerald-400 bg-emerald-400 text-white"
+                                    : isActive
+                                      ? "border-cyan-500 bg-cyan-500 text-white pipeline-step-active-ring"
+                                      : "border-slate-300 bg-white text-slate-400"
+                                }`}
+                              >
+                                {isCompleted ? (
+                                  <svg viewBox="0 0 12 12" className="h-4 w-4" fill="none">
+                                    <path d="M2 6l3 3 5-5" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
+                                  </svg>
+                                ) : (
+                                  <span className="text-[11px] font-bold leading-none">{index + 1}</span>
+                                )}
+                              </div>
+                              <span
+                                className={`mt-1.5 max-w-[68px] text-center text-[10px] leading-tight ${
+                                  isActive ? "font-semibold text-cyan-900" : isCompleted ? "text-emerald-700" : "text-slate-500"
+                                }`}
+                              >
+                                {step.label}
+                              </span>
+                            </div>
 
-      {shouldShowFileInput ? (
-        <input
-          ref={fileInputRef}
-          type="file"
-          accept={inputAccept}
-          multiple={acceptsMultiple}
-          onChange={(event) => onSelect(event.target.files)}
-          className="w-full rounded-xl border border-slate-300 bg-slate-50 px-3 py-2 text-sm text-slate-700 file:mr-3 file:rounded-md file:border-0 file:bg-slate-200 file:px-3 file:py-1.5 file:text-sm file:font-semibold file:text-slate-800 hover:file:bg-slate-300"
-        />
-      ) : null}
-
-      {shouldShowPreflight && files.length ? (
-        <div className="space-y-2 rounded-2xl border border-cyan-200 bg-cyan-50/70 p-3">
-          <div className="flex items-center justify-between gap-3">
-            <p className="text-xs font-semibold uppercase tracking-[0.14em] text-cyan-900">Smart Preflight</p>
-            {preflightLoading ? <span className="text-xs font-medium text-cyan-800">Analyzing...</span> : null}
-          </div>
-
-          {preflightSummary ? (
-            <>
-              <p className="text-sm text-cyan-950">
-                {preflightSummary.fileCount} file(s), {(preflightSummary.totalBytes / (1024 * 1024)).toFixed(1)} MB total, input type: {preflightSummary.estimatedInputType}.
-              </p>
-              <p className="text-sm text-cyan-900">
-                Scan likelihood: <span className="font-semibold uppercase">{preflightSummary.scanLikelihood}</span>
-              </p>
-
-              <ul className="space-y-1 text-sm text-cyan-900">
-                {preflightSummary.findings.slice(0, 3).map((finding) => (
-                  <li key={finding}>- {finding}</li>
-                ))}
-              </ul>
-
-              {preflightSummary.recommendations.length ? (
-                <div className="space-y-2 rounded-xl border border-cyan-200 bg-white/80 p-2">
-                  <p className="text-xs font-semibold uppercase tracking-[0.12em] text-cyan-900">Suggested next tools</p>
-                  <div className="space-y-2">
-                    {preflightSummary.recommendations.slice(0, 3).map((recommendation) => {
-                      const suggestedTool = TOOL_ITEMS.find((item) => item.slug === recommendation.toolSlug);
-                      if (!suggestedTool) return null;
-                      const isCurrentTool = suggestedTool.slug === tool.slug;
-
-                      return (
-                        <div key={suggestedTool.slug} className="flex items-center justify-between gap-3 rounded-lg border border-cyan-100 bg-white p-2">
-                          <div>
-                            <p className="text-sm font-semibold text-slate-900">
-                              {suggestedTool.name} ({recommendation.confidence})
-                            </p>
-                            <p className="text-xs text-slate-700">{recommendation.reason}</p>
+                            {/* connector line */}
+                            {index < selectedRecipe.steps.length - 1 ? (
+                              <div className="relative mx-1 mt-3.5 h-0.5 w-10 overflow-hidden rounded-full bg-slate-200">
+                                {isCompleted ? (
+                                  <span className="pipeline-line-fill absolute inset-0 rounded-full bg-emerald-400" />
+                                ) : isActive ? (
+                                  <span
+                                    className="absolute inset-y-0 left-0 rounded-full bg-cyan-400"
+                                    style={{ width: "50%", opacity: 0.7 }}
+                                  />
+                                ) : null}
+                              </div>
+                            ) : null}
                           </div>
-                          <button
-                            type="button"
-                            disabled={isCurrentTool}
-                            onClick={() => router.push(`/tools/${suggestedTool.slug}`)}
-                            className="rounded-full border border-cyan-300 bg-cyan-100 px-3 py-1 text-xs font-semibold text-cyan-900 transition hover:bg-cyan-200 disabled:cursor-default disabled:opacity-60"
-                          >
-                            {isCurrentTool ? "Current" : "Open"}
-                          </button>
-                        </div>
-                      );
-                    })}
+                        );
+                      })}
+                    </div>
                   </div>
-                </div>
+
+                  {(currentRecipeNextStep || currentRecipePreviousStep) && !busy ? (
+                    <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+                      <button
+                        type="button"
+                        onClick={goToPreviousRecipeStage}
+                        disabled={!currentRecipePreviousStep}
+                        className="rounded-xl border border-slate-300 bg-white py-2 text-xs font-semibold text-slate-700 transition hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-50"
+                      >
+                        {currentRecipePreviousStep
+                          ? `← Previous step: ${currentRecipePreviousStep.label}`
+                          : "No previous stage"}
+                      </button>
+
+                      {currentRecipeNextStep ? (
+                        <button
+                          type="button"
+                          onClick={() => void continueRecipe()}
+                          disabled={busy || !!continueBlockedReason}
+                          title={continueBlockedReason || undefined}
+                          aria-label={
+                            continueBlockedReason
+                              ? `Continue disabled. ${continueBlockedReason}`
+                              : `Continue to ${currentRecipeNextStep.label}`
+                          }
+                          className="rounded-xl border border-cyan-300 bg-cyan-50 py-2 text-xs font-semibold text-cyan-900 transition hover:bg-cyan-100 disabled:cursor-not-allowed disabled:opacity-50"
+                        >
+                          {busy
+                            ? `Running ${tool.name}…`
+                            : `Continue to step ${selectedRecipe.steps.findIndex((s) => s.toolSlug === currentRecipeNextStep.toolSlug) + 1}: ${currentRecipeNextStep.label} →`}
+                        </button>
+                      ) : null}
+                    </div>
+                  ) : null}
+
+                  {continueBlockedReason ? (
+                    <p className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-[11px] font-medium text-amber-900">
+                      {continueBlockedReason}
+                    </p>
+                  ) : !currentRecipeNextStep && outputPreview ? (
+                    <button
+                      type="button"
+                      onClick={handleDownloadOutput}
+                      disabled={downloadingOutput}
+                      className="flex w-full animate-bounce items-center justify-center gap-2 rounded-xl border border-emerald-400 bg-emerald-500 py-2.5 text-sm font-bold text-white shadow-lg transition hover:animate-none hover:bg-emerald-600 disabled:cursor-not-allowed disabled:opacity-60"
+                    >
+                      <svg viewBox="0 0 20 20" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="2.2">
+                        <path d="M10 3v10M6 9l4 4 4-4" strokeLinecap="round" strokeLinejoin="round" />
+                        <path d="M4 16h12" strokeLinecap="round" />
+                      </svg>
+                      {downloadingOutput ? "Downloading…" : "Download completed workflow output"}
+                    </button>
+                  ) : !currentRecipeNextStep ? (
+                    <p className="rounded-xl bg-emerald-50 px-3 py-2 text-xs font-semibold text-emerald-700">
+                      ✓ Final step — run the tool above to generate your output.
+                    </p>
+                  ) : null}
+                </>
               ) : null}
-            </>
+            </div>
           ) : null}
+
         </div>
-      ) : null}
+
+        <div className="space-y-2">
 
       {isOcrTool ? (
         <div className="space-y-3">
@@ -3242,7 +3519,8 @@ export default function ToolWorkbench({ tool }: WorkbenchProps) {
           {mergeLoading ? <p className="text-sm text-slate-600">Generating merge page thumbnails...</p> : null}
 
           {!mergeLoading && mergePageOrder.length ? (
-            <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5">
+            <div className="max-h-[58vh] overflow-auto pr-1">
+              <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
               {mergePageOrder.map((pageId, index) => {
                 const page = mergePages.find((item) => item.id === pageId);
                 if (!page) return null;
@@ -3313,6 +3591,7 @@ export default function ToolWorkbench({ tool }: WorkbenchProps) {
                   </div>
                 );
               })}
+              </div>
             </div>
           ) : null}
 
@@ -3323,161 +3602,7 @@ export default function ToolWorkbench({ tool }: WorkbenchProps) {
       ) : null}
 
       {usesThumbnailEditor ? (
-        <div className="space-y-2 rounded-2xl border border-slate-200 bg-slate-50 p-3">
-          <div className="flex items-center justify-between gap-3">
-            <p className="text-xs font-semibold uppercase tracking-[0.14em] text-slate-600">
-              Page Thumbnails
-            </p>
-            <p className="text-xs text-slate-500">
-              {isOrganizeTool
-                ? `${pageOrder.length} pages in output`
-                : `${selectedPages.length} pages selected`}
-            </p>
-          </div>
-
-          {thumbnailLoading ? (
-            <p className="text-sm text-slate-600">Generating page previews...</p>
-          ) : null}
-
-          {!thumbnailLoading && supportsOrderDrag && (isOrganizeTool ? pageOrder.length : selectedPages.length) ? (
-            <div className="space-y-2 rounded-xl border border-slate-200 bg-white p-2">
-              <p className="text-xs font-semibold uppercase tracking-[0.12em] text-slate-600">
-                {isOrganizeTool ? "Output order (drag thumbnails)" : "Extraction order (drag thumbnails)"}
-              </p>
-              <div className="flex flex-wrap gap-2">
-                {(isOrganizeTool ? pageOrder : selectedPages).map((pageNumber, index) => {
-                  const thumb = pageThumbnails.find((item) => item.pageNumber === pageNumber);
-                  if (!thumb) return null;
-
-                  const isDragOver = dragOverPage === pageNumber && draggedPage !== pageNumber;
-
-                  return (
-                    <div
-                      key={`order-${pageNumber}`}
-                      draggable
-                      onDragStart={() => {
-                        setDraggedPage(pageNumber);
-                        setDragOverPage(null);
-                      }}
-                      onDragOver={(event) => {
-                        event.preventDefault();
-                        if (draggedPage !== null && draggedPage !== pageNumber) {
-                          setDragOverPage(pageNumber);
-                        }
-                      }}
-                      onDragLeave={() => {
-                        if (dragOverPage === pageNumber) {
-                          setDragOverPage(null);
-                        }
-                      }}
-                      onDrop={(event) => {
-                        event.preventDefault();
-                        if (draggedPage !== null && draggedPage !== pageNumber) {
-                          if (isOrganizeTool) {
-                            reorderPages(draggedPage, pageNumber);
-                          } else {
-                            reorderSelectedPages(draggedPage, pageNumber);
-                          }
-                        }
-                        setDraggedPage(null);
-                        setDragOverPage(null);
-                      }}
-                      onDragEnd={() => {
-                        setDraggedPage(null);
-                        setDragOverPage(null);
-                      }}
-                      className={`w-20 cursor-grab rounded-lg border bg-slate-50 p-1 active:cursor-grabbing ${
-                        isDragOver ? "border-cyan-500 ring-2 ring-cyan-200" : "border-slate-200"
-                      }`}
-                      title="Drag to reorder"
-                    >
-                      {/* eslint-disable-next-line @next/next/no-img-element */}
-                      <img
-                        src={thumb.dataUrl}
-                        alt={`Ordered page ${pageNumber}`}
-                        className="h-20 w-full rounded object-cover"
-                      />
-                      <div className="mt-1 flex items-center justify-between px-0.5 text-[10px] font-semibold text-slate-700">
-                        <span>Pg {pageNumber}</span>
-                        <span>#{index + 1}</span>
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
-          ) : null}
-
-          {!thumbnailLoading && pageThumbnails.length ? (
-            <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5">
-              {pageThumbnails.map((thumb) => {
-                const selected = isOrganizeTool
-                  ? pageOrder.includes(thumb.pageNumber)
-                  : selectedPages.includes(thumb.pageNumber);
-                const orderIndex = isOrganizeTool
-                  ? pageOrder.indexOf(thumb.pageNumber) + 1
-                  : supportsOrderDrag
-                    ? selectedPages.indexOf(thumb.pageNumber) + 1
-                    : 0;
-
-                return (
-                  <div
-                    key={thumb.pageNumber}
-                    className={`rounded-xl border p-2 transition ${
-                      selected
-                        ? "border-cyan-500 bg-cyan-50"
-                        : "border-slate-200 bg-white"
-                    }`}
-                  >
-                    <button
-                      type="button"
-                      onClick={() => togglePage(thumb.pageNumber)}
-                      className="w-full text-left"
-                    >
-                      {/* eslint-disable-next-line @next/next/no-img-element */}
-                      <img
-                        src={thumb.dataUrl}
-                        alt={`Page ${thumb.pageNumber}`}
-                        className="h-28 w-full rounded-md object-cover"
-                      />
-                      <div className="mt-2 flex items-center justify-between text-xs font-semibold text-slate-700">
-                        <span>Page {thumb.pageNumber}</span>
-                        {supportsOrderDrag && selected ? (
-                          <span className="rounded-full bg-cyan-500 px-2 py-0.5 text-[10px] text-white">
-                            #{orderIndex}
-                          </span>
-                        ) : null}
-                      </div>
-                    </button>
-                  </div>
-                );
-              })}
-            </div>
-          ) : null}
-
-          {!thumbnailLoading && !pageThumbnails.length ? (
-            <p className="text-sm text-slate-600">
-              Upload a PDF to select pages visually.
-            </p>
-          ) : null}
-        </div>
-      ) : null}
-
-      {tool.slug === "split-pdf" || tool.slug === "extract-pages" ? (
-        <div className="space-y-1">
-          <label htmlFor="ranges" className="text-xs font-semibold uppercase tracking-wide text-slate-600">
-            Pages to extract (optional fallback)
-          </label>
-          <input
-            id="ranges"
-            type="text"
-            value={ranges}
-            onChange={(event) => setRanges(event.target.value)}
-            placeholder="Example: 1,3,5-8"
-            className="w-full rounded-xl border border-slate-300 bg-slate-50 px-3 py-2 text-sm text-slate-800"
-          />
-          <p className="field-help">Use comma-separated pages or ranges like 2-6.</p>
-        </div>
+        <></>
       ) : null}
 
       {tool.slug === "organize-pdf" ? (
@@ -3657,20 +3782,29 @@ export default function ToolWorkbench({ tool }: WorkbenchProps) {
               </div>
 
               {signatureMode === "draw" ? (
-                <div className="space-y-2 rounded-xl border border-slate-300 bg-slate-50 p-3">
+                <div className="space-y-2 rounded-xl border border-slate-300 bg-white p-3">
                   <p className="field-help">Sign using your touchpad, mouse, or touchscreen. Undo last stroke with Ctrl+X, Ctrl+Z, or Cmd+Z.</p>
-                  <canvas
-                    ref={(node) => {
-                      signatureCanvasRef.current = node;
-                      if (node) setupSignatureCanvas(node);
-                    }}
-                    onPointerDown={onSignaturePointerDown}
-                    onPointerMove={onSignaturePointerMove}
-                    onPointerUp={endSignatureStroke}
-                    onPointerCancel={endSignatureStroke}
-                    className="w-full max-w-[420px] rounded-lg border border-slate-300 bg-white touch-none"
-                    aria-label="Signature pad"
-                  />
+                  <div className="relative inline-block w-full max-w-[420px]">
+                    <canvas
+                      ref={(node) => {
+                        signatureCanvasRef.current = node;
+                        if (node) setupSignatureCanvas(node);
+                      }}
+                      onPointerDown={onSignaturePointerDown}
+                      onPointerMove={onSignaturePointerMove}
+                      onPointerUp={endSignatureStroke}
+                      onPointerLeave={endSignatureStroke}
+                      onPointerCancel={endSignatureStroke}
+                      className="w-full max-w-[420px] rounded-lg border-2 border-slate-300 touch-none cursor-crosshair"
+                      style={{ background: '#ffffff', display: 'block' }}
+                      aria-label="Signature pad"
+                    />
+                    {!signatureDrawn ? (
+                      <span className="pointer-events-none absolute inset-0 flex items-center justify-center text-sm italic text-slate-400 select-none">
+                        Draw your signature here
+                      </span>
+                    ) : null}
+                  </div>
                   <button
                     type="button"
                     onClick={clearSignatureCanvas}
@@ -3680,13 +3814,24 @@ export default function ToolWorkbench({ tool }: WorkbenchProps) {
                   </button>
                 </div>
               ) : (
-                <input
-                  id="edit-text"
-                  type="text"
-                  value={editText}
-                  onChange={(event) => setEditText(event.target.value)}
-                  className="w-full rounded-xl border border-slate-300 bg-slate-50 px-3 py-2 text-sm text-slate-800"
-                />
+                <div className="space-y-2">
+                  <input
+                    id="edit-text"
+                    type="text"
+                    value={editText}
+                    onChange={(event) => setEditText(event.target.value)}
+                    placeholder="Type your name"
+                    className="w-full rounded-xl border border-slate-300 bg-slate-50 px-3 py-2 text-sm text-slate-800"
+                  />
+                  {editText ? (
+                    <div className="flex items-center justify-center rounded-lg border-2 border-slate-300 bg-white px-4 py-3" style={{ minHeight: '64px' }}>
+                      <span className="text-2xl text-slate-800" style={{ fontFamily: 'Georgia, "Times New Roman", serif', fontStyle: 'italic' }}>
+                        {editText}
+                      </span>
+                    </div>
+                  ) : null}
+                  <p className="field-help">This text will be placed on the PDF as your signature.</p>
+                </div>
               )}
 
               <div className="space-y-2 rounded-xl border border-slate-300 bg-slate-50 p-3">
@@ -4007,183 +4152,224 @@ export default function ToolWorkbench({ tool }: WorkbenchProps) {
         </div>
       ) : null}
 
-      <button
-        type="button"
-        onClick={runTool}
-        disabled={busy}
-        className="btn btn-primary rounded-full px-5 py-2 text-sm disabled:cursor-not-allowed disabled:bg-slate-500"
-      >
-        {busy ? "Processing..." : `Run ${tool.name}`}
-      </button>
 
-      {files.length ? (
-        <ul className="space-y-1 text-sm text-slate-700">
-          {files.map((file) => (
-            <li key={`${file.name}-${file.size}`}>{file.name}</li>
-          ))}
-        </ul>
-      ) : null}
 
-      {outputPreview ? (
-        <div className="space-y-3 rounded-xl border border-slate-200 bg-slate-50 p-3">
-          <div className="flex flex-wrap items-center justify-between gap-2">
-            <div>
-              <p className="type-eyebrow text-slate-600">Output Preview</p>
-              <p className="text-sm font-medium text-slate-800">{outputPreview.fileName}</p>
-              {outputPreview.note ? <p className="field-help mt-1">{outputPreview.note}</p> : null}
-              <p className="field-help mt-1">Auto-delete in browser buffer: {formatRetention(retentionSecondsLeft)}</p>
+        </div>
+
+        {usesThumbnailEditor ? (
+          <div className="space-y-2 rounded-2xl border border-slate-200 bg-slate-50 p-3 xl:col-span-2">
+            <div className="flex items-center justify-between gap-3">
+              <p className="text-xs font-semibold uppercase tracking-[0.14em] text-slate-600">
+                Page Thumbnails
+              </p>
+              <p className="text-xs text-slate-500">
+                {isOrganizeTool
+                  ? `${pageOrder.length} pages in output`
+                  : `${selectedPages.length} pages selected`}
+              </p>
             </div>
-            <button
-              type="button"
-              onClick={handleDownloadOutput}
-              disabled={downloadingOutput}
-              className={`${downloadingOutput ? "" : "animate-pulse"} btn btn-primary rounded-full px-4 py-2 text-xs uppercase tracking-wide shadow-[0_0_0_0_rgba(8,145,178,0.45)] disabled:cursor-not-allowed disabled:bg-cyan-200`}
-            >
-              {downloadingOutput ? "Downloading..." : "Download output"}
-            </button>
-          </div>
 
-          {outputPreview.mime.includes("pdf") ? (
-            <div className="space-y-2">
-              {outputPreview.pdfPreviewDataUrl ? (
-                // eslint-disable-next-line @next/next/no-img-element
-                <img
-                  src={outputPreview.pdfPreviewDataUrl}
-                  alt="Processed PDF first-page preview"
-                  className="max-h-72 w-auto rounded-lg border border-slate-300 bg-white"
-                />
-              ) : (
-                <div className="rounded-lg border border-slate-300 bg-white p-3 text-xs text-slate-700">
-                  Generating PDF preview...
+            {thumbnailLoading ? (
+              <p className="text-sm text-slate-600">Generating page previews...</p>
+            ) : null}
+
+            {!thumbnailLoading && supportsOrderDrag && (isOrganizeTool ? pageOrder.length : selectedPages.length) ? (
+              <div className="space-y-2 rounded-xl border border-slate-200 bg-white p-2">
+                <p className="text-xs font-semibold uppercase tracking-[0.12em] text-slate-600">
+                  {isOrganizeTool ? "Output order (drag thumbnails)" : "Extraction order (drag thumbnails)"}
+                </p>
+                <div className="flex flex-wrap gap-2">
+                  {(isOrganizeTool ? pageOrder : selectedPages).map((pageNumber, index) => {
+                    const thumb = pageThumbnails.find((item) => item.pageNumber === pageNumber);
+                    if (!thumb) return null;
+
+                    const isDragOver = dragOverPage === pageNumber && draggedPage !== pageNumber;
+
+                    return (
+                      <div
+                        key={`order-${pageNumber}`}
+                        draggable
+                        onDragStart={() => {
+                          setDraggedPage(pageNumber);
+                          setDragOverPage(null);
+                        }}
+                        onDragOver={(event) => {
+                          event.preventDefault();
+                          if (draggedPage !== null && draggedPage !== pageNumber) {
+                            setDragOverPage(pageNumber);
+                          }
+                        }}
+                        onDragLeave={() => {
+                          if (dragOverPage === pageNumber) {
+                            setDragOverPage(null);
+                          }
+                        }}
+                        onDrop={(event) => {
+                          event.preventDefault();
+                          if (draggedPage !== null && draggedPage !== pageNumber) {
+                            if (isOrganizeTool) {
+                              reorderPages(draggedPage, pageNumber);
+                            } else {
+                              reorderSelectedPages(draggedPage, pageNumber);
+                            }
+                          }
+                          setDraggedPage(null);
+                          setDragOverPage(null);
+                        }}
+                        onDragEnd={() => {
+                          setDraggedPage(null);
+                          setDragOverPage(null);
+                        }}
+                        className={`w-20 cursor-grab rounded-lg border bg-slate-50 p-1 active:cursor-grabbing ${
+                          isDragOver ? "border-cyan-500 ring-2 ring-cyan-200" : "border-slate-200"
+                        }`}
+                        title="Drag to reorder"
+                      >
+                        {/* eslint-disable-next-line @next/next/no-img-element */}
+                        <img
+                          src={thumb.dataUrl}
+                          alt={`Ordered page ${pageNumber}`}
+                          className="h-20 w-full rounded object-cover"
+                        />
+                        <div className="mt-1 flex items-center justify-between px-0.5 text-[10px] font-semibold text-slate-700">
+                          <span>Pg {pageNumber}</span>
+                          <span>#{index + 1}</span>
+                        </div>
+                      </div>
+                    );
+                  })}
                 </div>
-              )}
-              <p className="field-help">PDF preview is shown before download to verify quality.</p>
-            </div>
-          ) : null}
+              </div>
+            ) : null}
 
-          {outputPreview.mime.startsWith("image/") || outputPreview.imagePreviewDataUrl ? (
-            // eslint-disable-next-line @next/next/no-img-element
-            <img
-              src={outputPreview.imagePreviewDataUrl || outputPreview.url}
-              alt="Processed output preview"
-              className="max-h-72 w-auto rounded-lg border border-slate-300 bg-white"
-            />
-          ) : null}
+            {!thumbnailLoading && pageThumbnails.length ? (
+              <div className="max-h-[58vh] overflow-auto pr-1">
+                <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
+                  {pageThumbnails.map((thumb) => {
+                    const selected = isOrganizeTool
+                      ? pageOrder.includes(thumb.pageNumber)
+                      : selectedPages.includes(thumb.pageNumber);
+                    const orderIndex = isOrganizeTool
+                      ? pageOrder.indexOf(thumb.pageNumber) + 1
+                      : supportsOrderDrag
+                        ? selectedPages.indexOf(thumb.pageNumber) + 1
+                        : 0;
 
-          {(outputPreview.mime.startsWith("text/") || OFFICE_PREVIEW_MIME_PATTERN.test(outputPreview.mime)) ? (
-            <pre className="max-h-72 overflow-auto whitespace-pre-wrap rounded-lg border border-slate-300 bg-white p-3 text-xs text-slate-800">
-              {previewText || "Loading preview..."}
-            </pre>
-          ) : null}
+                    return (
+                      <div
+                        key={thumb.pageNumber}
+                        className={`rounded-xl border p-2 transition ${
+                          selected
+                            ? "border-cyan-500 bg-cyan-50"
+                            : "border-slate-200 bg-white"
+                        }`}
+                      >
+                        <button
+                          type="button"
+                          onClick={() => togglePage(thumb.pageNumber)}
+                          className="w-full text-left"
+                        >
+                          {/* eslint-disable-next-line @next/next/no-img-element */}
+                          <img
+                            src={thumb.dataUrl}
+                            alt={`Page ${thumb.pageNumber}`}
+                            className="h-28 w-full rounded-md object-cover"
+                          />
+                          <div className="mt-2 flex items-center justify-between text-xs font-semibold text-slate-700">
+                            <span>Page {thumb.pageNumber}</span>
+                            {supportsOrderDrag && selected ? (
+                              <span className="rounded-full bg-cyan-500 px-2 py-0.5 text-[10px] text-white">
+                                #{orderIndex}
+                              </span>
+                            ) : null}
+                          </div>
+                        </button>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            ) : null}
 
-          {!outputPreview.mime.includes("pdf") &&
-          !outputPreview.mime.startsWith("image/") &&
-          !outputPreview.mime.startsWith("text/") &&
-          !OFFICE_PREVIEW_MIME_PATTERN.test(outputPreview.mime) &&
-          !outputPreview.imagePreviewDataUrl ? (
-            <div className="rounded-lg border border-slate-300 bg-white p-3 text-xs text-slate-700">
-              <p>Inline rendering is not available for this format in-browser.</p>
-              <p className="mt-1">File type: {outputPreview.mime || "Unknown"}</p>
-              <p className="mt-1">Size: {(outputPreview.blob.size / 1024).toFixed(1)} KB</p>
-            </div>
-          ) : null}
-        </div>
-      ) : null}
+            {!thumbnailLoading && !pageThumbnails.length ? (
+              <p className="text-sm text-slate-600">
+                Upload a PDF to select pages visually.
+              </p>
+            ) : null}
 
-      <div className="flex flex-wrap items-center gap-2">
-        {busy ? <span className="status-chip status-chip-busy">Processing</span> : null}
-        {status ? <span className="status-chip status-chip-ok">Ready</span> : null}
-        {error ? <span className="status-chip status-chip-error">Failed</span> : null}
-      </div>
+            {tool.slug === "split-pdf" || tool.slug === "extract-pages" ? (
+              <div className="space-y-1">
+                <label htmlFor="ranges" className="text-xs font-semibold uppercase tracking-wide text-slate-600">
+                  Pages to extract (optional fallback)
+                </label>
+                <input
+                  id="ranges"
+                  type="text"
+                  value={ranges}
+                  onChange={(event) => setRanges(event.target.value)}
+                  placeholder="Example: 1,3,5-8"
+                  className="w-full rounded-xl border border-slate-300 bg-slate-50 px-3 py-2 text-sm text-slate-800"
+                />
+                <p className="field-help">Use comma-separated pages or ranges like 2-6.</p>
+              </div>
+            ) : null}
 
-      {lastRunSummary ? (
-        <div className="rounded-xl border border-slate-200 bg-slate-50 p-3">
-          <p className="type-eyebrow text-slate-600">Run Summary</p>
-          <p className="mt-1 text-sm font-medium text-slate-800">{lastRunSummary.message}</p>
-          <p className="field-help mt-1">
-            Processed {lastRunSummary.inputCount} file(s) at {lastRunSummary.timestamp}
-          </p>
-        </div>
-      ) : null}
+            {lastRunSummary ? (
+              <div className="rounded-xl border border-slate-200 bg-slate-50 p-3">
+                <p className="type-eyebrow text-slate-600">Run Summary</p>
+                <p className="mt-1 text-sm font-medium text-slate-800">{lastRunSummary.message}</p>
+                <p className="field-help mt-1">
+                  Processed {lastRunSummary.inputCount} file(s) at {lastRunSummary.timestamp}
+                </p>
+              </div>
+            ) : null}
 
-      {runReport ? (
-        <div className="space-y-2 rounded-xl border border-slate-200 bg-slate-50 p-3">
-          <p className="type-eyebrow text-slate-600">Quality and Trust Report</p>
-          <p className="text-sm font-medium text-slate-800">
-            Confidence: {runReport.confidence.toUpperCase()} ({runReport.confidenceReason})
-          </p>
-          <p className="field-help">Runtime: {runReport.mode} | Duration: {formatDurationMs(runReport.durationMs)}</p>
-          <ul className="space-y-1 text-sm text-slate-700">
-            {runReport.transforms.slice(0, 6).map((item) => (
-              <li key={item}>- {item}</li>
-            ))}
-          </ul>
-          <div className="flex flex-wrap gap-2">
-            <button
-              type="button"
-              onClick={downloadRunReport}
-              className="rounded-full border border-slate-300 bg-white px-3 py-1 text-xs font-semibold text-slate-700 transition hover:bg-slate-100"
-            >
-              Download run report
-            </button>
-            <button
-              type="button"
-              onClick={downloadProcessingLog}
-              className="rounded-full border border-slate-300 bg-white px-3 py-1 text-xs font-semibold text-slate-700 transition hover:bg-slate-100"
-            >
-              Download processing log
-            </button>
+            {runReport ? (
+              <div className="space-y-2 rounded-xl border border-slate-200 bg-slate-50 p-3">
+                <p className="type-eyebrow text-slate-600">Quality and Trust Report</p>
+                <p className="text-sm font-medium text-slate-800">
+                  Confidence: {runReport.confidence.toUpperCase()} ({runReport.confidenceReason})
+                </p>
+                <p className="field-help">Runtime: {runReport.mode} | Duration: {formatDurationMs(runReport.durationMs)}</p>
+                <ul className="space-y-1 text-sm text-slate-700">
+                  {runReport.transforms.slice(0, 6).map((item) => (
+                    <li key={item}>- {item}</li>
+                  ))}
+                </ul>
+                <div className="flex flex-wrap gap-2">
+                  <button
+                    type="button"
+                    onClick={downloadRunReport}
+                    className="rounded-full border border-slate-300 bg-white px-3 py-1 text-xs font-semibold text-slate-700 transition hover:bg-slate-100"
+                  >
+                    Download run report
+                  </button>
+                  <button
+                    type="button"
+                    onClick={downloadProcessingLog}
+                    className="rounded-full border border-slate-300 bg-white px-3 py-1 text-xs font-semibold text-slate-700 transition hover:bg-slate-100"
+                  >
+                    Download processing log
+                  </button>
+                </div>
+              </div>
+            ) : null}
+
+            {processingLog.length ? (
+              <div className="rounded-xl border border-slate-200 bg-slate-50 p-3">
+                <p className="type-eyebrow text-slate-600">Recent Processing Events</p>
+                <ul className="mt-2 space-y-1 text-xs text-slate-700">
+                  {processingLog.slice(0, 6).map((entry) => (
+                    <li key={`${entry.at}-${entry.message}`}>[{entry.at}] {entry.message}</li>
+                  ))}
+                </ul>
+              </div>
+            ) : null}
           </div>
-        </div>
-      ) : null}
+        ) : null}
 
-      {processingLog.length ? (
-        <div className="rounded-xl border border-slate-200 bg-slate-50 p-3">
-          <p className="type-eyebrow text-slate-600">Recent Processing Events</p>
-          <ul className="mt-2 space-y-1 text-xs text-slate-700">
-            {processingLog.slice(0, 6).map((entry) => (
-              <li key={`${entry.at}-${entry.message}`}>[{entry.at}] {entry.message}</li>
-            ))}
-          </ul>
-        </div>
-      ) : null}
-
-      <div className="rounded-xl border border-slate-200 bg-slate-50 p-3">
-        <div className="flex items-center justify-between gap-2">
-          <p className="type-eyebrow text-slate-600">Stored Files (Local Browser)</p>
-          <div className="flex gap-2">
-            <button
-              type="button"
-              onClick={refreshLocalFileHistory}
-              className="rounded-full border border-slate-300 bg-white px-3 py-1 text-xs font-semibold text-slate-700 transition hover:bg-slate-100"
-            >
-              Refresh
-            </button>
-            <button
-              type="button"
-              onClick={clearLocalFileHistory}
-              className="rounded-full border border-rose-300 bg-rose-50 px-3 py-1 text-xs font-semibold text-rose-700 transition hover:bg-rose-100"
-            >
-              Clear
-            </button>
-          </div>
-        </div>
-
-        {!localStoredFiles.length ? (
-          <p className="field-help mt-2">No locally stored files yet.</p>
-        ) : (
-          <ul className="mt-2 space-y-1 text-xs text-slate-700">
-            {localStoredFiles.slice(0, 8).map((entry) => (
-              <li key={entry.id}>
-                [{new Date(entry.createdAt).toLocaleString()}] {entry.fileName} ({formatBytes(entry.size)}) - {entry.message}
-              </li>
-            ))}
-          </ul>
-        )}
+        <div className="space-y-2 xl:sticky xl:top-4">{outputPreviewPanel}</div>
       </div>
-
-      {error ? <p className="text-sm font-medium text-rose-700">{error}</p> : null}
-      {status ? <p className="text-sm font-medium text-emerald-700">{status}</p> : null}
     </section>
   );
 }

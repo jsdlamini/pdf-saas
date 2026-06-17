@@ -7,7 +7,7 @@ import ProjectSessionCta from "./project-session-cta";
 import { rankToolsByIntent } from "@/lib/tool-intent-search";
 import { TOOL_ITEMS } from "@/lib/tools";
 import { WORKFLOW_RECIPES } from "@/lib/workflow-recipes";
-import { stageWorkflowPipeline } from "@/lib/workflow-pipeline";
+import { clearWorkflowPipeline, stageWorkflowPipeline } from "@/lib/workflow-pipeline";
 
 function getWorkflowCreatedAt() {
   return Date.now();
@@ -102,6 +102,9 @@ export default function Home() {
     pendingWorkflowRecipeRef.current = null;
     if (!recipe || !file) return;
     const firstStep = recipe.steps[0];
+    // Clear stale pipeline payloads from any previous run of this recipe so
+    // continuing from a mid-workflow step is never possible after a fresh start.
+    recipe.steps.slice(1).forEach((step) => clearWorkflowPipeline(step.toolSlug));
     stageWorkflowPipeline({
       fromToolSlug: "workflow-home",
       toToolSlug: firstStep.toolSlug,
