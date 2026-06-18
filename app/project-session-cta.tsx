@@ -9,6 +9,11 @@ type ProjectSessionCtaProps = {
 
 export default function ProjectSessionCta({ compact = false }: ProjectSessionCtaProps) {
   const { isLoaded, userId } = useAuth();
+  const sessionMessage = isLoaded
+    ? userId
+      ? "Your account is connected. Open your workspace to keep this session synced across devices."
+      : "Save this session as a project so your files, drafts, and workflow context follow you across devices."
+    : "Save this session as a project so your files, drafts, and workflow context follow you across devices.";
 
   return (
     <section
@@ -18,7 +23,7 @@ export default function ProjectSessionCta({ compact = false }: ProjectSessionCta
         <div>
           <p className="text-xs font-semibold uppercase tracking-[0.14em] text-cyan-900">Project sessions</p>
           <p className={`text-slate-700 ${compact ? "mt-1 text-xs" : "mt-1 text-sm"}`}>
-            Save this session as a project so your files, drafts, and workflow context follow you across devices.
+            {sessionMessage}
           </p>
         </div>
 

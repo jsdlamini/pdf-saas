@@ -22,10 +22,78 @@ const displayFont = Space_Grotesk({
 
 const NAV_PARENTS = ["All", ...TOOL_CATEGORIES] as const;
 
+const SITE_NAME = "PaperTrail";
+const DEFAULT_SITE_URL = "http://localhost:3000";
+
+function getSiteUrl() {
+  const raw = process.env.NEXT_PUBLIC_SITE_URL || DEFAULT_SITE_URL;
+  try {
+    return new URL(raw);
+  } catch {
+    return new URL(DEFAULT_SITE_URL);
+  }
+}
+
+const siteUrl = getSiteUrl();
+
 export const metadata: Metadata = {
-  title: "PaperTrail | PDF SaaS",
+  metadataBase: siteUrl,
+  title: {
+    default: "PaperTrail | Online PDF Tools for Merge, OCR, Convert, Compress, and Sign",
+    template: "%s | PaperTrail",
+  },
   description:
-    "Upload, annotate, and automate your PDF workflows in one modern SaaS workspace.",
+    "Use fast online PDF tools to merge, split, compress, convert, OCR, secure, edit, and sign documents in one workspace.",
+  applicationName: SITE_NAME,
+  alternates: {
+    canonical: "/",
+  },
+  keywords: [
+    "PDF tools",
+    "merge PDF",
+    "split PDF",
+    "compress PDF",
+    "OCR PDF",
+    "PDF converter",
+    "sign PDF",
+    "online PDF editor",
+    "PaperTrail",
+  ],
+  category: "technology",
+  openGraph: {
+    type: "website",
+    url: "/",
+    siteName: SITE_NAME,
+    title: "PaperTrail | Online PDF Tools",
+    description:
+      "Online PDF tools for merge, convert, OCR, compress, security, editing, and signing workflows.",
+    images: [
+      {
+        url: "/opengraph-image",
+        width: 1200,
+        height: 630,
+        alt: "PaperTrail PDF tools",
+      },
+    ],
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: "PaperTrail | Online PDF Tools",
+    description:
+      "Merge, split, compress, convert, OCR, secure, edit, and sign PDFs online.",
+    images: ["/opengraph-image"],
+  },
+  robots: {
+    index: true,
+    follow: true,
+    googleBot: {
+      index: true,
+      follow: true,
+      "max-video-preview": -1,
+      "max-image-preview": "large",
+      "max-snippet": -1,
+    },
+  },
 };
 
 export default async function RootLayout({
@@ -127,6 +195,36 @@ export default async function RootLayout({
           </header>
 
           <div className="flex w-full flex-1 flex-col">{children}</div>
+
+          <script
+            type="application/ld+json"
+            // Global schema for site-level entity understanding.
+            dangerouslySetInnerHTML={{
+              __html: JSON.stringify({
+                "@context": "https://schema.org",
+                "@graph": [
+                  {
+                    "@type": "WebSite",
+                    name: SITE_NAME,
+                    url: siteUrl.toString(),
+                    description:
+                      "Online PDF tools for merge, split, convert, OCR, security, editing, and signing workflows.",
+                    potentialAction: {
+                      "@type": "SearchAction",
+                      target: `${siteUrl.toString()}?q={search_term_string}`,
+                      "query-input": "required name=search_term_string",
+                    },
+                  },
+                  {
+                    "@type": "Organization",
+                    name: SITE_NAME,
+                    url: siteUrl.toString(),
+                    logo: `${siteUrl.toString()}globe.svg`,
+                  },
+                ],
+              }),
+            }}
+          />
 
           <footer className="glass-3d mt-8">
             <div className="mx-auto grid w-full max-w-7xl gap-8 px-6 py-10 md:grid-cols-3 md:px-10">
