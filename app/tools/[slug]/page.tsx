@@ -26,7 +26,7 @@ export async function generateMetadata({ params }: ToolPageProps): Promise<Metad
   }
 
   const title = `${tool.name} Online`;
-  const description = `${tool.description} Run ${tool.name} in your browser with PaperTrail PDF tools.`;
+  const description = `${tool.description} Run ${tool.name} in your browser with WiserFiles PDF tools.`;
 
   return {
     title,
@@ -38,13 +38,13 @@ export async function generateMetadata({ params }: ToolPageProps): Promise<Metad
     openGraph: {
       type: "website",
       url: `/tools/${tool.slug}`,
-      title: `${tool.name} | PaperTrail`,
+      title: `${tool.name} | WiserFiles`,
       description,
       images: [`/tools/${tool.slug}/opengraph-image`],
     },
     twitter: {
       card: "summary_large_image",
-      title: `${tool.name} | PaperTrail`,
+      title: `${tool.name} | WiserFiles`,
       description,
       images: [`/tools/${tool.slug}/opengraph-image`],
     },
@@ -64,7 +64,7 @@ export default async function ToolPage({ params }: ToolPageProps) {
   const toolSchema = {
     "@context": "https://schema.org",
     "@type": "SoftwareApplication",
-    name: `${tool.name} - PaperTrail`,
+    name: `${tool.name} - WiserFiles`,
     applicationCategory: "BusinessApplication",
     operatingSystem: "Web",
     description: tool.description,
@@ -112,7 +112,7 @@ export default async function ToolPage({ params }: ToolPageProps) {
     },
     {
       question: `Is ${tool.name} free to try?`,
-      answer: `${tool.name} is available in the PaperTrail workspace and can be tested directly in your browser.`,
+      answer: `${tool.name} is available in the WiserFiles workspace and can be tested directly in your browser.`,
     },
     {
       question: `What file types work best with ${tool.name}?`,

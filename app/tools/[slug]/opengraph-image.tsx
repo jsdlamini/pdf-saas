@@ -36,7 +36,7 @@ export default function Image({ params }: ToolOgImageProps) {
           justifyContent: "space-between",
         }}
       >
-        <div style={{ fontSize: "28px", opacity: 0.9 }}>PaperTrail PDF Tools</div>
+        <div style={{ fontSize: "28px", opacity: 0.9 }}>WiserFiles PDF Tools</div>
         <div style={{ display: "flex", flexDirection: "column", gap: "18px" }}>
           <div style={{ fontSize: "72px", fontWeight: 800, lineHeight: 1.04 }}>{title}</div>
           <div style={{ fontSize: "30px", opacity: 0.94, maxWidth: "980px" }}>{description}</div>

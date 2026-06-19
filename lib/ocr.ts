@@ -5,7 +5,7 @@ export type OcrLanguageOption = {
   packageName: string;
 };
 
-export const MAX_OCR_UPLOAD_BYTES = 50 * 1024 * 1024;
+export const MAX_OCR_UPLOAD_BYTES = 1024 * 1024 * 1024;
 
 export const OCR_LANGUAGE_OPTIONS: OcrLanguageOption[] = [
   { value: "eng", label: "English", hint: "Best for English-language scans.", packageName: "tesseract-ocr-eng" },

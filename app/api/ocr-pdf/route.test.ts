@@ -22,7 +22,7 @@ describe("OCR PDF route", () => {
       body: formData,
     });
 
-    const mkdtempMock = vi.fn().mockResolvedValue("/tmp/papertrail-ocr-test");
+    const mkdtempMock = vi.fn().mockResolvedValue("/tmp/wiserfiles-ocr-test");
     const writeFileMock = vi.fn().mockResolvedValue(undefined);
     const readFileMock = vi.fn().mockResolvedValue(fixture);
     const rmMock = vi.fn().mockResolvedValue(undefined);
@@ -50,13 +50,13 @@ describe("OCR PDF route", () => {
         "--clean-final",
         "--rotate-pages",
         "--redo-ocr",
-        "/tmp/papertrail-ocr-test/scan.pdf",
-        "/tmp/papertrail-ocr-test/searchable.pdf",
+        "/tmp/wiserfiles-ocr-test/scan.pdf",
+        "/tmp/wiserfiles-ocr-test/searchable.pdf",
       ],
       { maxBuffer: 16 * 1024 * 1024 }
     );
-    expect(writeFileMock).toHaveBeenCalledWith("/tmp/papertrail-ocr-test/scan.pdf", expect.any(Buffer));
-    expect(readFileMock).toHaveBeenCalledWith("/tmp/papertrail-ocr-test/searchable.pdf");
-    expect(rmMock).toHaveBeenCalledWith("/tmp/papertrail-ocr-test", { recursive: true, force: true });
+    expect(writeFileMock).toHaveBeenCalledWith("/tmp/wiserfiles-ocr-test/scan.pdf", expect.any(Buffer));
+    expect(readFileMock).toHaveBeenCalledWith("/tmp/wiserfiles-ocr-test/searchable.pdf");
+    expect(rmMock).toHaveBeenCalledWith("/tmp/wiserfiles-ocr-test", { recursive: true, force: true });
   });
 });

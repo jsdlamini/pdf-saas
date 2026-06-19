@@ -10,14 +10,14 @@ export type WorkflowPipelinePayload = {
 
 declare global {
   interface Window {
-    __papertrailPipelineStore?: Record<string, WorkflowPipelinePayload>;
+    __wiserfilesPipelineStore?: Record<string, WorkflowPipelinePayload>;
   }
 }
 
 function getStore() {
   if (typeof window === "undefined") return null;
-  window.__papertrailPipelineStore ??= {};
-  return window.__papertrailPipelineStore;
+  window.__wiserfilesPipelineStore ??= {};
+  return window.__wiserfilesPipelineStore;
 }
 
 export function stageWorkflowPipeline(payload: WorkflowPipelinePayload) {

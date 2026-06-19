@@ -103,14 +103,14 @@ export async function handleOcrPost(
   }
 
   if (uploadedFile.size > MAX_OCR_UPLOAD_BYTES) {
-    return jsonError("OCR uploads are limited to 50 MB.", 413);
+    return jsonError("OCR uploads are limited to 1 GB.", 413);
   }
 
   if (!SUPPORTED_OCR_LANGUAGES.has(selectedLanguage)) {
     return jsonError("Unsupported OCR language selection.", 400);
   }
 
-  const tempDir = await dependencies.mkdtemp(join(tmpdir(), "papertrail-ocr-"));
+  const tempDir = await dependencies.mkdtemp(join(tmpdir(), "wiserfiles-ocr-"));
   const inputPath = join(tempDir, `${normalizeUploadName(uploadedFile.name)}.pdf`);
   const outputPath = join(tempDir, "searchable.pdf");
 

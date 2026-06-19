@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 
 type ThemeMode = "light" | "dark";
 
-const STORAGE_KEY = "papertrail-theme";
+const STORAGE_KEY = "wiserfiles-theme";
 
 function resolveInitialTheme(): ThemeMode {
   if (typeof window === "undefined") return "light";

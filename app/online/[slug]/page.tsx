@@ -23,8 +23,8 @@ export async function generateMetadata({ params }: LandingPageProps): Promise<Me
     };
   }
 
-  const title = `${landing.title} | PaperTrail`;
-  const description = `${landing.description} Use PaperTrail to process PDFs quickly online.`;
+  const title = `${landing.title} | WiserFiles`;
+  const description = `${landing.description} Use WiserFiles to process PDFs quickly online.`;
 
   return {
     title,
@@ -32,7 +32,7 @@ export async function generateMetadata({ params }: LandingPageProps): Promise<Me
     alternates: {
       canonical: `/online/${landing.slug}`,
     },
-    keywords: [landing.keyword, landing.title, "online pdf tools", "PaperTrail"],
+    keywords: [landing.keyword, landing.title, "online pdf tools", "WiserFiles"],
     openGraph: {
       type: "website",
       url: `/online/${landing.slug}`,
@@ -65,11 +65,11 @@ export default async function LandingPage({ params }: LandingPageProps) {
   const faqItems = [
     {
       question: `How can I ${landing.keyword}?`,
-      answer: `Open ${tool.name} in PaperTrail, upload your file, apply options, and download the output in one workflow.`,
+      answer: `Open ${tool.name} in WiserFiles, upload your file, apply options, and download the output in one workflow.`,
     },
     {
       question: `Do I need to install anything for ${landing.title}?`,
-      answer: `No installation is needed. PaperTrail runs in your browser.`,
+      answer: `No installation is needed. WiserFiles runs in your browser.`,
     },
     {
       question: `Can I continue from ${landing.title} into another tool?`,

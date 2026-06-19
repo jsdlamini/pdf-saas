@@ -3,15 +3,15 @@ services:
     image: postgres:17
     restart: unless-stopped
     environment:
-      POSTGRES_DB: ${POSTGRES_DB:-papertrail}
-      POSTGRES_USER: ${POSTGRES_USER:-papertrail}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-papertrail}
+      POSTGRES_DB: ${POSTGRES_DB:-wiserfiles}
+      POSTGRES_USER: ${POSTGRES_USER:-wiserfiles}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-wiserfiles}
     expose:
       - "5432"
     volumes:
       - postgres-data:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-papertrail} -d ${POSTGRES_DB:-papertrail}"]
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-wiserfiles} -d ${POSTGRES_DB:-wiserfiles}"]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -37,7 +37,7 @@ services:
       NODE_ENV: production
       PORT: 3000
       HOSTNAME: 0.0.0.0
-      DATABASE_URL: ${DATABASE_URL:-postgresql://papertrail:papertrail@db:5432/papertrail}
+      DATABASE_URL: ${DATABASE_URL:-postgresql://wiserfiles:wiserfiles@db:5432/wiserfiles}
       NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY: ${NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY:-}
       CLERK_SECRET_KEY: ${CLERK_SECRET_KEY:-}
       # DeepSeek configuration is read from host environment or project .env.

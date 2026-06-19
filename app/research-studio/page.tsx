@@ -69,7 +69,7 @@ const DEFAULT_LATEX = String.raw`\documentclass[11pt]{article}
 \usepackage{amsmath,amssymb}
 \usepackage{siunitx}
 \usepackage{hyperref}
-\title{PaperTrail Research Draft}
+\title{WiserFiles Research Draft}
 \author{Research Team}
 \date{\today}
 
@@ -106,8 +106,8 @@ const DEFAULT_DISCUSSION = String.raw`\section{Discussion}
 Interpret implications and limitations.
 `;
 
-const DEFAULT_BIB = String.raw`@article{papertrail2026,
-  title={PaperTrail Research Patterns},
+const DEFAULT_BIB = String.raw`@article{wiserfiles2026,
+  title={WiserFiles Research Patterns},
   author={Doe, Alex},
   journal={Journal of Practical Workflows},
   year={2026}
@@ -601,7 +601,7 @@ function loadInitialResearchStudioState(): InitialResearchStudioState {
   return {
     savedProjects: [],
     activeProjectId: "starter-project",
-    projectName: "PaperTrail Research Draft",
+    projectName: "WiserFiles Research Draft",
     projectEntries: STARTER_PROJECT,
     selectedPath: "main.tex",
     lastCompileAt: "Not compiled yet",
@@ -1317,7 +1317,7 @@ export default function ResearchStudioPage() {
           setLastCompileAt(fallback.lastCompileAt || "Not compiled yet");
         } else {
           setActiveProjectId("starter-project");
-          setProjectName("PaperTrail Research Draft");
+          setProjectName("WiserFiles Research Draft");
           setProjectEntries(STARTER_PROJECT);
           setSelectedPath("main.tex");
           setLastCompileAt("Not compiled yet");
@@ -2820,7 +2820,7 @@ export default function ResearchStudioPage() {
                     </button>
                     <button
                       type="button"
-                      onClick={() => insertEditorSnippet({ before: "\\cite{", after: "}", placeholder: "papertrail2026" })}
+                      onClick={() => insertEditorSnippet({ before: "\\cite{", after: "}", placeholder: "wiserfiles2026" })}
                       className="group relative inline-flex h-8 w-8 items-center justify-center rounded-md border border-slate-300 bg-white text-slate-800 transition hover:bg-slate-100"
                       aria-label="Insert citation"
                     >

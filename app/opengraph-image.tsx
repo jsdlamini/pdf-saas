@@ -1,7 +1,7 @@
 import { ImageResponse } from "next/og";
 
 export const runtime = "edge";
-export const alt = "PaperTrail Online PDF Tools";
+export const alt = "WiserFiles Online PDF Tools";
 export const size = {
   width: 1200,
   height: 630,
@@ -26,7 +26,7 @@ export default function Image() {
       >
         <div style={{ display: "flex", flexDirection: "column", justifyContent: "space-between" }}>
           <div style={{ display: "flex", flexDirection: "column", gap: "14px" }}>
-            <div style={{ fontSize: "28px", opacity: 0.9 }}>PaperTrail</div>
+            <div style={{ fontSize: "28px", opacity: 0.9 }}>WiserFiles</div>
             <div style={{ fontSize: "66px", fontWeight: 800, lineHeight: 1.05, maxWidth: "760px" }}>
               Professional Online PDF Tools
             </div>

@@ -2,7 +2,7 @@
 
 This file provides guidance to WARP (warp.dev) when working with code in this repository.
 
-PaperTrail is a Next.js 16 (App Router) + React 19 + TypeScript app that exposes an iLovePDF-style directory of ~30 PDF tools, each with its own workspace. Styling is Tailwind CSS v4.
+WiserFiles is a Next.js 16 (App Router) + React 19 + TypeScript app that exposes an iLovePDF-style directory of ~30 PDF tools, each with its own workspace. Styling is Tailwind CSS v4.
 
 ## Commands
 
@@ -40,7 +40,7 @@ Server-runtime tools live under `app/api/*`. The only fully implemented one is O
 - A missing `ocrmypdf` binary (`ENOENT`) is mapped to HTTP 503; OCRmyPDF stderr/stdout is surfaced as 500.
 
 ### Shared client/server contract
-`lib/ocr.ts` holds constants used by BOTH the browser and the API route: `MAX_OCR_UPLOAD_BYTES` (50 MB) and `OCR_LANGUAGE_OPTIONS` / `SUPPORTED_OCR_LANGUAGES`. The upload-size and language validations are enforced client-side (in `ToolWorkbench`) and re-checked server-side as a backstop. Adding an OCR language requires updating `OCR_LANGUAGE_OPTIONS` here AND installing the matching `tesseract-ocr-*` package in the `Dockerfile`.
+`lib/ocr.ts` holds constants used by BOTH the browser and the API route: `MAX_OCR_UPLOAD_BYTES` (1 GB) and `OCR_LANGUAGE_OPTIONS` / `SUPPORTED_OCR_LANGUAGES`. The upload-size and language validations are enforced client-side (in `ToolWorkbench`) and re-checked server-side as a backstop. Adding an OCR language requires updating `OCR_LANGUAGE_OPTIONS` here AND installing the matching `tesseract-ocr-*` package in the `Dockerfile`.
 
 ## System dependencies & deployment
 OCR requires `ocrmypdf`, `tesseract-ocr` (+ per-language packs), `ghostscript`, and `qpdf` on the host. These are not npm packages — locally, OCR returns 503 unless they are installed. The `Dockerfile` (multi-stage, Node 22) installs them and is the intended way to run server tools; `docker-compose.yml` builds and exposes port 3000.

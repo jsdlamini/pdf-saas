@@ -1,6 +1,6 @@
-# PaperTrail (PDF SaaS Tool Suite)
+# WiserFiles (PDF SaaS Tool Suite)
 
-PaperTrail is a Next.js App Router project that exposes a full iLovePDF-style tool directory with per-tool workspaces.
+WiserFiles is a Next.js App Router project that exposes a full iLovePDF-style tool directory with per-tool workspaces.
 
 ## Included tool functions
 
@@ -40,7 +40,7 @@ npm run build
 - The OCR route depends on OCRmyPDF plus `tesseract-ocr`, `ghostscript`, and `qpdf` on the server.
 - The provided Dockerfile installs those packages for the production container.
 - The UI currently exposes English, German, French, Spanish, Italian, Portuguese, Dutch, and Polish OCR profiles and passes the selected language to OCRmyPDF with `-l`.
-- OCR uploads larger than 50 MB are rejected in the UI before processing and by the API route as a server-side backstop.
+- OCR uploads larger than 1 GB are rejected in the UI before processing and by the API route as a server-side backstop.
 
 ## LaTeX compile requirements
 

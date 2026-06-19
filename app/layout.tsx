@@ -22,7 +22,7 @@ const displayFont = Space_Grotesk({
 
 const NAV_PARENTS = ["All", ...TOOL_CATEGORIES] as const;
 
-const SITE_NAME = "PaperTrail";
+const SITE_NAME = "WiserFiles";
 const DEFAULT_SITE_URL = "http://localhost:3000";
 
 function getSiteUrl() {
@@ -39,8 +39,8 @@ const siteUrl = getSiteUrl();
 export const metadata: Metadata = {
   metadataBase: siteUrl,
   title: {
-    default: "PaperTrail | Online PDF Tools for Merge, OCR, Convert, Compress, and Sign",
-    template: "%s | PaperTrail",
+    default: "WiserFiles | Online PDF Tools for Merge, OCR, Convert, Compress, and Sign",
+    template: "%s | WiserFiles",
   },
   description:
     "Use fast online PDF tools to merge, split, compress, convert, OCR, secure, edit, and sign documents in one workspace.",
@@ -57,14 +57,14 @@ export const metadata: Metadata = {
     "PDF converter",
     "sign PDF",
     "online PDF editor",
-    "PaperTrail",
+    "WiserFiles",
   ],
   category: "technology",
   openGraph: {
     type: "website",
     url: "/",
     siteName: SITE_NAME,
-    title: "PaperTrail | Online PDF Tools",
+    title: "WiserFiles | Online PDF Tools",
     description:
       "Online PDF tools for merge, convert, OCR, compress, security, editing, and signing workflows.",
     images: [
@@ -72,13 +72,13 @@ export const metadata: Metadata = {
         url: "/opengraph-image",
         width: 1200,
         height: 630,
-        alt: "PaperTrail PDF tools",
+        alt: "WiserFiles PDF tools",
       },
     ],
   },
   twitter: {
     card: "summary_large_image",
-    title: "PaperTrail | Online PDF Tools",
+    title: "WiserFiles | Online PDF Tools",
     description:
       "Merge, split, compress, convert, OCR, secure, edit, and sign PDFs online.",
     images: ["/opengraph-image"],
@@ -127,7 +127,7 @@ export default async function RootLayout({
                     PT
                   </span>
                   <span className="font-display text-base font-semibold tracking-tight text-slate-950 md:text-xl">
-                    PaperTrail
+                    WiserFiles
                   </span>
                 </Link>
 
@@ -147,7 +147,7 @@ export default async function RootLayout({
 
               <div className="neo-navbar-sub hidden w-full items-center justify-between gap-4 md:flex">
                 <nav className="flex items-center gap-2">
-                  {NAV_PARENTS.map((parent, index) => {
+                  {NAV_PARENTS.map((parent) => {
                     const subgroupTools =
                       parent === "All"
                         ? TOOL_ITEMS
@@ -157,8 +157,7 @@ export default async function RootLayout({
                       <div key={parent} className="group relative">
                         <button
                           type="button"
-                          className="nav-link neo-pill animate-rise-in border border-transparent bg-transparent text-[11px] uppercase tracking-[0.12em]"
-                          style={{ animationDelay: `${index * 40}ms` }}
+                          className="nav-link neo-pill border border-transparent bg-transparent text-[11px] uppercase tracking-[0.12em]"
                         >
                           {parent}
                         </button>
@@ -174,12 +173,11 @@ export default async function RootLayout({
                           </div>
 
                           <div className="grid max-h-[320px] grid-cols-2 gap-2 overflow-auto pr-1 lg:grid-cols-3">
-                            {subgroupTools.map((tool, idx) => (
+                            {subgroupTools.map((tool) => (
                               <Link
                                 key={`top-sub-${tool.slug}`}
                                 href={`/tools/${tool.slug}`}
-                                className="neo-submenu-item group/item animate-rise-in px-3 py-2.5 text-xs font-semibold"
-                                style={{ animationDelay: `${idx * 28}ms` }}
+                                className="neo-submenu-item group/item px-3 py-2.5 text-xs font-semibold"
                               >
                                 {tool.name}
                               </Link>
@@ -232,7 +230,7 @@ export default async function RootLayout({
             <div className="mx-auto grid w-full max-w-7xl gap-8 px-6 py-10 md:grid-cols-3 md:px-10">
               <div className="space-y-3">
                 <p className="font-display text-2xl font-semibold tracking-tight text-slate-950">
-                  PaperTrail
+                  WiserFiles
                 </p>
                 <p className="max-w-sm text-sm text-slate-600">
                   Professional PDF operations suite for conversion, editing, security,

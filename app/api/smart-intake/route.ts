@@ -72,7 +72,7 @@ function removeInitialWordRepetition(text: string) {
 function normalizeIntakeSummary(summary: string) {
   const cleaned = removeInitialWordRepetition(summary.replace(/\s+/g, " ").trim());
   if (!cleaned) {
-    return "The uploaded file is about a document workflow that can be processed with PaperTrail tools.";
+    return "The uploaded file is about a document workflow that can be processed with WiserFiles tools.";
   }
 
   const deDuplicatedStarter = cleaned

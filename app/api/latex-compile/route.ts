@@ -388,7 +388,7 @@ export async function POST(request: Request) {
     return jsonError("Invalid root LaTeX file path.", 400);
   }
 
-  const tempDir = await mkdtemp(join(tmpdir(), "papertrail-latex-"));
+  const tempDir = await mkdtemp(join(tmpdir(), "wiserfiles-latex-"));
 
   try {
     const fileMap = new Map<string, string>();

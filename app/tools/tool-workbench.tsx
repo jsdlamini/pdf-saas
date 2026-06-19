@@ -70,7 +70,7 @@ type LocalStoredFileEntry = {
   createdAt: number;
 };
 
-const LOCAL_FILE_HISTORY_KEY = "papertrail-local-file-history";
+const LOCAL_FILE_HISTORY_KEY = "wiserfiles-local-file-history";
 
 function isFileCompatibleForTool(toolSlug: string, file: File) {
   const lower = file.name.toLowerCase();
@@ -751,7 +751,7 @@ export default function ToolWorkbench({ tool }: WorkbenchProps) {
   const [ranges, setRanges] = useState("1");
   const [watermarkText, setWatermarkText] = useState("CONFIDENTIAL");
   const [password, setPassword] = useState("");
-  const [editText, setEditText] = useState("Reviewed by PaperTrail");
+  const [editText, setEditText] = useState("Reviewed by WiserFiles");
   const [editPreview, setEditPreview] = useState("");
   const [editCanvasSize, setEditCanvasSize] = useState({ width: 0, height: 0 });
   const [editPageNumber, setEditPageNumber] = useState(1);
@@ -1077,7 +1077,7 @@ export default function ToolWorkbench({ tool }: WorkbenchProps) {
     }
 
     try {
-      const previous = JSON.parse(localStorage.getItem("papertrail-recent-workflows") || "[]") as Array<{
+      const previous = JSON.parse(localStorage.getItem("wiserfiles-recent-workflows") || "[]") as Array<{
         slug: string;
         name: string;
         at: string;
@@ -1085,8 +1085,8 @@ export default function ToolWorkbench({ tool }: WorkbenchProps) {
       const next = [{ slug: tool.slug, name: tool.name, at: finishedAt.toISOString() }, ...previous]
         .filter((entry, index, all) => index === all.findIndex((item) => item.slug === entry.slug))
         .slice(0, 6);
-      localStorage.setItem("papertrail-recent-workflows", JSON.stringify(next));
-      window.dispatchEvent(new Event("papertrail-recent-workflows-change"));
+      localStorage.setItem("wiserfiles-recent-workflows", JSON.stringify(next));
+      window.dispatchEvent(new Event("wiserfiles-recent-workflows-change"));
     } catch {
       // Ignore localStorage failures in restricted contexts.
     }
@@ -2707,8 +2707,8 @@ export default function ToolWorkbench({ tool }: WorkbenchProps) {
           compressedSource.setAuthor("");
           compressedSource.setSubject("");
           compressedSource.setKeywords([]);
-          compressedSource.setCreator("PaperTrail Compression Engine");
-          compressedSource.setProducer("PaperTrail Compression Engine");
+          compressedSource.setCreator("WiserFiles Compression Engine");
+          compressedSource.setProducer("WiserFiles Compression Engine");
         }
 
         stageOutput(
@@ -2725,7 +2725,7 @@ export default function ToolWorkbench({ tool }: WorkbenchProps) {
         const source = await PDFDocument.load(await readAsArrayBuffer(firstFile), { ignoreEncryption: true });
         if (tool.slug === "pdf-to-pdfa") {
           source.setTitle(source.getTitle() || "PDF-A export");
-          source.setProducer("PaperTrail PDF-A Export");
+          source.setProducer("WiserFiles PDF-A Export");
         }
         const bytes = await source.save({ useObjectStreams: false });
         const suffix = tool.slug === "repair-pdf" ? "repaired" : "pdfa";
@@ -2797,7 +2797,7 @@ export default function ToolWorkbench({ tool }: WorkbenchProps) {
               method: "POST",
               headers: { "Content-Type": "application/json" },
               body: JSON.stringify({
-                event: "papertrail.ocr.batch.completed",
+                event: "wiserfiles.ocr.batch.completed",
                 tool: tool.slug,
                 files: files.map((file) => file.name),
                 completedAt: new Date().toISOString(),

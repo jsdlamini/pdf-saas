@@ -16,8 +16,8 @@ export type StoredResearchProject = {
 };
 
 declare global {
-  var __papertrailPgPool: Pool | undefined;
-  var __papertrailResearchSchemaReady: Promise<void> | undefined;
+  var __wiserfilesPgPool: Pool | undefined;
+  var __wiserfilesResearchSchemaReady: Promise<void> | undefined;
 }
 
 function getPool() {
@@ -26,19 +26,19 @@ function getPool() {
     throw new Error("DATABASE_URL is not configured.");
   }
 
-  if (!global.__papertrailPgPool) {
-    global.__papertrailPgPool = new Pool({ connectionString });
+  if (!global.__wiserfilesPgPool) {
+    global.__wiserfilesPgPool = new Pool({ connectionString });
   }
 
-  return global.__papertrailPgPool;
+  return global.__wiserfilesPgPool;
 }
 
 async function ensureSchema() {
-  if (!global.__papertrailResearchSchemaReady) {
+  if (!global.__wiserfilesResearchSchemaReady) {
     const pool = getPool();
-    global.__papertrailResearchSchemaReady = pool
+    global.__wiserfilesResearchSchemaReady = pool
       .query(`
-        CREATE TABLE IF NOT EXISTS papertrail_research_projects (
+        CREATE TABLE IF NOT EXISTS wiserfiles_research_projects (
           user_id TEXT NOT NULL,
           id TEXT NOT NULL,
           name TEXT NOT NULL,
@@ -50,13 +50,13 @@ async function ensureSchema() {
           PRIMARY KEY (user_id, id)
         );
 
-        CREATE INDEX IF NOT EXISTS papertrail_research_projects_user_updated_idx
-        ON papertrail_research_projects (user_id, updated_at DESC);
+        CREATE INDEX IF NOT EXISTS wiserfiles_research_projects_user_updated_idx
+        ON wiserfiles_research_projects (user_id, updated_at DESC);
       `)
       .then(() => undefined);
   }
 
-  await global.__papertrailResearchSchemaReady;
+  await global.__wiserfilesResearchSchemaReady;
 }
 
 function isProjectEntry(value: unknown): value is ProjectEntry {
@@ -124,7 +124,7 @@ export async function listResearchProjectsForUser(userId: string) {
   const result = await pool.query(
     `
       SELECT id, name, entries, selected_path, last_compile_at, updated_at
-      FROM papertrail_research_projects
+      FROM wiserfiles_research_projects
       WHERE user_id = $1
       ORDER BY updated_at DESC
       LIMIT 20
@@ -145,7 +145,7 @@ export async function upsertResearchProjectForUser(userId: string, project: Stor
 
   const result = await pool.query(
     `
-      INSERT INTO papertrail_research_projects (
+      INSERT INTO wiserfiles_research_projects (
         user_id,
         id,
         name,
@@ -183,7 +183,7 @@ export async function deleteResearchProjectForUser(userId: string, projectId: st
   const pool = getPool();
   await pool.query(
     `
-      DELETE FROM papertrail_research_projects
+      DELETE FROM wiserfiles_research_projects
       WHERE user_id = $1 AND id = $2
     `,
     [userId, projectId]
