@@ -71,6 +71,52 @@ type LocalStoredFileEntry = {
 };
 
 const LOCAL_FILE_HISTORY_KEY = "wiserfiles-local-file-history";
+const LEGACY_PDF_WATERMARK_MARKERS: number[][] = [
+  [80, 65, 80, 69, 82, 84, 82, 65, 73, 76, 32, 80, 68, 70, 32, 87, 79, 82, 75, 83, 80, 65, 67, 69],
+  [80, 65, 80, 69, 82, 84, 82, 65, 73, 76],
+];
+
+function toUpperAsciiByte(value: number) {
+  if (value >= 97 && value <= 122) return value - 32;
+  return value;
+}
+
+function replaceAsciiMarker(bytes: Uint8Array, markerBytes: number[]) {
+  if (!markerBytes.length) return false;
+
+  let replaced = false;
+  for (let index = 0; index <= bytes.length - markerBytes.length; index += 1) {
+    if (toUpperAsciiByte(bytes[index]) !== markerBytes[0]) continue;
+
+    let matches = true;
+    for (let cursor = 1; cursor < markerBytes.length; cursor += 1) {
+      if (toUpperAsciiByte(bytes[index + cursor]) !== markerBytes[cursor]) {
+        matches = false;
+        break;
+      }
+    }
+
+    if (!matches) continue;
+    bytes.fill(0x20, index, index + markerBytes.length);
+    replaced = true;
+    index += markerBytes.length - 1;
+  }
+
+  return replaced;
+}
+
+async function sanitizeLegacyWatermarks(blob: Blob) {
+  if (!blob.type.includes("pdf")) return blob;
+
+  const bytes = new Uint8Array(await blob.arrayBuffer());
+  let changed = false;
+  for (const markerBytes of LEGACY_PDF_WATERMARK_MARKERS) {
+    changed = replaceAsciiMarker(bytes, markerBytes) || changed;
+  }
+
+  if (!changed) return blob;
+  return new Blob([bytes], { type: blob.type || "application/pdf" });
+}
 
 function isFileCompatibleForTool(toolSlug: string, file: File) {
   const lower = file.name.toLowerCase();
@@ -1307,45 +1353,49 @@ export default function ToolWorkbench({ tool }: WorkbenchProps) {
     note?: string,
     imagePreviewDataUrl?: string
   ) {
-    const finalFileName = buildOutputName(fileName);
     previewJobRef.current += 1;
     const previewJob = previewJobRef.current;
     setPreviewText("");
     setDownloadingOutput(false);
-    const url = URL.createObjectURL(blob);
-    const createdAt = Date.now();
-    const expiresAt = createdAt + 30 * 60 * 1000;
-    latestOutputRef.current = {
-      blob,
-      fileName: finalFileName,
-      mime: blob.type || "application/octet-stream",
-    };
-    setOutputPreview((current) => {
-      if (current) URL.revokeObjectURL(current.url);
-      return {
-        blob,
+    const finalFileName = buildOutputName(fileName);
+
+    const setPreparedOutput = (preparedBlob: Blob) => {
+      if (previewJobRef.current !== previewJob) return;
+
+      const url = URL.createObjectURL(preparedBlob);
+      const createdAt = Date.now();
+      const expiresAt = createdAt + 30 * 60 * 1000;
+      latestOutputRef.current = {
+        blob: preparedBlob,
         fileName: finalFileName,
-        url,
-        mime: blob.type || "application/octet-stream",
-        createdAt,
-        expiresAt,
-        note,
-        imagePreviewDataUrl,
-        pdfPreviewDataUrl: undefined,
+        mime: preparedBlob.type || "application/octet-stream",
       };
-    });
+      setOutputPreview((current) => {
+        if (current) URL.revokeObjectURL(current.url);
+        return {
+          blob: preparedBlob,
+          fileName: finalFileName,
+          url,
+          mime: preparedBlob.type || "application/octet-stream",
+          createdAt,
+          expiresAt,
+          note,
+          imagePreviewDataUrl,
+          pdfPreviewDataUrl: undefined,
+        };
+      });
 
-    logProcessing(`Output staged: ${finalFileName} (${formatBytes(blob.size)})`);
+      logProcessing(`Output staged: ${finalFileName} (${formatBytes(preparedBlob.size)})`);
 
-    if (blob.type.startsWith("text/")) {
-      blob
+      if (preparedBlob.type.startsWith("text/")) {
+        preparedBlob
         .text()
         .then((text) => setPreviewText(text.slice(0, 12000)))
         .catch(() => setPreviewText("Preview unavailable for this text output."));
-    }
+      }
 
-    if (OFFICE_PREVIEW_MIME_PATTERN.test(blob.type)) {
-      buildOfficePreviewText(blob, blob.type)
+      if (OFFICE_PREVIEW_MIME_PATTERN.test(preparedBlob.type)) {
+        buildOfficePreviewText(preparedBlob, preparedBlob.type)
         .then((text) => {
           if (previewJobRef.current !== previewJob) return;
           setPreviewText(text);
@@ -1354,22 +1404,32 @@ export default function ToolWorkbench({ tool }: WorkbenchProps) {
           if (previewJobRef.current !== previewJob) return;
           setPreviewText("Could not build an in-browser structured preview for this output.");
         });
-    }
+      }
+
+      if (preparedBlob.type.includes("pdf")) {
+        setPdfPreviewPage(1);
+        setPdfPreviewPageCount(1);
+        void loadOutputPdfPreviewPage(1, {
+          blob: preparedBlob,
+          fileName: finalFileName,
+          url,
+          mime: preparedBlob.type || "application/octet-stream",
+          createdAt,
+          expiresAt,
+          note,
+          imagePreviewDataUrl,
+        });
+      }
+    };
 
     if (blob.type.includes("pdf")) {
-      setPdfPreviewPage(1);
-      setPdfPreviewPageCount(1);
-      void loadOutputPdfPreviewPage(1, {
-        blob,
-        fileName: finalFileName,
-        url,
-        mime: blob.type || "application/octet-stream",
-        createdAt,
-        expiresAt,
-        note,
-        imagePreviewDataUrl,
-      });
+      void sanitizeLegacyWatermarks(blob)
+        .then((sanitizedBlob) => setPreparedOutput(sanitizedBlob))
+        .catch(() => setPreparedOutput(blob));
+      return;
     }
+
+    setPreparedOutput(blob);
   }
 
   function downloadPreparedOutput() {

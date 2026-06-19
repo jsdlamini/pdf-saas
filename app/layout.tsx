@@ -124,7 +124,7 @@ export default async function RootLayout({
 
                 <Link href="/" className="flex items-center justify-center gap-2 md:justify-start md:gap-3">
                   <span className="inline-flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-cyan-400 via-sky-500 to-indigo-500 text-sm font-bold text-slate-950 shadow-[0_10px_22px_-14px_rgba(14,165,233,0.9)] ring-1 ring-white/20 md:h-9 md:w-9 dark:from-cyan-300 dark:via-sky-400 dark:to-fuchsia-400 dark:text-slate-950 dark:ring-white/25">
-                    PT
+                    WF
                   </span>
                   <span className="font-display text-base font-semibold tracking-tight text-slate-950 md:text-xl">
                     WiserFiles
