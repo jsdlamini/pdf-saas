@@ -126,20 +126,24 @@ export default function Home() {
       <main className="relative z-10 mx-auto flex w-full max-w-7xl flex-col gap-4 px-6 py-6 md:gap-5 md:px-10 md:py-8">
 
         {/* ── Zone 1: Hero ─────────────────────────────────────────── */}
-        <header className="ai-hero-panel rounded-3xl px-6 py-7 md:px-10 md:py-9">
-          <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">
+        <header className="ai-hero-panel animate-rise-in rounded-3xl px-6 py-7 md:px-10 md:py-9">
+          <p className="animate-rise-in text-xs font-semibold uppercase tracking-[0.18em] text-slate-500" style={{ animationDelay: "90ms" }}>
             PaperTrail Workspace
           </p>
-          <h1 className="mt-2 font-display text-4xl font-semibold leading-tight tracking-tight text-slate-950 lg:text-5xl">
+          <h1 className="animate-rise-in-delayed mt-2 font-display text-4xl font-semibold leading-tight tracking-tight text-slate-950 lg:text-5xl" style={{ animationDelay: "140ms" }}>
             Professional PDF tools,<br className="hidden sm:block" /> one focused workspace.
           </h1>
-          <p className="mt-2 max-w-2xl text-base text-slate-600">
+          <p className="animate-rise-in mt-2 max-w-2xl text-base text-slate-600" style={{ animationDelay: "220ms" }}>
             Organize, convert, secure, and sign documents — or open the Research Studio for LaTeX editing.
           </p>
 
           <div className="mt-5 grid gap-3 sm:grid-cols-3">
-            {DASHBOARD_METRICS.map((metric) => (
-              <div key={metric.label} className="invoice-kpi-card rounded-2xl px-4 py-3">
+            {DASHBOARD_METRICS.map((metric, index) => (
+              <div
+                key={metric.label}
+                className="invoice-kpi-card animate-rise-in rounded-2xl px-4 py-3"
+                style={{ animationDelay: `${260 + index * 90}ms` }}
+              >
                 <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-slate-500">{metric.label}</p>
                 <p className="mt-1 font-display text-2xl font-semibold leading-none text-slate-950">{metric.value}</p>
                 <p className="mt-1 text-xs text-cyan-700">{metric.trend}</p>
@@ -149,11 +153,12 @@ export default function Home() {
 
           {/* Quick-action chips */}
           <div className="mt-5 flex flex-wrap gap-2">
-            {HERO_QUICK_ACTIONS.map((action) => (
+            {HERO_QUICK_ACTIONS.map((action, index) => (
               <Link
                 key={action.href}
                 href={action.href}
-                className="ai-pill group inline-flex items-center gap-2 rounded-full px-4 py-2 text-sm font-semibold text-slate-800"
+                className="ai-pill animate-rise-in group inline-flex items-center gap-2 rounded-full px-4 py-2 text-sm font-semibold text-slate-800"
+                style={{ animationDelay: `${360 + index * 70}ms` }}
               >
                 <span className="text-slate-500 transition group-hover:text-cyan-700">{action.icon}</span>
                 {action.label}
@@ -167,7 +172,7 @@ export default function Home() {
           </div>
 
           {/* Search bar */}
-          <div className="mt-5 flex items-center gap-2">
+          <div className="animate-rise-in mt-5 flex items-center gap-2" style={{ animationDelay: "640ms" }}>
             <div className="relative flex-1">
               <svg
                 viewBox="0 0 20 20"
@@ -209,7 +214,7 @@ export default function Home() {
         </header>
 
         {/* ── Zone 2: Tool Directory ────────────────────────────────── */}
-        <section className="ai-panel rounded-2xl">
+        <section className="ai-panel animate-rise-in rounded-2xl" style={{ animationDelay: "720ms" }}>
           {/* Header row: title + count */}
           <div className="flex items-center justify-between border-b border-slate-100 px-4 pt-4 pb-3">
             <h2 className="font-display text-lg font-semibold tracking-tight text-slate-950">
@@ -228,11 +233,12 @@ export default function Home() {
               </div>
             ) : (
               <div className="flex flex-wrap items-center justify-center gap-3">
-                {visibleTools.map((tool) => (
+                {visibleTools.map((tool, index) => (
                   <Link
                     key={tool.slug}
                     href={`/tools/${tool.slug}`}
                     title={`${tool.name}: ${tool.description}`}
+                    style={{ animationDelay: `${index * 24}ms` }}
                     className={`ai-tool-pill group inline-flex items-center justify-center rounded-full border bg-gradient-to-r px-4 py-2 text-sm font-semibold transition-all duration-200 hover:scale-105 hover:shadow-lg ${getCategoryColor(tool.category)} cursor-pointer`}
                   >
                     <span className="flex items-center gap-1.5">
@@ -254,7 +260,7 @@ export default function Home() {
         </section>
 
         {/* ── Zone 3: Workflow Recipes ──────────────────────────────── */}
-        <section className="ai-panel rounded-2xl p-4">
+        <section className="ai-panel animate-rise-in rounded-2xl p-4" style={{ animationDelay: "840ms" }}>
           <div className="mb-3 flex items-center justify-between">
             <h2 className="font-display text-lg font-semibold tracking-tight text-slate-950">Workflow Recipes</h2>
             <p className="text-xs uppercase tracking-[0.12em] text-slate-500">Click to start</p>
@@ -270,12 +276,13 @@ export default function Home() {
             }}
           />
           <div className="grid gap-2 md:grid-cols-2">
-            {WORKFLOW_RECIPES.slice(0, 4).map((recipe) => (
+            {WORKFLOW_RECIPES.slice(0, 4).map((recipe, index) => (
               <button
                 key={recipe.slug}
                 type="button"
                 onClick={() => startWorkflow(recipe)}
                 className="ai-workflow-card group rounded-xl p-3 text-left transition hover:-translate-y-0.5 hover:border-cyan-300 hover:bg-cyan-50"
+                style={{ animationDelay: `${index * 110}ms` }}
               >
                 <div className="flex items-start justify-between gap-2">
                   <p className="text-sm font-semibold text-slate-900 group-hover:text-cyan-900">{recipe.name}</p>
@@ -287,11 +294,17 @@ export default function Home() {
                 <div className="mt-2 flex items-center gap-0">
                   {recipe.steps.map((step, index) => (
                     <div key={`${recipe.slug}-${step.toolSlug}`} className="flex items-center">
-                      <span className="inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-slate-200 text-[10px] font-bold text-slate-600 group-hover:bg-cyan-200 group-hover:text-cyan-900">
+                      <span
+                        className="workflow-step-badge inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-slate-200 text-[10px] font-bold text-slate-600 group-hover:bg-cyan-200 group-hover:text-cyan-900"
+                        style={{ animationDelay: `${120 + index * 70}ms` }}
+                      >
                         {index + 1}
                       </span>
                       {index < recipe.steps.length - 1 ? (
-                        <span className="mx-1 block h-px w-4 bg-slate-300 group-hover:bg-cyan-300" />
+                        <span
+                          className="workflow-step-line mx-1 block h-px w-4 bg-slate-300 group-hover:bg-cyan-300"
+                          style={{ animationDelay: `${180 + index * 70}ms` }}
+                        />
                       ) : null}
                     </div>
                   ))}

@@ -5,7 +5,7 @@ import { jsPDF } from "jspdf";
 import JSZip from "jszip";
 import * as mammoth from "mammoth";
 import { useRouter, useSearchParams } from "next/navigation";
-import { PDFDocument, StandardFonts, degrees, rgb } from "pdf-lib";
+import { PDFDocument, StandardFonts, degrees, rgb, type PDFImage } from "pdf-lib";
 import { useEffect, useMemo, useRef, useState } from "react";
 import PptxGenJS from "pptxgenjs";
 import * as XLSX from "xlsx";
@@ -19,6 +19,9 @@ import { getNextRecipeStep, getRecipesForTool } from "@/lib/workflow-recipes";
 type WorkbenchProps = {
   tool: ToolItem;
 };
+
+type ImagePdfPageSizeMode = "original" | "a4";
+type ImagePdfPlacementMode = "single" | "grid";
 
 type PageThumbnail = {
   pageNumber: number;
@@ -71,7 +74,7 @@ const LOCAL_FILE_HISTORY_KEY = "papertrail-local-file-history";
 
 function isFileCompatibleForTool(toolSlug: string, file: File) {
   const lower = file.name.toLowerCase();
-  if (toolSlug === "jpg-to-pdf" || toolSlug === "scan-to-pdf") {
+  if (toolSlug === "jpg-to-pdf" || toolSlug === "images-to-pdf" || toolSlug === "scan-to-pdf") {
     return file.type.startsWith("image/") || /\.(png|jpe?g|webp)$/.test(lower);
   }
   if (toolSlug === "word-to-pdf") {
@@ -610,34 +613,69 @@ async function pdfFromLines(lines: string[], title: string) {
   return output.save();
 }
 
-async function fileToPdfImage(pdf: PDFDocument, file: File) {
-  const lower = file.name.toLowerCase();
-  const bytes = await readAsArrayBuffer(file);
+const PDF_MAX_IMAGE_PAGE_DIMENSION = 14400;
+const A4_PAGE_SIZE_PORTRAIT = { width: 595, height: 842 };
 
-  if (lower.endsWith(".png")) return pdf.embedPng(bytes);
-  if (lower.endsWith(".webp")) {
-    const bitmap = await createImageBitmap(file);
-    const canvas = document.createElement("canvas");
-    canvas.width = bitmap.width;
-    canvas.height = bitmap.height;
-    const context = canvas.getContext("2d");
-    if (!context) throw new Error("Cannot convert WEBP image.");
-    context.drawImage(bitmap, 0, 0);
+async function normalizeImageForPdf(file: File) {
+  const bitmap = await createImageBitmap(file);
+  const canvas = document.createElement("canvas");
+  canvas.width = bitmap.width;
+  canvas.height = bitmap.height;
+  const context = canvas.getContext("2d");
+  if (!context) throw new Error("Could not prepare image for PDF conversion.");
+  context.drawImage(bitmap, 0, 0);
+  bitmap.close();
 
-    const blob = await new Promise<Blob>((resolve, reject) => {
-      canvas.toBlob((generated) => {
+  const preferPng = file.type === "image/png";
+  const blob = await new Promise<Blob>((resolve, reject) => {
+    canvas.toBlob(
+      (generated) => {
         if (!generated) {
-          reject(new Error("Failed converting WEBP to PNG."));
+          reject(new Error("Failed to normalize image for PDF conversion."));
           return;
         }
         resolve(generated);
-      }, "image/png");
-    });
+      },
+      preferPng ? "image/png" : "image/jpeg",
+      preferPng ? undefined : 0.95
+    );
+  });
 
-    return pdf.embedPng(await blob.arrayBuffer());
+  return {
+    bytes: await blob.arrayBuffer(),
+    mime: blob.type,
+    width: canvas.width,
+    height: canvas.height,
+  };
+}
+
+function clampPdfImageDimensions(width: number, height: number) {
+  const scale = Math.min(1, PDF_MAX_IMAGE_PAGE_DIMENSION / width, PDF_MAX_IMAGE_PAGE_DIMENSION / height);
+  return {
+    width: Math.max(1, Math.round(width * scale)),
+    height: Math.max(1, Math.round(height * scale)),
+  };
+}
+
+async function fileToPdfImage(pdf: PDFDocument, file: File): Promise<{ image: PDFImage; width: number; height: number }> {
+  const lower = file.name.toLowerCase();
+  const isJpeg = lower.endsWith(".jpg") || lower.endsWith(".jpeg") || file.type === "image/jpeg";
+  const isPng = lower.endsWith(".png") || file.type === "image/png";
+  const isWebp = lower.endsWith(".webp") || file.type === "image/webp";
+
+  if (isJpeg || isPng || isWebp) {
+    const normalized = await normalizeImageForPdf(file);
+    const image =
+      normalized.mime === "image/png"
+        ? await pdf.embedPng(normalized.bytes)
+        : await pdf.embedJpg(normalized.bytes);
+    return { image, width: normalized.width, height: normalized.height };
   }
 
-  return pdf.embedJpg(bytes);
+  const bytes = await readAsArrayBuffer(file);
+  const image = await pdf.embedJpg(bytes);
+  const { width, height } = image.scale(1);
+  return { image, width, height };
 }
 
 function sortSlidePaths(paths: string[]) {
@@ -765,6 +803,11 @@ export default function ToolWorkbench({ tool }: WorkbenchProps) {
   const [cameraPermissionStatus, setCameraPermissionStatus] = useState<
     "unknown" | "prompt" | "granted" | "denied"
   >("unknown");
+  const [imagePdfPageSizeMode, setImagePdfPageSizeMode] = useState<ImagePdfPageSizeMode>("original");
+  const [imagePdfPlacementMode, setImagePdfPlacementMode] = useState<ImagePdfPlacementMode>("single");
+  const [imagePdfGridColumns, setImagePdfGridColumns] = useState(2);
+  const [imagePdfGridRows, setImagePdfGridRows] = useState(2);
+  const [imagePdfPageMargin, setImagePdfPageMargin] = useState(24);
   const [ocrLanguage, setOcrLanguage] = useState("eng");
   const [ocrPreset, setOcrPreset] = useState<OcrPreset>("balanced");
   const [ocrQualityOptions, setOcrQualityOptions] = useState<OcrQualityOptions>({
@@ -831,6 +874,8 @@ export default function ToolWorkbench({ tool }: WorkbenchProps) {
   const isSignTool = tool.slug === "sign-pdf";
   const isMergeTool = tool.slug === "merge-pdf";
   const isScanTool = tool.slug === "scan-to-pdf";
+  const isImageToPdfTool =
+    tool.slug === "jpg-to-pdf" || tool.slug === "images-to-pdf" || tool.slug === "scan-to-pdf";
   const isEditTool = tool.slug === "edit-pdf";
   const isOcrTool = tool.slug === "ocr-pdf";
   const supportsOrderDrag =
@@ -1586,7 +1631,7 @@ export default function ToolWorkbench({ tool }: WorkbenchProps) {
     }
     if (tool.slug === "organize-pdf") return "Upload one PDF and drag thumbnails to set output order.";
     if (tool.slug === "remove-pages") return "Upload one PDF and click page thumbnails to remove pages.";
-    if (tool.slug === "jpg-to-pdf" || tool.slug === "scan-to-pdf") {
+    if (tool.slug === "jpg-to-pdf" || tool.slug === "images-to-pdf" || tool.slug === "scan-to-pdf") {
       return "Upload one or more images to generate a PDF.";
     }
     if (tool.slug === "pdf-to-latex") {
@@ -1921,11 +1966,12 @@ export default function ToolWorkbench({ tool }: WorkbenchProps) {
   const acceptsMultiple =
     tool.slug === "merge-pdf" ||
     tool.slug === "jpg-to-pdf" ||
+    tool.slug === "images-to-pdf" ||
     tool.slug === "scan-to-pdf" ||
     tool.slug === "compare-pdf";
 
   const inputAccept = useMemo(() => {
-    if (tool.slug === "jpg-to-pdf" || tool.slug === "scan-to-pdf") {
+    if (tool.slug === "jpg-to-pdf" || tool.slug === "images-to-pdf" || tool.slug === "scan-to-pdf") {
       return "image/jpeg,image/png,image/webp";
     }
     if (tool.slug === "word-to-pdf") {
@@ -2529,14 +2575,86 @@ export default function ToolWorkbench({ tool }: WorkbenchProps) {
         return;
       }
 
-      if (tool.slug === "jpg-to-pdf" || tool.slug === "scan-to-pdf") {
+      if (tool.slug === "jpg-to-pdf" || tool.slug === "images-to-pdf" || tool.slug === "scan-to-pdf") {
         const output = await PDFDocument.create();
+        const preparedImages: Array<{ image: PDFImage; width: number; height: number }> = [];
+
         for (const file of files) {
-          const image = await fileToPdfImage(output, file);
-          const { width, height } = image.scale(1);
-          const page = output.addPage([width, height]);
-          page.drawImage(image, { x: 0, y: 0, width, height });
+          preparedImages.push(await fileToPdfImage(output, file));
         }
+
+        if (imagePdfPlacementMode === "single") {
+          for (const embedded of preparedImages) {
+            let pageWidth = embedded.width;
+            let pageHeight = embedded.height;
+
+            if (imagePdfPageSizeMode === "a4") {
+              const isLandscape = embedded.width > embedded.height;
+              pageWidth = isLandscape ? A4_PAGE_SIZE_PORTRAIT.height : A4_PAGE_SIZE_PORTRAIT.width;
+              pageHeight = isLandscape ? A4_PAGE_SIZE_PORTRAIT.width : A4_PAGE_SIZE_PORTRAIT.height;
+            }
+
+            const clampedPage = clampPdfImageDimensions(pageWidth, pageHeight);
+            const page = output.addPage([clampedPage.width, clampedPage.height]);
+            const margin = Math.max(0, Math.min(120, Math.round(imagePdfPageMargin || 0)));
+            const contentWidth = Math.max(1, clampedPage.width - margin * 2);
+            const contentHeight = Math.max(1, clampedPage.height - margin * 2);
+            const fitScale = Math.min(
+              contentWidth / embedded.width,
+              contentHeight / embedded.height
+            );
+            const drawWidth = embedded.width * fitScale;
+            const drawHeight = embedded.height * fitScale;
+            const x = margin + (contentWidth - drawWidth) / 2;
+            const y = margin + (contentHeight - drawHeight) / 2;
+
+            page.drawImage(embedded.image, { x, y, width: drawWidth, height: drawHeight });
+          }
+        } else {
+          const columns = Math.max(1, Math.min(4, Math.round(imagePdfGridColumns || 2)));
+          const rows = Math.max(1, Math.min(6, Math.round(imagePdfGridRows || 2)));
+          const margin = Math.max(0, Math.min(120, Math.round(imagePdfPageMargin || 0)));
+          const gap = 12;
+
+          let pageWidth = A4_PAGE_SIZE_PORTRAIT.width;
+          let pageHeight = A4_PAGE_SIZE_PORTRAIT.height;
+
+          if (imagePdfPageSizeMode === "original") {
+            const maxWidth = Math.max(...preparedImages.map((item) => item.width));
+            const maxHeight = Math.max(...preparedImages.map((item) => item.height));
+            const clampedMax = clampPdfImageDimensions(maxWidth, maxHeight);
+            pageWidth = clampedMax.width;
+            pageHeight = clampedMax.height;
+          }
+
+          const clampedPage = clampPdfImageDimensions(pageWidth, pageHeight);
+          const usableWidth = Math.max(1, clampedPage.width - margin * 2);
+          const usableHeight = Math.max(1, clampedPage.height - margin * 2);
+          const cellWidth = Math.max(1, (usableWidth - gap * (columns - 1)) / columns);
+          const perPage = Math.max(1, columns * rows);
+
+          for (let pageStart = 0; pageStart < preparedImages.length; pageStart += perPage) {
+            const page = output.addPage([clampedPage.width, clampedPage.height]);
+            const chunk = preparedImages.slice(pageStart, pageStart + perPage);
+            const cellHeight = Math.max(1, (usableHeight - gap * (rows - 1)) / rows);
+
+            chunk.forEach((embedded, index) => {
+              const row = Math.floor(index / columns);
+              const col = index % columns;
+              const xCell = margin + col * (cellWidth + gap);
+              const yCellTop = clampedPage.height - margin - row * (cellHeight + gap);
+
+              const fitScale = Math.min(cellWidth / embedded.width, cellHeight / embedded.height);
+              const drawWidth = embedded.width * fitScale;
+              const drawHeight = embedded.height * fitScale;
+              const x = xCell + (cellWidth - drawWidth) / 2;
+              const y = yCellTop - cellHeight + (cellHeight - drawHeight) / 2;
+
+              page.drawImage(embedded.image, { x, y, width: drawWidth, height: drawHeight });
+            });
+          }
+        }
+
         stageOutput(asPdfBlob(await output.save()), "images.pdf", "Preview the converted PDF before downloading.");
         complete(tool.slug === "scan-to-pdf" ? "Scan PDF ready for preview." : "Converted PDF ready for preview.");
         return;
@@ -3186,7 +3304,7 @@ export default function ToolWorkbench({ tool }: WorkbenchProps) {
           ) : null}
 
           {hasChosenWorkflow && applicableRecipes.length ? (
-            <div className="space-y-3 rounded-2xl border border-slate-200 bg-slate-50 p-3">
+            <div className="space-y-3 card-panel rounded-2xl border border-slate-200 bg-slate-50 p-3">
               <div className="flex items-center justify-between gap-3">
                 <p className="text-xs font-semibold uppercase tracking-[0.14em] text-slate-600">Workflow in progress</p>
                 {applicableRecipes.length > 1 ? (
@@ -3452,7 +3570,7 @@ export default function ToolWorkbench({ tool }: WorkbenchProps) {
           </div>
 
           {ocrUploadWarning ? (
-            <div className="rounded-2xl border border-rose-200 bg-rose-50 p-3 text-sm font-medium text-rose-700">
+            <div className="rounded-2xl card-panel border border-rose-200 bg-rose-50 p-3 text-sm font-medium text-rose-700">
               {ocrUploadWarning}
             </div>
           ) : null}
@@ -3500,6 +3618,90 @@ export default function ToolWorkbench({ tool }: WorkbenchProps) {
             className={`w-full max-w-[420px] rounded-lg border border-slate-300 bg-slate-900 ${cameraActive ? "block" : "hidden"}`}
           />
           <canvas ref={cameraCanvasRef} className="hidden" />
+        </div>
+      ) : null}
+
+      {isImageToPdfTool ? (
+        <div className="space-y-3 rounded-2xl border border-slate-200 bg-slate-50 p-3">
+          <p className="text-xs font-semibold uppercase tracking-[0.14em] text-slate-600">Image to PDF layout</p>
+
+          <div className="grid gap-2 sm:grid-cols-2">
+            <label className="space-y-1">
+              <span className="text-xs font-semibold uppercase tracking-wide text-slate-600">Page size</span>
+              <select
+                value={imagePdfPageSizeMode}
+                onChange={(event) => setImagePdfPageSizeMode(event.target.value as ImagePdfPageSizeMode)}
+                className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm text-slate-800"
+              >
+                <option value="original">Keep original size</option>
+                <option value="a4">Fit to A4</option>
+              </select>
+            </label>
+
+            <label className="space-y-1">
+              <span className="text-xs font-semibold uppercase tracking-wide text-slate-600">Placement</span>
+              <select
+                value={imagePdfPlacementMode}
+                onChange={(event) => setImagePdfPlacementMode(event.target.value as ImagePdfPlacementMode)}
+                className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm text-slate-800"
+              >
+                <option value="single">Each image on its own page (default)</option>
+                <option value="grid">Place images on a page grid</option>
+              </select>
+            </label>
+          </div>
+
+          {imagePdfPlacementMode === "grid" ? (
+            <div className="grid gap-2 sm:grid-cols-2">
+              <label className="space-y-1">
+                <span className="text-xs font-semibold uppercase tracking-wide text-slate-600">Grid columns</span>
+                <select
+                  value={imagePdfGridColumns}
+                  onChange={(event) => setImagePdfGridColumns(Number(event.target.value))}
+                  className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm text-slate-800"
+                >
+                  <option value={1}>1 column</option>
+                  <option value={2}>2 columns</option>
+                  <option value={3}>3 columns</option>
+                  <option value={4}>4 columns</option>
+                </select>
+              </label>
+
+              <label className="space-y-1">
+                <span className="text-xs font-semibold uppercase tracking-wide text-slate-600">Grid rows</span>
+                <select
+                  value={imagePdfGridRows}
+                  onChange={(event) => setImagePdfGridRows(Number(event.target.value))}
+                  className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm text-slate-800"
+                >
+                  <option value={1}>1 row</option>
+                  <option value={2}>2 rows</option>
+                  <option value={3}>3 rows</option>
+                  <option value={4}>4 rows</option>
+                  <option value={5}>5 rows</option>
+                  <option value={6}>6 rows</option>
+                </select>
+              </label>
+            </div>
+          ) : null}
+
+          <label className="space-y-1">
+            <span className="text-xs font-semibold uppercase tracking-wide text-slate-600">Page margin (pt)</span>
+            <input
+              type="range"
+              min={0}
+              max={120}
+              step={2}
+              value={imagePdfPageMargin}
+              onChange={(event) => setImagePdfPageMargin(Number(event.target.value))}
+              className="w-full"
+            />
+            <p className="text-xs text-slate-500">{imagePdfPageMargin} pt</p>
+          </label>
+
+          <p className="field-help">
+            Images always keep aspect ratio. Use A4 for print-ready pages, or original size to preserve exact image dimensions.
+          </p>
         </div>
       ) : null}
 

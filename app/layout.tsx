@@ -147,7 +147,7 @@ export default async function RootLayout({
 
               <div className="neo-navbar-sub hidden w-full items-center justify-between gap-4 md:flex">
                 <nav className="flex items-center gap-2">
-                  {NAV_PARENTS.map((parent) => {
+                  {NAV_PARENTS.map((parent, index) => {
                     const subgroupTools =
                       parent === "All"
                         ? TOOL_ITEMS
@@ -157,7 +157,8 @@ export default async function RootLayout({
                       <div key={parent} className="group relative">
                         <button
                           type="button"
-                          className="nav-link neo-pill border border-transparent bg-transparent text-[11px] uppercase tracking-[0.12em]"
+                          className="nav-link neo-pill animate-rise-in border border-transparent bg-transparent text-[11px] uppercase tracking-[0.12em]"
+                          style={{ animationDelay: `${index * 40}ms` }}
                         >
                           {parent}
                         </button>
@@ -173,11 +174,12 @@ export default async function RootLayout({
                           </div>
 
                           <div className="grid max-h-[320px] grid-cols-2 gap-2 overflow-auto pr-1 lg:grid-cols-3">
-                            {subgroupTools.map((tool) => (
+                            {subgroupTools.map((tool, idx) => (
                               <Link
                                 key={`top-sub-${tool.slug}`}
                                 href={`/tools/${tool.slug}`}
-                                className="neo-submenu-item group/item px-3 py-2.5 text-xs font-semibold"
+                                className="neo-submenu-item group/item animate-rise-in px-3 py-2.5 text-xs font-semibold"
+                                style={{ animationDelay: `${idx * 28}ms` }}
                               >
                                 {tool.name}
                               </Link>

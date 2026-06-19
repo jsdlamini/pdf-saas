@@ -392,7 +392,33 @@ html[data-theme="dark"] .text-cyan-900 {
   animation: pipeline-banner-slide 0.3s ease-out both;
 }
 
-/* ───────────────────────────────────────────────────────────────── */
+/* ── Tool workbench & Research Studio card animations ────────────────── */
+
+.card-panel {
+  animation: card-pop 520ms cubic-bezier(0.16, 1, 0.3, 1) both;
+  transform-origin: center;
+}
+
+.studio-card {
+  animation: rise-in 580ms cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+@keyframes breathe-idle {
+  0%,
+  100% {
+    transform: translateY(0);
+    opacity: 1;
+  }
+  50% {
+    transform: translateY(-2px);
+    opacity: 0.96;
+  }
+}
+
+.panel-breathe {
+  animation: breathe-idle 6s ease-in-out infinite;
+}
+
 
 .tool-shell button {
   border-radius: 0.65rem;
@@ -600,6 +626,7 @@ html[data-theme="dark"] .latex-intellisense-option:hover {
   font-size: 0.86rem;
   font-weight: 600;
   color: var(--muted);
+  animation: rise-in 650ms cubic-bezier(0.16, 1, 0.3, 1) both;
   transition: color 180ms ease, background-color 180ms ease, transform 180ms ease, box-shadow 180ms ease;
 }
 
@@ -671,6 +698,7 @@ html[data-theme="dark"] .latex-intellisense-option:hover {
     5px 7px 16px -14px rgba(15, 23, 42, 0.46),
     -4px -4px 10px -9px rgba(255, 255, 255, 0.88),
     inset 0 1px 0 rgba(255, 255, 255, 0.74);
+  animation: rise-in 620ms cubic-bezier(0.16, 1, 0.3, 1) both;
   transition: all 200ms ease;
 }
 
@@ -785,6 +813,7 @@ html[data-theme="dark"] .field-help {
 }
 
 .ai-home-bg {
+  position: relative;
   background:
     radial-gradient(90% 70% at 0% 0%, rgba(56, 189, 248, 0.22), transparent 52%),
     radial-gradient(80% 70% at 100% 0%, rgba(45, 212, 191, 0.16), transparent 48%),
@@ -792,7 +821,23 @@ html[data-theme="dark"] .field-help {
     linear-gradient(180deg, #f7fbff 0%, #eef5ff 100%);
 }
 
+.ai-home-bg > div {
+  animation: float-orbit 14s ease-in-out infinite;
+}
+
+.ai-home-bg > div:nth-of-type(2) {
+  animation-duration: 18s;
+  animation-delay: -4s;
+}
+
+.ai-home-bg > div:nth-of-type(3) {
+  animation-duration: 22s;
+  animation-delay: -8s;
+}
+
 .ai-hero-panel {
+  position: relative;
+  overflow: hidden;
   border: 1px solid color-mix(in srgb, var(--border) 72%, white 28%);
   background:
     radial-gradient(140% 130% at 0% 0%, rgba(56, 189, 248, 0.14), transparent 46%),
@@ -802,6 +847,27 @@ html[data-theme="dark"] .field-help {
     0 18px 40px -30px rgba(2, 6, 23, 0.32),
     0 10px 26px -24px rgba(14, 165, 233, 0.4),
     inset 0 1px 0 rgba(255, 255, 255, 0.86);
+}
+
+.ai-hero-panel::after {
+  content: "";
+  position: absolute;
+  inset: -40% -24%;
+  pointer-events: none;
+  background: linear-gradient(
+    110deg,
+    transparent 35%,
+    rgba(255, 255, 255, 0.42) 47%,
+    transparent 59%
+  );
+  transform: translateX(-28%) rotate(8deg);
+  opacity: 0.45;
+  animation: panel-sheen 10s ease-in-out infinite;
+}
+
+.ai-hero-panel > * {
+  position: relative;
+  z-index: 1;
 }
 
 .ai-panel {
@@ -826,6 +892,24 @@ html[data-theme="dark"] .field-help {
   border-color: color-mix(in srgb, var(--accent) 42%, var(--border) 58%);
   background: color-mix(in srgb, var(--accent) 9%, white 91%);
   transform: translateY(-1px);
+}
+
+.ai-tool-pill {
+  animation: card-pop 560ms cubic-bezier(0.16, 1, 0.3, 1) both;
+  transform-origin: center;
+}
+
+.ai-tool-pill:hover {
+  transform: translateY(-3px) scale(1.03);
+}
+
+.workflow-step-badge {
+  animation: step-bubble-in 520ms cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+.workflow-step-line {
+  transform-origin: left center;
+  animation: step-line-grow 520ms cubic-bezier(0.16, 1, 0.3, 1) both;
 }
 
 .ai-search-input {
@@ -868,6 +952,87 @@ html[data-theme="dark"] .field-help {
     inset 0 1px 0 rgba(255, 255, 255, 0.86);
 }
 
+.invoice-kpi-card,
+.ai-pill,
+.ai-search-input,
+.ai-panel,
+.ai-workflow-card {
+  animation: rise-in 700ms cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+.invoice-kpi-card {
+  animation-duration: 620ms;
+}
+
+.ai-panel {
+  animation-duration: 720ms;
+}
+
+.ai-workflow-card {
+  animation-duration: 760ms;
+}
+
+@keyframes float-orbit {
+  0%,
+  100% {
+    transform: translate3d(0, 0, 0) scale(1);
+  }
+  33% {
+    transform: translate3d(8px, -10px, 0) scale(1.03);
+  }
+  66% {
+    transform: translate3d(-10px, 6px, 0) scale(0.98);
+  }
+}
+
+@keyframes panel-sheen {
+  0%,
+  64% {
+    transform: translateX(-32%) rotate(8deg);
+    opacity: 0;
+  }
+  72% {
+    opacity: 0.5;
+  }
+  100% {
+    transform: translateX(28%) rotate(8deg);
+    opacity: 0;
+  }
+}
+
+@keyframes card-pop {
+  from {
+    opacity: 0;
+    transform: translateY(14px) scale(0.97);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+@keyframes step-bubble-in {
+  from {
+    opacity: 0;
+    transform: translateY(8px) scale(0.82);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+@keyframes step-line-grow {
+  from {
+    opacity: 0;
+    transform: scaleX(0.3);
+  }
+  to {
+    opacity: 1;
+    transform: scaleX(1);
+  }
+}
+
 html[data-theme="dark"] .ai-home-bg {
   background:
     radial-gradient(90% 70% at 0% 0%, rgba(56, 189, 248, 0.2), transparent 52%),
@@ -908,4 +1073,41 @@ html[data-theme="dark"] .invoice-kpi-card {
   box-shadow:
     0 18px 28px -22px rgba(0, 0, 0, 0.74),
     inset 0 1px 0 rgba(255, 255, 255, 0.08);
+}
+
+html[data-theme="dark"] .ai-hero-panel::after {
+  background: linear-gradient(
+    110deg,
+    transparent 38%,
+    rgba(255, 255, 255, 0.16) 48%,
+    transparent 58%
+  );
+  opacity: 0.28;
+}
+
+html[data-theme="dark"] .ai-tool-pill:hover {
+  background: color-mix(in srgb, var(--accent) 16%, var(--surface) 84%);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+
+  .ai-home-bg > div,
+  .ai-hero-panel::after,
+  .workflow-step-badge,
+  .workflow-step-line,
+  .ai-tool-pill,
+  .nav-link,
+  .neo-submenu-item,
+  .card-panel,
+  .studio-card {
+    animation: none !important;
+  }
 }
