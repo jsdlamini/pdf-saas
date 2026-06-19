@@ -171,13 +171,6 @@ export const TOOL_ITEMS: ToolItem[] = [
     runtime: "client",
   },
   {
-    slug: "watermark-pdf",
-    name: "Watermark PDF",
-    description: "Stamp pages with text watermark overlays.",
-    category: "Edit",
-    runtime: "client",
-  },
-  {
     slug: "page-numbers",
     name: "Page Numbers",
     description: "Add footer page numbering automatically.",

@@ -749,9 +749,8 @@ export default function ToolWorkbench({ tool }: WorkbenchProps) {
   const [error, setError] = useState("");
   const [status, setStatus] = useState("");
   const [ranges, setRanges] = useState("1");
-  const [watermarkText, setWatermarkText] = useState("CONFIDENTIAL");
   const [password, setPassword] = useState("");
-  const [editText, setEditText] = useState("Reviewed by WiserFiles");
+  const [editText, setEditText] = useState("");
   const [editPreview, setEditPreview] = useState("");
   const [editCanvasSize, setEditCanvasSize] = useState({ width: 0, height: 0 });
   const [editPageNumber, setEditPageNumber] = useState(1);
@@ -2550,31 +2549,6 @@ export default function ToolWorkbench({ tool }: WorkbenchProps) {
         return;
       }
 
-      if (tool.slug === "watermark-pdf") {
-        if (!firstFile) throw new Error("Missing PDF file.");
-        const source = await PDFDocument.load(await readAsArrayBuffer(firstFile));
-        const font = await source.embedFont(StandardFonts.HelveticaBold);
-        source.getPages().forEach((page) => {
-          const { width, height } = page.getSize();
-          page.drawText(watermarkText || "WATERMARK", {
-            x: width * 0.18,
-            y: height * 0.45,
-            size: 40,
-            rotate: degrees(35),
-            font,
-            color: rgb(0.85, 0.1, 0.1),
-            opacity: 0.2,
-          });
-        });
-        stageOutput(
-          asPdfBlob(await source.save()),
-          `${normalizeFileName(firstFile.name)}-watermarked.pdf`,
-          "Preview watermark placement before downloading."
-        );
-        complete("Watermarked PDF ready for preview.");
-        return;
-      }
-
       if (tool.slug === "jpg-to-pdf" || tool.slug === "images-to-pdf" || tool.slug === "scan-to-pdf") {
         const output = await PDFDocument.create();
         const preparedImages: Array<{ image: PDFImage; width: number; height: number }> = [];
@@ -3022,11 +2996,6 @@ export default function ToolWorkbench({ tool }: WorkbenchProps) {
                 },
               }
             : {};
-        const hasCanvasEdits =
-          tool.slug === "edit-pdf" &&
-          Object.values(pageLayers).some(
-            (layer) => layer.strokes.length > 0 || layer.textNotes.length > 0
-          );
         const signatureImageBytes =
           tool.slug === "sign-pdf" && signatureMode === "draw" ? await getSignatureImageBytes() : null;
         const signatureImage = signatureImageBytes ? await source.embedPng(signatureImageBytes) : null;
@@ -3094,8 +3063,6 @@ export default function ToolWorkbench({ tool }: WorkbenchProps) {
                   color: hexToRgb(note.color),
                 });
               }
-            } else if (!hasCanvasEdits && index === 0) {
-              page.drawText(editText, { x: 40, y: 40, size: 12, font, color: rgb(0.12, 0.4, 0.9) });
             }
           }
         });
@@ -3842,21 +3809,6 @@ export default function ToolWorkbench({ tool }: WorkbenchProps) {
               ? "Crop margin is in PDF points. 72 points equals about 1 inch."
               : "Select pages to remove using commas and ranges like 3,7-9."}
           </p>
-        </div>
-      ) : null}
-
-      {tool.slug === "watermark-pdf" ? (
-        <div className="space-y-1">
-          <label htmlFor="watermark" className="text-xs font-semibold uppercase tracking-wide text-slate-600">
-            Watermark text
-          </label>
-          <input
-            id="watermark"
-            type="text"
-            value={watermarkText}
-            onChange={(event) => setWatermarkText(event.target.value)}
-            className="w-full rounded-xl border border-slate-300 bg-slate-50 px-3 py-2 text-sm text-slate-800"
-          />
         </div>
       ) : null}
 
