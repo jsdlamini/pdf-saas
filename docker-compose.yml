@@ -9,7 +9,8 @@ services:
     expose:
       - "5432"
     volumes:
-      - postgres-data:/var/lib/postgresql/data
+      # Host bind mount keeps project/account data outside container lifecycle.
+      - ./data/postgres:/var/lib/postgresql/data
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-wiserfiles} -d ${POSTGRES_DB:-wiserfiles}"]
       interval: 10s
@@ -17,6 +18,7 @@ services:
       retries: 5
 
   web:
+    image: ${WEB_IMAGE:-pdf-saas-web:local}
     build:
       context: .
       dockerfile: Dockerfile
@@ -37,7 +39,8 @@ services:
       NODE_ENV: production
       PORT: 3000
       HOSTNAME: 0.0.0.0
-      DATABASE_URL: ${DATABASE_URL:-postgresql://wiserfiles:wiserfiles@db:5432/wiserfiles}
+      # Keep database local to this compose stack for portability and isolation.
+      DATABASE_URL: postgresql://${POSTGRES_USER:-wiserfiles}:${POSTGRES_PASSWORD:-wiserfiles}@db:5432/${POSTGRES_DB:-wiserfiles}
       NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY: ${NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY:-}
       CLERK_SECRET_KEY: ${CLERK_SECRET_KEY:-}
       # DeepSeek configuration is read from host environment or project .env.
@@ -54,7 +57,4 @@ networks:
   # container by name, so the web service MUST join it.
   webnet:
     external: true
-    name: docker_webnet
-
-volumes:
-  postgres-data:
+    name: ${WEB_EXTERNAL_NETWORK:-docker_webnet}

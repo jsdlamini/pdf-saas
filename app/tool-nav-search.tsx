@@ -64,7 +64,7 @@ export default function ToolNavSearch({ className, onNavigate }: ToolNavSearchPr
   }
 
   return (
-    <form onSubmit={onSubmit} className={`relative w-full max-w-[340px] ${className ?? ""}`.trim()}>
+    <form onSubmit={onSubmit} className={`relative min-w-0 w-full ${className ?? "max-w-[340px]"}`.trim()}>
       <input
         type="search"
         value={query}

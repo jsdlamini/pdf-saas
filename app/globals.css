@@ -648,6 +648,18 @@ html[data-theme="dark"] .latex-intellisense-option:hover {
     -6px -6px 16px -14px rgba(255, 255, 255, 0.9),
     inset 0 1px 0 rgba(255, 255, 255, 0.65);
   padding: 0.45rem 0.6rem;
+  overflow: visible;
+}
+
+@media (min-width: 768px) and (max-width: 1279px) {
+  .neo-navbar-sub {
+    row-gap: 0.55rem;
+  }
+
+  .neo-navbar-sub > nav {
+    width: 100%;
+    min-width: 0;
+  }
 }
 
 .neo-pill {

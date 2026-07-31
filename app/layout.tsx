@@ -145,8 +145,8 @@ export default async function RootLayout({
                 </div>
               </div>
 
-              <div className="neo-navbar-sub hidden w-full items-center justify-between gap-4 md:flex">
-                <nav className="flex items-center gap-2">
+              <div className="neo-navbar-sub hidden w-full gap-3 md:flex md:flex-wrap md:items-start md:justify-start xl:flex-nowrap xl:items-center xl:justify-between">
+                <nav className="flex min-w-0 flex-1 flex-wrap items-center gap-2">
                   {NAV_PARENTS.map((parent) => {
                     const subgroupTools =
                       parent === "All"
@@ -154,7 +154,7 @@ export default async function RootLayout({
                         : TOOL_ITEMS.filter((tool) => tool.category === parent);
 
                     return (
-                      <div key={parent} className="group relative">
+                      <div key={parent} className="group relative shrink-0">
                         <button
                           type="button"
                           className="nav-link neo-pill border border-transparent bg-transparent text-[11px] uppercase tracking-[0.12em]"
@@ -162,7 +162,7 @@ export default async function RootLayout({
                           {parent}
                         </button>
 
-                        <div className="nav-dropdown-panel nav-dropdown-pop pointer-events-none invisible absolute left-0 top-[calc(100%+10px)] z-50 w-[min(82vw,760px)] origin-top-left rounded-3xl border border-slate-200/80 bg-white/90 p-4 opacity-0 shadow-[0_24px_60px_-28px_rgba(15,23,42,0.42)] backdrop-blur-xl ring-1 ring-white/50 transition-all duration-200 ease-out will-change-transform translate-y-2 scale-[0.985] group-hover:pointer-events-auto group-hover:visible group-hover:opacity-100 group-hover:translate-y-0 group-hover:scale-100 group-focus-within:pointer-events-auto group-focus-within:visible group-focus-within:opacity-100 group-focus-within:translate-y-0 group-focus-within:scale-100 dark:bg-slate-950/90 dark:border-slate-700/80 dark:ring-white/10">
+                        <div className="nav-dropdown-panel nav-dropdown-pop pointer-events-none invisible absolute left-0 top-[calc(100%+10px)] z-50 w-[min(92vw,760px)] max-w-[calc(100vw-1rem)] origin-top-left rounded-3xl border border-slate-200/80 bg-white/90 p-4 opacity-0 shadow-[0_24px_60px_-28px_rgba(15,23,42,0.42)] backdrop-blur-xl ring-1 ring-white/50 transition-all duration-200 ease-out will-change-transform translate-y-2 scale-[0.985] group-hover:pointer-events-auto group-hover:visible group-hover:opacity-100 group-hover:translate-y-0 group-hover:scale-100 group-focus-within:pointer-events-auto group-focus-within:visible group-focus-within:opacity-100 group-focus-within:translate-y-0 group-focus-within:scale-100 dark:bg-slate-950/90 dark:border-slate-700/80 dark:ring-white/10">
                           <div className="mb-3 flex items-center justify-between gap-3 border-b border-slate-100/80 pb-2 dark:border-slate-800/80">
                             <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-cyan-700 dark:text-cyan-300">
                               {parent === "All" ? "All tool subgroups" : `${parent} subgroups`}
@@ -189,7 +189,7 @@ export default async function RootLayout({
                   })}
                 </nav>
 
-                <ToolNavSearch />
+                <ToolNavSearch className="min-w-0 max-w-none md:basis-full xl:basis-auto xl:max-w-[340px]" />
               </div>
             </div>
           </header>

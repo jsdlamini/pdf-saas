@@ -80,6 +80,8 @@ DEEPSEEK_API_URL=https://api.deepseek.com/chat/completions
 ### Docker Compose env wiring
 
 - `docker-compose.yml` forwards DeepSeek vars into the `web` service using `${...}` substitution.
+- `docker-compose.yml` also builds `DATABASE_URL` from `POSTGRES_DB`, `POSTGRES_USER`, and `POSTGRES_PASSWORD`, and targets the in-stack `db` service (`@db:5432`) for portability.
+- `web` supports both local build and prebuilt image flows via `WEB_IMAGE`.
 - Create a root `.env` file (gitignored) before `docker compose up`.
 - A template is provided at `env.compose.example`:
 
@@ -93,6 +95,154 @@ docker compose up -d --build
 ```bash
 DEEPSEEK_API_KEY=your_key docker compose up -d --build
 ```
+
+- The reverse proxy network defaults to `docker_webnet` and can be overridden with `WEB_EXTERNAL_NETWORK`.
+
+### Deploy workflows
+
+Use `deploy.sh` with one of two modes:
+
+- `DEPLOY_MODE=git` (default): server pulls `origin/main`, then runs `docker compose up -d --build`.
+- `DEPLOY_MODE=registry`: server pulls prebuilt `WEB_IMAGE`, then runs `docker compose up -d` without building.
+
+Optional git pinning variables for `DEPLOY_MODE=git`:
+
+- `DEPLOY_GIT_REMOTE` (default `origin`)
+- `DEPLOY_GIT_REF` (default `main`, but can also be a tag or commit SHA)
+
+#### 1) Git-based deploy (push first, then deploy)
+
+On your local machine:
+
+```bash
+git add .
+git commit -m "your change"
+git push origin main
+```
+
+On the VPS:
+
+```bash
+cd /var/www/pdf-saas
+./deploy.sh
+```
+
+#### 2) Registry-based deploy (push image first, then deploy)
+
+Build and push from CI or local machine:
+
+```bash
+docker build -t ghcr.io/your-org/pdf-saas-web:main \
+	--build-arg NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY=your_publishable_key \
+	.
+docker push ghcr.io/your-org/pdf-saas-web:main
+```
+
+On the VPS `.env`:
+
+```bash
+DEPLOY_MODE=registry
+WEB_IMAGE=ghcr.io/your-org/pdf-saas-web:main
+```
+
+Then deploy:
+
+```bash
+cd /var/www/pdf-saas
+./deploy.sh
+```
+
+### Local release helper
+
+Use `release.sh` on your local machine to automate commit/push and registry publishing.
+
+Prepare `.env` locally with:
+
+- `WEB_IMAGE_REPO` (for registry/all mode), for example `ghcr.io/your-org/pdf-saas-web`
+- `NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY` (required for image build arg)
+
+Examples:
+
+```bash
+# Commit + push git only
+./release.sh --mode git --commit "feat: improve deploy flow"
+
+# Build + push image only (tag defaults to current short git SHA)
+./release.sh --mode registry
+
+# Commit + push git + build/push image + latest tag
+./release.sh --mode all --commit "chore: release" --latest
+```
+
+After a registry release, set on VPS:
+
+```bash
+DEPLOY_MODE=registry
+WEB_IMAGE=ghcr.io/your-org/pdf-saas-web:<tag>
+```
+
+After a git release, you can optionally pin deploy to a specific commit:
+
+```bash
+DEPLOY_MODE=git
+DEPLOY_GIT_REF=<commit-sha-or-tag>
+```
+
+### One-command release-to-live helper
+
+Use `ship.sh` on your local machine to optionally publish an image and then deploy it to VPS over SSH in one command.
+
+Optional local `.env` defaults for this helper:
+
+- `DEPLOY_SSH_TARGET` (for example `johns@idealsoftwaresolutions`)
+- `DEPLOY_SSH_PORT` (default `22`)
+- `DEPLOY_SSH_IDENTITY` (path to private key, optional)
+- `DEPLOY_APP_DIR` (default `/var/www/pdf-saas`)
+
+Common usage:
+
+```bash
+# Commit + push + publish + deploy in one command
+./ship.sh --commit "chore: release" --publish
+
+# Strict commit mode: fail if there are no local changes
+./ship.sh --commit-all "chore: release" --publish
+
+# Publish image (tag defaults to current short git SHA), then deploy that tag
+./ship.sh --publish
+
+# Publish and deploy an explicit tag
+./ship.sh --publish --tag main
+
+# Deploy an already-pushed image directly
+./ship.sh --image ghcr.io/your-org/pdf-saas-web:abc1234
+```
+
+Commit policy options:
+
+- `--commit "message"`: best-effort commit; continues even if nothing new is committed.
+- `--commit-all "message"`: strict mode; exits with error when there are no local changes.
+
+What `ship.sh` does remotely:
+
+- Updates VPS `.env` with `DEPLOY_MODE=registry`
+- Updates VPS `.env` with `WEB_IMAGE=<your image>`
+- Runs `./deploy.sh`
+
+### Docker data persistence
+
+- Postgres is bind-mounted to `./data/postgres` via `docker-compose.yml`.
+- This keeps account/project data outside the container filesystem, so recreating containers is safe.
+- Do not delete `./data/postgres` unless you intentionally want to reset database state.
+
+### LaTeX packages in container
+
+- The `web` image installs LaTeX toolchain packages during build, including:
+	- `latexmk`
+	- `texlive-latex-base`
+	- `texlive-latex-recommended`
+	- `texlive-fonts-recommended`
+- Additional support packages are also installed (`texlive-extra-utils`, `texlive-science`).
 
 ## Notes
 
