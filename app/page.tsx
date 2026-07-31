@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useMemo, useRef, useState } from "react";
 import ProjectSessionCta from "./project-session-cta";
+import ActivitySidebar from "@/components/activity-sidebar";
 import { rankToolsByIntent } from "@/lib/tool-intent-search";
 import { TOOL_ITEMS } from "@/lib/tools";
 import { WORKFLOW_RECIPES } from "@/lib/workflow-recipes";
@@ -320,6 +321,9 @@ export default function Home() {
             ))}
           </div>
         </section>
+
+        {/* ── Zone 4: Recent Activity ──────────────────────────────── */}
+        <ActivitySidebar />
 
       </main>
     </div>

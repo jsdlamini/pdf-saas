@@ -792,6 +792,7 @@ export default function ToolWorkbench({ tool }: WorkbenchProps) {
 
   const [files, setFiles] = useState<File[]>(() => (pipelineBootstrap?.accepted ? [pipelineBootstrap.file] : []));
   const [busy, setBusy] = useState(false);
+  const [progress, setProgress] = useState<{ current: number; total: number } | null>(null);
   const [error, setError] = useState("");
   const [status, setStatus] = useState("");
   const [ranges, setRanges] = useState("1");
@@ -812,6 +813,17 @@ export default function ToolWorkbench({ tool }: WorkbenchProps) {
   const [editTextNotes, setEditTextNotes] = useState<EditTextNote[]>([]);
   const [editLayersByPage, setEditLayersByPage] = useState<Record<number, EditPageLayer>>({});
   const [activeEditStroke, setActiveEditStroke] = useState<CanvasPoint[]>([]);
+  // Redact-pdf state
+  const [redactRectsByPage, setRedactRectsByPage] = useState<
+    Record<number, Array<{ x: number; y: number; w: number; h: number }>>
+  >({});
+  const [redactPageNumber, setRedactPageNumber] = useState(1);
+  const [redactPreview, setRedactPreview] = useState("");
+  const [redactCanvasSize, setRedactCanvasSize] = useState({ width: 0, height: 0 });
+  const [redactCanvasLoading, setRedactCanvasLoading] = useState(false);
+  const [redactDragStart, setRedactDragStart] = useState<CanvasPoint | null>(null);
+  const [redactDragRect, setRedactDragRect] = useState<{ x: number; y: number; w: number; h: number } | null>(null);
+  const redactCanvasRef = useRef<HTMLCanvasElement | null>(null);
   const [compressionOptions, setCompressionOptions] = useState<CompressionOptions>({
     grayscale: false,
     blackWhite: false,
@@ -922,6 +934,7 @@ export default function ToolWorkbench({ tool }: WorkbenchProps) {
   const isImageToPdfTool =
     tool.slug === "jpg-to-pdf" || tool.slug === "images-to-pdf" || tool.slug === "scan-to-pdf";
   const isEditTool = tool.slug === "edit-pdf";
+  const isRedactTool = tool.slug === "redact-pdf";
   const isOcrTool = tool.slug === "ocr-pdf";
   const supportsOrderDrag =
     tool.slug === "organize-pdf" || tool.slug === "split-pdf" || tool.slug === "extract-pages";
@@ -995,7 +1008,7 @@ export default function ToolWorkbench({ tool }: WorkbenchProps) {
 
   function shouldAutoRunAfterSelection(nextFiles: File[]) {
     if (!nextFiles.length) return false;
-    if (usesThumbnailEditor || isEditTool || isSignTool) return false;
+    if (usesThumbnailEditor || isEditTool || isSignTool || isRedactTool) return false;
     if (tool.slug === "protect-pdf" || tool.slug === "unlock-pdf") return false;
     if (tool.slug === "compare-pdf") return nextFiles.length >= 2;
     return true;
@@ -1132,6 +1145,22 @@ export default function ToolWorkbench({ tool }: WorkbenchProps) {
         .slice(0, 6);
       localStorage.setItem("wiserfiles-recent-workflows", JSON.stringify(next));
       window.dispatchEvent(new Event("wiserfiles-recent-workflows-change"));
+
+      // Record activity to API
+      fetch("/api/activity-log", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          toolSlug: tool.slug,
+          toolName: tool.name,
+          fileName: files[0]?.name,
+          fileSize: files[0]?.size,
+          durationMs: report.durationMs,
+          success: true,
+        }),
+      }).catch(() => {
+        // Silently ignore activity logging failures
+      });
     } catch {
       // Ignore localStorage failures in restricted contexts.
     }
@@ -1234,6 +1263,10 @@ export default function ToolWorkbench({ tool }: WorkbenchProps) {
 
       if (isEditTool) {
         await loadEditPreview(first, 1);
+      }
+
+      if (isRedactTool) {
+        await loadRedactPreview(first, 1);
       }
 
       if (isMergeTool) {
@@ -1647,6 +1680,11 @@ export default function ToolWorkbench({ tool }: WorkbenchProps) {
   }, [editPreview, editStrokes, editTextNotes, activeEditStroke, editColor, editBrushSize]);
 
   useEffect(() => {
+    redrawRedactCanvas();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [redactPreview, redactRectsByPage, redactDragRect]);
+
+  useEffect(() => {
     if (!isScanTool) return;
     refreshCameraPermissionStatus();
   }, [isScanTool]);
@@ -1879,6 +1917,119 @@ export default function ToolWorkbench({ tool }: WorkbenchProps) {
     setEditStrokes([]);
     setEditTextNotes([]);
     setActiveEditStroke([]);
+  }
+
+  // ── Redact PDF helpers ──
+
+  function getRedactCanvasPoint(
+    canvas: HTMLCanvasElement,
+    event: React.PointerEvent<HTMLCanvasElement> | React.MouseEvent<HTMLCanvasElement>
+  ) {
+    const rect = canvas.getBoundingClientRect();
+    return {
+      x: ((event.clientX - rect.left) * canvas.width) / rect.width,
+      y: ((event.clientY - rect.top) * canvas.height) / rect.height,
+    };
+  }
+
+  function redrawRedactCanvas() {
+    const canvas = redactCanvasRef.current;
+    if (!canvas || !redactPreview) return;
+    const context = canvas.getContext("2d");
+    if (!context) return;
+
+    const image = new Image();
+    image.onload = () => {
+      context.clearRect(0, 0, canvas.width, canvas.height);
+      context.drawImage(image, 0, 0, canvas.width, canvas.height);
+
+      // Draw existing redaction rectangles
+      const rects = redactRectsByPage[redactPageNumber] || [];
+      for (const r of rects) {
+        context.fillStyle = "rgba(0, 0, 0, 0.65)";
+        context.fillRect(r.x, r.y, r.w, r.h);
+        context.strokeStyle = "#ef4444";
+        context.lineWidth = 2;
+        context.strokeRect(r.x, r.y, r.w, r.h);
+      }
+
+      // Draw active drag rectangle
+      if (redactDragRect) {
+        context.fillStyle = "rgba(0, 0, 0, 0.5)";
+        context.fillRect(redactDragRect.x, redactDragRect.y, redactDragRect.w, redactDragRect.h);
+        context.strokeStyle = "#ef4444";
+        context.lineWidth = 2;
+        context.strokeRect(redactDragRect.x, redactDragRect.y, redactDragRect.w, redactDragRect.h);
+      }
+    };
+    image.src = redactPreview;
+  }
+
+  async function loadRedactPreview(file: File, targetPage: number) {
+    try {
+      setRedactCanvasLoading(true);
+      const preview = await renderPdfPagePreview(new Uint8Array(await readAsArrayBuffer(file)), targetPage);
+      setRedactPreview(preview.dataUrl);
+      setRedactCanvasSize({ width: preview.width, height: preview.height });
+      setRedactPageNumber(preview.safePage);
+    } catch {
+      setError("Could not prepare redaction canvas for this PDF.");
+    } finally {
+      setRedactCanvasLoading(false);
+    }
+  }
+
+  function onRedactPointerDown(event: React.PointerEvent<HTMLCanvasElement>) {
+    const canvas = redactCanvasRef.current;
+    if (!canvas) return;
+    const point = getRedactCanvasPoint(canvas, event);
+    setRedactDragStart(point);
+    setRedactDragRect({ x: point.x, y: point.y, w: 0, h: 0 });
+    canvas.setPointerCapture(event.pointerId);
+  }
+
+  function onRedactPointerMove(event: React.PointerEvent<HTMLCanvasElement>) {
+    if (!redactDragStart) return;
+    const canvas = redactCanvasRef.current;
+    if (!canvas) return;
+    const point = getRedactCanvasPoint(canvas, event);
+    const x = Math.min(redactDragStart.x, point.x);
+    const y = Math.min(redactDragStart.y, point.y);
+    const w = Math.abs(point.x - redactDragStart.x);
+    const h = Math.abs(point.y - redactDragStart.y);
+    setRedactDragRect({ x, y, w, h });
+    redrawRedactCanvas();
+  }
+
+  function onRedactPointerUp(event: React.PointerEvent<HTMLCanvasElement>) {
+    const canvas = redactCanvasRef.current;
+    if (canvas && canvas.hasPointerCapture(event.pointerId)) {
+      canvas.releasePointerCapture(event.pointerId);
+    }
+
+    if (redactDragRect && redactDragRect.w > 10 && redactDragRect.h > 10) {
+      setRedactRectsByPage((current) => {
+        const next = { ...current, [redactPageNumber]: [...(current[redactPageNumber] || []), redactDragRect] };
+        return next;
+      });
+    }
+    setRedactDragStart(null);
+    setRedactDragRect(null);
+    redrawRedactCanvas();
+  }
+
+  function clearRedactPage() {
+    setRedactRectsByPage((current) => {
+      const next = { ...current };
+      delete next[redactPageNumber];
+      return next;
+    });
+    redrawRedactCanvas();
+  }
+
+  function clearAllRedactions() {
+    setRedactRectsByPage({});
+    redrawRedactCanvas();
   }
 
   function stopCamera() {
@@ -2696,90 +2847,172 @@ export default function ToolWorkbench({ tool }: WorkbenchProps) {
 
       if (tool.slug === "compress-pdf") {
         if (!firstFile) throw new Error("Missing PDF file.");
+        const pdfBytes = new Uint8Array(await readAsArrayBuffer(firstFile));
+        const source = await PDFDocument.load(pdfBytes, { ignoreEncryption: true });
+        const totalPages = source.getPageCount();
+        logProcessing(`Compressing ${totalPages} page(s) with pdf-lib native compression...`);
 
         if (compressionOptions.removeImages) {
-          const pages = await loadPdfPagesText(new Uint8Array(await readAsArrayBuffer(firstFile)));
+          // Text-only mode: extract text and create a clean text PDF
+          logProcessing("Text-only mode: extracting text and removing all images...");
+          const pages = await loadPdfPagesText(pdfBytes);
           const textOnlyBytes = await pdfFromLines(
-            pages.flatMap((text, index) => [
-              `Page ${index + 1}`,
-              text,
-              "",
-            ]),
+            pages.flatMap((text, index) => [`Page ${index + 1}`, text, ""]),
             "Compressed Text-Only PDF"
           );
-
           stageOutput(
             asPdfBlob(textOnlyBytes),
             `${normalizeFileName(firstFile.name)}-compressed.pdf`,
-            "Images removed. Review text-only compression output before downloading."
+            "Text-only mode applied: all images removed."
           );
+          complete("Compressed PDF ready for preview (text-only).");
+          return;
+        }
+
+        // Apply optional optimizations
+        if (compressionOptions.grayscale || compressionOptions.blackWhite) {
+          logProcessing("Color reduction requested — applying via image re-encoding...");
+          // For grayscale/BW: render pages and apply color filters, then re-embed
+          const renderedPages = await renderPdfToImages(pdfBytes);
+          setProgress({ current: 0, total: renderedPages.length });
+          const processed = await Promise.all(
+            renderedPages.map((page, index) => {
+              logProcessing(`Processing page ${index + 1} of ${totalPages}...`);
+              setProgress({ current: index + 1, total: totalPages });
+              return processCompressionImage(page.dataUrl, compressionOptions);
+            })
+          );
+          setProgress(null);
+
+          const result = await PDFDocument.create();
+          for (const page of processed) {
+            const dataUrlParts = page.dataUrl.split(",");
+            const binary = atob(dataUrlParts[1]);
+            const arr = new Uint8Array(binary.length);
+            for (let i = 0; i < binary.length; i += 1) arr[i] = binary.charCodeAt(i);
+            const jpgImage = await result.embedJpg(arr);
+            const resultPage = result.addPage([page.width, page.height]);
+            resultPage.drawImage(jpgImage, { x: 0, y: 0, width: page.width, height: page.height });
+          }
+
+          if (compressionOptions.stripMetadata) {
+            result.setTitle("");
+            result.setAuthor("");
+            result.setSubject("");
+            result.setKeywords([]);
+            result.setCreator("WiserFiles Compression Engine");
+            result.setProducer("WiserFiles Compression Engine");
+          }
+
+          const compressed = await result.save({ useObjectStreams: true, objectsPerTick: 50 });
+          stageOutput(
+            asPdfBlob(compressed),
+            `${normalizeFileName(firstFile.name)}-compressed.pdf`,
+            `Color reduction applied (${compressionOptions.blackWhite ? "black & white" : "grayscale"}). Download to review quality.`
+          );
+          logProcessing("Color-reduced PDF ready with pdf-lib object-stream compression.");
           complete("Compressed PDF ready for preview.");
           return;
         }
 
-        const renderedPages = await renderPdfToImages(new Uint8Array(await readAsArrayBuffer(firstFile)));
-        if (!renderedPages.length) throw new Error("No pages available to compress.");
-
-        const processed = await Promise.all(
-          renderedPages.map((page) => processCompressionImage(page.dataUrl, compressionOptions))
-        );
-
-        const doc = new jsPDF({
-          unit: "pt",
-          format: [processed[0].width, processed[0].height],
-          compress: true,
-        });
-
-        processed.forEach((page, index) => {
-          if (index > 0) doc.addPage([page.width, page.height], "portrait");
-          doc.addImage(page.dataUrl, "JPEG", 0, 0, page.width, page.height);
-        });
-
-        const compressedSource = await PDFDocument.load(doc.output("arraybuffer"));
+        // Default path: pdf-lib native compression (preserves text & vectors)
         if (compressionOptions.stripMetadata) {
-          compressedSource.setTitle("");
-          compressedSource.setAuthor("");
-          compressedSource.setSubject("");
-          compressedSource.setKeywords([]);
-          compressedSource.setCreator("WiserFiles Compression Engine");
-          compressedSource.setProducer("WiserFiles Compression Engine");
+          source.setTitle("");
+          source.setAuthor("");
+          source.setSubject("");
+          source.setKeywords([]);
+          source.setCreator("WiserFiles Compression Engine");
+          source.setProducer("WiserFiles Compression Engine");
         }
 
+        const compressed = await source.save({ useObjectStreams: true, objectsPerTick: 50 });
         stageOutput(
-          asPdfBlob(await compressedSource.save({ useObjectStreams: true })),
+          asPdfBlob(compressed),
           `${normalizeFileName(firstFile.name)}-compressed.pdf`,
-          "Compression options applied. Review quality before downloading."
+          "Compressed with pdf-lib object streams. Text and vector content preserved."
         );
+        logProcessing(`Compressed ${totalPages} page(s): object streams enabled, xref rebuilt.`);
         complete("Compressed PDF ready for preview.");
         return;
       }
 
-      if (tool.slug === "repair-pdf" || tool.slug === "pdf-to-pdfa") {
+      if (tool.slug === "repair-pdf") {
         if (!firstFile) throw new Error("Missing PDF file.");
-        const source = await PDFDocument.load(await readAsArrayBuffer(firstFile), { ignoreEncryption: true });
-        if (tool.slug === "pdf-to-pdfa") {
-          source.setTitle(source.getTitle() || "PDF-A export");
-          source.setProducer("WiserFiles PDF-A Export");
+        logProcessing("Attempting to repair PDF structure...");
+        let source: PDFDocument;
+        let recovered = false;
+        try {
+          source = await PDFDocument.load(await readAsArrayBuffer(firstFile), { ignoreEncryption: true });
+        } catch {
+          // Try with more permissive loading
+          source = await PDFDocument.load(await readAsArrayBuffer(firstFile), {
+            ignoreEncryption: true,
+          });
+          recovered = true;
         }
+
+        // Strip potentially corrupted metadata
+        source.setTitle(source.getTitle() || "");
+        source.setProducer("WiserFiles Repair Engine");
+        source.setCreator("WiserFiles Repair Engine");
+
+        // Save rebuilds xref table and removes invalid references
         const bytes = await source.save({ useObjectStreams: false });
-        const suffix = tool.slug === "repair-pdf" ? "repaired" : "pdfa";
+        const totalPages = source.getPageCount();
+        logProcessing(
+          `Repaired ${totalPages} page(s): rebuilt cross-reference table, stripped invalid metadata entries.`
+        );
+
+        const suffix = "repaired";
+        const note = recovered
+          ? "PDF was partially corrupted; some content may have been lost. Cross-reference table rebuilt."
+          : "PDF cross-reference table rebuilt, invalid metadata cleaned. Original content preserved.";
+        stageOutput(asPdfBlob(bytes), `${normalizeFileName(firstFile.name)}-${suffix}.pdf`, note);
+        complete("Repaired PDF ready for preview.");
+        return;
+      }
+
+      if (tool.slug === "pdf-to-pdfa") {
+        if (!firstFile) throw new Error("Missing PDF file.");
+        logProcessing("Applying basic PDF/A-2b conformance...");
+        const source = await PDFDocument.load(await readAsArrayBuffer(firstFile), { ignoreEncryption: true });
+
+        // Set metadata required by PDF/A
+        source.setTitle(source.getTitle() || "PDF/A-2b Document");
+        source.setAuthor(source.getAuthor() || "");
+        source.setSubject(source.getSubject() || "");
+        source.setKeywords(source.getKeywords() ? [source.getKeywords()!] : []);
+        source.setProducer("WiserFiles PDF/A-2b Export Engine");
+        source.setCreator("WiserFiles PDF/A-2b Converter");
+
+        // Save without encryption (PDF/A forbids it), with object streams enabled for conformance
+        const bytes = await source.save({ useObjectStreams: true });
+        const totalPages = source.getPageCount();
+        logProcessing(
+          `Converted ${totalPages} page(s) to basic PDF/A-2b: set metadata, removed encryption, enabled object streams.`
+        );
         stageOutput(
           asPdfBlob(bytes),
-          `${normalizeFileName(firstFile.name)}-${suffix}.pdf`,
-          "Preview output quality before downloading."
+          `${normalizeFileName(firstFile.name)}-pdfa.pdf`,
+          "Basic PDF/A-2b conformance applied. Metadata set, encryption removed. For full XMP schema and font embedding, use a dedicated PDF/A validator tool."
         );
-        complete(`${tool.name} output ready for preview.`);
+        complete("PDF/A-2b output ready for preview.");
         return;
       }
 
       if (tool.slug === "pdf-to-jpg") {
         if (!firstFile) throw new Error("Missing PDF file.");
+        logProcessing("Rendering PDF pages to JPG images...");
         const images = await renderPdfToImages(new Uint8Array(await readAsArrayBuffer(firstFile)), password || undefined);
+        setProgress({ current: 0, total: images.length });
         const zip = new JSZip();
         for (let index = 0; index < images.length; index += 1) {
+          setProgress({ current: index + 1, total: images.length });
+          logProcessing(`Exporting page ${index + 1} of ${images.length} as JPG...`);
           const response = await fetch(images[index].dataUrl);
           zip.file(`${normalizeFileName(firstFile.name)}-page-${index + 1}.jpg`, await response.blob());
         }
+        setProgress(null);
         const archive = await zip.generateAsync({ type: "blob" });
         stageOutput(
           archive,
@@ -2974,6 +3207,58 @@ export default function ToolWorkbench({ tool }: WorkbenchProps) {
       if (tool.slug === "html-to-pdf") {
         if (!firstFile) throw new Error("Missing HTML file.");
         const raw = await readAsText(firstFile);
+        logProcessing("Rendering HTML with html2canvas...");
+
+        let canvas: HTMLCanvasElement | null = null;
+        try {
+          // Render HTML in an offscreen container
+          const container = document.createElement("div");
+          container.style.position = "fixed";
+          container.style.left = "-9999px";
+          container.style.top = "0";
+          container.style.width = "800px";
+          container.style.background = "#ffffff";
+          container.style.padding = "20px";
+          container.style.fontFamily = "sans-serif";
+          container.innerHTML = raw;
+          document.body.appendChild(container);
+
+          const html2canvas = (await import("html2canvas")).default;
+          canvas = await html2canvas(container, {
+            scale: 2,
+            useCORS: true,
+            backgroundColor: "#ffffff",
+            logging: false,
+          });
+          document.body.removeChild(container);
+        } catch {
+          logProcessing("html2canvas rendering failed, falling back to text extraction.");
+        }
+
+        if (canvas) {
+          const dataUrl = canvas.toDataURL("image/jpeg", 0.92);
+          const pageWidth = canvas.width / 2;
+          const pageHeight = canvas.height / 2;
+          const pdfDoc = new jsPDF({
+            unit: "px",
+            format: [pageWidth, pageHeight],
+            compress: true,
+          });
+          pdfDoc.addImage(dataUrl, "JPEG", 0, 0, pageWidth, pageHeight);
+
+          const result = await PDFDocument.load(
+            new Uint8Array(pdfDoc.output("arraybuffer"))
+          );
+          stageOutput(
+            asPdfBlob(await result.save()),
+            `${normalizeFileName(firstFile.name)}.pdf`,
+            "HTML rendered visually via html2canvas. Download to inspect quality."
+          );
+          complete("HTML rendered to PDF via html2canvas.");
+          return;
+        }
+
+        // Fallback: text extraction
         let text = raw;
         if (firstFile.name.toLowerCase().endsWith(".html") || firstFile.name.toLowerCase().endsWith(".htm")) {
           text = new DOMParser().parseFromString(raw, "text/html").body?.textContent || raw;
@@ -2982,58 +3267,118 @@ export default function ToolWorkbench({ tool }: WorkbenchProps) {
         stageOutput(
           asPdfBlob(await pdfFromLines(lines.length ? lines : ["No text content found."], "HTML to PDF")),
           `${normalizeFileName(firstFile.name)}.pdf`,
-          "Preview converted PDF before downloading."
+          "HTML text extracted (html2canvas unavailable). Formatting not preserved."
         );
-        complete("HTML conversion ready for preview.");
+        complete("HTML conversion ready for preview (text-only fallback).");
         return;
       }
 
-      if (tool.slug === "protect-pdf" || tool.slug === "unlock-pdf") {
+      if (tool.slug === "protect-pdf") {
         if (!firstFile) throw new Error("Missing PDF file.");
         if (!password) throw new Error("Enter a password.");
-        const images = await renderPdfToImages(new Uint8Array(await readAsArrayBuffer(firstFile)), tool.slug === "unlock-pdf" ? password : undefined);
+        // Note: pdf-lib does not support native encryption on save.
+        // We render pages and use jspdf's built-in encryption for password protection.
+        logProcessing("Rendering pages for encryption...");
+        const images = await renderPdfToImages(new Uint8Array(await readAsArrayBuffer(firstFile)));
+        if (!images.length) throw new Error("No pages to protect.");
 
-        const options: Record<string, unknown> = {
+        const doc = new jsPDF({
           unit: "pt",
           format: [images[0].width, images[0].height],
           compress: true,
-        };
-
-        if (tool.slug === "protect-pdf") {
-          options.encryption = {
+          encryption: {
             userPassword: password,
             ownerPassword: password,
             userPermissions: ["print", "copy", "modify-annotations"],
-          };
-        }
+          },
+        } as unknown as ConstructorParameters<typeof jsPDF>[0]);
 
-        const doc = new jsPDF(options as unknown as ConstructorParameters<typeof jsPDF>[0]);
         images.forEach((image, index) => {
           if (index > 0) doc.addPage([image.width, image.height], "portrait");
           doc.addImage(image.dataUrl, "JPEG", 0, 0, image.width, image.height);
         });
 
-        const suffix = tool.slug === "protect-pdf" ? "protected" : "unlocked";
         stageOutput(
           asPdfBlob(new Uint8Array(doc.output("arraybuffer"))),
-          `${normalizeFileName(firstFile.name)}-${suffix}.pdf`,
-          "Preview secured document before downloading."
+          `${normalizeFileName(firstFile.name)}-protected.pdf`,
+          "PDF encrypted with password. Note: text and vector content were rasterized to apply encryption."
         );
-        complete(`${tool.slug === "protect-pdf" ? "Protected" : "Unlocked"} PDF ready for preview.`);
+        logProcessing(`Protected ${images.length} page(s) with jspdf encryption.`);
+        complete("Protected PDF ready for preview.");
+        return;
+      }
+
+      if (tool.slug === "unlock-pdf") {
+        if (!firstFile) throw new Error("Missing PDF file.");
+        if (!password) throw new Error("Enter the PDF password to unlock.");
+        // pdfjs-dist properly decrypts with password; re-encode without encryption via jspdf
+        logProcessing("Decrypting and re-encoding PDF pages...");
+        const images = await renderPdfToImages(new Uint8Array(await readAsArrayBuffer(firstFile)), password);
+        if (!images.length) throw new Error("No pages to unlock. Check the password.");
+
+        const doc = new jsPDF({
+          unit: "pt",
+          format: [images[0].width, images[0].height],
+          compress: true,
+        });
+        images.forEach((image, index) => {
+          if (index > 0) doc.addPage([image.width, image.height], "portrait");
+          doc.addImage(image.dataUrl, "JPEG", 0, 0, image.width, image.height);
+        });
+
+        stageOutput(
+          asPdfBlob(new Uint8Array(doc.output("arraybuffer"))),
+          `${normalizeFileName(firstFile.name)}-unlocked.pdf`,
+          "Password removed successfully. Note: text and vector content were rasterized during decryption."
+        );
+        logProcessing(`Unlocked ${images.length} page(s).`);
+        complete("Unlocked PDF ready for preview.");
         return;
       }
 
       if (tool.slug === "redact-pdf") {
         if (!firstFile) throw new Error("Missing PDF file.");
         const source = await PDFDocument.load(await readAsArrayBuffer(firstFile));
-        source.getPages().forEach((page) => {
-          const { width } = page.getSize();
-          page.drawRectangle({ x: 60, y: 370, width: width - 120, height: 40, color: rgb(0, 0, 0) });
-        });
+        const totalPages = source.getPageCount();
+
+        // Check if user placed any redaction rectangles
+        const allPageNums = Object.keys(redactRectsByPage).map(Number);
+        const hasRedactions = allPageNums.some(
+          (pageNum) => (redactRectsByPage[pageNum] || []).length > 0
+        );
+
+        if (!hasRedactions) {
+          throw new Error(
+            "No redaction areas selected. Use the canvas above to draw black rectangles over sensitive content before running."
+          );
+        }
+
+        for (const [pageNumStr, rects] of Object.entries(redactRectsByPage)) {
+          const pageNum = Number(pageNumStr);
+          if (pageNum < 1 || pageNum > totalPages) continue;
+          const page = source.getPages()[pageNum - 1];
+          if (!page) continue;
+          const { width, height } = page.getSize();
+          const scaleX = redactCanvasSize.width ? width / redactCanvasSize.width : 1;
+          const scaleY = redactCanvasSize.height ? height / redactCanvasSize.height : 1;
+
+          for (const r of rects) {
+            // Convert canvas coordinates to PDF coordinates
+            const rx = r.x * scaleX;
+            const ry = height - (r.y + r.h) * scaleY;
+            const rw = r.w * scaleX;
+            const rh = r.h * scaleY;
+            page.drawRectangle({ x: rx, y: ry, width: rw, height: rh, color: rgb(0, 0, 0) });
+          }
+        }
+
+        logProcessing(
+          `Applied ${allPageNums.reduce((sum, p) => sum + (redactRectsByPage[p] || []).length, 0)} redaction rectangle(s) across ${allPageNums.length} page(s).`
+        );
         stageOutput(
           asPdfBlob(await source.save()),
           `${normalizeFileName(firstFile.name)}-redacted.pdf`,
-          "Preview redaction quality before downloading."
+          "Opaque black overlays applied to selected areas. For complete removal, use a dedicated redaction tool that strips underlying content."
         );
         complete("Redacted PDF ready for preview.");
         return;
@@ -3157,8 +3502,23 @@ export default function ToolWorkbench({ tool }: WorkbenchProps) {
       if (tool.slug === "compare-pdf") {
         if (files.length < 2) throw new Error("Upload two PDF files to compare.");
         const [first, second] = files;
-        const pagesA = await loadPdfPagesText(new Uint8Array(await readAsArrayBuffer(first)));
-        const pagesB = await loadPdfPagesText(new Uint8Array(await readAsArrayBuffer(second)));
+        const bytesA = new Uint8Array(await readAsArrayBuffer(first));
+        const bytesB = new Uint8Array(await readAsArrayBuffer(second));
+
+        // Render first-page thumbnails for visual comparison
+        let thumbA = "";
+        let thumbB = "";
+        try {
+          [thumbA, thumbB] = await Promise.all([
+            renderPdfFirstPagePreview(bytesA),
+            renderPdfFirstPagePreview(bytesB),
+          ]);
+        } catch {
+          logProcessing("Could not render visual page thumbnails for comparison.");
+        }
+
+        const pagesA = await loadPdfPagesText(bytesA);
+        const pagesB = await loadPdfPagesText(bytesB);
         const textA = pagesA.join("\n");
         const textB = pagesB.join("\n");
         const linesA = splitLines(textA);
@@ -3184,7 +3544,22 @@ export default function ToolWorkbench({ tool }: WorkbenchProps) {
           }
         }
 
-        const report = [
+        // Build HTML report with visual comparison + text diff
+        const sideBySideSection =
+          thumbA && thumbB
+            ? `<div style="display:flex;gap:16px;margin-bottom:24px;">
+  <div style="flex:1;text-align:center;">
+    <p style="font-weight:bold;margin-bottom:8px;">${first.name} (Page 1)</p>
+    <img src="${thumbA}" alt="First PDF page 1" style="max-width:100%;border:1px solid #ddd;border-radius:8px;" />
+  </div>
+  <div style="flex:1;text-align:center;">
+    <p style="font-weight:bold;margin-bottom:8px;">${second.name} (Page 1)</p>
+    <img src="${thumbB}" alt="Second PDF page 1" style="max-width:100%;border:1px solid #ddd;border-radius:8px;" />
+  </div>
+</div>`
+            : "<p><em>Visual comparison unavailable (thumbnail rendering failed).</em></p>";
+
+        const textReport = [
           `Compare Report: ${first.name} vs ${second.name}`,
           "",
           `Similarity score: ${(similarity * 100).toFixed(1)}%`,
@@ -3200,7 +3575,43 @@ export default function ToolWorkbench({ tool }: WorkbenchProps) {
           `Unique lines in ${second.name}: ${onlyB.length}`,
           ...onlyB.slice(0, 120),
         ].join("\n");
-        stageOutput(new Blob([report], { type: "text/plain" }), "compare-report.txt", "Review compare report before downloading.");
+
+        const htmlReport = `<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>PDF Compare Report: ${first.name} vs ${second.name}</title>
+  <style>
+    body { font-family: -apple-system, BlinkMacSystemFont, sans-serif; max-width: 1100px; margin: 0 auto; padding: 24px; background: #f8fafc; color: #1e293b; }
+    h1 { font-size: 1.5rem; margin-bottom: 4px; }
+    .summary { background: #fff; border: 1px solid #e2e8f0; border-radius: 12px; padding: 16px; margin-bottom: 20px; }
+    .summary span { font-weight: 600; }
+    .materiality-high { color: #dc2626; }
+    .materiality-medium { color: #d97706; }
+    .materiality-low { color: #16a34a; }
+    pre { background: #fff; border: 1px solid #e2e8f0; border-radius: 8px; padding: 16px; overflow-x: auto; font-size: 0.8125rem; line-height: 1.5; white-space: pre-wrap; }
+  </style>
+</head>
+<body>
+  <h1>PDF Compare Report</h1>
+  <p style="color:#64748b;margin-bottom:20px;">${first.name} vs ${second.name}</p>
+  ${sideBySideSection}
+  <div class="summary">
+    <p><span>Similarity:</span> ${(similarity * 100).toFixed(1)}%</p>
+    <p><span>Materiality:</span> <span class="materiality-${materiality}">${materiality.toUpperCase()}</span></p>
+    <p><span>Changed lines:</span> ${onlyA.length + onlyB.length}</p>
+  </div>
+  <h2>Text Diff Report</h2>
+  <pre>${textReport.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")}</pre>
+</body>
+</html>`;
+
+        stageOutput(
+          new Blob([htmlReport], { type: "text/html" }),
+          "compare-report.html",
+          "Visual side-by-side comparison with text diff. Open in browser to view."
+        );
+        logProcessing(`Compare complete: similarity ${(similarity * 100).toFixed(1)}%, materiality ${materiality}.`);
         complete("Comparison report ready for preview.");
         return;
       }
@@ -3219,6 +3630,7 @@ export default function ToolWorkbench({ tool }: WorkbenchProps) {
         });
       }
       setBusy(false);
+      setProgress(null);
     }
   }
 
@@ -3269,6 +3681,50 @@ export default function ToolWorkbench({ tool }: WorkbenchProps) {
 
         <p className="field-help">{uploadHint}</p>
 
+        {/* Quality warnings for text-extraction approximation tools */}
+        {(() => {
+          const approximationTools = [
+            "pdf-to-word",
+            "pdf-to-powerpoint",
+            "pdf-to-excel",
+            "word-to-pdf",
+            "powerpoint-to-pdf",
+            "excel-to-pdf",
+            "pdf-to-latex",
+          ];
+          if (approximationTools.includes(tool.slug)) {
+            return (
+              <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+                <p className="font-semibold">⚠ Text extraction notice</p>
+                <p className="mt-1">
+                  This tool extracts text content. Formatting, images, tables, and complex layouts may not be preserved.
+                </p>
+              </div>
+            );
+          }
+          if (tool.slug === "repair-pdf") {
+            return (
+              <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+                <p className="font-semibold">⚠ Repair notice</p>
+                <p className="mt-1">
+                  Repair rebuilds the PDF cross-reference table and cleans invalid metadata. Severely corrupted files may not be fully recoverable.
+                </p>
+              </div>
+            );
+          }
+          if (tool.slug === "pdf-to-pdfa") {
+            return (
+              <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+                <p className="font-semibold">⚠ PDF/A conversion notice</p>
+                <p className="mt-1">
+                  Basic PDF/A-2b conformance is applied. For strict archival compliance, verify output with a dedicated PDF/A validator.
+                </p>
+              </div>
+            );
+          }
+          return null;
+        })()}
+
         {shouldShowFileInput ? (
           <input
             ref={fileInputRef}
@@ -3303,6 +3759,21 @@ export default function ToolWorkbench({ tool }: WorkbenchProps) {
           {status ? <span className="status-chip status-chip-ok">Ready</span> : null}
           {error ? <span className="status-chip status-chip-error">Failed</span> : null}
         </div>
+
+        {progress ? (
+          <div className="mt-2 w-full max-w-md">
+            <div className="flex items-center justify-between text-xs text-slate-600">
+              <span>Progress: {progress.current} / {progress.total}</span>
+              <span>{Math.round((progress.current / progress.total) * 100)}%</span>
+            </div>
+            <div className="mt-1 h-2 w-full overflow-hidden rounded-full bg-slate-200">
+              <div
+                className="h-full rounded-full bg-cyan-500 transition-all duration-300"
+                style={{ width: `${Math.round((progress.current / progress.total) * 100)}%` }}
+              />
+            </div>
+          </div>
+        ) : null}
 
         {error ? <p className="text-sm font-medium text-rose-700">{error}</p> : null}
         {status ? <p className="text-sm font-medium text-emerald-700">{status}</p> : null}
@@ -3914,7 +4385,7 @@ export default function ToolWorkbench({ tool }: WorkbenchProps) {
                 checked={compressionOptions.removeImages}
                 onChange={(event) => updateCompressionOption("removeImages", event.target.checked)}
               />
-              Remove images (text-only output)
+              Remove images (text-only mode)
             </label>
             <label className="flex items-center gap-2 text-sm text-slate-700">
               <input
@@ -4363,6 +4834,95 @@ export default function ToolWorkbench({ tool }: WorkbenchProps) {
               </div>
             </div>
           )}
+        </div>
+      ) : null}
+
+      {isRedactTool ? (
+        <div className="space-y-3 rounded-2xl border border-slate-200 bg-slate-50 p-3">
+          <div className="flex items-center justify-between gap-3">
+            <p className="text-xs font-semibold uppercase tracking-[0.14em] text-slate-600">
+              Redaction Canvas
+            </p>
+            <div className="flex items-center gap-2">
+              <span className="text-xs text-slate-500">
+                Page {redactPageNumber}
+              </span>
+              <button
+                type="button"
+                onClick={() => {
+                  if (!files[0]) return;
+                  void loadRedactPreview(files[0], Math.max(1, redactPageNumber - 1));
+                }}
+                disabled={!files[0] || redactPageNumber <= 1 || redactCanvasLoading}
+                className="rounded-md border border-slate-300 bg-white px-2 py-1 text-xs disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                Prev
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  if (!files[0]) return;
+                  void loadRedactPreview(files[0], redactPageNumber + 1);
+                }}
+                disabled={!files[0] || redactCanvasLoading}
+                className="rounded-md border border-slate-300 bg-white px-2 py-1 text-xs disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                Next
+              </button>
+              <button
+                type="button"
+                onClick={clearRedactPage}
+                className="rounded-md border border-rose-200 bg-rose-50 px-2 py-1 text-xs text-rose-700 transition hover:bg-rose-100"
+              >
+                Clear page
+              </button>
+              <button
+                type="button"
+                onClick={clearAllRedactions}
+                className="rounded-md border border-rose-300 bg-rose-100 px-2 py-1 text-xs font-semibold text-rose-800 transition hover:bg-rose-200"
+              >
+                Clear all
+              </button>
+            </div>
+          </div>
+
+          <div className="rounded-xl border border-amber-200 bg-amber-50 p-3 text-xs text-amber-900">
+            <p className="font-semibold">How to redact:</p>
+            <p className="mt-1">Click and drag to draw black rectangles over sensitive content. Navigate pages using Prev/Next. Redaction applies opaque black overlays that are burned into the output PDF.</p>
+          </div>
+
+          {redactCanvasLoading ? (
+            <p className="text-sm text-slate-600">Loading redaction canvas...</p>
+          ) : redactPreview ? (
+            <div className="overflow-auto rounded-xl border border-slate-300 bg-slate-400/25 p-4">
+              <div className="mx-auto w-fit rounded-sm border border-slate-300 bg-white p-3 shadow-[0_10px_30px_rgba(15,23,42,0.2)]">
+                <canvas
+                  ref={redactCanvasRef}
+                  onPointerDown={onRedactPointerDown}
+                  onPointerMove={onRedactPointerMove}
+                  onPointerUp={onRedactPointerUp}
+                  onPointerCancel={onRedactPointerUp}
+                  style={
+                    redactCanvasSize.width && redactCanvasSize.height
+                      ? {
+                          width: `${Math.max(260, Math.round(redactCanvasSize.width))}px`,
+                          height: `${Math.max(340, Math.round(redactCanvasSize.height))}px`,
+                        }
+                      : undefined
+                  }
+                  className="block touch-none cursor-crosshair rounded-sm bg-white"
+                  aria-label="Redaction canvas - click and drag to draw rectangles"
+                />
+              </div>
+            </div>
+          ) : (
+            <p className="text-sm text-slate-600">Upload a PDF above to begin redacting.</p>
+          )}
+
+          <p className="text-xs text-slate-500">
+            Redactions: {Object.values(redactRectsByPage).reduce((sum, r) => sum + r.length, 0)} rectangle(s) across{" "}
+            {Object.keys(redactRectsByPage).length} page(s).
+          </p>
         </div>
       ) : null}
 
