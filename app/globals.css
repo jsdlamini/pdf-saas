@@ -1,29 +1,29 @@
 @import "tailwindcss";
 
 :root {
-  --background: #f7fbff;
+  --background: #eef4ff;
   --foreground: #0f172a;
   --surface: #ffffff;
-  --surface-soft: #f3f8ff;
-  --border: #b8c9e4;
+  --surface-soft: #f1f6ff;
+  --border: #b0c4e0;
   --muted: #475569;
   --headline: #020617;
-  --accent: #0ea5e9;
-  --accent-strong: #0284c7;
+  --accent: #06b6d4;
+  --accent-strong: #0891b2;
   --success: #059669;
   --warning: #d97706;
 }
 
 html[data-theme="dark"] {
-  --background: #040b1a;
+  --background: #030a1c;
   --foreground: #e5eefc;
   --surface: #0b1730;
   --surface-soft: #10213f;
   --border: #2f466e;
   --muted: #a4b8d6;
   --headline: #f8fbff;
-  --accent: #38bdf8;
-  --accent-strong: #22d3ee;
+  --accent: #22d3ee;
+  --accent-strong: #06b6d4;
   --success: #34d399;
   --warning: #fbbf24;
 }
@@ -37,10 +37,10 @@ html[data-theme="dark"] {
 
 body {
   background:
-    radial-gradient(circle at 0% 0%, rgba(34, 211, 238, 0.24), transparent 28%),
-    radial-gradient(circle at 100% 0%, rgba(59, 130, 246, 0.2), transparent 26%),
-    radial-gradient(circle at 100% 100%, rgba(168, 85, 247, 0.16), transparent 24%),
-    radial-gradient(circle at 50% 100%, rgba(250, 204, 21, 0.1), transparent 22%),
+    radial-gradient(circle at 0% 0%, rgba(6, 182, 212, 0.30), transparent 28%),
+    radial-gradient(circle at 100% 0%, rgba(59, 130, 246, 0.26), transparent 26%),
+    radial-gradient(circle at 100% 100%, rgba(168, 85, 247, 0.20), transparent 24%),
+    radial-gradient(circle at 50% 100%, rgba(250, 204, 21, 0.14), transparent 22%),
     linear-gradient(180deg, color-mix(in srgb, var(--background) 90%, white 10%) 0%, var(--background) 100%);
   color: var(--foreground);
   font-family: var(--font-body), "DM Sans", sans-serif;
@@ -807,20 +807,21 @@ html[data-theme="dark"] .field-help {
 
 .ai-home-bg {
   background:
-    radial-gradient(90% 70% at 0% 0%, rgba(56, 189, 248, 0.22), transparent 52%),
-    radial-gradient(80% 70% at 100% 0%, rgba(45, 212, 191, 0.16), transparent 48%),
-    radial-gradient(70% 60% at 100% 100%, rgba(251, 191, 36, 0.14), transparent 44%),
-    linear-gradient(180deg, #f7fbff 0%, #eef5ff 100%);
+    radial-gradient(90% 70% at 0% 0%, rgba(6, 182, 212, 0.28), transparent 52%),
+    radial-gradient(80% 70% at 100% 0%, rgba(20, 184, 166, 0.22), transparent 48%),
+    radial-gradient(70% 60% at 100% 100%, rgba(251, 191, 36, 0.18), transparent 44%),
+    linear-gradient(180deg, #eef4ff 0%, #e0edff 100%);
 }
 .ai-hero-panel {
   border: 1px solid color-mix(in srgb, var(--border) 72%, white 28%);
   background:
-    radial-gradient(140% 130% at 0% 0%, rgba(56, 189, 248, 0.14), transparent 46%),
-    radial-gradient(120% 100% at 100% 0%, rgba(45, 212, 191, 0.1), transparent 42%),
-    linear-gradient(170deg, rgba(255, 255, 255, 0.94), rgba(245, 250, 255, 0.9));
+    radial-gradient(140% 130% at 0% 0%, rgba(6, 182, 212, 0.18), transparent 46%),
+    radial-gradient(120% 100% at 100% 0%, rgba(99, 102, 241, 0.14), transparent 42%),
+    radial-gradient(100% 100% at 100% 100%, rgba(168, 85, 247, 0.10), transparent 38%),
+    linear-gradient(170deg, rgba(255, 255, 255, 0.94), rgba(240, 245, 255, 0.9));
   box-shadow:
-    0 18px 40px -30px rgba(2, 6, 23, 0.32),
-    0 10px 26px -24px rgba(14, 165, 233, 0.4),
+    0 18px 40px -30px rgba(2, 6, 23, 0.36),
+    0 12px 28px -24px rgba(6, 182, 212, 0.45),
     inset 0 1px 0 rgba(255, 255, 255, 0.86);
 }
 .ai-panel {
@@ -908,10 +909,10 @@ html[data-theme="dark"] .field-help {
 
 html[data-theme="dark"] .ai-home-bg {
   background:
-    radial-gradient(90% 70% at 0% 0%, rgba(56, 189, 248, 0.2), transparent 52%),
-    radial-gradient(80% 70% at 100% 0%, rgba(45, 212, 191, 0.16), transparent 48%),
-    radial-gradient(70% 60% at 100% 100%, rgba(251, 191, 36, 0.14), transparent 44%),
-    linear-gradient(180deg, #050d1d 0%, #081328 100%);
+    radial-gradient(90% 70% at 0% 0%, rgba(34, 211, 238, 0.26), transparent 52%),
+    radial-gradient(80% 70% at 100% 0%, rgba(20, 184, 166, 0.20), transparent 48%),
+    radial-gradient(70% 60% at 100% 100%, rgba(251, 191, 36, 0.18), transparent 44%),
+    linear-gradient(180deg, #030a1c 0%, #071028 100%);
 }
 
 html[data-theme="dark"] .ai-hero-panel,
@@ -960,9 +961,13 @@ html[data-theme="dark"] .ai-tool-pill:hover {
 }
 
 @keyframes drop-ring-pulse {
-  0% { box-shadow: 0 0 0 0 rgba(6, 182, 212, 0.4); }
-  70% { box-shadow: 0 0 0 12px rgba(6, 182, 212, 0); }
+  0% { box-shadow: 0 0 0 0 rgba(6, 182, 212, 0.55); }
+  70% { box-shadow: 0 0 0 16px rgba(6, 182, 212, 0); }
   100% { box-shadow: 0 0 0 0 rgba(6, 182, 212, 0); }
+}
+
+.drop-zone-active-glow {
+  box-shadow: 0 0 60px -6px rgba(34, 211, 238, 0.50), 0 0 0 4px rgba(34, 211, 238, 0.22);
 }
 
 .drop-icon-bounce {
