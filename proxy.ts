@@ -1,17 +1,20 @@
 import { clerkMiddleware } from "@clerk/nextjs/server";
+import { NextResponse } from "next/server";
 
-export default clerkMiddleware({
-  publicRoutes: [
-    "/",
-    "/tools/(.*)",
-    "/research-studio",
-    "/history",
-    "/online/(.*)",
-    "/sitemap.xml",
-    "/robots.txt",
-    "/opengraph-image",
-    "/icon.svg",
-  ],
+const PUBLIC_PATHS = [
+  "/",
+  "/tools/",
+  "/research-studio",
+  "/history",
+  "/online/",
+];
+
+export default clerkMiddleware(async (auth, req) => {
+  const path = req.nextUrl.pathname;
+  if (PUBLIC_PATHS.some((p) => path === p || path.startsWith(p))) {
+    return NextResponse.next();
+  }
+  return;
 });
 
 export const config = {
