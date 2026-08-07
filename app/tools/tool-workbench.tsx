@@ -889,6 +889,39 @@ export default function ToolWorkbench({ tool }: WorkbenchProps) {
       : pipelineBootstrap.payload.fromToolSlug;
     return `From: ${from} → ${tool.name}`;
   }, [pipelineBootstrap, tool.name]);
+  const [switchDropdownOpen, setSwitchDropdownOpen] = useState(false);
+
+  const switchableTools = useMemo(() => {
+    if (!files.length) return [];
+    return TOOL_ITEMS.filter((candidate) => {
+      if (candidate.slug === tool.slug) return false;
+      return files.some((file) => isFileCompatibleForTool(candidate.slug, file));
+    }).slice(0, 8);
+  }, [files, tool.slug]);
+
+  function switchToTool(targetSlug: string) {
+    if (latestOutputRef.current && outputPreview) {
+      stageWorkflowPipeline({
+        fromToolSlug: tool.slug,
+        toToolSlug: targetSlug,
+        fileName: outputPreview.fileName,
+        mime: outputPreview.mime,
+        blob: outputPreview.blob,
+        createdAt: Date.now(),
+      });
+    } else if (files[0]) {
+      stageWorkflowPipeline({
+        fromToolSlug: tool.slug,
+        toToolSlug: targetSlug,
+        fileName: files[0].name,
+        mime: files[0].type || "application/octet-stream",
+        blob: files[0],
+        createdAt: Date.now(),
+      });
+    }
+    setSwitchDropdownOpen(false);
+    router.push(`/tools/${targetSlug}?pipeline=true`);
+  }
   // preflightSummary feeds the smart-intake API payload (findings/scanLikelihood)
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
   const [preflightSummary, setPreflightSummary] = useState<ReturnType<typeof analyzeDocumentSelection> | null>(null);
@@ -917,6 +950,7 @@ export default function ToolWorkbench({ tool }: WorkbenchProps) {
   const autoWorkflowUploadPromptedRef = useRef(false);
   const autoRunHandledRef = useRef(0);
   const autoRunReasonRef = useRef("");
+  const switchDropdownRef = useRef<HTMLDivElement | null>(null);
   const previewJobRef = useRef(0);
   const pdfPreviewRequestRef = useRef(0);
   const outputRef = useRef<HTMLDivElement | null>(null);
@@ -1630,6 +1664,17 @@ export default function ToolWorkbench({ tool }: WorkbenchProps) {
     // hydrateSelectionContext/runPreflightAnalysis are intentionally not deps to avoid reruns.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [pipelineBootstrap, shouldShowPreflight]);
+
+  useEffect(() => {
+    if (!switchDropdownOpen) return;
+    const handler = (event: MouseEvent) => {
+      if (switchDropdownRef.current && !switchDropdownRef.current.contains(event.target as Node)) {
+        setSwitchDropdownOpen(false);
+      }
+    };
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, [switchDropdownOpen]);
 
   useEffect(() => {
     if (!autoRunEpoch || autoRunHandledRef.current === autoRunEpoch) return;
@@ -3252,16 +3297,60 @@ export default function ToolWorkbench({ tool }: WorkbenchProps) {
 
   return (
     <section className="tool-shell glass-3d mx-auto max-w-[2300px] space-y-3 rounded-3xl p-4 xl:p-5">
-      {/* ── Breadcrumb ── */}
-      <nav aria-label="Breadcrumb" className="flex items-center gap-1.5 text-xs text-slate-500">
-        <Link href="/" className="hover:text-cyan-700 hover:underline transition-colors">
-          Home
-        </Link>
-        <svg viewBox="0 0 16 16" className="h-3 w-3 text-slate-400" fill="none" stroke="currentColor" strokeWidth="2">
-          <path d="M6 4l4 4-4 4" strokeLinecap="round" strokeLinejoin="round" />
-        </svg>
-        <span className="font-semibold text-slate-800">{tool.name}</span>
-      </nav>
+      {/* ── Breadcrumb + Switch Tool ── */}
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <nav aria-label="Breadcrumb" className="flex items-center gap-1.5 text-xs text-slate-500">
+          <Link href="/" className="hover:text-cyan-700 hover:underline transition-colors">
+            Home
+          </Link>
+          <svg viewBox="0 0 16 16" className="h-3 w-3 text-slate-400" fill="none" stroke="currentColor" strokeWidth="2">
+            <path d="M6 4l4 4-4 4" strokeLinecap="round" strokeLinejoin="round" />
+          </svg>
+          <span className="font-semibold text-slate-800">{tool.name}</span>
+        </nav>
+
+        {switchableTools.length > 0 ? (
+          <div className="relative" ref={switchDropdownRef}>
+            <button
+              type="button"
+              onClick={() => setSwitchDropdownOpen((prev) => !prev)}
+              className="inline-flex items-center gap-1 rounded-full border border-slate-200 bg-white px-3 py-1 text-xs font-semibold text-slate-700 shadow-sm transition hover:border-cyan-300 hover:bg-cyan-50 hover:text-cyan-800"
+            >
+              {tool.name}
+              <svg
+                viewBox="0 0 10 6"
+                className={`h-2.5 w-2.5 text-slate-400 transition-transform ${switchDropdownOpen ? "rotate-180" : ""}`}
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="1.6"
+              >
+                <path d="M1 1l4 4 4-4" strokeLinecap="round" strokeLinejoin="round" />
+              </svg>
+            </button>
+
+            {switchDropdownOpen ? (
+              <div className="absolute right-0 top-full z-50 mt-1 w-56 rounded-xl border border-slate-200 bg-white p-1 shadow-lg ring-1 ring-slate-900/5">
+                <p className="px-3 py-1.5 text-[10px] font-semibold uppercase tracking-[0.12em] text-slate-400">
+                  Switch to
+                </p>
+                {switchableTools.map((candidate) => (
+                  <button
+                    key={candidate.slug}
+                    type="button"
+                    onClick={() => switchToTool(candidate.slug)}
+                    className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-sm font-medium text-slate-700 transition hover:bg-cyan-50 hover:text-cyan-900"
+                  >
+                    <span className="flex-1">{candidate.name}</span>
+                    <svg viewBox="0 0 12 12" className="h-3 w-3 shrink-0 text-slate-300" fill="none" stroke="currentColor" strokeWidth="2">
+                      <path d="M3 6h6M7 3l3 3-3 3" strokeLinecap="round" strokeLinejoin="round" />
+                    </svg>
+                  </button>
+                ))}
+              </div>
+            ) : null}
+          </div>
+        ) : null}
+      </div>
 
       {/* ── Full-width top banner ── */}
       <div className="space-y-2">
