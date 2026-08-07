@@ -919,6 +919,7 @@ export default function ToolWorkbench({ tool }: WorkbenchProps) {
   const autoRunReasonRef = useRef("");
   const previewJobRef = useRef(0);
   const pdfPreviewRequestRef = useRef(0);
+  const outputRef = useRef<HTMLDivElement | null>(null);
   const preflightJobRef = useRef(0);
   const latestOutputRef = useRef<{ blob: Blob; fileName: string; mime: string } | null>(null);
 
@@ -1640,6 +1641,20 @@ export default function ToolWorkbench({ tool }: WorkbenchProps) {
     // runTool/logProcessing are intentionally omitted because runTool is not memoized.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [autoRunEpoch, busy, files.length]);
+
+  // Auto-dismiss pipeline notice when output is successfully produced
+  useEffect(() => {
+    if (outputPreview && pipelineBootstrap) {
+      setPipelineNotice("");
+    }
+  }, [outputPreview, pipelineBootstrap]);
+
+  // Scroll to output when it becomes available after processing
+  useEffect(() => {
+    if (outputPreview && outputRef.current) {
+      outputRef.current.scrollIntoView({ behavior: "smooth", block: "nearest" });
+    }
+  }, [outputPreview]);
 
   useEffect(() => {
     if (!isScanTool) {
@@ -3334,44 +3349,6 @@ export default function ToolWorkbench({ tool }: WorkbenchProps) {
       <div className="grid gap-3 xl:grid-cols-[minmax(240px,0.95fr)_minmax(0,3.05fr)_minmax(240px,1fr)] xl:items-start">
         <div className="space-y-2">
 
-          {pipelineNotice ? (
-            <div className="rounded-xl border border-amber-200 bg-amber-50 px-3 py-2">
-              <p className="text-sm font-medium text-amber-800">{pipelineNotice}</p>
-              <button
-                type="button"
-                onClick={() => {
-                  setFiles([]);
-                  setPipelineNotice("");
-                  logProcessing("Pipeline handoff dismissed.");
-                }}
-                className="mt-1 text-xs font-semibold text-amber-700 underline hover:text-amber-900"
-              >
-                Clear and upload a new file
-              </button>
-            </div>
-          ) : null}
-
-          {pipelineChipLabel ? (
-            <div className="inline-flex items-center gap-1.5 rounded-full border border-cyan-300 bg-gradient-to-r from-cyan-100 to-blue-100 px-2.5 py-1 text-xs font-medium text-cyan-800 shadow-sm">
-              <svg viewBox="0 0 16 16" className="h-3 w-3 text-cyan-500" fill="none" stroke="currentColor" strokeWidth="2">
-                <path d="M3 8h10M8 3l5 5-5 5" strokeLinecap="round" strokeLinejoin="round" />
-              </svg>
-              <span>{pipelineChipLabel}</span>
-              <button
-                type="button"
-                onClick={() => {
-                  setFiles([]);
-                  setPipelineNotice("");
-                  logProcessing("Pipeline context dismissed.");
-                }}
-                className="ml-0.5 inline-flex h-4 w-4 items-center justify-center rounded-full text-cyan-600 hover:bg-cyan-200 hover:text-cyan-900"
-                aria-label="Dismiss pipeline context"
-              >
-                ×
-              </button>
-            </div>
-          ) : null}
-
           {hasChosenWorkflow && applicableRecipes.length ? (
             <div className="space-y-3 card-panel rounded-2xl border border-slate-200 bg-slate-50 p-3">
               <div className="flex items-center justify-between gap-3">
@@ -3512,6 +3489,44 @@ export default function ToolWorkbench({ tool }: WorkbenchProps) {
                   ) : null}
                 </>
               ) : null}
+            </div>
+          ) : null}
+
+          {pipelineNotice ? (
+            <div className="rounded-xl border border-amber-200 bg-amber-50 px-3 py-2">
+              <p className="text-sm font-medium text-amber-800">{pipelineNotice}</p>
+              <button
+                type="button"
+                onClick={() => {
+                  setFiles([]);
+                  setPipelineNotice("");
+                  logProcessing("Pipeline handoff dismissed.");
+                }}
+                className="mt-1 text-xs font-semibold text-amber-700 underline hover:text-amber-900"
+              >
+                Clear and upload a new file
+              </button>
+            </div>
+          ) : null}
+
+          {pipelineChipLabel ? (
+            <div className="inline-flex items-center gap-1.5 rounded-full border border-cyan-300 bg-gradient-to-r from-cyan-100 to-blue-100 px-2.5 py-1 text-xs font-medium text-cyan-800 shadow-sm">
+              <svg viewBox="0 0 16 16" className="h-3 w-3 text-cyan-500" fill="none" stroke="currentColor" strokeWidth="2">
+                <path d="M3 8h10M8 3l5 5-5 5" strokeLinecap="round" strokeLinejoin="round" />
+              </svg>
+              <span>{pipelineChipLabel}</span>
+              <button
+                type="button"
+                onClick={() => {
+                  setFiles([]);
+                  setPipelineNotice("");
+                  logProcessing("Pipeline context dismissed.");
+                }}
+                className="ml-0.5 inline-flex h-4 w-4 items-center justify-center rounded-full text-cyan-600 hover:bg-cyan-200 hover:text-cyan-900"
+                aria-label="Dismiss pipeline context"
+              >
+                ×
+              </button>
             </div>
           ) : null}
 
@@ -4624,7 +4639,7 @@ export default function ToolWorkbench({ tool }: WorkbenchProps) {
           </div>
         ) : null}
 
-        <div className="space-y-2 xl:sticky xl:top-4">{outputPreviewPanel}</div>
+        <div ref={outputRef} className="space-y-2 xl:sticky xl:top-4">{outputPreviewPanel}</div>
       </div>
     </section>
   );
