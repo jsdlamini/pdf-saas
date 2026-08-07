@@ -82,6 +82,7 @@ export default function Home() {
   >(null);
   const [intentQuery, setIntentQuery] = useState("");
   const [showAllTools, setShowAllTools] = useState(false);
+  const [dropToolsOpen, setDropToolsOpen] = useState(false);
 
   /* ── drop-zone state ──────────────────────────────────────────── */
   const [dragOver, setDragOver] = useState(false);
@@ -314,20 +315,44 @@ export default function Home() {
                   ) : null}
                 </div>
                 <p className="text-sm text-slate-500">Choose a quick action:</p>
-                <div className="flex flex-wrap justify-center gap-2">
-                  {suggestedTools.map((tool) => (
-                    <button
-                      key={tool.slug}
-                      type="button"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        navigateToTool(tool.slug);
-                      }}
-                      className={`inline-flex items-center gap-1.5 rounded-full border bg-gradient-to-r px-4 py-2 text-sm font-semibold transition-all hover:scale-105 hover:shadow-lg ${getCategoryColor(tool.category)}`}
-                    >
-                      {tool.name}
-                    </button>
-                  ))}
+                <div className="relative">
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setDropToolsOpen(!dropToolsOpen);
+                    }}
+                    className="inline-flex items-center gap-2 rounded-xl border border-cyan-300 bg-white px-4 py-2.5 text-sm font-semibold text-cyan-800 shadow-sm transition hover:bg-cyan-50"
+                  >
+                    {suggestedTools[0]?.name ?? "Select tool"}
+                    <svg viewBox="0 0 20 20" className={`h-4 w-4 text-cyan-500 transition-transform ${dropToolsOpen ? "rotate-180" : ""}`} fill="none" stroke="currentColor" strokeWidth="1.8">
+                      <path d="M5 7l5 5 5-5" strokeLinecap="round" strokeLinejoin="round" />
+                    </svg>
+                  </button>
+                  {dropToolsOpen ? (
+                    <>
+                      <div className="fixed inset-0 z-40" onClick={(e) => { e.stopPropagation(); setDropToolsOpen(false); }} />
+                      <div className="absolute left-0 top-full z-50 mt-1 w-60 rounded-xl border border-slate-200 bg-white py-1 shadow-lg">
+                        {suggestedTools.map((tool) => (
+                          <button
+                            key={tool.slug}
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setDropToolsOpen(false);
+                              navigateToTool(tool.slug);
+                            }}
+                            className="flex w-full items-center gap-2 px-4 py-2.5 text-left text-sm font-semibold text-slate-700 transition hover:bg-cyan-50 hover:text-cyan-900"
+                          >
+                            <span>{tool.name}</span>
+                            <span className="ml-auto text-[10px] font-normal text-slate-400">
+                              {tool.runtime === "server" ? "Server" : "Browser"}
+                            </span>
+                          </button>
+                        ))}
+                      </div>
+                    </>
+                  ) : null}
                 </div>
                 <button
                   type="button"
@@ -364,7 +389,7 @@ export default function Home() {
                   </svg>
                 </div>
                 <p className="font-display text-2xl font-semibold tracking-tight bg-gradient-to-r from-red-500 to-pink-500 bg-clip-text text-transparent md:text-3xl">
-                  Drag your file here
+                  Drop your file here
                 </p>
                 <p className="text-sm text-slate-500">
                   Or click to browse — PDF, PNG, JPG, WebP accepted
