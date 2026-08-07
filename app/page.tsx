@@ -25,15 +25,15 @@ function getWorkflowCreatedAt() {
 
 function getCategoryColor(category: string) {
   const colors: Record<string, string> = {
-    Organize: "from-sky-100 to-cyan-100 text-sky-800 border-sky-200",
-    Optimize: "from-indigo-100 to-fuchsia-100 text-indigo-800 border-indigo-200",
-    Convert: "from-emerald-100 to-teal-100 text-emerald-800 border-emerald-200",
-    Security: "from-rose-100 to-orange-100 text-rose-800 border-rose-200",
-    Edit: "from-amber-100 to-yellow-100 text-amber-800 border-amber-200",
-    Sign: "from-green-100 to-lime-100 text-green-800 border-green-200",
+    Organize: "from-sky-200 to-cyan-200 text-sky-900 border-sky-300 shadow-sky-200/60",
+    Optimize: "from-indigo-200 to-violet-200 text-indigo-900 border-indigo-300 shadow-indigo-200/60",
+    Convert: "from-emerald-200 to-teal-200 text-emerald-900 border-emerald-300 shadow-emerald-200/60",
+    Security: "from-rose-200 to-orange-200 text-rose-900 border-rose-300 shadow-rose-200/60",
+    Edit: "from-amber-200 to-yellow-200 text-amber-900 border-amber-300 shadow-amber-200/60",
+    Sign: "from-green-200 to-lime-200 text-green-900 border-green-300 shadow-green-200/60",
   };
   return (
-    colors[category] || "from-slate-100 to-slate-50 text-slate-700 border-slate-200"
+    colors[category] || "from-slate-200 to-slate-100 text-slate-800 border-slate-300 shadow-slate-200/60"
   );
 }
 
@@ -265,8 +265,8 @@ export default function Home() {
             }}
             className={`drop-zone-hover-ring relative cursor-pointer rounded-2xl border-2 border-dashed p-8 text-center transition-all duration-300 md:p-12 ${
               dragOver
-                ? "border-cyan-400 bg-cyan-50/70 shadow-[0_0_40px_-12px_rgba(34,211,238,0.4)]"
-                : "border-slate-300 bg-slate-50/50 hover:border-cyan-300 hover:bg-cyan-50/40"
+                ? "border-cyan-400 bg-gradient-to-br from-cyan-50 to-blue-50 drop-zone-active-glow"
+                : "border-slate-200 bg-gradient-to-br from-white to-blue-50/60 hover:border-cyan-400 hover:from-cyan-50/80 hover:to-blue-50/80 hover:shadow-[0_0_36px_-10px_rgba(34,211,238,0.3)]"
             }`}
           >
             <input
@@ -345,8 +345,8 @@ export default function Home() {
                 <div
                   className={`drop-icon-drag-scale inline-flex h-16 w-16 items-center justify-center rounded-2xl text-slate-400 ${
                     dragOver
-                      ? "scale-125 bg-cyan-100 text-cyan-600"
-                      : "drop-icon-bounce bg-slate-100"
+                      ? "scale-125 bg-gradient-to-br from-cyan-200 to-blue-200 text-cyan-700 shadow-lg shadow-cyan-200/50"
+                      : "drop-icon-bounce bg-gradient-to-br from-slate-100 to-blue-50"
                   }`}
                 >
                   <svg

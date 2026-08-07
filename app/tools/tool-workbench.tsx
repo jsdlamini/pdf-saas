@@ -878,10 +878,17 @@ export default function ToolWorkbench({ tool }: WorkbenchProps) {
   const [pipelineNotice, setPipelineNotice] = useState(() => {
     if (!pipelineBootstrap) return "";
     if (!pipelineBootstrap.accepted) {
-      return `Pipeline output from ${pipelineBootstrap.payload.fromToolSlug} is incompatible with ${tool.name}. Upload a new file for this step.`;
+      return `Incompatible pipeline file from ${pipelineBootstrap.payload.fromToolSlug}. Please upload a compatible file.`;
     }
-    return `Pipeline input received from ${pipelineBootstrap.payload.fromToolSlug}. No re-upload needed for this step.`;
+    return "";
   });
+  const pipelineChipLabel = useMemo(() => {
+    if (!pipelineBootstrap?.accepted) return null;
+    const from = pipelineBootstrap.payload.fromToolSlug === "home-dropzone"
+      ? "drop zone"
+      : pipelineBootstrap.payload.fromToolSlug;
+    return `From: ${from} → ${tool.name}`;
+  }, [pipelineBootstrap, tool.name]);
   // preflightSummary feeds the smart-intake API payload (findings/scanLikelihood)
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
   const [preflightSummary, setPreflightSummary] = useState<ReturnType<typeof analyzeDocumentSelection> | null>(null);
@@ -3328,21 +3335,40 @@ export default function ToolWorkbench({ tool }: WorkbenchProps) {
         <div className="space-y-2">
 
           {pipelineNotice ? (
-            <div className="pipeline-banner flex flex-wrap items-center justify-between gap-2 rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2">
-              <p className="text-sm font-medium text-emerald-800">{pipelineNotice}</p>
-              {pipelineNotice.includes("received") && shouldShowFileInput ? (
-                <button
-                  type="button"
-                  onClick={() => {
-                    setFiles([]);
-                    setPipelineNotice("");
-                    logProcessing("Pipeline handoff dismissed. Manual file upload required.");
-                  }}
-                  className="rounded-full border border-emerald-300 bg-white px-3 py-1 text-xs font-semibold text-emerald-800 transition hover:bg-emerald-100"
-                >
-                  Use original file instead
-                </button>
-              ) : null}
+            <div className="rounded-xl border border-amber-200 bg-amber-50 px-3 py-2">
+              <p className="text-sm font-medium text-amber-800">{pipelineNotice}</p>
+              <button
+                type="button"
+                onClick={() => {
+                  setFiles([]);
+                  setPipelineNotice("");
+                  logProcessing("Pipeline handoff dismissed.");
+                }}
+                className="mt-1 text-xs font-semibold text-amber-700 underline hover:text-amber-900"
+              >
+                Clear and upload a new file
+              </button>
+            </div>
+          ) : null}
+
+          {pipelineChipLabel ? (
+            <div className="inline-flex items-center gap-1.5 rounded-full border border-cyan-300 bg-gradient-to-r from-cyan-100 to-blue-100 px-2.5 py-1 text-xs font-medium text-cyan-800 shadow-sm">
+              <svg viewBox="0 0 16 16" className="h-3 w-3 text-cyan-500" fill="none" stroke="currentColor" strokeWidth="2">
+                <path d="M3 8h10M8 3l5 5-5 5" strokeLinecap="round" strokeLinejoin="round" />
+              </svg>
+              <span>{pipelineChipLabel}</span>
+              <button
+                type="button"
+                onClick={() => {
+                  setFiles([]);
+                  setPipelineNotice("");
+                  logProcessing("Pipeline context dismissed.");
+                }}
+                className="ml-0.5 inline-flex h-4 w-4 items-center justify-center rounded-full text-cyan-600 hover:bg-cyan-200 hover:text-cyan-900"
+                aria-label="Dismiss pipeline context"
+              >
+                ×
+              </button>
             </div>
           ) : null}
 

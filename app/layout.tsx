@@ -107,7 +107,7 @@ export default async function RootLayout({
       suppressHydrationWarning
       className={`${bodyFont.variable} ${displayFont.variable} h-full antialiased`}
     >
-      <body className="min-h-full flex flex-col bg-[#f4f6f8] text-slate-900 depth-stage">
+      <body className="min-h-full flex flex-col bg-[#f0f4ff] text-slate-900 depth-stage">
         <ClerkProvider>
           <ToastContainer />
           <MobileToolNav />
