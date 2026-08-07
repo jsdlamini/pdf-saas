@@ -2,64 +2,25 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useMemo, useRef, useState } from "react";
-import ProjectSessionCta from "./project-session-cta";
+import {
+  useMemo,
+  useRef,
+  useState,
+  type DragEvent,
+} from "react";
 import { rankToolsByIntent } from "@/lib/tool-intent-search";
-import { TOOL_ITEMS } from "@/lib/tools";
+import { TOOL_CATEGORIES, TOOL_ITEMS } from "@/lib/tools";
 import { WORKFLOW_RECIPES } from "@/lib/workflow-recipes";
-import { clearWorkflowPipeline, stageWorkflowPipeline } from "@/lib/workflow-pipeline";
+import {
+  clearWorkflowPipeline,
+  stageWorkflowPipeline,
+} from "@/lib/workflow-pipeline";
+
+/* ── helpers ────────────────────────────────────────────────────── */
 
 function getWorkflowCreatedAt() {
   return Date.now();
 }
-
-const HERO_QUICK_ACTIONS = [
-  {
-    label: "Merge PDF",
-    href: "/tools/merge-pdf",
-    icon: (
-      <svg viewBox="0 0 20 20" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="1.8">
-        <path d="M4 6h5l7 4-7 4H4l7-4-7-4z" strokeLinecap="round" strokeLinejoin="round" />
-      </svg>
-    ),
-  },
-  {
-    label: "OCR PDF",
-    href: "/tools/ocr-pdf",
-    icon: (
-      <svg viewBox="0 0 20 20" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="1.8">
-        <rect x="3" y="5" width="14" height="10" rx="1.5" />
-        <path d="M7 9h6M7 12h4" strokeLinecap="round" />
-      </svg>
-    ),
-  },
-  {
-    label: "Sign PDF",
-    href: "/tools/sign-pdf",
-    icon: (
-      <svg viewBox="0 0 20 20" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="1.8">
-        <path d="M4 14.5V16h1.5L15 6.5 13.5 5 4 14.5z" strokeLinecap="round" strokeLinejoin="round" />
-      </svg>
-    ),
-  },
-  {
-    label: "Research Studio",
-    href: "/research-studio",
-    badge: "New",
-    icon: (
-      <svg viewBox="0 0 20 20" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="1.8">
-        <path d="M6 3h6l3 3v11H6V3z" strokeLinecap="round" strokeLinejoin="round" />
-        <path d="M12 3v3h3M8 11h4M8 14h2" strokeLinecap="round" strokeLinejoin="round" />
-      </svg>
-    ),
-  },
-] as const;
-
-const DASHBOARD_METRICS = [
-  { label: "Tools Available", value: `${TOOL_ITEMS.length}`, trend: "Updated daily" },
-  { label: "Workflow Recipes", value: `${WORKFLOW_RECIPES.length}`, trend: "Ready to launch" },
-  { label: "AI Search", value: "Instant", trend: "Intent ranked" },
-] as const;
 
 function getCategoryColor(category: string) {
   const colors: Record<string, string> = {
@@ -70,15 +31,117 @@ function getCategoryColor(category: string) {
     Edit: "from-amber-100 to-yellow-100 text-amber-800 border-amber-200",
     Sign: "from-green-100 to-lime-100 text-green-800 border-green-200",
   };
-  return colors[category] || "from-slate-100 to-slate-50 text-slate-700 border-slate-200";
+  return (
+    colors[category] || "from-slate-100 to-slate-50 text-slate-700 border-slate-200"
+  );
 }
+
+const ACCEPTED_TYPES = [
+  "application/pdf",
+  "image/png",
+  "image/jpeg",
+  "image/webp",
+  "image/gif",
+];
+
+function isPdf(file: File) {
+  return file.type === "application/pdf" || file.name.endsWith(".pdf");
+}
+
+function isImage(file: File) {
+  return file.type.startsWith("image/") || /\.(png|jpe?g|webp|gif)$/i.test(file.name);
+}
+
+const TOP_PICK_SLUGS = [
+  "merge-pdf",
+  "split-pdf",
+  "compress-pdf",
+  "ocr-pdf",
+  "sign-pdf",
+  "pdf-to-word",
+];
+
+function getDropSuggestions(file: File): string[] {
+  if (isPdf(file)) {
+    return ["merge-pdf", "compress-pdf", "ocr-pdf"];
+  }
+  if (isImage(file)) {
+    return ["jpg-to-pdf", "images-to-pdf", "ocr-pdf"];
+  }
+  return ["merge-pdf", "compress-pdf", "sign-pdf"];
+}
+
+/* ── component ──────────────────────────────────────────────────── */
 
 export default function Home() {
   const router = useRouter();
   const workflowFileInputRef = useRef<HTMLInputElement | null>(null);
-  const pendingWorkflowRecipeRef = useRef<(typeof WORKFLOW_RECIPES)[number] | null>(null);
+  const pendingWorkflowRecipeRef = useRef<
+    (typeof WORKFLOW_RECIPES)[number] | null
+  >(null);
   const [intentQuery, setIntentQuery] = useState("");
+  const [showAllTools, setShowAllTools] = useState(false);
 
+  /* ── drop-zone state ──────────────────────────────────────────── */
+  const [dragOver, setDragOver] = useState(false);
+  const [dropFile, setDropFile] = useState<File | null>(null);
+  const dropSuggestions = useMemo(
+    () => (dropFile ? getDropSuggestions(dropFile) : []),
+    [dropFile],
+  );
+  const suggestedTools = useMemo(
+    () =>
+      dropSuggestions
+        .map((slug) => TOOL_ITEMS.find((t) => t.slug === slug))
+        .filter(Boolean) as typeof TOOL_ITEMS,
+    [dropSuggestions],
+  );
+
+  function clearDrop() {
+    setDropFile(null);
+    setDragOver(false);
+  }
+
+  function onDragOver(e: DragEvent) {
+    e.preventDefault();
+    e.stopPropagation();
+    setDragOver(true);
+  }
+  function onDragLeave(e: DragEvent) {
+    e.preventDefault();
+    e.stopPropagation();
+    setDragOver(false);
+  }
+  function onDrop(e: DragEvent) {
+    e.preventDefault();
+    e.stopPropagation();
+    setDragOver(false);
+    const f = e.dataTransfer.files?.[0];
+    if (f && (isPdf(f) || isImage(f))) {
+      setDropFile(f);
+    }
+  }
+
+  function handleBrowse(file: File) {
+    if (isPdf(file) || isImage(file)) {
+      setDropFile(file);
+    }
+  }
+
+  function navigateToTool(slug: string) {
+    if (!dropFile) return;
+    stageWorkflowPipeline({
+      fromToolSlug: "home-dropzone",
+      toToolSlug: slug,
+      fileName: dropFile.name,
+      mime: dropFile.type || "application/octet-stream",
+      blob: dropFile,
+      createdAt: getWorkflowCreatedAt(),
+    });
+    router.push(`/tools/${slug}?pipeline=true`);
+  }
+
+  /* ── search ───────────────────────────────────────────────────── */
   const searchResults = useMemo(() => {
     if (!intentQuery.trim()) return null;
     return rankToolsByIntent(TOOL_ITEMS, intentQuery)
@@ -87,19 +150,19 @@ export default function Home() {
       .map((entry) => entry.tool);
   }, [intentQuery]);
 
+  /* ── workflow recipes ─────────────────────────────────────────── */
   function startWorkflow(recipe: (typeof WORKFLOW_RECIPES)[number]) {
     pendingWorkflowRecipeRef.current = recipe;
     workflowFileInputRef.current?.click();
   }
-
   function handleWorkflowFileSelect(file: File | null) {
     const recipe = pendingWorkflowRecipeRef.current;
     pendingWorkflowRecipeRef.current = null;
     if (!recipe || !file) return;
     const firstStep = recipe.steps[0];
-    // Clear stale pipeline payloads from any previous run of this recipe so
-    // continuing from a mid-workflow step is never possible after a fresh start.
-    recipe.steps.slice(1).forEach((step) => clearWorkflowPipeline(step.toolSlug));
+    recipe.steps.slice(1).forEach((step) =>
+      clearWorkflowPipeline(step.toolSlug),
+    );
     stageWorkflowPipeline({
       fromToolSlug: "workflow-home",
       toToolSlug: firstStep.toolSlug,
@@ -109,8 +172,27 @@ export default function Home() {
       blob: file,
       createdAt: getWorkflowCreatedAt(),
     });
-    router.push(`/tools/${firstStep.toolSlug}?recipe=${encodeURIComponent(recipe.slug)}`);
+    router.push(
+      `/tools/${firstStep.toolSlug}?recipe=${encodeURIComponent(recipe.slug)}`,
+    );
   }
+
+  /* ── tool grouping ────────────────────────────────────────────── */
+  const topPicks = useMemo(
+    () =>
+      TOP_PICK_SLUGS.map((slug) => TOOL_ITEMS.find((t) => t.slug === slug)).filter(
+        Boolean,
+      ) as typeof TOOL_ITEMS,
+    [],
+  );
+
+  const toolsByCategory = useMemo(() => {
+    const map: Record<string, typeof TOOL_ITEMS> = {};
+    for (const cat of TOOL_CATEGORIES) {
+      map[cat] = TOOL_ITEMS.filter((t) => t.category === cat);
+    }
+    return map;
+  }, []);
 
   return (
     <div className="ai-home-bg relative isolate flex w-full flex-1 flex-col">
@@ -119,52 +201,114 @@ export default function Home() {
       <div className="pointer-events-none absolute bottom-0 left-1/3 -z-10 h-64 w-64 rounded-full bg-amber-300/20 blur-3xl" />
 
       <main className="relative z-10 mx-auto flex w-full max-w-7xl flex-col gap-4 px-6 py-6 md:gap-5 md:px-10 md:py-8">
-
-        {/* ── Zone 1: Hero ─────────────────────────────────────────── */}
+        {/* ── Zone 1: Drop-zone Hero ─────────────────────────────── */}
         <header className="ai-hero-panel rounded-3xl px-6 py-7 md:px-10 md:py-9">
-          <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">
-            WiserFiles Workspace
-          </p>
-          <h1 className="mt-2 font-display text-4xl font-semibold leading-tight tracking-tight text-slate-950 lg:text-5xl">
-            Professional PDF tools,<br className="hidden sm:block" /> one focused workspace.
-          </h1>
-          <p className="mt-2 max-w-2xl text-base text-slate-600">
-            Organize, convert, secure, and sign documents — or open the Research Studio for LaTeX editing.
-          </p>
+          {/* Drop-zone */}
+          <div
+            onDragOver={onDragOver}
+            onDragLeave={onDragLeave}
+            onDrop={onDrop}
+            onClick={() => {
+              const input = document.getElementById(
+                "hero-file-input",
+              ) as HTMLInputElement | null;
+              input?.click();
+            }}
+            className={`relative cursor-pointer rounded-2xl border-2 border-dashed p-8 text-center transition-all duration-200 md:p-12 ${
+              dragOver
+                ? "border-cyan-400 bg-cyan-50/60"
+                : "border-slate-300 bg-slate-50/50 hover:border-cyan-300 hover:bg-cyan-50/40"
+            }`}
+          >
+            <input
+              id="hero-file-input"
+              type="file"
+              accept={ACCEPTED_TYPES.join(",")}
+              className="hidden"
+              onChange={(e) => {
+                const f = e.target.files?.[0];
+                if (f) handleBrowse(f);
+                e.currentTarget.value = "";
+              }}
+            />
 
-          <div className="mt-5 grid gap-3 sm:grid-cols-3">
-            {DASHBOARD_METRICS.map((metric) => (
-              <div
-                key={metric.label}
-                className="invoice-kpi-card rounded-2xl px-4 py-3"
-              >
-                <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-slate-500">{metric.label}</p>
-                <p className="mt-1 font-display text-2xl font-semibold leading-none text-slate-950">{metric.value}</p>
-                <p className="mt-1 text-xs text-cyan-700">{metric.trend}</p>
+            {dropFile ? (
+              <div className="flex flex-col items-center gap-4">
+                <div className="inline-flex h-14 w-14 items-center justify-center rounded-2xl bg-cyan-100 text-cyan-700">
+                  <svg
+                    viewBox="0 0 24 24"
+                    className="h-7 w-7"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="1.8"
+                  >
+                    <path
+                      d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8l-6-6z"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                    />
+                    <path d="M14 2v6h6" strokeLinecap="round" strokeLinejoin="round" />
+                  </svg>
+                </div>
+                <p className="font-semibold text-slate-900">{dropFile.name}</p>
+                <p className="text-sm text-slate-500">
+                  {(dropFile.size / 1024 / 1024).toFixed(1)} MB — Choose a quick
+                  action:
+                </p>
+                <div className="flex flex-wrap justify-center gap-2">
+                  {suggestedTools.map((tool) => (
+                    <button
+                      key={tool.slug}
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        navigateToTool(tool.slug);
+                      }}
+                      className={`inline-flex items-center gap-1.5 rounded-full border bg-gradient-to-r px-4 py-2 text-sm font-semibold transition-all hover:scale-105 hover:shadow-lg ${getCategoryColor(tool.category)}`}
+                    >
+                      {tool.name}
+                    </button>
+                  ))}
+                </div>
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    clearDrop();
+                  }}
+                  className="text-xs text-slate-400 underline hover:text-slate-600"
+                >
+                  Choose a different file
+                </button>
               </div>
-            ))}
+            ) : (
+              <div className="flex flex-col items-center gap-3">
+                <div className="inline-flex h-16 w-16 items-center justify-center rounded-2xl bg-slate-100 text-slate-400">
+                  <svg
+                    viewBox="0 0 24 24"
+                    className="h-8 w-8"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="1.6"
+                  >
+                    <path
+                      d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M7 10l5 5 5-5M12 15V3"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                    />
+                  </svg>
+                </div>
+                <p className="text-lg font-semibold text-slate-700">
+                  Drop a PDF or image here — or click to browse
+                </p>
+                <p className="text-sm text-slate-400">
+                  PDF, PNG, JPG, WebP, GIF — up to 1 GB
+                </p>
+              </div>
+            )}
           </div>
 
-          {/* Quick-action chips */}
-          <div className="mt-5 flex flex-wrap gap-2">
-            {HERO_QUICK_ACTIONS.map((action) => (
-              <Link
-                key={action.href}
-                href={action.href}
-                className="ai-pill group inline-flex items-center gap-2 rounded-full px-4 py-2 text-sm font-semibold text-slate-800"
-              >
-                <span className="text-slate-500 transition group-hover:text-cyan-700">{action.icon}</span>
-                {action.label}
-                {"badge" in action && action.badge ? (
-                  <span className="rounded-full bg-cyan-100 px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide text-cyan-800">
-                    {action.badge}
-                  </span>
-                ) : null}
-              </Link>
-            ))}
-          </div>
-
-          {/* Search bar */}
+          {/* Search bar below drop-zone */}
           <div className="mt-5 flex items-center gap-2">
             <div className="relative flex-1">
               <svg
@@ -192,38 +336,64 @@ export default function Home() {
                   className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
                   aria-label="Clear search"
                 >
-                  <svg viewBox="0 0 20 20" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="1.8">
-                    <path d="M5 5l10 10M15 5L5 15" strokeLinecap="round" />
+                  <svg
+                    viewBox="0 0 20 20"
+                    className="h-4 w-4"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="1.8"
+                  >
+                    <path
+                      d="M5 5l10 10M15 5L5 15"
+                      strokeLinecap="round"
+                    />
                   </svg>
                 </button>
               ) : null}
 
-              {/* Inline search results — appear immediately below the input */}
+              {/* Inline search results: cards */}
               {intentQuery.trim() && searchResults !== null ? (
-                <div className="absolute left-0 right-0 top-[calc(100%+6px)] z-30 max-h-72 overflow-y-auto rounded-2xl border border-slate-200/80 bg-white/95 p-3 shadow-[0_16px_40px_-20px_rgba(15,23,42,0.32)] backdrop-blur-md dark:border-slate-700/80 dark:bg-slate-950/95">
+                <div className="absolute left-0 right-0 top-[calc(100%+6px)] z-30 max-h-96 overflow-y-auto rounded-2xl border border-slate-200/80 bg-white/95 p-3 shadow-[0_16px_40px_-20px_rgba(15,23,42,0.32)] backdrop-blur-md dark:border-slate-700/80 dark:bg-slate-950/95">
                   {searchResults.length === 0 ? (
-                    <p className="px-1 py-2 text-sm text-slate-500">No tools match your search.</p>
+                    <p className="px-1 py-2 text-sm text-slate-500">
+                      No tools match your search.
+                    </p>
                   ) : (
-                    <>
-                      <p className="mb-2 px-1 text-[11px] font-semibold uppercase tracking-[0.14em] text-slate-400">
-                        {searchResults.length} result{searchResults.length !== 1 ? "s" : ""}
-                      </p>
-                      <div className="flex flex-wrap gap-2">
-                        {searchResults.map((result) => (
-                          <Link
-                            key={result.slug}
-                            href={`/tools/${result.slug}`}
-                            onClick={() => setIntentQuery("")}
-                            className={`inline-flex items-center gap-1.5 rounded-full border bg-gradient-to-r px-3 py-1.5 text-xs font-semibold transition-all hover:scale-105 hover:shadow-md ${getCategoryColor(result.category)}`}
+                    <div className="grid gap-2 sm:grid-cols-2">
+                      {searchResults.map((result) => (
+                        <Link
+                          key={result.slug}
+                          href={`/tools/${result.slug}`}
+                          onClick={() => setIntentQuery("")}
+                          className="flex flex-col gap-1 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5 text-left transition hover:border-cyan-300 hover:bg-cyan-50"
+                        >
+                          <div className="flex items-center gap-2">
+                            <span className="text-sm font-semibold text-slate-800">
+                              {result.name}
+                            </span>
+                            <span
+                              className={`inline-flex shrink-0 rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide ${getCategoryColor(result.category)}`}
+                            >
+                              {result.category}
+                            </span>
+                          </div>
+                          <p className="text-xs text-slate-500 line-clamp-1">
+                            {result.description}
+                          </p>
+                          <span
+                            className={`inline-flex w-fit items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-semibold ${
+                              result.runtime === "client"
+                                ? "bg-emerald-100 text-emerald-700"
+                                : "bg-amber-100 text-amber-700"
+                            }`}
                           >
-                            {result.name}
-                            {result.runtime === "server" ? (
-                              <span className="text-[10px] font-bold opacity-60">⚙</span>
-                            ) : null}
-                          </Link>
-                        ))}
-                      </div>
-                    </>
+                            {result.runtime === "client"
+                              ? "Works in browser"
+                              : "Server processed"}
+                          </span>
+                        </Link>
+                      ))}
+                    </div>
                   )}
                 </div>
               ) : null}
@@ -231,50 +401,15 @@ export default function Home() {
           </div>
         </header>
 
-        {/* ── Zone 2: Tool Directory ────────────────────────────────── */}
-        <section className="ai-panel rounded-2xl">
-          {/* Header row: title + count */}
-          <div className="flex items-center justify-between border-b border-slate-100 px-4 pt-4 pb-3">
-            <h2 className="font-display text-lg font-semibold tracking-tight text-slate-950">
-              Tools
-            </h2>
-            <span className="text-xs text-slate-500">
-              {TOOL_ITEMS.length} tool{TOOL_ITEMS.length !== 1 ? "s" : ""}
-            </span>
-          </div>
-
-          {/* Tool balls clusters by category */}
-          <div className="px-4 py-6">
-            <div className="flex flex-wrap items-center justify-center gap-3">
-              {TOOL_ITEMS.map((tool) => (
-                  <Link
-                    key={tool.slug}
-                    href={`/tools/${tool.slug}`}
-                    title={`${tool.name}: ${tool.description}`}
-                    className={`ai-tool-pill group inline-flex items-center justify-center rounded-full border bg-gradient-to-r px-4 py-2 text-sm font-semibold transition-all duration-200 hover:scale-105 hover:shadow-lg ${getCategoryColor(tool.category)} cursor-pointer`}
-                  >
-                    <span className="flex items-center gap-1.5">
-                      {tool.name}
-                      {tool.runtime === "server" ? (
-                        <span className="text-[10px] font-bold opacity-75">⚙</span>
-                      ) : null}
-                    </span>
-                  </Link>
-                ))}
-              </div>
-          </div>
-
-          {/* Research Studio CTA at foot of tools section */}
-          <div className="border-t border-slate-100 px-4 py-3">
-            <ProjectSessionCta compact />
-          </div>
-        </section>
-
-        {/* ── Zone 3: Workflow Recipes ──────────────────────────────── */}
+        {/* ── Zone 2: Workflow Recipes (moved above tools) ────────── */}
         <section className="ai-panel rounded-2xl p-4">
           <div className="mb-3 flex items-center justify-between">
-            <h2 className="font-display text-lg font-semibold tracking-tight text-slate-950">Workflow Recipes</h2>
-            <p className="text-xs uppercase tracking-[0.12em] text-slate-500">Click to start</p>
+            <h2 className="font-display text-lg font-semibold tracking-tight text-slate-950">
+              Workflow Recipes
+            </h2>
+            <p className="text-xs uppercase tracking-[0.12em] text-slate-500">
+              Click to start
+            </p>
           </div>
           <input
             ref={workflowFileInputRef}
@@ -286,41 +421,132 @@ export default function Home() {
               event.currentTarget.value = "";
             }}
           />
-          <div className="grid gap-2 md:grid-cols-2">
+          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
             {WORKFLOW_RECIPES.slice(0, 4).map((recipe) => (
               <button
                 key={recipe.slug}
                 type="button"
                 onClick={() => startWorkflow(recipe)}
-                className="ai-workflow-card group rounded-xl p-3 text-left transition hover:-translate-y-0.5 hover:border-cyan-300 hover:bg-cyan-50"
+                className="ai-workflow-card group rounded-xl p-4 text-left transition hover:-translate-y-0.5 hover:border-cyan-300 hover:bg-cyan-50"
               >
-                <div className="flex items-start justify-between gap-2">
-                  <p className="text-sm font-semibold text-slate-900 group-hover:text-cyan-900">{recipe.name}</p>
-                  <span className="mt-0.5 shrink-0 text-[10px] font-bold uppercase tracking-wide text-cyan-700 opacity-0 transition-opacity group-hover:opacity-100">
-                    Start ›
-                  </span>
-                </div>
-                <p className="mt-0.5 text-xs text-slate-600">{recipe.description}</p>
-                <div className="mt-2 flex items-center gap-0">
+                <p className="text-sm font-semibold text-slate-900 group-hover:text-cyan-900">
+                  {recipe.name}
+                </p>
+                <p className="mt-1 text-xs text-slate-600">
+                  {recipe.description}
+                </p>
+                <div className="mt-3 flex items-center gap-0">
                   {recipe.steps.map((step, index) => (
-                    <div key={`${recipe.slug}-${step.toolSlug}`} className="flex items-center">
+                    <div
+                      key={`${recipe.slug}-${step.toolSlug}`}
+                      className="flex items-center"
+                    >
                       <span className="inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-slate-200 text-[10px] font-bold text-slate-600 group-hover:bg-cyan-200 group-hover:text-cyan-900">
                         {index + 1}
                       </span>
                       {index < recipe.steps.length - 1 ? (
-                        <span className="mx-1 block h-px w-4 bg-slate-300 group-hover:bg-cyan-300" />
+                        <span className="mx-1 block h-px w-3 bg-slate-300 group-hover:bg-cyan-300" />
                       ) : null}
                     </div>
                   ))}
-                  <span className="ml-2 text-[11px] text-slate-500 group-hover:text-cyan-700">
-                    {recipe.steps[0].label}
-                  </span>
                 </div>
+                <span className="mt-2 inline-block text-[10px] font-bold uppercase tracking-wide text-cyan-700 opacity-0 transition-opacity group-hover:opacity-100">
+                  Start ›
+                </span>
               </button>
             ))}
           </div>
         </section>
 
+        {/* ── Zone 3: Tool Directory (collapsed to top picks) ─────── */}
+        <section className="ai-panel rounded-2xl">
+          <div className="flex items-center justify-between border-b border-slate-100 px-4 pt-4 pb-3">
+            <h2 className="font-display text-lg font-semibold tracking-tight text-slate-950">
+              Tools
+            </h2>
+            <span className="text-xs text-slate-500">
+              {TOOL_ITEMS.length} tools
+            </span>
+          </div>
+
+          {/* Top 6 picks */}
+          <div className="px-4 py-5">
+            <div className="flex flex-wrap items-center justify-center gap-3">
+              {topPicks.map((tool) => (
+                <Link
+                  key={tool.slug}
+                  href={`/tools/${tool.slug}`}
+                  title={`${tool.name}: ${tool.description}`}
+                  className={`ai-tool-pill group inline-flex items-center justify-center rounded-full border bg-gradient-to-r px-5 py-2.5 text-sm font-semibold transition-all duration-200 hover:scale-105 hover:shadow-lg ${getCategoryColor(tool.category)} cursor-pointer`}
+                >
+                  <span className="flex items-center gap-1.5">
+                    {tool.name}
+                    {tool.runtime === "server" ? (
+                      <span className="text-[10px] font-bold opacity-75">⚙</span>
+                    ) : null}
+                  </span>
+                </Link>
+              ))}
+            </div>
+
+            {/* Expandable "All tools" */}
+            <div className="mt-4 text-center">
+              <button
+                type="button"
+                onClick={() => setShowAllTools(!showAllTools)}
+                className="inline-flex items-center gap-1.5 rounded-full border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-600 transition hover:border-cyan-300 hover:bg-cyan-50 hover:text-cyan-800"
+              >
+                {showAllTools ? "Show fewer" : `All ${TOOL_ITEMS.length} tools`}
+                <svg
+                  viewBox="0 0 20 20"
+                  className={`h-4 w-4 transition-transform ${showAllTools ? "rotate-180" : ""}`}
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="1.8"
+                >
+                  <path
+                    d="M5 7l5 5 5-5"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  />
+                </svg>
+              </button>
+            </div>
+
+            {/* Full tool grid (expandable) */}
+            {showAllTools ? (
+              <div className="mt-5 space-y-4">
+                {TOOL_CATEGORIES.map((cat) => {
+                  const catTools = toolsByCategory[cat];
+                  if (!catTools.length) return null;
+                  return (
+                    <div key={cat}>
+                      <p className="mb-2 text-xs font-semibold uppercase tracking-[0.12em] text-slate-500">
+                        {cat}
+                      </p>
+                      <div className="flex flex-wrap gap-2">
+                        {catTools.map((tool) => (
+                          <Link
+                            key={tool.slug}
+                            href={`/tools/${tool.slug}`}
+                            className={`ai-tool-pill inline-flex items-center rounded-full border bg-gradient-to-r px-4 py-2 text-sm font-semibold transition-all hover:scale-105 hover:shadow-lg ${getCategoryColor(tool.category)}`}
+                          >
+                            {tool.name}
+                            {tool.runtime === "server" ? (
+                              <span className="ml-1 text-[10px] font-bold opacity-75">
+                                ⚙
+                              </span>
+                            ) : null}
+                          </Link>
+                        ))}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            ) : null}
+          </div>
+        </section>
       </main>
     </div>
   );
