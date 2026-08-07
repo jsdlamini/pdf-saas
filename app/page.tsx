@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
+  useEffect,
   useMemo,
   useRef,
   useState,
@@ -85,6 +86,12 @@ export default function Home() {
   /* ── drop-zone state ──────────────────────────────────────────── */
   const [dragOver, setDragOver] = useState(false);
   const [dropFile, setDropFile] = useState<File | null>(null);
+  const [dropFileInfo, setDropFileInfo] = useState<{
+    kind: "pdf" | "image";
+    pageCount?: number;
+    width?: number;
+    height?: number;
+  } | null>(null);
   const dropSuggestions = useMemo(
     () => (dropFile ? getDropSuggestions(dropFile) : []),
     [dropFile],
@@ -97,8 +104,48 @@ export default function Home() {
     [dropSuggestions],
   );
 
+  useEffect(() => {
+    if (!dropFile) return;
+
+    let cancelled = false;
+
+    async function readFileInfo() {
+      if (isPdf(dropFile!)) {
+        try {
+          const { PDFDocument: PDFDoc } = await import("pdf-lib");
+          const buffer = await dropFile!.arrayBuffer();
+          if (cancelled) return;
+          const doc = await PDFDoc.load(buffer, { ignoreEncryption: true });
+          if (!cancelled) setDropFileInfo({ kind: "pdf", pageCount: doc.getPageCount() });
+        } catch {
+          if (!cancelled) setDropFileInfo({ kind: "pdf" });
+        }
+      } else if (isImage(dropFile!)) {
+        try {
+          const img = new Image();
+          const url = URL.createObjectURL(dropFile!);
+          await new Promise<void>((resolve, reject) => {
+            img.onload = () => resolve();
+            img.onerror = () => reject(new Error("Failed to load image"));
+            img.src = url;
+          });
+          URL.revokeObjectURL(url);
+          if (!cancelled) {
+            setDropFileInfo({ kind: "image", width: img.naturalWidth, height: img.naturalHeight });
+          }
+        } catch {
+          if (!cancelled) setDropFileInfo({ kind: "image" });
+        }
+      }
+    }
+
+    readFileInfo();
+    return () => { cancelled = true; };
+  }, [dropFile]);
+
   function clearDrop() {
     setDropFile(null);
+    setDropFileInfo(null);
     setDragOver(false);
   }
 
@@ -118,12 +165,14 @@ export default function Home() {
     setDragOver(false);
     const f = e.dataTransfer.files?.[0];
     if (f && (isPdf(f) || isImage(f))) {
+      setDropFileInfo(null);
       setDropFile(f);
     }
   }
 
   function handleBrowse(file: File) {
     if (isPdf(file) || isImage(file)) {
+      setDropFileInfo(null);
       setDropFile(file);
     }
   }
@@ -214,9 +263,9 @@ export default function Home() {
               ) as HTMLInputElement | null;
               input?.click();
             }}
-            className={`relative cursor-pointer rounded-2xl border-2 border-dashed p-8 text-center transition-all duration-200 md:p-12 ${
+            className={`drop-zone-hover-ring relative cursor-pointer rounded-2xl border-2 border-dashed p-8 text-center transition-all duration-300 md:p-12 ${
               dragOver
-                ? "border-cyan-400 bg-cyan-50/60"
+                ? "border-cyan-400 bg-cyan-50/70 shadow-[0_0_40px_-12px_rgba(34,211,238,0.4)]"
                 : "border-slate-300 bg-slate-50/50 hover:border-cyan-300 hover:bg-cyan-50/40"
             }`}
           >
@@ -233,7 +282,7 @@ export default function Home() {
             />
 
             {dropFile ? (
-              <div className="flex flex-col items-center gap-4">
+              <div className="flex flex-col items-center gap-3">
                 <div className="inline-flex h-14 w-14 items-center justify-center rounded-2xl bg-cyan-100 text-cyan-700">
                   <svg
                     viewBox="0 0 24 24"
@@ -251,10 +300,20 @@ export default function Home() {
                   </svg>
                 </div>
                 <p className="font-semibold text-slate-900">{dropFile.name}</p>
-                <p className="text-sm text-slate-500">
-                  {(dropFile.size / 1024 / 1024).toFixed(1)} MB — Choose a quick
-                  action:
-                </p>
+                <div className="flex flex-wrap items-center justify-center gap-x-4 gap-y-1 text-sm text-slate-500">
+                  <span>{(dropFile.size / 1024 / 1024).toFixed(1)} MB</span>
+                  {dropFileInfo?.kind === "pdf" && dropFileInfo.pageCount ? (
+                    <span className="inline-flex items-center gap-1 rounded-full bg-slate-200/70 px-2.5 py-0.5 text-xs font-medium text-slate-700">
+                      {dropFileInfo.pageCount} page{dropFileInfo.pageCount !== 1 ? "s" : ""}
+                    </span>
+                  ) : null}
+                  {dropFileInfo?.kind === "image" && dropFileInfo.width && dropFileInfo.height ? (
+                    <span className="inline-flex items-center gap-1 rounded-full bg-slate-200/70 px-2.5 py-0.5 text-xs font-medium text-slate-700">
+                      {dropFileInfo.width}&times;{dropFileInfo.height} px
+                    </span>
+                  ) : null}
+                </div>
+                <p className="text-sm text-slate-500">Choose a quick action:</p>
                 <div className="flex flex-wrap justify-center gap-2">
                   {suggestedTools.map((tool) => (
                     <button
@@ -283,7 +342,13 @@ export default function Home() {
               </div>
             ) : (
               <div className="flex flex-col items-center gap-3">
-                <div className="inline-flex h-16 w-16 items-center justify-center rounded-2xl bg-slate-100 text-slate-400">
+                <div
+                  className={`drop-icon-drag-scale inline-flex h-16 w-16 items-center justify-center rounded-2xl text-slate-400 ${
+                    dragOver
+                      ? "scale-125 bg-cyan-100 text-cyan-600"
+                      : "drop-icon-bounce bg-slate-100"
+                  }`}
+                >
                   <svg
                     viewBox="0 0 24 24"
                     className="h-8 w-8"
@@ -298,11 +363,11 @@ export default function Home() {
                     />
                   </svg>
                 </div>
-                <p className="text-lg font-semibold text-slate-700">
-                  Drop a PDF or image here — or click to browse
+                <p className="font-display text-2xl font-semibold tracking-tight text-slate-800 md:text-3xl">
+                  Drag your file here
                 </p>
-                <p className="text-sm text-slate-400">
-                  PDF, PNG, JPG, WebP, GIF — up to 1 GB
+                <p className="text-sm text-slate-500">
+                  Or click to browse — PDF, PNG, JPG, WebP accepted
                 </p>
               </div>
             )}
@@ -327,7 +392,7 @@ export default function Home() {
                 value={intentQuery}
                 onChange={(event) => setIntentQuery(event.target.value)}
                 placeholder="Search tools — e.g. remove sensitive text from contracts"
-                className="ai-search-input w-full rounded-xl py-2.5 pl-9 pr-3 text-sm text-slate-800 placeholder:text-slate-400 focus:outline-none"
+                className="ai-search-input w-full rounded-xl py-3 pl-9 pr-3 text-base text-slate-800 placeholder:text-slate-400 focus:outline-none"
               />
               {intentQuery ? (
                 <button
