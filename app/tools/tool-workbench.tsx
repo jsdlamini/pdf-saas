@@ -3409,7 +3409,7 @@ export default function ToolWorkbench({ tool }: WorkbenchProps) {
         ) : null}
 
         <div className="sticky-action-bar">
-          <div className="flex flex-wrap items-center justify-center gap-2">
+          <div className="flex flex-wrap items-center gap-2">
             <button
               type="button"
               onClick={runTool}
