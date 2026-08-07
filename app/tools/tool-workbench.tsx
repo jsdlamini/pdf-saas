@@ -4,6 +4,7 @@ import { Document as DocxDocument, Packer, Paragraph } from "docx";
 import { jsPDF } from "jspdf";
 import JSZip from "jszip";
 import * as mammoth from "mammoth";
+import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { PDFDocument, StandardFonts, degrees, rgb, type PDFImage } from "pdf-lib";
 import { useEffect, useMemo, useRef, useState } from "react";
@@ -15,6 +16,7 @@ import { formatDurationMs, hashBlob, hashFile, summarizeRunConfidence, type RunR
 import { TOOL_ITEMS, type ToolItem } from "@/lib/tools";
 import { consumeWorkflowPipeline, stageWorkflowPipeline } from "@/lib/workflow-pipeline";
 import { getNextRecipeStep, getRecipesForTool } from "@/lib/workflow-recipes";
+import { showToast } from "@/app/components/toast";
 
 type WorkbenchProps = {
   tool: ToolItem;
@@ -2469,10 +2471,12 @@ export default function ToolWorkbench({ tool }: WorkbenchProps) {
     const complete = (message: string) => {
       completionMessage = message;
       setStatus(message);
+      showToast(message, "success");
     };
 
     if (!files.length) {
       setError("Upload at least one file to continue.");
+      showToast("Upload at least one file to continue.", "error");
       return;
     }
 
@@ -3207,7 +3211,9 @@ export default function ToolWorkbench({ tool }: WorkbenchProps) {
 
       complete("Tool execution completed.");
     } catch (runError) {
-      setError(runError instanceof Error ? runError.message : "Unexpected tool error.");
+      const errMsg = runError instanceof Error ? runError.message : "Unexpected tool error.";
+      setError(errMsg);
+      showToast(errMsg, "error");
       logProcessing(`Failed: ${runError instanceof Error ? runError.message : "Unexpected tool error."}`);
     } finally {
       if (completionMessage) {
@@ -3224,6 +3230,17 @@ export default function ToolWorkbench({ tool }: WorkbenchProps) {
 
   return (
     <section className="tool-shell glass-3d mx-auto max-w-[2300px] space-y-3 rounded-3xl p-4 xl:p-5">
+      {/* ── Breadcrumb ── */}
+      <nav aria-label="Breadcrumb" className="flex items-center gap-1.5 text-xs text-slate-500">
+        <Link href="/" className="hover:text-cyan-700 hover:underline transition-colors">
+          Home
+        </Link>
+        <svg viewBox="0 0 16 16" className="h-3 w-3 text-slate-400" fill="none" stroke="currentColor" strokeWidth="2">
+          <path d="M6 4l4 4-4 4" strokeLinecap="round" strokeLinejoin="round" />
+        </svg>
+        <span className="font-semibold text-slate-800">{tool.name}</span>
+      </nav>
+
       {/* ── Full-width top banner ── */}
       <div className="space-y-2">
         <div className="flex flex-wrap items-baseline gap-x-3 gap-y-0.5">
@@ -3280,32 +3297,31 @@ export default function ToolWorkbench({ tool }: WorkbenchProps) {
           />
         ) : null}
 
-        <div className="flex flex-wrap items-center gap-2">
-          <button
-            type="button"
-            onClick={runTool}
-            disabled={busy}
-            className="btn btn-primary rounded-full px-5 py-2 text-sm disabled:cursor-not-allowed disabled:bg-slate-500"
-          >
-            {busy ? "Processing..." : outputPreview ? `Re-run ${tool.name}` : `Run ${tool.name}`}
-          </button>
-          {suggestedWorkflow ? (
+        <div className="sticky-action-bar -mx-4 -mb-1 px-4 xl:-mx-5 xl:px-5">
+          <div className="flex flex-wrap items-center gap-2">
             <button
               type="button"
-              onClick={() => startSuggestedWorkflow(suggestedWorkflow)}
+              onClick={runTool}
               disabled={busy}
-              className="rounded-full border border-cyan-300 bg-white px-4 py-2 text-sm font-semibold text-cyan-900 transition hover:bg-cyan-50 disabled:cursor-not-allowed disabled:opacity-50"
+              className="btn btn-primary rounded-full px-5 py-2.5 text-sm font-semibold shadow-lg disabled:cursor-not-allowed disabled:bg-slate-500"
             >
-              Start suggested workflow
+              {busy ? "Processing..." : outputPreview ? `Re-run ${tool.name}` : `Run ${tool.name}`}
             </button>
-          ) : null}
-          {busy ? <span className="status-chip status-chip-busy">Processing</span> : null}
-          {status ? <span className="status-chip status-chip-ok">Ready</span> : null}
-          {error ? <span className="status-chip status-chip-error">Failed</span> : null}
+            {suggestedWorkflow ? (
+              <button
+                type="button"
+                onClick={() => startSuggestedWorkflow(suggestedWorkflow)}
+                disabled={busy}
+                className="rounded-full border border-cyan-300 bg-white px-4 py-2 text-sm font-semibold text-cyan-900 transition hover:bg-cyan-50 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                Start suggested workflow
+              </button>
+            ) : null}
+            {busy ? <span className="status-chip status-chip-busy">Processing</span> : null}
+          </div>
+          {error ? <p className="mt-1 text-sm font-medium text-rose-700">{error}</p> : null}
+          {status ? <p className="mt-1 text-sm font-medium text-emerald-700">{status}</p> : null}
         </div>
-
-        {error ? <p className="text-sm font-medium text-rose-700">{error}</p> : null}
-        {status ? <p className="text-sm font-medium text-emerald-700">{status}</p> : null}
       </div>
 
       <div className="grid gap-3 xl:grid-cols-[minmax(240px,0.95fr)_minmax(0,3.05fr)_minmax(240px,1fr)] xl:items-start">
