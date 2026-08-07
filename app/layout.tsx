@@ -3,10 +3,10 @@ import { auth } from "@clerk/nextjs/server";
 import type { Metadata } from "next";
 import { DM_Sans, Space_Grotesk } from "next/font/google";
 import Link from "next/link";
-import { TOOL_ITEMS } from "@/lib/tools";
 import AccountControls from "./account-controls";
 import MobileToolNav from "./mobile-tool-nav";
 import ThemeToggle from "./theme-toggle";
+import ToastContainer from "./components/toast";
 import "./globals.css";
 
 const bodyFont = DM_Sans({
@@ -109,6 +109,7 @@ export default async function RootLayout({
     >
       <body className="min-h-full flex flex-col bg-[#f4f6f8] text-slate-900 depth-stage">
         <ClerkProvider>
+          <ToastContainer />
           <MobileToolNav />
 
           <header className="sticky top-0 z-50 md:px-8 md:pt-3">
@@ -129,43 +130,7 @@ export default async function RootLayout({
                     </span>
                   </Link>
 
-                  {/* Simple flat Tools dropdown */}
-                  <div className="group relative ml-1 hidden md:block">
-                    <button
-                      type="button"
-                      className="neo-pill inline-flex items-center gap-1 border border-transparent bg-transparent px-3 py-1.5 text-sm font-semibold text-slate-700"
-                    >
-                      Tools
-                      <svg
-                        viewBox="0 0 20 20"
-                        className="h-3.5 w-3.5 text-slate-400"
-                        fill="none"
-                        stroke="currentColor"
-                        strokeWidth="1.8"
-                      >
-                        <path d="M5 7l5 5 5-5" strokeLinecap="round" strokeLinejoin="round" />
-                      </svg>
-                    </button>
 
-                    <div className="nav-dropdown-panel nav-dropdown-pop pointer-events-none invisible absolute left-0 top-[calc(100%+8px)] z-50 w-[280px] origin-top-left rounded-2xl border border-slate-200/80 bg-white/95 p-3 opacity-0 shadow-[0_20px_50px_-24px_rgba(15,23,42,0.4)] backdrop-blur-xl ring-1 ring-white/50 transition-all duration-200 ease-out translate-y-2 scale-[0.985] group-hover:pointer-events-auto group-hover:visible group-hover:opacity-100 group-hover:translate-y-0 group-hover:scale-100 group-focus-within:pointer-events-auto group-focus-within:visible group-focus-within:opacity-100 group-focus-within:translate-y-0 group-focus-within:scale-100 dark:bg-slate-950/95 dark:border-slate-700/80 dark:ring-white/10">
-                      <div className="max-h-[360px] overflow-auto">
-                        {TOOL_ITEMS.map((tool) => (
-                          <Link
-                            key={`nav-tool-${tool.slug}`}
-                            href={`/tools/${tool.slug}`}
-                            className="neo-submenu-item block px-3 py-2 text-xs font-semibold"
-                          >
-                            <span className="flex items-center justify-between">
-                              <span>{tool.name}</span>
-                              <span className="text-[10px] font-normal text-slate-400">
-                                {tool.runtime === "server" ? "⚙ Server" : "Browser"}
-                              </span>
-                            </span>
-                          </Link>
-                        ))}
-                      </div>
-                    </div>
-                  </div>
                 </div>
 
                 <div className="flex items-center justify-end gap-1.5 md:gap-2">
