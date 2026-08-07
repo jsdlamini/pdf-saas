@@ -9,10 +9,16 @@ export default function AccountControls() {
 
   return (
     <div className="flex items-center gap-2">
+      <Link
+        href="/history"
+        className="hidden rounded-full border border-slate-300 bg-white px-3 py-2 text-xs font-semibold text-slate-600 transition hover:border-cyan-300 hover:bg-cyan-50 hover:text-cyan-900 md:inline-flex"
+      >
+        History
+      </Link>
       {isSignedIn ? (
         <Link
           href="/research-studio"
-          className="rounded-full border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-800 transition hover:border-cyan-300 hover:bg-cyan-50 hover:text-cyan-900"
+          className="hidden rounded-full border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-800 transition hover:border-cyan-300 hover:bg-cyan-50 hover:text-cyan-900 md:inline-flex"
         >
           Projects
         </Link>

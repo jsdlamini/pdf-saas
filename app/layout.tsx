@@ -3,10 +3,9 @@ import { auth } from "@clerk/nextjs/server";
 import type { Metadata } from "next";
 import { DM_Sans, Space_Grotesk } from "next/font/google";
 import Link from "next/link";
-import { TOOL_CATEGORIES, TOOL_ITEMS } from "@/lib/tools";
+import { TOOL_ITEMS } from "@/lib/tools";
 import AccountControls from "./account-controls";
 import MobileToolNav from "./mobile-tool-nav";
-import ToolNavSearch from "./tool-nav-search";
 import ThemeToggle from "./theme-toggle";
 import "./globals.css";
 
@@ -19,8 +18,6 @@ const displayFont = Space_Grotesk({
   variable: "--font-display",
   subsets: ["latin"],
 });
-
-const NAV_PARENTS = ["All", ...TOOL_CATEGORIES] as const;
 
 const SITE_NAME = "WiserFiles";
 const DEFAULT_SITE_URL = "http://localhost:3000";
@@ -115,21 +112,61 @@ export default async function RootLayout({
           <MobileToolNav />
 
           <header className="sticky top-0 z-50 md:px-8 md:pt-3">
-            <div className="neo-navbar mx-auto flex w-full max-w-7xl flex-col gap-0 px-3 md:gap-3 md:px-6">
+            <div className="neo-navbar mx-auto flex w-full max-w-7xl items-center px-4 py-0 md:px-6">
               {/* Mobile: 3-col grid — hamburger slot | centred logo | actions */}
               {/* Desktop: plain flex row */}
-              <div className="grid h-14 grid-cols-[3rem_1fr_auto] items-center md:flex md:h-auto md:justify-between md:py-3">
+              <div className="grid h-14 w-full grid-cols-[3rem_1fr_auto] items-center md:flex md:h-14 md:justify-between">
                 {/* Col 1 — empty spacer on mobile (hamburger is fixed); hidden on desktop */}
                 <div className="md:hidden" aria-hidden="true" />
 
-                <Link href="/" className="flex items-center justify-center gap-2 md:justify-start md:gap-3">
-                  <span className="inline-flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-cyan-400 via-sky-500 to-indigo-500 text-sm font-bold text-slate-950 shadow-[0_10px_22px_-14px_rgba(14,165,233,0.9)] ring-1 ring-white/20 md:h-9 md:w-9 dark:from-cyan-300 dark:via-sky-400 dark:to-fuchsia-400 dark:text-slate-950 dark:ring-white/25">
-                    WF
-                  </span>
-                  <span className="font-display text-base font-semibold tracking-tight text-slate-950 md:text-xl">
-                    WiserFiles
-                  </span>
-                </Link>
+                <div className="flex items-center justify-center gap-2 md:justify-start md:gap-3">
+                  <Link href="/" className="flex items-center gap-2 md:gap-3">
+                    <span className="inline-flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-cyan-400 via-sky-500 to-indigo-500 text-sm font-bold text-slate-950 shadow-[0_10px_22px_-14px_rgba(14,165,233,0.9)] ring-1 ring-white/20 dark:from-cyan-300 dark:via-sky-400 dark:to-fuchsia-400 dark:text-slate-950 dark:ring-white/25">
+                      WF
+                    </span>
+                    <span className="font-display text-base font-semibold tracking-tight text-slate-950 md:text-lg">
+                      WiserFiles
+                    </span>
+                  </Link>
+
+                  {/* Simple flat Tools dropdown */}
+                  <div className="group relative ml-1 hidden md:block">
+                    <button
+                      type="button"
+                      className="neo-pill inline-flex items-center gap-1 border border-transparent bg-transparent px-3 py-1.5 text-sm font-semibold text-slate-700"
+                    >
+                      Tools
+                      <svg
+                        viewBox="0 0 20 20"
+                        className="h-3.5 w-3.5 text-slate-400"
+                        fill="none"
+                        stroke="currentColor"
+                        strokeWidth="1.8"
+                      >
+                        <path d="M5 7l5 5 5-5" strokeLinecap="round" strokeLinejoin="round" />
+                      </svg>
+                    </button>
+
+                    <div className="nav-dropdown-panel nav-dropdown-pop pointer-events-none invisible absolute left-0 top-[calc(100%+8px)] z-50 w-[280px] origin-top-left rounded-2xl border border-slate-200/80 bg-white/95 p-3 opacity-0 shadow-[0_20px_50px_-24px_rgba(15,23,42,0.4)] backdrop-blur-xl ring-1 ring-white/50 transition-all duration-200 ease-out translate-y-2 scale-[0.985] group-hover:pointer-events-auto group-hover:visible group-hover:opacity-100 group-hover:translate-y-0 group-hover:scale-100 group-focus-within:pointer-events-auto group-focus-within:visible group-focus-within:opacity-100 group-focus-within:translate-y-0 group-focus-within:scale-100 dark:bg-slate-950/95 dark:border-slate-700/80 dark:ring-white/10">
+                      <div className="max-h-[360px] overflow-auto">
+                        {TOOL_ITEMS.map((tool) => (
+                          <Link
+                            key={`nav-tool-${tool.slug}`}
+                            href={`/tools/${tool.slug}`}
+                            className="neo-submenu-item block px-3 py-2 text-xs font-semibold"
+                          >
+                            <span className="flex items-center justify-between">
+                              <span>{tool.name}</span>
+                              <span className="text-[10px] font-normal text-slate-400">
+                                {tool.runtime === "server" ? "⚙ Server" : "Browser"}
+                              </span>
+                            </span>
+                          </Link>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+                </div>
 
                 <div className="flex items-center justify-end gap-1.5 md:gap-2">
                   <ThemeToggle />
@@ -138,58 +175,11 @@ export default async function RootLayout({
                       href="/research-studio"
                       className="neo-pill hidden px-3 py-1.5 text-xs font-semibold text-slate-800 sm:inline-flex md:px-4 md:py-2 md:text-sm"
                     >
-                      Open Workspace
+                      Research Studio
                     </Link>
                   ) : null}
                   <AccountControls />
                 </div>
-              </div>
-
-              <div className="neo-navbar-sub hidden w-full gap-3 md:flex md:flex-wrap md:items-start md:justify-start xl:flex-nowrap xl:items-center xl:justify-between">
-                <nav className="flex min-w-0 flex-1 flex-wrap items-center gap-2">
-                  {NAV_PARENTS.map((parent) => {
-                    const subgroupTools =
-                      parent === "All"
-                        ? TOOL_ITEMS
-                        : TOOL_ITEMS.filter((tool) => tool.category === parent);
-
-                    return (
-                      <div key={parent} className="group relative shrink-0">
-                        <button
-                          type="button"
-                          className="nav-link neo-pill border border-transparent bg-transparent text-[11px] uppercase tracking-[0.12em]"
-                        >
-                          {parent}
-                        </button>
-
-                        <div className="nav-dropdown-panel nav-dropdown-pop pointer-events-none invisible absolute left-0 top-[calc(100%+10px)] z-50 w-[min(92vw,760px)] max-w-[calc(100vw-1rem)] origin-top-left rounded-3xl border border-slate-200/80 bg-white/90 p-4 opacity-0 shadow-[0_24px_60px_-28px_rgba(15,23,42,0.42)] backdrop-blur-xl ring-1 ring-white/50 transition-all duration-200 ease-out will-change-transform translate-y-2 scale-[0.985] group-hover:pointer-events-auto group-hover:visible group-hover:opacity-100 group-hover:translate-y-0 group-hover:scale-100 group-focus-within:pointer-events-auto group-focus-within:visible group-focus-within:opacity-100 group-focus-within:translate-y-0 group-focus-within:scale-100 dark:bg-slate-950/90 dark:border-slate-700/80 dark:ring-white/10">
-                          <div className="mb-3 flex items-center justify-between gap-3 border-b border-slate-100/80 pb-2 dark:border-slate-800/80">
-                            <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-cyan-700 dark:text-cyan-300">
-                              {parent === "All" ? "All tool subgroups" : `${parent} subgroups`}
-                            </p>
-                            <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[11px] font-semibold text-slate-600 dark:bg-slate-800 dark:text-slate-300">
-                              {subgroupTools.length} tools
-                            </span>
-                          </div>
-
-                          <div className="grid max-h-[320px] grid-cols-2 gap-2 overflow-auto pr-1 lg:grid-cols-3">
-                            {subgroupTools.map((tool) => (
-                              <Link
-                                key={`top-sub-${tool.slug}`}
-                                href={`/tools/${tool.slug}`}
-                                className="neo-submenu-item group/item px-3 py-2.5 text-xs font-semibold"
-                              >
-                                {tool.name}
-                              </Link>
-                            ))}
-                          </div>
-                        </div>
-                      </div>
-                    );
-                  })}
-                </nav>
-
-                <ToolNavSearch className="min-w-0 max-w-none md:basis-full xl:basis-auto xl:max-w-[340px]" />
               </div>
             </div>
           </header>
@@ -259,6 +249,7 @@ export default async function RootLayout({
                   <Link href="/tools/unlock-pdf" className="footer-link">Unlock PDF</Link>
                   <Link href="/tools/sign-pdf" className="footer-link">Sign PDF</Link>
                   <Link href="/tools/compare-pdf" className="footer-link">Compare PDF</Link>
+                  <Link href="/history" className="footer-link">Activity history</Link>
                 </div>
               </div>
             </div>
