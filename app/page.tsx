@@ -343,10 +343,10 @@ export default function Home() {
             ) : (
               <div className="flex flex-col items-center gap-3">
                 <div
-                  className={`drop-icon-drag-scale inline-flex h-16 w-16 items-center justify-center rounded-2xl text-slate-400 ${
+                  className={`drop-icon-drag-scale inline-flex h-16 w-16 items-center justify-center rounded-2xl transition-all duration-300 ${
                     dragOver
-                      ? "scale-125 bg-gradient-to-br from-cyan-200 to-blue-200 text-cyan-700 shadow-lg shadow-cyan-200/50"
-                      : "drop-icon-bounce bg-gradient-to-br from-slate-100 to-blue-50"
+                      ? "scale-125 bg-gradient-to-br from-cyan-200 to-blue-200 text-cyan-600 shadow-lg shadow-cyan-200/50"
+                      : "drop-icon-bounce bg-gradient-to-br from-cyan-100 to-blue-200 text-cyan-500"
                   }`}
                 >
                   <svg
