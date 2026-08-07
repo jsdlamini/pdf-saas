@@ -104,6 +104,17 @@ export default function Home() {
         .filter(Boolean) as typeof TOOL_ITEMS,
     [dropSuggestions],
   );
+  const otherCompatibleTools = useMemo(() => {
+    if (!dropFile) return [];
+    const slugs = new Set(dropSuggestions);
+    const isPdfFile = isPdf(dropFile);
+    return TOOL_ITEMS.filter((t) => {
+      if (slugs.has(t.slug)) return false;
+      if (t.slug === "ocr-pdf") return true; // OCR works with both
+      if (isPdfFile) return t.slug.includes("pdf") || t.slug === "merge-pdf" || t.slug === "split-pdf" || t.slug === "compress-pdf" || t.slug === "sign-pdf" || t.slug === "protect-pdf" || t.slug === "unlock-pdf" || t.slug === "redact-pdf" || t.slug === "edit-pdf" || t.slug === "crop-pdf" || t.slug === "rotate-pdf" || t.slug === "organize-pdf" || t.slug === "remove-pages" || t.slug === "extract-pages" || t.slug === "repair-pdf" || t.slug === "page-numbers" || t.slug === "compare-pdf" || t.slug === "pdf-to-pdfa" || t.slug === "pdf-to-latex";
+      return t.slug === "jpg-to-pdf" || t.slug === "images-to-pdf" || t.slug === "ocr-pdf" || t.slug === "scan-to-pdf";
+    }).slice(0, 10);
+  }, [dropFile, dropSuggestions]);
 
   useEffect(() => {
     if (!dropFile) return;
@@ -315,33 +326,41 @@ export default function Home() {
                   ) : null}
                 </div>
                 <p className="text-sm text-slate-500">Choose a quick action:</p>
+                <div className="flex flex-wrap justify-center gap-2">
+                  {suggestedTools.map((tool) => (
+                    <button
+                      key={tool.slug}
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        navigateToTool(tool.slug);
+                      }}
+                      className={`inline-flex items-center gap-1.5 rounded-full border bg-gradient-to-r px-4 py-2 text-sm font-semibold transition-all hover:scale-105 hover:shadow-lg ${getCategoryColor(tool.category)}`}
+                    >
+                      {tool.name}
+                    </button>
+                  ))}
+                </div>
                 <div className="relative">
                   <button
                     type="button"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      setDropToolsOpen(!dropToolsOpen);
-                    }}
-                    className="inline-flex items-center gap-2 rounded-xl border border-cyan-300 bg-white px-4 py-2.5 text-sm font-semibold text-cyan-800 shadow-sm transition hover:bg-cyan-50"
+                    onClick={(e) => { e.stopPropagation(); setDropToolsOpen(!dropToolsOpen); }}
+                    className="inline-flex items-center gap-1.5 rounded-full border border-slate-300 bg-white px-3 py-1.5 text-xs font-semibold text-slate-600 transition hover:border-cyan-300 hover:text-cyan-800"
                   >
-                    {suggestedTools[0]?.name ?? "Select tool"}
-                    <svg viewBox="0 0 20 20" className={`h-4 w-4 text-cyan-500 transition-transform ${dropToolsOpen ? "rotate-180" : ""}`} fill="none" stroke="currentColor" strokeWidth="1.8">
+                    More tools
+                    <svg viewBox="0 0 20 20" className={`h-3.5 w-3.5 transition-transform ${dropToolsOpen ? "rotate-180" : ""}`} fill="none" stroke="currentColor" strokeWidth="1.8">
                       <path d="M5 7l5 5 5-5" strokeLinecap="round" strokeLinejoin="round" />
                     </svg>
                   </button>
                   {dropToolsOpen ? (
                     <>
                       <div className="fixed inset-0 z-40" onClick={(e) => { e.stopPropagation(); setDropToolsOpen(false); }} />
-                      <div className="absolute left-0 top-full z-50 mt-1 w-60 rounded-xl border border-slate-200 bg-white py-1 shadow-lg">
-                        {suggestedTools.map((tool) => (
+                      <div className="absolute left-1/2 top-full z-50 mt-1 -translate-x-1/2 w-56 rounded-xl border border-slate-200 bg-white py-1 shadow-lg">
+                        {otherCompatibleTools.map((tool) => (
                           <button
                             key={tool.slug}
                             type="button"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              setDropToolsOpen(false);
-                              navigateToTool(tool.slug);
-                            }}
+                            onClick={(e) => { e.stopPropagation(); setDropToolsOpen(false); navigateToTool(tool.slug); }}
                             className="flex w-full items-center gap-2 px-4 py-2.5 text-left text-sm font-semibold text-slate-700 transition hover:bg-cyan-50 hover:text-cyan-900"
                           >
                             <span>{tool.name}</span>
