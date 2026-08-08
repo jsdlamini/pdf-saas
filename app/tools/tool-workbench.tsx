@@ -3009,15 +3009,57 @@ export default function ToolWorkbench({ tool }: WorkbenchProps) {
 
       if (tool.slug === "pdf-to-word") {
         if (!firstFile) throw new Error("Missing PDF file.");
-        const pages = await loadPdfPagesText(new Uint8Array(await readAsArrayBuffer(firstFile)));
-        const children = pages.flatMap((text, index) => [new Paragraph(`Page ${index + 1}`), new Paragraph(text), new Paragraph("")]);
-        const doc = new DocxDocument({ sections: [{ children }] });
-        stageOutput(
-          await Packer.toBlob(doc),
-          `${normalizeFileName(firstFile.name)}.docx`,
-          "Binary DOCX preview is metadata-only. Download to inspect in Word."
-        );
-        complete("DOCX file ready for preview.");
+
+        // Try server-side LibreOffice conversion first
+        let serverFailed = false;
+        try {
+          setStatus("Converting PDF to Word on server...");
+          logProcessing("Sending PDF to server for DOCX conversion via LibreOffice.");
+          const formData = new FormData();
+          formData.append("file", firstFile);
+          const response = await fetch("/api/pdf-to-word", { method: "POST", body: formData });
+
+          if (response.ok) {
+            const docxBlob = await response.blob();
+            const disposition = response.headers.get("Content-Disposition");
+            const downloadName = getFileNameFromDisposition(disposition) || `${normalizeFileName(firstFile.name)}.docx`;
+            stageOutput(
+              docxBlob,
+              downloadName,
+              "Formatted DOCX produced by LibreOffice. Download to open in Word."
+            );
+            complete("DOCX file ready for preview.");
+            return;
+          }
+
+          // Server returned an error — fall back to client-side
+          let serverMessage = "Server conversion unavailable.";
+          try {
+            const serverBody = await response.json();
+            if (serverBody?.error) serverMessage = serverBody.error;
+          } catch {
+            // ignore parse errors
+          }
+          logProcessing(`Server conversion failed (${response.status}): ${serverMessage}. Falling back to client-side text extraction.`);
+          serverFailed = true;
+        } catch (networkError) {
+          logProcessing(`Could not reach server for DOCX conversion: ${networkError instanceof Error ? networkError.message : "network error"}. Falling back to client-side text extraction.`);
+          serverFailed = true;
+        }
+
+        // Client-side fallback: text-extraction DOCX
+        if (serverFailed) {
+          setStatus("Falling back to client-side text extraction...");
+          const pages = await loadPdfPagesText(new Uint8Array(await readAsArrayBuffer(firstFile)));
+          const children = pages.flatMap((text, index) => [new Paragraph(`Page ${index + 1}`), new Paragraph(text), new Paragraph("")]);
+          const doc = new DocxDocument({ sections: [{ children }] });
+          stageOutput(
+            await Packer.toBlob(doc),
+            `${normalizeFileName(firstFile.name)}.docx`,
+            "Client-side text extraction (fallback). Download to inspect in Word."
+          );
+          complete("DOCX file ready for preview (client-side fallback).");
+        }
         return;
       }
 

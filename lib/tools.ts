@@ -77,7 +77,7 @@ export const TOOL_ITEMS: ToolItem[] = [
     name: "PDF to Word",
     description: "Convert PDF pages into editable DOCX.",
     category: "Convert",
-    runtime: "client",
+    runtime: "server",
   },
   {
     slug: "pdf-to-powerpoint",
