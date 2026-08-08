@@ -935,6 +935,30 @@ export default function ToolWorkbench({ tool }: WorkbenchProps) {
 
   const [files, setFiles] = useState<File[]>(() => (pipelineBootstrap?.accepted ? [pipelineBootstrap.file] : []));
   const [busy, setBusy] = useState(false);
+
+  async function applyRotateNow() {
+    const file = files[0];
+    if (!file || busy || !isRotateTool) return;
+    setBusy(true);
+    setError("");
+    try {
+      const source = await PDFDocument.load(await readAsArrayBuffer(file));
+      source.getPages().forEach((page, index) => {
+        const angle = pageRotations[index + 1] ?? rotateAngle;
+        page.setRotation(degrees(angle));
+      });
+      stageOutput(
+        asPdfBlob(await source.save()),
+        `${normalizeFileName(file.name)}-rotated.pdf`,
+        "Preview rotated pages before downloading."
+      );
+      complete(`Rotated PDF (${rotateAngle}°) ready for preview.`);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Rotation failed.");
+    } finally {
+      setBusy(false);
+    }
+  }
   const [error, setError] = useState("");
   const [status, setStatus] = useState("");
   const [progress, setProgress] = useState<{ current: number; total: number; label: string } | null>(null);
@@ -985,29 +1009,6 @@ export default function ToolWorkbench({ tool }: WorkbenchProps) {
   const [mergePages, setMergePages] = useState<MergePageNode[]>([]);
   const [rotateAngle, setRotateAngle] = useState(90);
   const [pageRotations, setPageRotations] = useState<Record<number, number>>({});
-
-  async function applyRotateNow() {
-    if (!firstFile || busy) return;
-    setBusy(true);
-    setError("");
-    try {
-      const source = await PDFDocument.load(await readAsArrayBuffer(firstFile));
-      source.getPages().forEach((page, index) => {
-        const angle = pageRotations[index + 1] ?? rotateAngle;
-        page.setRotation(degrees(angle));
-      });
-      stageOutput(
-        asPdfBlob(await source.save()),
-        `${normalizeFileName(firstFile.name)}-rotated.pdf`,
-        "Preview rotated pages before downloading."
-      );
-      complete(`Rotated PDF (${rotateAngle}°) ready for preview.`);
-    } catch (e) {
-      setError(e instanceof Error ? e.message : "Rotation failed.");
-    } finally {
-      setBusy(false);
-    }
-  }
   const [mergePageOrder, setMergePageOrder] = useState<string[]>([]);
   const [mergeLoading, setMergeLoading] = useState(false);
   const [mergeDraggedId, setMergeDraggedId] = useState<string | null>(null);
