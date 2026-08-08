@@ -7,15 +7,15 @@ const ONBOARDING_KEY = "wiserfiles-onboarding-seen";
 const STEPS = [
   {
     title: "Drop your file here",
-    body: "Drag any PDF, Word doc, or image onto this zone. WiserFiles will detect the file type and suggest the best tools.",
+    body: "Drag any PDF, Word doc, or image onto this zone. WiserFiles will detect the file type and suggest the best tools for you.",
     targetSelector: "#hero-drop-zone",
     position: "bottom",
   },
   {
-    title: "Pick a quick action",
-    body: "After dropping a file, choose from the suggested tools that appear here. We'll pick the most relevant ones based on your file type.",
-    targetSelector: "#drop-suggestions",
-    position: "top",
+    title: "After dropping, pick an action",
+    body: "Once your file is in the drop zone above, suggested tools like Merge, Compress, or OCR will appear right here. Click one to process your file instantly.",
+    targetSelector: "#hero-drop-zone",
+    position: "bottom",
   },
   {
     title: "Search or browse all tools",

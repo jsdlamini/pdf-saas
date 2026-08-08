@@ -935,30 +935,6 @@ export default function ToolWorkbench({ tool }: WorkbenchProps) {
 
   const [files, setFiles] = useState<File[]>(() => (pipelineBootstrap?.accepted ? [pipelineBootstrap.file] : []));
   const [busy, setBusy] = useState(false);
-
-  async function applyRotateNow() {
-    const file = files[0];
-    if (!file || busy || !isRotateTool) return;
-    setBusy(true);
-    setError("");
-    try {
-      const source = await PDFDocument.load(await readAsArrayBuffer(file));
-      source.getPages().forEach((page, index) => {
-        const angle = pageRotations[index + 1] ?? rotateAngle;
-        page.setRotation(degrees(angle));
-      });
-      stageOutput(
-        asPdfBlob(await source.save()),
-        `${normalizeFileName(file.name)}-rotated.pdf`,
-        "Preview rotated pages before downloading."
-      );
-      complete(`Rotated PDF (${rotateAngle}°) ready for preview.`);
-    } catch (e) {
-      setError(e instanceof Error ? e.message : "Rotation failed.");
-    } finally {
-      setBusy(false);
-    }
-  }
   const [error, setError] = useState("");
   const [status, setStatus] = useState("");
   const [progress, setProgress] = useState<{ current: number; total: number; label: string } | null>(null);
@@ -5140,7 +5116,7 @@ export default function ToolWorkbench({ tool }: WorkbenchProps) {
                   <button
                     key={deg}
                     type="button"
-                    onClick={() => { setRotateAngle(deg); setPageRotations({}); setTimeout(() => applyRotateNow(), 50); }}
+                    onClick={() => { setRotateAngle(deg); setPageRotations({}); requestAutoRun("rotation-angle-changed"); }}
                     className={`inline-flex items-center gap-1 rounded-full border px-3 py-1 text-xs font-semibold transition ${
                       rotateAngle === deg && Object.keys(pageRotations).length === 0
                         ? "border-cyan-500 bg-cyan-100 text-cyan-800"
@@ -5306,7 +5282,7 @@ export default function ToolWorkbench({ tool }: WorkbenchProps) {
                                       }
                                       return next;
                                     });
-                                    setTimeout(() => applyRotateNow(), 50);
+                                    requestAutoRun("rotation-angle-changed");
                                   }}
                                   className={`flex-1 rounded border px-1 py-0.5 text-[10px] font-semibold transition ${
                                     (pageRotations[thumb.pageNumber] ?? 0) === deg
