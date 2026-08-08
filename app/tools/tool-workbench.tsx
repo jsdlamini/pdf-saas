@@ -983,6 +983,8 @@ export default function ToolWorkbench({ tool }: WorkbenchProps) {
   const [signaturePlacement, setSignaturePlacement] = useState({ xRatio: 0.82, yRatio: 0.12 });
   const [signaturePlacementPreview, setSignaturePlacementPreview] = useState("");
   const [mergePages, setMergePages] = useState<MergePageNode[]>([]);
+  const [rotateAngle, setRotateAngle] = useState(90);
+  const [pageRotations, setPageRotations] = useState<Record<number, number>>({});
   const [mergePageOrder, setMergePageOrder] = useState<string[]>([]);
   const [mergeLoading, setMergeLoading] = useState(false);
   const [mergeDraggedId, setMergeDraggedId] = useState<string | null>(null);
@@ -1112,9 +1114,10 @@ export default function ToolWorkbench({ tool }: WorkbenchProps) {
   const preflightJobRef = useRef(0);
   const latestOutputRef = useRef<{ blob: Blob; fileName: string; mime: string } | null>(null);
 
-  const pageEditSlugs = ["split-pdf", "extract-pages", "remove-pages", "organize-pdf"];
+  const pageEditSlugs = ["split-pdf", "extract-pages", "remove-pages", "organize-pdf", "rotate-pdf"];
   const usesThumbnailEditor = pageEditSlugs.includes(tool.slug);
   const isOrganizeTool = tool.slug === "organize-pdf";
+  const isRotateTool = tool.slug === "rotate-pdf";
   const isSignTool = tool.slug === "sign-pdf";
   const isMergeTool = tool.slug === "merge-pdf";
   const isScanTool = tool.slug === "scan-to-pdf";
@@ -1914,6 +1917,7 @@ export default function ToolWorkbench({ tool }: WorkbenchProps) {
     }
     if (tool.slug === "organize-pdf") return "Upload one PDF and drag thumbnails to set output order.";
     if (tool.slug === "remove-pages") return "Upload one PDF and click page thumbnails to remove pages.";
+    if (tool.slug === "rotate-pdf") return "Upload a PDF, choose a rotation angle for all pages, or set per-page rotation below.";
     if (tool.slug === "jpg-to-pdf" || tool.slug === "images-to-pdf" || tool.slug === "scan-to-pdf") {
       return "Upload one or more images to generate a PDF.";
     }
@@ -2864,13 +2868,16 @@ export default function ToolWorkbench({ tool }: WorkbenchProps) {
       if (tool.slug === "rotate-pdf") {
         if (!firstFile) throw new Error("Missing PDF file.");
         const source = await PDFDocument.load(await readAsArrayBuffer(firstFile));
-        source.getPages().forEach((page) => page.setRotation(degrees(90)));
+        source.getPages().forEach((page, index) => {
+          const angle = pageRotations[index + 1] ?? rotateAngle;
+          page.setRotation(degrees(angle));
+        });
         stageOutput(
           asPdfBlob(await source.save()),
           `${normalizeFileName(firstFile.name)}-rotated.pdf`,
           "Preview rotated pages before downloading."
         );
-        complete("Rotated PDF ready for preview.");
+        complete(`Rotated PDF (${rotateAngle}°) ready for preview.`);
         return;
       }
 
@@ -5102,6 +5109,35 @@ export default function ToolWorkbench({ tool }: WorkbenchProps) {
 
         {usesThumbnailEditor ? (
           <div className="space-y-2 rounded-2xl border border-slate-200 bg-slate-50 p-3 xl:col-span-2">
+            {isRotateTool ? (
+              <div className="flex flex-wrap items-center gap-3 rounded-xl bg-white p-3 border border-cyan-200">
+                <span className="text-xs font-semibold text-slate-600">Rotate all pages:</span>
+                {[90, 180, 270].map((deg) => (
+                  <button
+                    key={deg}
+                    type="button"
+                    onClick={() => { setRotateAngle(deg); setPageRotations({}); }}
+                    className={`inline-flex items-center gap-1 rounded-full border px-3 py-1 text-xs font-semibold transition ${
+                      rotateAngle === deg && Object.keys(pageRotations).length === 0
+                        ? "border-cyan-500 bg-cyan-100 text-cyan-800"
+                        : "border-slate-200 bg-white text-slate-600 hover:border-cyan-300"
+                    }`}
+                  >
+                    <svg viewBox="0 0 16 16" className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth="1.8">
+                      <path d="M3 8h10M8 3l5 5-5 5" strokeLinecap="round" strokeLinejoin="round" />
+                    </svg>
+                    {deg}°
+                  </button>
+                ))}
+                <button
+                  type="button"
+                  onClick={() => setPageRotations({})}
+                  className="ml-auto text-xs text-cyan-600 underline hover:text-cyan-800"
+                >
+                  Reset per-page rotations
+                </button>
+              </div>
+            ) : null}
             <div className="flex items-center justify-between gap-3">
               <p className="text-xs font-semibold uppercase tracking-[0.14em] text-slate-600">
                 Page Thumbnails
@@ -5109,7 +5145,9 @@ export default function ToolWorkbench({ tool }: WorkbenchProps) {
               <p className="text-xs text-slate-500">
                 {isOrganizeTool
                   ? `${pageOrder.length} pages in output`
-                  : `${selectedPages.length} pages selected`}
+                  : isRotateTool
+                    ? `${pageThumbnails.length} pages`
+                    : `${selectedPages.length} pages selected`}
               </p>
             </div>
 
@@ -5227,6 +5265,35 @@ export default function ToolWorkbench({ tool }: WorkbenchProps) {
                               </span>
                             ) : null}
                           </div>
+                          {isRotateTool ? (
+                            <div className="mt-2 flex items-center gap-1">
+                              {[0, 90, 180, 270].map((deg) => (
+                                <button
+                                  key={deg}
+                                  type="button"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    setPageRotations((prev) => {
+                                      const next = { ...prev };
+                                      if (deg === 0) {
+                                        delete next[thumb.pageNumber];
+                                      } else {
+                                        next[thumb.pageNumber] = deg;
+                                      }
+                                      return next;
+                                    });
+                                  }}
+                                  className={`flex-1 rounded border px-1 py-0.5 text-[10px] font-semibold transition ${
+                                    (pageRotations[thumb.pageNumber] ?? 0) === deg
+                                      ? "border-cyan-500 bg-cyan-100 text-cyan-800"
+                                      : "border-slate-200 text-slate-500 hover:border-cyan-300"
+                                  }`}
+                                >
+                                  {deg === 0 ? "0°" : `${deg}°`}
+                                </button>
+                              ))}
+                            </div>
+                          ) : null}
                         </button>
                       </div>
                     );
