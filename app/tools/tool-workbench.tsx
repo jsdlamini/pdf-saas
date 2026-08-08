@@ -938,6 +938,12 @@ export default function ToolWorkbench({ tool }: WorkbenchProps) {
   const [status, setStatus] = useState("");
   const [progress, setProgress] = useState<{ current: number; total: number; label: string } | null>(null);
   const [pinnedError, setPinnedError] = useState(false);
+  const [formatRedirectSuggestion, setFormatRedirectSuggestion] = useState<{
+    label: string;
+    targetSlug: string;
+    targetName: string;
+    file: File;
+  } | null>(null);
   const [comparePageNumber, setComparePageNumber] = useState(1);
   const [comparePageCountA, setComparePageCountA] = useState(0);
   const [comparePageCountB, setComparePageCountB] = useState(0);
@@ -2494,6 +2500,41 @@ export default function ToolWorkbench({ tool }: WorkbenchProps) {
     });
   }
 
+  function detectFileType(file: File): { label: string; suggestedTool: string | null } {
+    const lower = file.name.toLowerCase();
+    if (lower.endsWith(".docx") || lower.endsWith(".doc") || file.type.includes("wordprocessingml")) {
+      return { label: "a Word document", suggestedTool: "word-to-pdf" };
+    }
+    if (lower.endsWith(".xlsx") || lower.endsWith(".xls") || file.type.includes("spreadsheetml")) {
+      return { label: "an Excel spreadsheet", suggestedTool: "excel-to-pdf" };
+    }
+    if (lower.endsWith(".pptx") || lower.endsWith(".ppt") || file.type.includes("presentationml")) {
+      return { label: "a PowerPoint presentation", suggestedTool: "powerpoint-to-pdf" };
+    }
+    if (file.type.startsWith("image/") || /\.(png|jpe?g|webp|gif)$/i.test(lower)) {
+      return { label: "an image file", suggestedTool: "jpg-to-pdf" };
+    }
+    if (lower.endsWith(".html") || lower.endsWith(".htm")) {
+      return { label: "an HTML file", suggestedTool: "html-to-pdf" };
+    }
+    if (file.type === "application/pdf" || lower.endsWith(".pdf")) {
+      return { label: "a PDF", suggestedTool: null };
+    }
+    return { label: "an unsupported file type", suggestedTool: null };
+  }
+
+  function navigateWithFile(targetSlug: string, file: File) {
+    stageWorkflowPipeline({
+      fromToolSlug: tool.slug,
+      toToolSlug: targetSlug,
+      fileName: file.name,
+      mime: file.type || "application/octet-stream",
+      blob: file,
+      createdAt: Date.now(),
+    });
+    router.push(`/tools/${targetSlug}?pipeline=true`);
+  }
+
   async function applySelectedFiles(nextFiles: File[]) {
     if (!nextFiles.length) return;
     setError("");
@@ -2513,6 +2554,7 @@ export default function ToolWorkbench({ tool }: WorkbenchProps) {
     setPreflightSummary(null);
     setSmartIntake(null);
     setPipelineNotice("");
+    setFormatRedirectSuggestion(null);
     logProcessing(`Selected ${nextFiles.length} file(s) for ${tool.name}.`);
 
     if (isOcrTool) {
@@ -2526,6 +2568,32 @@ export default function ToolWorkbench({ tool }: WorkbenchProps) {
         setSmartIntakeLoading(false);
         return;
       }
+    }
+
+    // Smart format detection: check if uploaded file is compatible
+    const incompatibleFile = nextFiles.find((file) => !isFileCompatibleForTool(tool.slug, file));
+    if (incompatibleFile && !isScanTool) {
+      const { label, suggestedTool } = detectFileType(incompatibleFile);
+      if (suggestedTool && suggestedTool !== tool.slug) {
+        const targetTool = TOOL_ITEMS.find((t) => t.slug === suggestedTool);
+        if (targetTool) {
+          setFormatRedirectSuggestion({
+            label,
+            targetSlug: suggestedTool,
+            targetName: targetTool.name,
+            file: incompatibleFile,
+          });
+          setFiles([]);
+          return;
+        }
+      }
+      setFiles([]);
+      setError(
+        `This appears to be ${label}. The ${tool.name} tool works with ${
+          tool.slug.includes("pdf") || isImageToPdfTool ? "PDF and image files" : "PDF files"
+        }. Please try a different tool.`
+      );
+      return;
     }
 
     const finalSelectedFiles = isScanTool ? [...files, ...nextFiles] : nextFiles;
@@ -3827,6 +3895,28 @@ export default function ToolWorkbench({ tool }: WorkbenchProps) {
           />
         ) : null}
 
+        {shouldShowFileInput ? (
+          <button
+            type="button"
+            onClick={async () => {
+              try {
+                setError("");
+                setStatus("Loading sample document…");
+                const resp = await fetch("/sample.pdf");
+                if (!resp.ok) throw new Error("Sample not available");
+                const blob = await resp.blob();
+                const file = new File([blob], "sample.pdf", { type: "application/pdf" });
+                await applySelectedFiles([file]);
+              } catch {
+                setError("Could not load the sample document. Please try uploading your own file.");
+              }
+            }}
+            className="text-xs text-slate-500 underline hover:text-cyan-700 transition"
+          >
+            No file handy? Try with a sample document
+          </button>
+        ) : null}
+
         <div className="sticky-action-bar">
           <div className="flex flex-wrap items-center gap-2">
             <button
@@ -3891,6 +3981,33 @@ export default function ToolWorkbench({ tool }: WorkbenchProps) {
               >
                 Dismiss
               </button>
+            </div>
+          ) : null}
+          {formatRedirectSuggestion ? (
+            <div className="mt-2 rounded-xl border border-cyan-200 bg-cyan-50 p-3">
+              <p className="text-sm font-medium text-cyan-800">
+                This appears to be {formatRedirectSuggestion.label}. Would you like to convert it to PDF instead?
+              </p>
+              <div className="mt-2 flex flex-wrap gap-2">
+                <button
+                  type="button"
+                  onClick={() => {
+                    const { targetSlug, file } = formatRedirectSuggestion;
+                    navigateWithFile(targetSlug, file);
+                    setFormatRedirectSuggestion(null);
+                  }}
+                  className="rounded-full bg-cyan-600 px-4 py-1.5 text-xs font-semibold text-white shadow transition hover:bg-cyan-700"
+                >
+                  Go to {formatRedirectSuggestion.targetName}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setFormatRedirectSuggestion(null)}
+                  className="text-xs font-semibold text-cyan-700 underline hover:text-cyan-900"
+                >
+                  Dismiss
+                </button>
+              </div>
             </div>
           ) : null}
           {status ? <p className="mt-1 text-sm font-medium text-emerald-700">{status}</p> : null}
@@ -4110,6 +4227,9 @@ export default function ToolWorkbench({ tool }: WorkbenchProps) {
             </select>
             <p className="field-help">
               {OCR_LANGUAGE_OPTIONS.find((option) => option.value === ocrLanguage)?.hint} Matching Tesseract language data must be installed on the server.
+            </p>
+            <p className="mt-1 text-xs text-slate-400 italic">
+              Available languages depend on installed language packs. Current installation supports: English, German, French, Spanish, Italian, Portuguese, Dutch, Polish. Additional languages require server configuration.
             </p>
           </div>
 

@@ -75,6 +75,31 @@ export default function Home() {
   const [dropToolsOpen, setDropToolsOpen] = useState(false);
   const [listening, setListening] = useState(false);
   const recognitionRef = useRef<any>(null);
+  const [serverOnline, setServerOnline] = useState<boolean | null>(null);
+
+  /* ── server status check ──────────────────────────────────── */
+  useEffect(() => {
+    let cancelled = false;
+    let timer: ReturnType<typeof setTimeout> | null = null;
+
+    async function check() {
+      try {
+        const resp = await fetch("/api/ocr-pdf", { method: "HEAD" });
+        if (!cancelled) setServerOnline(resp.ok || resp.status === 405);
+      } catch {
+        if (!cancelled) setServerOnline(false);
+      }
+      if (!cancelled) {
+        timer = setTimeout(check, 30_000);
+      }
+    }
+
+    check();
+    return () => {
+      cancelled = true;
+      if (timer) clearTimeout(timer);
+    };
+  }, []);
 
   function toggleListening() {
     const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
@@ -263,6 +288,14 @@ export default function Home() {
       <div className="pointer-events-none absolute bottom-0 left-1/3 -z-10 h-64 w-64 rounded-full bg-amber-300/20 blur-3xl" />
 
       <main className="relative z-10 mx-auto flex w-full max-w-7xl flex-col gap-4 px-6 py-6 md:gap-5 md:px-10 md:py-8">
+        {/* ── Server status banner ──────────────────────────────── */}
+        {serverOnline === false ? (
+          <div className="rounded-xl border border-orange-200 bg-orange-50 px-4 py-2.5 text-sm text-orange-800">
+            <span className="font-semibold">⚡ Server tools (OCR, PDF-to-Word) are currently unavailable.</span>{" "}
+            Browser tools still work. Retrying every 30 seconds…
+          </div>
+        ) : null}
+
         {/* ── Zone 1: Drop-zone Hero ─────────────────────────────── */}
         <header className="ai-hero-panel rounded-3xl px-6 py-7 md:px-10 md:py-9">
           {/* Drop-zone */}
@@ -523,7 +556,15 @@ export default function Home() {
         {/* ── Animated tool carousel ─────────────────────────────── */}
         <div className="overflow-hidden py-4">
           <div className="animate-tool-scroll flex gap-3 whitespace-nowrap">
-            {[...TOOL_ITEMS, ...TOOL_ITEMS].map((tool, i) => (
+            {(() => {
+              const TOP_TOOLS = new Set([
+                "merge-pdf", "split-pdf", "compress-pdf", "ocr-pdf",
+                "sign-pdf", "pdf-to-word", "jpg-to-pdf", "protect-pdf",
+              ]);
+              const topDuplicates = TOOL_ITEMS.filter((t) => TOP_TOOLS.has(t.slug));
+              const weighted = [...TOOL_ITEMS, ...topDuplicates];
+              return [...weighted, ...weighted];
+            })().map((tool, i) => (
               <Link
                 key={`${tool.slug}-${i}`}
                 href={`/tools/${tool.slug}`}
@@ -535,6 +576,19 @@ export default function Home() {
                 ) : null}
               </Link>
             ))}
+          </div>
+        </div>
+
+        {/* ── Trust badge ──────────────────────────────────────── */}
+        <div className="flex justify-center">
+          <div className="inline-flex items-center gap-2 rounded-full border border-emerald-200 bg-emerald-50/80 px-4 py-2 text-sm text-emerald-800 shadow-sm">
+            <svg viewBox="0 0 20 20" className="h-4 w-4 text-emerald-600" fill="none" stroke="currentColor" strokeWidth="1.8">
+              <path d="M10 2l1.5 4.5h4.8l-3.9 2.8 1.5 4.7L10 11.5l-3.9 2.5 1.5-4.7-3.9-2.8h4.8z" strokeLinecap="round" strokeLinejoin="round" />
+              <path d="M10 6v13M6 14l4 4 4-4" strokeLinecap="round" strokeLinejoin="round" />
+            </svg>
+            <span className="text-xs font-medium">
+              Your files are encrypted during transfer and automatically deleted after processing. We never store or share your documents.
+            </span>
           </div>
         </div>
 

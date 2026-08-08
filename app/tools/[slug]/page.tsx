@@ -25,8 +25,8 @@ export async function generateMetadata({ params }: ToolPageProps): Promise<Metad
     };
   }
 
-  const title = `${tool.name} Online`;
-  const description = `${tool.description} Run ${tool.name} in your browser with WiserFiles PDF tools.`;
+  const title = `${tool.name} — Free Online PDF Tool | WiserFiles`;
+  const description = tool.description;
 
   return {
     title,
@@ -34,19 +34,19 @@ export async function generateMetadata({ params }: ToolPageProps): Promise<Metad
     alternates: {
       canonical: `/tools/${tool.slug}`,
     },
-    keywords: [tool.name, `${tool.name} online`, `${tool.category} PDF tools`, "PDF tools"],
+    keywords: [tool.name, `${tool.name} online free`, "free PDF tool", "PDF tools", tool.category],
     openGraph: {
       type: "website",
       url: `/tools/${tool.slug}`,
-      title: `${tool.name} | WiserFiles`,
+      title,
       description,
-      images: [`/tools/${tool.slug}/opengraph-image`],
+      images: ["/opengraph-image"],
     },
     twitter: {
       card: "summary_large_image",
-      title: `${tool.name} | WiserFiles`,
+      title,
       description,
-      images: [`/tools/${tool.slug}/opengraph-image`],
+      images: ["/opengraph-image"],
     },
   };
 }
