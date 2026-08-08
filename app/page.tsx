@@ -544,9 +544,6 @@ export default function Home() {
             <h2 className="font-display text-lg font-semibold tracking-tight text-slate-950">
               Workflow Recipes
             </h2>
-            <p className="text-xs uppercase tracking-[0.12em] text-slate-500">
-              Click to start
-            </p>
           </div>
           <input
             ref={workflowFileInputRef}
