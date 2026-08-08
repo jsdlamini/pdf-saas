@@ -424,9 +424,6 @@ export default function Home() {
                             className="flex w-full items-center gap-2 px-4 py-2.5 text-left text-sm font-semibold text-slate-700 transition hover:bg-cyan-50 hover:text-cyan-900"
                           >
                             <span>{tool.name}</span>
-                            <span className="ml-auto text-[10px] font-normal text-slate-400">
-                              {tool.runtime === "server" ? "Server" : "Browser"}
-                            </span>
                           </button>
                         ))}
                       </div>
@@ -559,17 +556,6 @@ export default function Home() {
                           <p className="text-xs text-slate-500 line-clamp-1">
                             {result.description}
                           </p>
-                          <span
-                            className={`inline-flex w-fit items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-semibold ${
-                              result.runtime === "client"
-                                ? "bg-emerald-100 text-emerald-700"
-                                : "bg-amber-100 text-amber-700"
-                            }`}
-                          >
-                            {result.runtime === "client"
-                              ? "Works in browser"
-                              : "Server processed"}
-                          </span>
                         </Link>
                       ))}
                     </div>
@@ -598,9 +584,6 @@ export default function Home() {
                 className={`inline-flex shrink-0 items-center gap-1.5 rounded-full border bg-gradient-to-r px-4 py-2 text-sm font-semibold transition-all hover:scale-105 hover:shadow-lg ${getCategoryColor(tool.category)}`}
               >
                 {tool.name}
-                {tool.runtime === "server" ? (
-                  <span className="text-[10px] font-bold opacity-75">⚙</span>
-                ) : null}
               </Link>
             ))}
           </div>
