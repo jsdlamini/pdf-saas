@@ -5,6 +5,8 @@ import { DM_Sans, Space_Grotesk } from "next/font/google";
 import Link from "next/link";
 import AccountControls from "./account-controls";
 import MobileToolNav from "./mobile-tool-nav";
+import FooterShareLink from "./components/footer-share-link";
+import Onboarding from "./components/onboarding";
 import ThemeToggle from "./theme-toggle";
 import ToastContainer from "./components/toast";
 import "./globals.css";
@@ -57,6 +59,18 @@ export const metadata: Metadata = {
     "WiserFiles",
   ],
   category: "technology",
+  icons: {
+    icon: [
+      { url: "/favicon.ico", sizes: "48x48" },
+      { url: "/icon.svg", type: "image/svg+xml" },
+    ],
+    apple: [{ url: "/apple-touch-icon.png", sizes: "180x180" }],
+  },
+  appleWebApp: {
+    capable: true,
+    title: SITE_NAME,
+    statusBarStyle: "default",
+  },
   openGraph: {
     type: "website",
     url: "/",
@@ -108,8 +122,16 @@ export default async function RootLayout({
       className={`${bodyFont.variable} ${displayFont.variable} h-full antialiased`}
     >
       <body className="min-h-full flex flex-col bg-[#f0f4ff] text-slate-900 depth-stage">
+        {/* Skip-to-content link for keyboard users */}
+        <a
+          href="#main-content"
+          className="sr-only focus:not-sr-only focus:fixed focus:left-4 focus:top-4 focus:z-[100] focus:rounded-xl focus:bg-cyan-600 focus:px-4 focus:py-2 focus:text-sm focus:font-semibold focus:text-white focus:shadow-lg focus:outline-none"
+        >
+          Skip to content
+        </a>
         <ClerkProvider>
           <ToastContainer />
+          <Onboarding />
           <MobileToolNav />
 
           <header className="sticky top-0 z-50 md:px-8 md:pt-3">
@@ -149,7 +171,7 @@ export default async function RootLayout({
             </div>
           </header>
 
-          <div className="flex w-full flex-1 flex-col">{children}</div>
+          <div id="main-content" className="flex w-full flex-1 flex-col">{children}</div>
 
           <script
             type="application/ld+json"
@@ -225,10 +247,33 @@ export default async function RootLayout({
                   <Link href="/tools/sign-pdf" className="footer-link">Sign PDF</Link>
                   <Link href="/tools/compare-pdf" className="footer-link">Compare PDF</Link>
                   <Link href="/history" className="footer-link">Activity history</Link>
+                  <Link href="/faq" className="footer-link">FAQ</Link>
+                  <span className="text-sm text-slate-400">—</span>
+                  <FooterShareLink />
                 </div>
               </div>
             </div>
           </footer>
+
+          {/* Register service worker for PWA offline support */}
+          <script
+            dangerouslySetInnerHTML={{
+              __html: `
+                if ('serviceWorker' in navigator) {
+                  window.addEventListener('load', function() {
+                    navigator.serviceWorker.register('/sw.js').then(
+                      function(registration) {
+                        console.log('SW registered:', registration.scope);
+                      },
+                      function(err) {
+                        console.log('SW registration failed:', err);
+                      }
+                    );
+                  });
+                }
+              `,
+            }}
+          />
         </ClerkProvider>
       </body>
     </html>
