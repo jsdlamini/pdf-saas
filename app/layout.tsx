@@ -6,6 +6,7 @@ import Link from "next/link";
 import AccountControls from "./account-controls";
 import MobileToolNav from "./mobile-tool-nav";
 import FooterShareLink from "./components/footer-share-link";
+import OfflineIndicator from "./components/offline-indicator";
 import Onboarding from "./components/onboarding";
 import ThemeToggle from "./theme-toggle";
 import ToastContainer from "./components/toast";
@@ -275,6 +276,7 @@ export default async function RootLayout({
             }}
           />
         </ClerkProvider>
+        <OfflineIndicator />
       </body>
     </html>
   );

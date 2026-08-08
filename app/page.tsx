@@ -43,6 +43,10 @@ const ACCEPTED_TYPES = [
   "image/jpeg",
   "image/webp",
   "image/gif",
+  "application/msword",
+  "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+  ".doc",
+  ".docx",
 ];
 
 function isPdf(file: File) {
@@ -53,12 +57,21 @@ function isImage(file: File) {
   return file.type.startsWith("image/") || /\.(png|jpe?g|webp|gif)$/i.test(file.name);
 }
 
+function isWord(file: File) {
+  return file.type === "application/msword" ||
+    file.type === "application/vnd.openxmlformats-officedocument.wordprocessingml.document" ||
+    /\.(doc|docx)$/i.test(file.name);
+}
+
 function getDropSuggestions(file: File): string[] {
   if (isPdf(file)) {
     return ["merge-pdf", "compress-pdf", "ocr-pdf"];
   }
   if (isImage(file)) {
     return ["jpg-to-pdf", "images-to-pdf", "ocr-pdf"];
+  }
+  if (isWord(file)) {
+    return ["word-to-pdf"];
   }
   return ["merge-pdf", "compress-pdf", "sign-pdf"];
 }
@@ -219,7 +232,7 @@ export default function Home() {
     e.stopPropagation();
     setDragOver(false);
     const f = e.dataTransfer.files?.[0];
-    if (f && (isPdf(f) || isImage(f))) {
+    if (f && (isPdf(f) || isImage(f) || isWord(f))) {
       setDropFileInfo(null);
       setDropFile(f);
     }
@@ -457,7 +470,7 @@ export default function Home() {
                   Drop your file here
                 </p>
                 <p className="text-sm text-slate-500 drop-zone-subtitle">
-                  Or click to browse — PDF, PNG, JPG, WebP accepted
+                  Or click to browse — PDF, Word, PNG, JPG, WebP accepted
                 </p>
               </div>
             )}
