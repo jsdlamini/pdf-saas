@@ -1047,3 +1047,46 @@ html[data-theme="dark"] .sticky-action-bar {
     scroll-behavior: auto !important;
   }
 }
+
+/* ── Focus ring defaults for interactive elements ─────────────── */
+
+a:focus-visible,
+button:focus-visible,
+input:focus-visible,
+select:focus-visible,
+textarea:focus-visible,
+[tabindex]:focus-visible {
+  outline: none;
+  ring-width: 2px;
+  ring-color: #06b6d4;
+}
+
+/* Skeleton shimmer animation */
+@keyframes skeleton-shimmer {
+  0% { background-position: -200% 0; }
+  100% { background-position: 200% 0; }
+}
+
+.animate-pulse {
+  animation: skeleton-shimmer 2.2s ease-in-out infinite;
+  background: linear-gradient(
+    90deg,
+    transparent 0%,
+    rgba(148, 163, 184, 0.12) 40%,
+    rgba(148, 163, 184, 0.12) 60%,
+    transparent 100%
+  );
+  background-size: 200% 100%;
+}
+
+.bg-slate-200 {
+  background-color: #e2e8f0;
+}
+
+.bg-slate-100 {
+  background-color: #f1f5f9;
+}
+
+.bg-slate-50 {
+  background-color: #f8fafc;
+}

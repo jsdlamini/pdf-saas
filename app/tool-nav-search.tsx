@@ -70,7 +70,8 @@ export default function ToolNavSearch({ className, onNavigate }: ToolNavSearchPr
         value={query}
         onChange={(event) => setQuery(event.target.value)}
         placeholder="Search tools..."
-        className="w-full rounded-full border border-slate-300 bg-white px-4 py-2 pr-20 text-xs font-medium text-slate-800 outline-none ring-cyan-400/40 transition focus:ring"
+        aria-label="Search tools"
+        className="w-full rounded-full border border-slate-300 bg-white px-4 py-2 pr-20 text-xs font-medium text-slate-800 outline-none ring-cyan-400/40 transition focus:ring-2 focus:ring-cyan-500"
       />
       <button
         type="submit"
