@@ -3077,10 +3077,27 @@ export default function ToolWorkbench({ tool }: WorkbenchProps) {
 
       if (tool.slug === "word-to-pdf") {
         if (!firstFile) throw new Error("Missing Word file.");
-        const result = await mammoth.extractRawText({ arrayBuffer: await readAsArrayBuffer(firstFile) });
-        const lines = splitLines(result.value || "");
+        const convertResult = await mammoth.convertToHtml({ arrayBuffer: await readAsArrayBuffer(firstFile) });
+        const html = convertResult.value || "<p>No content extracted from Word file.</p>";
+        const styles = `
+          body { font-family: Arial, Helvetica, sans-serif; font-size: 12px; line-height: 1.6; color: #1a1a1a; }
+          h1 { font-size: 24px; margin: 16px 0 8px; }
+          h2 { font-size: 20px; margin: 14px 0 6px; }
+          h3 { font-size: 16px; margin: 12px 0 4px; }
+          h4, h5, h6 { font-size: 14px; margin: 10px 0 4px; }
+          p { margin: 0 0 8px; }
+          ul, ol { margin: 0 0 8px; padding-left: 24px; }
+          li { margin-bottom: 4px; }
+          table { border-collapse: collapse; width: 100%; margin: 8px 0; }
+          th, td { border: 1px solid #ccc; padding: 6px 8px; text-align: left; vertical-align: top; }
+          th { background-color: #f5f5f5; font-weight: bold; }
+          img { max-width: 100%; height: auto; }
+          blockquote { border-left: 4px solid #ccc; margin: 8px 0; padding: 4px 12px; color: #555; }
+          pre { background: #f5f5f5; padding: 8px; font-family: monospace; font-size: 11px; overflow-x: auto; }
+          code { background: #f5f5f5; padding: 1px 4px; font-family: monospace; font-size: 11px; }
+        `;
         stageOutput(
-          asPdfBlob(await pdfFromLines(lines.length ? lines : ["No text extracted from Word file."], "Word to PDF")),
+          await htmlContentToPdfBlob(html, styles),
           `${normalizeFileName(firstFile.name)}.pdf`,
           "Preview converted PDF before downloading."
         );
