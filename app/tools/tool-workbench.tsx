@@ -3827,6 +3827,28 @@ export default function ToolWorkbench({ tool }: WorkbenchProps) {
           />
         ) : null}
 
+        {shouldShowFileInput ? (
+          <button
+            type="button"
+            onClick={async () => {
+              try {
+                setError("");
+                setStatus("Loading sample document…");
+                const resp = await fetch("/sample.pdf");
+                if (!resp.ok) throw new Error("Sample not available");
+                const blob = await resp.blob();
+                const file = new File([blob], "sample.pdf", { type: "application/pdf" });
+                await applySelectedFiles([file]);
+              } catch {
+                setError("Could not load the sample document. Please try uploading your own file.");
+              }
+            }}
+            className="text-xs text-slate-500 underline hover:text-cyan-700 transition"
+          >
+            No file handy? Try with a sample document
+          </button>
+        ) : null}
+
         <div className="sticky-action-bar">
           <div className="flex flex-wrap items-center gap-2">
             <button
