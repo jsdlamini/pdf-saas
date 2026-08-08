@@ -1,6 +1,7 @@
 "use client";
 
 import { Document as DocxDocument, Packer, Paragraph } from "docx";
+import html2canvas from "html2canvas";
 import { jsPDF } from "jspdf";
 import JSZip from "jszip";
 import * as mammoth from "mammoth";
@@ -659,6 +660,67 @@ async function pdfFromLines(lines: string[], title: string) {
   }
 
   return output.save();
+}
+
+async function htmlContentToPdfBlob(htmlContent: string, extraStyles?: string): Promise<Blob> {
+  const container = document.createElement("div");
+  container.style.position = "absolute";
+  container.style.left = "-9999px";
+  container.style.top = "0";
+  container.style.width = "515px";
+  container.style.backgroundColor = "#ffffff";
+  container.style.padding = "40px";
+  container.style.fontFamily = "Arial, Helvetica, sans-serif";
+  container.style.fontSize = "12px";
+  container.style.lineHeight = "1.5";
+  container.style.color = "#1a1a1a";
+  container.innerHTML = htmlContent;
+
+  if (extraStyles) {
+    const styleEl = document.createElement("style");
+    styleEl.textContent = extraStyles;
+    container.prepend(styleEl);
+  }
+
+  document.body.appendChild(container);
+
+  try {
+    const canvas = await html2canvas(container, {
+      scale: 2,
+      useCORS: true,
+      logging: false,
+      backgroundColor: "#ffffff",
+    });
+
+    document.body.removeChild(container);
+
+    const pageWidth = 595;
+    const pageHeight = 842;
+    const scale = pageWidth / canvas.width;
+    const canvasPageHeight = pageHeight / scale;
+
+    const pdf = new jsPDF({ unit: "pt", format: "a4", orientation: "portrait" });
+    const totalPages = Math.ceil(canvas.height / canvasPageHeight);
+
+    for (let i = 0; i < totalPages; i += 1) {
+      if (i > 0) pdf.addPage();
+      const srcY = i * canvasPageHeight;
+      const srcH = Math.min(canvasPageHeight, canvas.height - srcY);
+
+      const slice = document.createElement("canvas");
+      slice.width = canvas.width;
+      slice.height = Math.ceil(srcH);
+      const ctx = slice.getContext("2d")!;
+      ctx.drawImage(canvas, 0, srcY, canvas.width, srcH, 0, 0, canvas.width, srcH);
+
+      const imgH = srcH * scale;
+      pdf.addImage(slice.toDataURL("image/jpeg", 0.92), "JPEG", 0, 0, pageWidth, imgH);
+    }
+
+    return new Blob([new Uint8Array(pdf.output("arraybuffer"))], { type: "application/pdf" });
+  } finally {
+    if (container.parentNode) document.body.removeChild(container);
+  }
 }
 
 const PDF_MAX_IMAGE_PAGE_DIMENSION = 14400;
