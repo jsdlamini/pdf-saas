@@ -10,7 +10,7 @@ import {
   type DragEvent,
 } from "react";
 import { rankToolsByIntent } from "@/lib/tool-intent-search";
-import { TOOL_CATEGORIES, TOOL_ITEMS } from "@/lib/tools";
+import { TOOL_ITEMS } from "@/lib/tools";
 import { WORKFLOW_RECIPES } from "@/lib/workflow-recipes";
 import {
   clearWorkflowPipeline,
@@ -53,15 +53,6 @@ function isImage(file: File) {
   return file.type.startsWith("image/") || /\.(png|jpe?g|webp|gif)$/i.test(file.name);
 }
 
-const TOP_PICK_SLUGS = [
-  "merge-pdf",
-  "split-pdf",
-  "compress-pdf",
-  "ocr-pdf",
-  "sign-pdf",
-  "pdf-to-word",
-];
-
 function getDropSuggestions(file: File): string[] {
   if (isPdf(file)) {
     return ["merge-pdf", "compress-pdf", "ocr-pdf"];
@@ -81,7 +72,6 @@ export default function Home() {
     (typeof WORKFLOW_RECIPES)[number] | null
   >(null);
   const [intentQuery, setIntentQuery] = useState("");
-  const [showAllTools, setShowAllTools] = useState(false);
   const [dropToolsOpen, setDropToolsOpen] = useState(false);
   const [listening, setListening] = useState(false);
   const recognitionRef = useRef<any>(null);
@@ -265,23 +255,6 @@ export default function Home() {
       `/tools/${firstStep.toolSlug}?recipe=${encodeURIComponent(recipe.slug)}`,
     );
   }
-
-  /* ── tool grouping ────────────────────────────────────────────── */
-  const topPicks = useMemo(
-    () =>
-      TOP_PICK_SLUGS.map((slug) => TOOL_ITEMS.find((t) => t.slug === slug)).filter(
-        Boolean,
-      ) as typeof TOOL_ITEMS,
-    [],
-  );
-
-  const toolsByCategory = useMemo(() => {
-    const map: Record<string, typeof TOOL_ITEMS> = {};
-    for (const cat of TOOL_CATEGORIES) {
-      map[cat] = TOOL_ITEMS.filter((t) => t.category === cat);
-    }
-    return map;
-  }, []);
 
   return (
     <div className="ai-home-bg relative isolate flex w-full flex-1 flex-col">
@@ -622,95 +595,6 @@ export default function Home() {
           </div>
         </section>
 
-        {/* ── Zone 3: Tool Directory (collapsed to top picks) ─────── */}
-        <section className="ai-panel rounded-2xl">
-          <div className="flex items-center justify-between border-b border-slate-100 px-4 pt-4 pb-3">
-            <h2 className="font-display text-lg font-semibold tracking-tight text-slate-950">
-              Tools
-            </h2>
-            <span className="text-xs text-slate-500">
-              {TOOL_ITEMS.length} tools
-            </span>
-          </div>
-
-          {/* Top 6 picks */}
-          <div className="px-4 py-5">
-            <div className="flex flex-wrap items-center justify-center gap-3">
-              {topPicks.map((tool) => (
-                <Link
-                  key={tool.slug}
-                  href={`/tools/${tool.slug}`}
-                  title={`${tool.name}: ${tool.description}`}
-                  className={`ai-tool-pill group inline-flex items-center justify-center rounded-full border bg-gradient-to-r px-5 py-2.5 text-sm font-semibold transition-all duration-200 hover:scale-105 hover:shadow-lg ${getCategoryColor(tool.category)} cursor-pointer`}
-                >
-                  <span className="flex items-center gap-1.5">
-                    {tool.name}
-                    {tool.runtime === "server" ? (
-                      <span className="text-[10px] font-bold opacity-75">⚙</span>
-                    ) : null}
-                  </span>
-                </Link>
-              ))}
-            </div>
-
-            {/* Expandable "All tools" */}
-            <div className="mt-4 text-center">
-              <button
-                type="button"
-                onClick={() => setShowAllTools(!showAllTools)}
-                className="inline-flex items-center gap-1.5 rounded-full border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-600 transition hover:border-cyan-300 hover:bg-cyan-50 hover:text-cyan-800"
-              >
-                {showAllTools ? "Show fewer" : `All ${TOOL_ITEMS.length} tools`}
-                <svg
-                  viewBox="0 0 20 20"
-                  className={`h-4 w-4 transition-transform ${showAllTools ? "rotate-180" : ""}`}
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth="1.8"
-                >
-                  <path
-                    d="M5 7l5 5 5-5"
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                  />
-                </svg>
-              </button>
-            </div>
-
-            {/* Full tool grid (expandable) */}
-            {showAllTools ? (
-              <div className="mt-5 space-y-4">
-                {TOOL_CATEGORIES.map((cat) => {
-                  const catTools = toolsByCategory[cat];
-                  if (!catTools.length) return null;
-                  return (
-                    <div key={cat}>
-                      <p className="mb-2 text-xs font-semibold uppercase tracking-[0.12em] text-slate-500">
-                        {cat}
-                      </p>
-                      <div className="flex flex-wrap gap-2">
-                        {catTools.map((tool) => (
-                          <Link
-                            key={tool.slug}
-                            href={`/tools/${tool.slug}`}
-                            className={`ai-tool-pill inline-flex items-center rounded-full border bg-gradient-to-r px-4 py-2 text-sm font-semibold transition-all hover:scale-105 hover:shadow-lg ${getCategoryColor(tool.category)}`}
-                          >
-                            {tool.name}
-                            {tool.runtime === "server" ? (
-                              <span className="ml-1 text-[10px] font-bold opacity-75">
-                                ⚙
-                              </span>
-                            ) : null}
-                          </Link>
-                        ))}
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            ) : null}
-          </div>
-        </section>
       </main>
     </div>
   );
