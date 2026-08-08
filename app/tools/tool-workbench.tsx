@@ -17,6 +17,7 @@ import { formatDurationMs, hashBlob, hashFile, summarizeRunConfidence, type RunR
 import { TOOL_ITEMS, type ToolItem } from "@/lib/tools";
 import { consumeWorkflowPipeline, stageWorkflowPipeline } from "@/lib/workflow-pipeline";
 import { getNextRecipeStep, getRecipesForTool } from "@/lib/workflow-recipes";
+import ShareButton from "@/app/components/share-button";
 import { showToast } from "@/app/components/toast";
 
 type WorkbenchProps = {
@@ -3837,6 +3838,7 @@ export default function ToolWorkbench({ tool }: WorkbenchProps) {
           </svg>
           <span className="font-semibold text-slate-800">{tool.name}</span>
         </nav>
+        <ShareButton toolSlug={tool.slug} toolName={tool.name} />
       </div>
 
       {/* ── Full-width top banner ── */}

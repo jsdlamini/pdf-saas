@@ -300,16 +300,28 @@ export default function Home() {
         <header className="ai-hero-panel rounded-3xl px-6 py-7 md:px-10 md:py-9">
           {/* Drop-zone */}
           <div
+            role="button"
+            tabIndex={0}
+            aria-label="Drop file here or click to browse — PDF, PNG, JPG, WebP accepted"
             onDragOver={onDragOver}
             onDragLeave={onDragLeave}
             onDrop={onDrop}
+            onKeyDown={(e) => {
+              if (e.key === "Enter" || e.key === " ") {
+                e.preventDefault();
+                const input = document.getElementById(
+                  "hero-file-input",
+                ) as HTMLInputElement | null;
+                input?.click();
+              }
+            }}
             onClick={() => {
               const input = document.getElementById(
                 "hero-file-input",
               ) as HTMLInputElement | null;
               input?.click();
             }}
-            className={`drop-zone-hover-ring relative cursor-pointer rounded-2xl border-2 border-dashed p-8 text-center transition-all duration-300 md:p-12 ${
+            className={`drop-zone-hover-ring relative cursor-pointer rounded-2xl border-2 border-dashed p-8 text-center transition-all duration-300 md:p-12 focus:outline-none focus:ring-2 focus:ring-cyan-500 ${
               dragOver
                 ? "border-cyan-400 bg-gradient-to-br from-cyan-50 to-blue-50 drop-zone-active-glow"
                 : "border-slate-200 bg-gradient-to-br from-white to-blue-50/60 hover:border-cyan-400 hover:from-cyan-50/80 hover:to-blue-50/80 hover:shadow-[0_0_36px_-10px_rgba(34,211,238,0.3)]"
@@ -470,7 +482,8 @@ export default function Home() {
                 value={intentQuery}
                 onChange={(event) => setIntentQuery(event.target.value)}
                 placeholder={listening ? "Listening..." : "Alternatively, type or say what you want — e.g. sign my PDF"}
-                className="ai-search-input w-full rounded-xl py-3 pl-9 pr-20 text-base text-slate-800 placeholder:text-slate-400 focus:outline-none"
+                aria-label="Search tools by intent"
+                className="ai-search-input w-full rounded-xl py-3 pl-9 pr-20 text-base text-slate-800 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-cyan-500"
               />
               <div className="absolute right-2 top-1/2 -translate-y-1/2 flex items-center gap-1">
                 <button
