@@ -407,7 +407,7 @@ export default function Home() {
                     />
                   </svg>
                 </div>
-                <p className="font-display text-2xl font-semibold tracking-tight bg-gradient-to-r from-red-500 to-pink-500 bg-clip-text text-transparent md:text-3xl">
+                <p className="font-display text-2xl font-semibold tracking-tight text-slate-800 dark:text-white md:text-3xl">
                   Drop your file here
                 </p>
                 <p className="text-sm text-slate-500">

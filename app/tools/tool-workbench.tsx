@@ -1022,7 +1022,7 @@ export default function ToolWorkbench({ tool }: WorkbenchProps) {
 
   const hasChosenWorkflow = Boolean(selectedRecipeSlug && selectedRecipe);
   const isFirstWorkflowStep = hasChosenWorkflow && currentRecipeStepIndex === 0;
-  const shouldShowFileInput = !hasChosenWorkflow || isFirstWorkflowStep;
+  const shouldShowFileInput = (!hasChosenWorkflow || isFirstWorkflowStep) && !pipelineBootstrap?.accepted;
   const shouldShowPreflight = !hasChosenWorkflow;
   const suggestedWorkflow = smartIntake?.recommendedWorkflow ?? null;
 
@@ -3297,7 +3297,7 @@ export default function ToolWorkbench({ tool }: WorkbenchProps) {
 
   return (
     <section className="tool-shell glass-3d mx-auto max-w-[2300px] space-y-3 rounded-3xl p-4 xl:p-5">
-      {/* ── Breadcrumb + Switch Tool ── */}
+      {/* ── Breadcrumb ── */}
       <div className="flex flex-wrap items-center justify-between gap-2">
         <nav aria-label="Breadcrumb" className="flex items-center gap-1.5 text-xs text-slate-500">
           <Link href="/" className="hover:text-cyan-700 hover:underline transition-colors">
@@ -3308,48 +3308,6 @@ export default function ToolWorkbench({ tool }: WorkbenchProps) {
           </svg>
           <span className="font-semibold text-slate-800">{tool.name}</span>
         </nav>
-
-        {switchableTools.length > 0 ? (
-          <div className="relative" ref={switchDropdownRef}>
-            <button
-              type="button"
-              onClick={() => setSwitchDropdownOpen((prev) => !prev)}
-              className="inline-flex items-center gap-1 rounded-full border border-slate-200 bg-white px-3 py-1 text-xs font-semibold text-slate-700 shadow-sm transition hover:border-cyan-300 hover:bg-cyan-50 hover:text-cyan-800"
-            >
-              {tool.name}
-              <svg
-                viewBox="0 0 10 6"
-                className={`h-2.5 w-2.5 text-slate-400 transition-transform ${switchDropdownOpen ? "rotate-180" : ""}`}
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="1.6"
-              >
-                <path d="M1 1l4 4 4-4" strokeLinecap="round" strokeLinejoin="round" />
-              </svg>
-            </button>
-
-            {switchDropdownOpen ? (
-              <div className="absolute right-0 top-full z-50 mt-1 w-56 rounded-xl border border-slate-200 bg-white p-1 shadow-lg ring-1 ring-slate-900/5">
-                <p className="px-3 py-1.5 text-[10px] font-semibold uppercase tracking-[0.12em] text-slate-400">
-                  Switch to
-                </p>
-                {switchableTools.map((candidate) => (
-                  <button
-                    key={candidate.slug}
-                    type="button"
-                    onClick={() => switchToTool(candidate.slug)}
-                    className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-sm font-medium text-slate-700 transition hover:bg-cyan-50 hover:text-cyan-900"
-                  >
-                    <span className="flex-1">{candidate.name}</span>
-                    <svg viewBox="0 0 12 12" className="h-3 w-3 shrink-0 text-slate-300" fill="none" stroke="currentColor" strokeWidth="2">
-                      <path d="M3 6h6M7 3l3 3-3 3" strokeLinecap="round" strokeLinejoin="round" />
-                    </svg>
-                  </button>
-                ))}
-              </div>
-            ) : null}
-          </div>
-        ) : null}
       </div>
 
       {/* ── Full-width top banner ── */}
