@@ -316,6 +316,7 @@ export default function Home() {
             role="button"
             tabIndex={0}
             aria-label="Drop file here or click to browse — PDF, PNG, JPG, WebP accepted"
+            id="hero-drop-zone"
             onDragOver={onDragOver}
             onDragLeave={onDragLeave}
             onDrop={onDrop}
@@ -385,7 +386,7 @@ export default function Home() {
                   ) : null}
                 </div>
                 <p className="text-sm text-slate-500 drop-zone-hint">Choose a quick action:</p>
-                <div className="flex flex-wrap justify-center gap-2">
+                <div id="drop-suggestions" className="flex flex-wrap justify-center gap-2">
                   {suggestedTools.map((tool) => (
                     <button
                       key={tool.slug}
