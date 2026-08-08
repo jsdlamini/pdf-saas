@@ -476,7 +476,7 @@ export default function Home() {
                   className={`inline-flex h-8 w-8 items-center justify-center rounded-full transition-all ${
                     listening
                       ? "bg-red-500 text-white animate-pulse shadow-lg shadow-red-300/50"
-                      : "bg-slate-100 text-slate-500 hover:bg-cyan-100 hover:text-cyan-700"
+                      : "bg-red-100 text-red-500 hover:bg-red-200 hover:text-red-700"
                   }`}
                   aria-label={listening ? "Stop listening" : "Search by voice"}
                   title={listening ? "Stop listening" : "Search by voice"}
