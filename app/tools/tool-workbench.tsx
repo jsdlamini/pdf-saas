@@ -3215,15 +3215,50 @@ export default function ToolWorkbench({ tool }: WorkbenchProps) {
       if (tool.slug === "excel-to-pdf") {
         if (!firstFile) throw new Error("Missing Excel file.");
         const workbook = XLSX.read(await readAsArrayBuffer(firstFile), { type: "array" });
-        const lines: string[] = [];
-        workbook.SheetNames.forEach((sheetName) => {
-          lines.push(`Sheet: ${sheetName}`);
-          const matrix = XLSX.utils.sheet_to_json<Array<string | number>>(workbook.Sheets[sheetName], { header: 1 });
-          matrix.forEach((row) => lines.push(row.join(" | ")));
-          lines.push("");
+
+        let html = "";
+        workbook.SheetNames.forEach((sheetName, sheetIdx) => {
+          if (sheetIdx > 0) html += '<div style="page-break-before: always;"></div>';
+          html += `<h3 style="margin: 8px 0; font-size: 16px;">${sheetName}</h3>`;
+
+          const data: Array<Array<string | number | null>> = XLSX.utils.sheet_to_json(workbook.Sheets[sheetName], { header: 1 });
+
+          if (!data.length) {
+            html += "<p><em>Empty sheet</em></p>";
+            return;
+          }
+
+          const maxCols = Math.max(...data.map((row) => row.length));
+
+          html += "<table><thead><tr>";
+          for (let c = 0; c < maxCols; c += 1) {
+            html += `<th>${String.fromCharCode(65 + (c % 26))}${c >= 26 ? Math.floor(c / 26) : ""}</th>`;
+          }
+          html += "</tr></thead><tbody>";
+
+          data.forEach((row) => {
+            html += "<tr>";
+            for (let c = 0; c < maxCols; c += 1) {
+              const val = c < row.length ? (row[c] ?? "") : "";
+              html += `<td>${String(val)}</td>`;
+            }
+            html += "</tr>";
+          });
+
+          html += "</tbody></table>";
         });
+
+        const styles = `
+          table { border-collapse: collapse; width: 100%; margin: 8px 0; font-size: 11px; }
+          th, td { border: 1px solid #999; padding: 4px 6px; text-align: left; vertical-align: top; }
+          th { background-color: #e8e8e8; font-weight: bold; }
+          td { background-color: #ffffff; }
+          tr:nth-child(even) td { background-color: #f9f9f9; }
+          h3 { font-size: 16px; margin: 16px 0 8px; }
+        `;
+
         stageOutput(
-          asPdfBlob(await pdfFromLines(lines, "Excel to PDF")),
+          await htmlContentToPdfBlob(html || "<p>No data found in workbook.</p>", styles),
           `${normalizeFileName(firstFile.name)}.pdf`,
           "Preview converted PDF before downloading."
         );
