@@ -463,7 +463,7 @@ export default function Home() {
                 type="text"
                 value={intentQuery}
                 onChange={(event) => setIntentQuery(event.target.value)}
-                placeholder={listening ? "Listening..." : "Search tools — e.g. remove sensitive text from contracts"}
+                placeholder={listening ? "Listening..." : "Type or say what you want to do — e.g. compress my PDF"}
                 className="ai-search-input w-full rounded-xl py-3 pl-9 pr-20 text-base text-slate-800 placeholder:text-slate-400 focus:outline-none"
               />
               <div className="absolute right-2 top-1/2 -translate-y-1/2 flex items-center gap-1">
