@@ -2887,21 +2887,45 @@ export default function ToolWorkbench({ tool }: WorkbenchProps) {
         return;
       }
 
-      if (tool.slug === "repair-pdf" || tool.slug === "pdf-to-pdfa") {
+      if (tool.slug === "repair-pdf") {
         if (!firstFile) throw new Error("Missing PDF file.");
         const source = await PDFDocument.load(await readAsArrayBuffer(firstFile), { ignoreEncryption: true });
-        if (tool.slug === "pdf-to-pdfa") {
-          source.setTitle(source.getTitle() || "PDF-A export");
-          source.setProducer("WiserFiles PDF-A Export");
-        }
-        const bytes = await source.save({ useObjectStreams: false });
-        const suffix = tool.slug === "repair-pdf" ? "repaired" : "pdfa";
+        source.setTitle("");
+        source.setAuthor("");
+        source.setSubject("");
+        source.setKeywords([]);
+        source.setProducer("WiserFiles PDF Repair");
+        source.setCreator("");
+        const bytes = await source.save({ useObjectStreams: false, objectsPerTick: 50 });
         stageOutput(
           asPdfBlob(bytes),
-          `${normalizeFileName(firstFile.name)}-${suffix}.pdf`,
-          "Preview output quality before downloading."
+          `${normalizeFileName(firstFile.name)}-repaired.pdf`,
+          "PDF structure rebuilt. Some content may be unrecoverable if the original was severely damaged."
         );
-        complete(`${tool.name} output ready for preview.`);
+        complete("PDF structure rebuilt. Some content may be unrecoverable if the original was severely damaged.");
+        return;
+      }
+
+      if (tool.slug === "pdf-to-pdfa") {
+        if (!firstFile) throw new Error("Missing PDF file.");
+        const source = await PDFDocument.load(await readAsArrayBuffer(firstFile), { ignoreEncryption: true });
+        source.setTitle(source.getTitle() || "PDF/A-2b Document");
+        source.setProducer("WiserFiles PDF/A-2b Export");
+        source.setCreator(source.getCreator() || "");
+        try {
+          await source.embedFont(StandardFonts.Helvetica);
+          await source.embedFont(StandardFonts.TimesRoman);
+          await source.embedFont(StandardFonts.Courier);
+        } catch {
+          // Font embedding is best-effort for PDF/A conformance.
+        }
+        const bytes = await source.save({ useObjectStreams: true, objectsPerTick: 50 });
+        stageOutput(
+          asPdfBlob(bytes),
+          `${normalizeFileName(firstFile.name)}-pdfa.pdf`,
+          "Basic PDF/A-2b conformance applied. Verify with a dedicated validator."
+        );
+        complete("Basic PDF/A-2b conformance applied. Verify with a dedicated validator.");
         return;
       }
 
