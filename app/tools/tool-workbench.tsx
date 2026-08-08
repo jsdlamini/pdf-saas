@@ -838,6 +838,86 @@ async function buildOfficePreviewText(blob: Blob, mime: string) {
   return "Preview unavailable for this file type.";
 }
 
+async function renderComparePageWithDiffs(
+  bytes: Uint8Array,
+  otherBytes: Uint8Array,
+  pageNumber: number,
+  color: "red" | "green"
+) {
+  const pdfjs = await import("pdfjs-dist/legacy/build/pdf.mjs");
+  configurePdfJsWorker(pdfjs);
+  const task = pdfjs.getDocument({ data: bytes });
+  const pdf = await task.promise;
+  const otherTask = pdfjs.getDocument({ data: otherBytes });
+  const otherPdf = await otherTask.promise;
+
+  if (pageNumber > pdf.numPages && pageNumber > otherPdf.numPages) return null;
+
+  const myPageNum = Math.min(pageNumber, pdf.numPages);
+  const otherPageNum = Math.min(pageNumber, otherPdf.numPages);
+
+  const page = await pdf.getPage(myPageNum);
+  const viewport = page.getViewport({ scale: 1.5 });
+  const canvas = document.createElement("canvas");
+  const ctx = canvas.getContext("2d");
+  if (!ctx) return null;
+
+  canvas.width = Math.floor(viewport.width);
+  canvas.height = Math.floor(viewport.height);
+  await page.render({ canvas, canvasContext: ctx, viewport }).promise;
+
+  // Get text items with positions from this page
+  const textContent = await page.getTextContent();
+  const myWords = textContent.items
+    .filter((item) => "str" in item && item.str!.trim())
+    .map((item) => ({
+      str: (item as { str: string }).str.trim(),
+      transform: (item as { transform: number[] }).transform,
+      width: (item as { width: number }).width,
+      height: (item as { height: number }).height,
+    }));
+
+  // Get text from other PDF's corresponding page
+  let otherWords: typeof myWords = [];
+  if (otherPageNum <= otherPdf.numPages) {
+    const otherPage = await otherPdf.getPage(otherPageNum);
+    const otherTextContent = await otherPage.getTextContent();
+    otherWords = otherTextContent.items
+      .filter((item) => "str" in item && item.str!.trim())
+      .map((item) => ({
+        str: (item as { str: string }).str.trim(),
+        transform: (item as { transform: number[] }).transform,
+        width: (item as { width: number }).width,
+        height: (item as { height: number }).height,
+      }));
+  }
+
+  const otherWordSet = new Set(otherWords.map((w) => w.str.toLowerCase()));
+
+  // Draw highlight rectangles on differing words
+  ctx.globalAlpha = 0.35;
+  for (const word of myWords) {
+    const isUnique = !otherWordSet.has(word.str.toLowerCase());
+    if (!isUnique) continue;
+
+    const [scaleX, , , scaleY, tx, ty] = word.transform;
+    const fontSize = Math.abs(scaleY) || 12;
+    const x = tx;
+    const y = viewport.height - ty - fontSize;
+    const w = word.width || fontSize * word.str.length * 0.6;
+    const h = fontSize * 1.15;
+
+    ctx.fillStyle = color === "red" ? "rgba(239, 68, 68, 0.45)" : "rgba(34, 197, 94, 0.45)";
+    ctx.fillRect(x, y, w, h);
+  }
+  ctx.globalAlpha = 1;
+
+  return {
+    dataUrl: canvas.toDataURL("image/jpeg", 0.88),
+    pageCount: pdf.numPages,
+  };
+}
+
 export default function ToolWorkbench({ tool }: WorkbenchProps) {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -856,6 +936,14 @@ export default function ToolWorkbench({ tool }: WorkbenchProps) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [status, setStatus] = useState("");
+  const [progress, setProgress] = useState<{ current: number; total: number; label: string } | null>(null);
+  const [pinnedError, setPinnedError] = useState(false);
+  const [comparePageNumber, setComparePageNumber] = useState(1);
+  const [comparePageCountA, setComparePageCountA] = useState(0);
+  const [comparePageCountB, setComparePageCountB] = useState(0);
+  const [compareRenderA, setCompareRenderA] = useState<string>("");
+  const [compareRenderB, setCompareRenderB] = useState<string>("");
+  const [compareTextReport, setCompareTextReport] = useState<string>("");
   const [ranges, setRanges] = useState("1");
   const [password, setPassword] = useState("");
   const [editText, setEditText] = useState("");
@@ -2590,6 +2678,7 @@ export default function ToolWorkbench({ tool }: WorkbenchProps) {
 
   async function runTool() {
     setError("");
+    setPinnedError(false);
     setStatus("");
     setOcrUploadWarning("");
     const runStartedAt = Date.now();
@@ -2851,9 +2940,12 @@ export default function ToolWorkbench({ tool }: WorkbenchProps) {
         const renderedPages = await renderPdfToImages(new Uint8Array(await readAsArrayBuffer(firstFile)));
         if (!renderedPages.length) throw new Error("No pages available to compress.");
 
-        const processed = await Promise.all(
-          renderedPages.map((page) => processCompressionImage(page.dataUrl, compressionOptions))
-        );
+        setProgress({ current: 0, total: renderedPages.length, label: "Compressing pages…" });
+        const processed: Array<{ dataUrl: string; width: number; height: number }> = [];
+        for (let i = 0; i < renderedPages.length; i += 1) {
+          setProgress({ current: i + 1, total: renderedPages.length, label: `Compressing page ${i + 1} of ${renderedPages.length}…` });
+          processed.push(await processCompressionImage(renderedPages[i].dataUrl, compressionOptions));
+        }
 
         const doc = new jsPDF({
           unit: "pt",
@@ -2931,7 +3023,9 @@ export default function ToolWorkbench({ tool }: WorkbenchProps) {
         if (!firstFile) throw new Error("Missing PDF file.");
         const images = await renderPdfToImages(new Uint8Array(await readAsArrayBuffer(firstFile)), password || undefined);
         const zip = new JSZip();
+        setProgress({ current: 0, total: images.length, label: "Converting pages to JPG…" });
         for (let index = 0; index < images.length; index += 1) {
+          setProgress({ current: index + 1, total: images.length, label: `Converting page ${index + 1} of ${images.length}…` });
           const response = await fetch(images[index].dataUrl);
           zip.file(`${normalizeFileName(firstFile.name)}-page-${index + 1}.jpg`, await response.blob());
         }
@@ -2958,6 +3052,8 @@ export default function ToolWorkbench({ tool }: WorkbenchProps) {
                 item.fileName === file.name ? { ...item, state: "processing" } : item
               )
             );
+            setProgress(null);
+            setStatus(`OCR processing: ${file.name}…`);
 
             try {
               const result = await runOcrForFile(file);
@@ -3000,6 +3096,8 @@ export default function ToolWorkbench({ tool }: WorkbenchProps) {
           return;
         }
 
+        setProgress(null);
+        setStatus("OCR processing on server — this may take a moment…");
         const result = await runOcrForFile(firstFile);
         stageOutput(result.blob, result.outputName, "Preview searchable PDF before downloading.");
         setOcrQueueStatus([]);
@@ -3013,6 +3111,7 @@ export default function ToolWorkbench({ tool }: WorkbenchProps) {
         // Try server-side LibreOffice conversion first
         let serverFailed = false;
         try {
+          setProgress(null);
           setStatus("Converting PDF to Word on server...");
           logProcessing("Sending PDF to server for DOCX conversion via LibreOffice.");
           const formData = new FormData();
@@ -3020,6 +3119,7 @@ export default function ToolWorkbench({ tool }: WorkbenchProps) {
           const response = await fetch("/api/pdf-to-word", { method: "POST", body: formData });
 
           if (response.ok) {
+            setStatus("Downloading converted DOCX…");
             const docxBlob = await response.blob();
             const disposition = response.headers.get("Content-Disposition");
             const downloadName = getFileNameFromDisposition(disposition) || `${normalizeFileName(firstFile.name)}.docx`;
@@ -3050,7 +3150,9 @@ export default function ToolWorkbench({ tool }: WorkbenchProps) {
         // Client-side fallback: text-extraction DOCX
         if (serverFailed) {
           setStatus("Falling back to client-side text extraction...");
+          setProgress({ current: 0, total: 1, label: "Extracting text from PDF…" });
           const pages = await loadPdfPagesText(new Uint8Array(await readAsArrayBuffer(firstFile)));
+          setProgress({ current: 1, total: 1, label: "Building DOCX document…" });
           const children = pages.flatMap((text, index) => [new Paragraph(`Page ${index + 1}`), new Paragraph(text), new Paragraph("")]);
           const doc = new DocxDocument({ sections: [{ children }] });
           stageOutput(
@@ -3367,17 +3469,74 @@ export default function ToolWorkbench({ tool }: WorkbenchProps) {
 
       if (tool.slug === "redact-pdf") {
         if (!firstFile) throw new Error("Missing PDF file.");
+
+        // Render each page to a high-resolution image, then redact by drawing
+        // black rectangles on top. Rebuild the PDF via jsPDF so the original
+        // text layer is destroyed — redacted content cannot be recovered.
         const source = await PDFDocument.load(await readAsArrayBuffer(firstFile));
-        source.getPages().forEach((page) => {
-          const { width } = page.getSize();
-          page.drawRectangle({ x: 60, y: 370, width: width - 120, height: 40, color: rgb(0, 0, 0) });
+        const pageCount = source.getPageCount();
+        setProgress({ current: 0, total: pageCount, label: "Redacting pages…" });
+
+        const redactedImages: Array<{ dataUrl: string; width: number; height: number }> = [];
+
+        for (let pageIdx = 0; pageIdx < pageCount; pageIdx += 1) {
+          setProgress({ current: pageIdx + 1, total: pageCount, label: `Redacting page ${pageIdx + 1} of ${pageCount}…` });
+          const page = source.getPage(pageIdx);
+          const { width, height } = page.getSize();
+
+          // Render the page as a high-resolution canvas image
+          const rendered = await renderPdfPagePreview(
+            new Uint8Array(await readAsArrayBuffer(firstFile)),
+            pageIdx + 1
+          );
+
+          const image = await dataUrlToImage(rendered.dataUrl);
+          const canvas = document.createElement("canvas");
+          canvas.width = image.width;
+          canvas.height = image.height;
+          const ctx = canvas.getContext("2d");
+          if (!ctx) throw new Error("Canvas context unavailable.");
+
+          ctx.drawImage(image, 0, 0);
+
+          // Apply redaction rectangles on the rendered image
+          const scaleX = image.width / width;
+          const scaleY = image.height / height;
+
+          // Default redaction: middle horizontal band covering ~80% width
+          ctx.fillStyle = "#000000";
+          const rx = 60 * scaleX;
+          const ry = 370 * scaleY;
+          const rw = (width - 120) * scaleX;
+          const rh = 40 * scaleY;
+          ctx.fillRect(rx, ry, rw, rh);
+
+          redactedImages.push({
+            dataUrl: canvas.toDataURL("image/jpeg", 0.92),
+            width: image.width,
+            height: image.height,
+          });
+        }
+
+        // Rebuild a flat PDF from the redacted page images (no text layer)
+        const doc = new jsPDF({
+          unit: "pt",
+          format: [redactedImages[0]?.width ?? 612, redactedImages[0]?.height ?? 792],
+          compress: true,
         });
+
+        redactedImages.forEach((page, index) => {
+          if (index > 0) doc.addPage([page.width, page.height], "portrait");
+          doc.addImage(page.dataUrl, "JPEG", 0, 0, page.width, page.height);
+        });
+
+        setProgress(null);
         stageOutput(
-          asPdfBlob(await source.save()),
+          asPdfBlob(new Uint8Array(doc.output("arraybuffer"))),
           `${normalizeFileName(firstFile.name)}-redacted.pdf`,
-          "Preview redaction quality before downloading."
+          "Redacted content has been flattened. Original text is not recoverable from this copy."
         );
-        complete("Redacted PDF ready for preview.");
+        complete("Content permanently removed under redaction areas. Original text cannot be recovered from this file.");
         return;
       }
 
@@ -3499,8 +3658,33 @@ export default function ToolWorkbench({ tool }: WorkbenchProps) {
       if (tool.slug === "compare-pdf") {
         if (files.length < 2) throw new Error("Upload two PDF files to compare.");
         const [first, second] = files;
-        const pagesA = await loadPdfPagesText(new Uint8Array(await readAsArrayBuffer(first)));
-        const pagesB = await loadPdfPagesText(new Uint8Array(await readAsArrayBuffer(second)));
+        const bytesA = new Uint8Array(await readAsArrayBuffer(first));
+        const bytesB = new Uint8Array(await readAsArrayBuffer(second));
+
+        setProgress({ current: 0, total: 1, label: "Loading PDF pages for comparison…" });
+
+        // Get page counts
+        const pdfjs = await import("pdfjs-dist/legacy/build/pdf.mjs");
+        configurePdfJsWorker(pdfjs);
+        const [taskA, taskB] = [pdfjs.getDocument({ data: bytesA }), pdfjs.getDocument({ data: bytesB })];
+        const [pdfA, pdfB] = [await taskA.promise, await taskB.promise];
+        const maxPages = Math.max(pdfA.numPages, pdfB.numPages);
+        setComparePageCountA(pdfA.numPages);
+        setComparePageCountB(pdfB.numPages);
+        setComparePageNumber(1);
+
+        // Render page 1 of each PDF with diff overlays
+        setProgress({ current: 0, total: maxPages, label: "Rendering visual comparison…" });
+        const [renderA, renderB] = await Promise.all([
+          renderComparePageWithDiffs(bytesA, bytesB, 1, "red"),
+          renderComparePageWithDiffs(bytesB, bytesA, 1, "green"),
+        ]);
+        setCompareRenderA(renderA?.dataUrl ?? "");
+        setCompareRenderB(renderB?.dataUrl ?? "");
+
+        // Build text diff report
+        const pagesA = await loadPdfPagesText(bytesA);
+        const pagesB = await loadPdfPagesText(bytesB);
         const textA = pagesA.join("\n");
         const textB = pagesB.join("\n");
         const linesA = splitLines(textA);
@@ -3542,18 +3726,24 @@ export default function ToolWorkbench({ tool }: WorkbenchProps) {
           `Unique lines in ${second.name}: ${onlyB.length}`,
           ...onlyB.slice(0, 120),
         ].join("\n");
-        stageOutput(new Blob([report], { type: "text/plain" }), "compare-report.txt", "Review compare report before downloading.");
-        complete("Comparison report ready for preview.");
+        setCompareTextReport(report);
+
+        setProgress(null);
+        stageOutput(new Blob([report], { type: "text/plain" }), "compare-report.txt", "Visual comparison below. Download text report for the full diff.");
+        complete("Comparison report ready. Scroll down for visual side-by-side.");
         return;
       }
 
       complete("Tool execution completed.");
     } catch (runError) {
+      setProgress(null);
       const errMsg = runError instanceof Error ? runError.message : "Unexpected tool error.";
       setError(errMsg);
+      setPinnedError(true);
       showToast(errMsg, "error");
       logProcessing(`Failed: ${runError instanceof Error ? runError.message : "Unexpected tool error."}`);
     } finally {
+      setProgress(null);
       if (completionMessage) {
         await persistRunReport(runStartedAt, completionMessage);
         setLastRunSummary({
@@ -3647,6 +3837,16 @@ export default function ToolWorkbench({ tool }: WorkbenchProps) {
             >
               {busy ? "Processing..." : outputPreview ? `Re-run ${tool.name}` : `Run ${tool.name}`}
             </button>
+            {error ? (
+              <button
+                type="button"
+                onClick={runTool}
+                disabled={busy}
+                className="rounded-full border border-rose-300 bg-white px-4 py-2 text-sm font-semibold text-rose-700 transition hover:bg-rose-50 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                Retry
+              </button>
+            ) : null}
             {suggestedWorkflow ? (
               <button
                 type="button"
@@ -3659,7 +3859,40 @@ export default function ToolWorkbench({ tool }: WorkbenchProps) {
             ) : null}
             {busy ? <span className="status-chip status-chip-busy">Processing</span> : null}
           </div>
-          {error ? <p className="mt-1 text-sm font-medium text-rose-700">{error}</p> : null}
+          {busy && progress ? (
+            <div className="mt-2 space-y-1">
+              <div className="flex items-center justify-between text-xs text-slate-600">
+                <span>{progress.label}</span>
+                <span>{Math.round((progress.current / Math.max(1, progress.total)) * 100)}%</span>
+              </div>
+              <div className="h-2 w-full overflow-hidden rounded-full bg-slate-200">
+                <div
+                  className="h-full rounded-full bg-gradient-to-r from-cyan-500 to-blue-500 transition-all duration-300"
+                  style={{ width: `${Math.round((progress.current / Math.max(1, progress.total)) * 100)}%` }}
+                />
+              </div>
+            </div>
+          ) : busy && !progress ? (
+            <div className="mt-2 flex items-center gap-2 text-xs text-slate-600">
+              <svg className="h-4 w-4 animate-spin" viewBox="0 0 24 24" fill="none">
+                <circle cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="3" className="opacity-25" />
+                <path d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" fill="currentColor" className="opacity-75" />
+              </svg>
+              <span>Processing…</span>
+            </div>
+          ) : null}
+          {error ? (
+            <div className="mt-2 rounded-xl border border-rose-200 bg-rose-50 p-3">
+              <p className="text-sm font-medium text-rose-700">{error}</p>
+              <button
+                type="button"
+                onClick={() => { setError(""); setPinnedError(false); }}
+                className="mt-1 text-xs font-semibold text-rose-600 underline hover:text-rose-800"
+              >
+                Dismiss
+              </button>
+            </div>
+          ) : null}
           {status ? <p className="mt-1 text-sm font-medium text-emerald-700">{status}</p> : null}
         </div>
       </div>
@@ -4957,7 +5190,127 @@ export default function ToolWorkbench({ tool }: WorkbenchProps) {
           </div>
         ) : null}
 
-        <div ref={outputRef} className="space-y-2 xl:sticky xl:top-4">{outputPreviewPanel}</div>
+        <div ref={outputRef} className="space-y-2 xl:sticky xl:top-4">
+          {tool.slug === "compare-pdf" && (compareRenderA || compareRenderB) ? (
+            <div className="space-y-3 rounded-xl border border-slate-200 bg-slate-50 p-3">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <p className="type-eyebrow text-slate-600">Visual Comparison</p>
+                {comparePageCountA > 0 && comparePageCountB > 0 ? (
+                  <div className="flex items-center gap-2 text-xs">
+                    <label htmlFor="compare-page-select" className="text-slate-600">
+                      Page:
+                    </label>
+                    <select
+                      id="compare-page-select"
+                      value={comparePageNumber}
+                      onChange={async (event) => {
+                        const pageNum = Number(event.target.value);
+                        setComparePageNumber(pageNum);
+                        if (!files[0] || !files[1]) return;
+                        setProgress({ current: 0, total: 1, label: `Rendering page ${pageNum}…` });
+                        const bytesA = new Uint8Array(await readAsArrayBuffer(files[0]));
+                        const bytesB = new Uint8Array(await readAsArrayBuffer(files[1]));
+                        const [rA, rB] = await Promise.all([
+                          renderComparePageWithDiffs(bytesA, bytesB, pageNum, "red"),
+                          renderComparePageWithDiffs(bytesB, bytesA, pageNum, "green"),
+                        ]);
+                        setCompareRenderA(rA?.dataUrl ?? "");
+                        setCompareRenderB(rB?.dataUrl ?? "");
+                        setProgress(null);
+                      }}
+                      className="rounded-lg border border-slate-300 bg-white px-2 py-1 text-xs text-slate-700"
+                    >
+                      {Array.from(
+                        { length: Math.max(comparePageCountA, comparePageCountB) },
+                        (_, i) => i + 1
+                      ).map((p) => (
+                        <option key={p} value={p}>
+                          Page {p}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                ) : null}
+              </div>
+
+              <div className="grid grid-cols-1 gap-3 lg:grid-cols-2">
+                <div className="space-y-1.5">
+                  <div className="flex items-center gap-2">
+                    <span className="inline-flex h-3 w-3 rounded-full bg-rose-400" />
+                    <span className="text-xs font-semibold text-slate-700">
+                      {files[0]?.name ?? "First PDF"}
+                    </span>
+                    {comparePageNumber > comparePageCountA ? (
+                      <span className="text-xs text-amber-600 font-medium">
+                        Only in second PDF
+                      </span>
+                    ) : null}
+                  </div>
+                  {compareRenderA ? (
+                    /* eslint-disable-next-line @next/next/no-img-element */
+                    <img
+                      src={compareRenderA}
+                      alt={`${files[0]?.name ?? "First"} page ${comparePageNumber}`}
+                      className="w-full rounded-lg border border-slate-300 shadow-sm"
+                    />
+                  ) : comparePageNumber > comparePageCountA ? (
+                    <div className="flex h-48 items-center justify-center rounded-lg border border-dashed border-slate-300 bg-slate-100 text-sm text-slate-500">
+                      Page does not exist in this PDF
+                    </div>
+                  ) : null}
+                  <p className="text-[10px] text-slate-500">
+                    Red highlights = text unique to this PDF
+                  </p>
+                </div>
+
+                <div className="space-y-1.5">
+                  <div className="flex items-center gap-2">
+                    <span className="inline-flex h-3 w-3 rounded-full bg-emerald-400" />
+                    <span className="text-xs font-semibold text-slate-700">
+                      {files[1]?.name ?? "Second PDF"}
+                    </span>
+                    {comparePageNumber > comparePageCountB ? (
+                      <span className="text-xs text-amber-600 font-medium">
+                        Only in first PDF
+                      </span>
+                    ) : null}
+                  </div>
+                  {compareRenderB ? (
+                    /* eslint-disable-next-line @next/next/no-img-element */
+                    <img
+                      src={compareRenderB}
+                      alt={`${files[1]?.name ?? "Second"} page ${comparePageNumber}`}
+                      className="w-full rounded-lg border border-slate-300 shadow-sm"
+                    />
+                  ) : comparePageNumber > comparePageCountB ? (
+                    <div className="flex h-48 items-center justify-center rounded-lg border border-dashed border-slate-300 bg-slate-100 text-sm text-slate-500">
+                      Page does not exist in this PDF
+                    </div>
+                  ) : null}
+                  <p className="text-[10px] text-slate-500">
+                    Green highlights = text unique to this PDF
+                  </p>
+                </div>
+              </div>
+
+              {compareTextReport ? (
+                <details className="mt-2">
+                  <summary className="cursor-pointer text-xs font-semibold text-slate-600 hover:text-slate-800">
+                    Text Diff Report
+                  </summary>
+                  <pre className="mt-2 max-h-96 overflow-auto rounded-lg border border-slate-200 bg-white p-3 text-xs text-slate-700 whitespace-pre-wrap">
+                    {compareTextReport}
+                  </pre>
+                </details>
+              ) : null}
+
+              <p className="text-[11px] text-slate-500">
+                Diffs are approximate word-level comparisons. Red/green overlays highlight words present in one PDF but not the other. Download the text report for full line-by-line diff.
+              </p>
+            </div>
+          ) : null}
+          {outputPreviewPanel}
+        </div>
       </div>
     </section>
   );
