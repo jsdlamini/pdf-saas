@@ -446,7 +446,10 @@ export default function Home() {
           </div>
 
           {/* Search bar below drop-zone */}
-          <div className="mt-5 flex items-center gap-2">
+          <p className="mt-5 text-center text-sm font-semibold italic text-slate-500 dark:text-white/80">
+            Alternatively, search your tool of choice below...
+          </p>
+          <div className="mt-3 flex items-center gap-2">
             <div className="relative flex-1">
               <svg
                 viewBox="0 0 20 20"
