@@ -3109,16 +3109,102 @@ export default function ToolWorkbench({ tool }: WorkbenchProps) {
         if (!firstFile) throw new Error("Missing PowerPoint file.");
         const zip = await JSZip.loadAsync(await readAsArrayBuffer(firstFile));
         const slidePaths = sortSlidePaths(Object.keys(zip.files).filter((path) => /^ppt\/slides\/slide\d+\.xml$/.test(path)));
-        const lines: string[] = [];
-        for (let index = 0; index < slidePaths.length; index += 1) {
-          const xml = await zip.file(slidePaths[index])?.async("string");
-          if (!xml) continue;
-          const matches = Array.from(xml.matchAll(/<a:t>(.*?)<\/a:t>/g));
-          const text = matches.map((match) => decodeXmlText(match[1])).join(" ").trim();
-          lines.push(`Slide ${index + 1}: ${text || "(no text)"}`);
+
+        let slideWidth = 9144000;
+        let slideHeight = 6858000;
+        try {
+          const presXml = await zip.file("ppt/presentation.xml")?.async("string");
+          if (presXml) {
+            const sldSz = presXml.match(/<p:sldSz[^>]*>/);
+            if (sldSz) {
+              const cx = sldSz[0].match(/cx="(\d+)"/);
+              const cy = sldSz[0].match(/cy="(\d+)"/);
+              if (cx) slideWidth = parseInt(cx[1], 10);
+              if (cy) slideHeight = parseInt(cy[1], 10);
+            }
+          }
+        } catch {
+          // Use default slide dimensions.
         }
+
+        const scaleX = 515 / slideWidth;
+        const scaleY = 762 / slideHeight;
+
+        let html = "";
+        for (let i = 0; i < slidePaths.length; i += 1) {
+          const xml = await zip.file(slidePaths[i])?.async("string");
+          if (!xml) continue;
+
+          if (i > 0) html += '<div style="page-break-before: always;"></div>';
+          html += `<div style="position: relative; width: 515px; height: 762px; border: 1px solid #ddd; margin-bottom: 8px; overflow: hidden;">`;
+          html += `<div style="position: absolute; top: 4px; left: 8px; font-size: 10px; color: #999;">Slide ${i + 1}</div>`;
+
+          const shapeRegex = /<p:sp[^>]*>[\s\S]*?<\/p:sp>/g;
+          let shapeMatch;
+          while ((shapeMatch = shapeRegex.exec(xml)) !== null) {
+            const shapeXml = shapeMatch[0];
+
+            const xfrm = shapeXml.match(/<a:xfrm>[\s\S]*?<\/a:xfrm>/);
+            let x = 0, y = 0, cx = slideWidth, cy = slideHeight;
+            if (xfrm) {
+              const off = xfrm[0].match(/<a:off[^>]*>/);
+              const ext = xfrm[0].match(/<a:ext[^>]*>/);
+              if (off) {
+                const xm = off[0].match(/x="(\d+)"/);
+                const ym = off[0].match(/y="(\d+)"/);
+                if (xm) x = parseInt(xm[1], 10);
+                if (ym) y = parseInt(ym[1], 10);
+              }
+              if (ext) {
+                const cxm = ext[0].match(/cx="(\d+)"/);
+                const cym = ext[0].match(/cy="(\d+)"/);
+                if (cxm) cx = parseInt(cxm[1], 10);
+                if (cym) cy = parseInt(cym[1], 10);
+              }
+            }
+
+            const textMatches = Array.from(shapeXml.matchAll(/<a:t>(.*?)<\/a:t>/g));
+            const texts = textMatches.map((m) => decodeXmlText(m[1]));
+            if (!texts.length || texts.every((t) => !t.trim())) continue;
+
+            const runPropsMatch = shapeXml.match(/<a:rPr[^>]*>/g);
+            let fontSize = 14;
+            let bold = false;
+            let italic = false;
+            if (runPropsMatch && runPropsMatch.length > 0) {
+              const firstProps = runPropsMatch[0];
+              const szM = firstProps.match(/sz="(\d+)"/);
+              if (szM) fontSize = Math.round(parseInt(szM[1], 10) / 100);
+              bold = /b="1"/.test(firstProps);
+              italic = /i="1"/.test(firstProps);
+            }
+
+            const text = texts.join("");
+            const left = Math.round(x * scaleX);
+            const top = Math.round(y * scaleY);
+            const width = Math.round(cx * scaleX);
+            const height = Math.round(cy * scaleY);
+
+            const styleParts = [
+              `left: ${left}px`,
+              `top: ${top}px`,
+              `width: ${width}px`,
+              `height: ${height}px`,
+              `font-size: ${fontSize}px`,
+              bold ? "font-weight: bold" : "",
+              italic ? "font-style: italic" : "",
+              "overflow: hidden",
+              "word-wrap: break-word",
+            ].filter(Boolean).join("; ");
+
+            html += `<div style="position: absolute; ${styleParts};">${text}</div>`;
+          }
+
+          html += "</div>";
+        }
+
         stageOutput(
-          asPdfBlob(await pdfFromLines(lines, "PowerPoint to PDF")),
+          await htmlContentToPdfBlob(html || "<p>No slides found.</p>", "body { font-family: Arial, Helvetica, sans-serif; }"),
           `${normalizeFileName(firstFile.name)}.pdf`,
           "Preview converted PDF before downloading."
         );
