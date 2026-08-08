@@ -340,7 +340,7 @@ export default function Home() {
                   </svg>
                 </div>
                 <p className="font-semibold text-slate-900">{dropFile.name}</p>
-                <div className="flex flex-wrap items-center justify-center gap-x-4 gap-y-1 text-sm text-slate-500 dark:text-white/80">
+                <div className="flex flex-wrap items-center justify-center gap-x-4 gap-y-1 text-sm text-slate-500 drop-zone-hint">
                   <span>{(dropFile.size / 1024 / 1024).toFixed(1)} MB</span>
                   {dropFileInfo?.kind === "pdf" && dropFileInfo.pageCount ? (
                     <span className="inline-flex items-center gap-1 rounded-full bg-slate-200/70 px-2.5 py-0.5 text-xs font-medium text-slate-700">
@@ -353,7 +353,7 @@ export default function Home() {
                     </span>
                   ) : null}
                 </div>
-                <p className="text-sm text-slate-500 dark:text-white/80">Choose a quick action:</p>
+                <p className="text-sm text-slate-500 drop-zone-hint">Choose a quick action:</p>
                 <div className="flex flex-wrap justify-center gap-2">
                   {suggestedTools.map((tool) => (
                     <button
@@ -438,7 +438,7 @@ export default function Home() {
                 <p className="font-display text-2xl font-semibold tracking-tight bg-gradient-to-r from-red-500 to-pink-500 bg-clip-text text-transparent md:text-3xl">
                   Drop your file here
                 </p>
-                <p className="text-sm text-slate-500 dark:text-white/80">
+                <p className="text-sm text-slate-500 drop-zone-subtitle">
                   Or click to browse — PDF, PNG, JPG, WebP accepted
                 </p>
               </div>

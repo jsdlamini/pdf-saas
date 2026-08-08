@@ -160,6 +160,11 @@ html[data-theme="dark"] .text-slate-800 {
   color: var(--muted) !important;
 }
 
+html[data-theme="dark"] .drop-zone-subtitle,
+html[data-theme="dark"] .drop-zone-hint {
+  color: rgba(255,255,255,0.8) !important;
+}
+
 html[data-theme="dark"] .text-slate-900,
 html[data-theme="dark"] .text-slate-950 {
   color: var(--headline) !important;
