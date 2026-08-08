@@ -958,6 +958,21 @@ html[data-theme="dark"] .ai-tool-pill:hover {
   background: color-mix(in srgb, var(--accent) 16%, var(--surface) 84%);
 }
 
+/* ── Tool carousel animation ──────────────────────────────────── */
+
+@keyframes tool-scroll {
+  0%   { transform: translateX(0); }
+  100% { transform: translateX(-50%); }
+}
+
+.animate-tool-scroll {
+  animation: tool-scroll 60s linear infinite;
+}
+
+.animate-tool-scroll:hover {
+  animation-play-state: paused;
+}
+
 /* ── Drop zone animations ─────────────────────────────────────── */
 
 @keyframes drop-icon-bounce {

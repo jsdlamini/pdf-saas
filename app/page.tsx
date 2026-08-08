@@ -547,6 +547,24 @@ export default function Home() {
           </div>
         </header>
 
+        {/* ── Animated tool carousel ─────────────────────────────── */}
+        <div className="overflow-hidden rounded-2xl bg-white/60 py-4">
+          <div className="animate-tool-scroll flex gap-3 whitespace-nowrap">
+            {[...TOOL_ITEMS, ...TOOL_ITEMS].map((tool, i) => (
+              <Link
+                key={`${tool.slug}-${i}`}
+                href={`/tools/${tool.slug}`}
+                className={`inline-flex shrink-0 items-center gap-1.5 rounded-full border bg-gradient-to-r px-4 py-2 text-sm font-semibold transition-all hover:scale-105 hover:shadow-lg ${getCategoryColor(tool.category)}`}
+              >
+                {tool.name}
+                {tool.runtime === "server" ? (
+                  <span className="text-[10px] font-bold opacity-75">⚙</span>
+                ) : null}
+              </Link>
+            ))}
+          </div>
+        </div>
+
         {/* ── Zone 2: Workflow Recipes (moved above tools) ────────── */}
         <section className="ai-panel rounded-2xl p-4">
           <div className="mb-3 flex items-center justify-between">
