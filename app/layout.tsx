@@ -191,6 +191,16 @@ export default async function RootLayout({
                   Professional PDF operations suite for conversion, editing, security,
                   and team-ready document workflows.
                 </p>
+                <Link
+                  href="/research-studio"
+                  className="inline-flex items-center gap-2 rounded-full bg-gradient-to-r from-purple-500 to-pink-500 px-4 py-2 text-sm font-bold text-white shadow-lg shadow-purple-300/40 transition-all hover:scale-105 hover:shadow-xl hover:shadow-purple-400/50"
+                >
+                  <svg viewBox="0 0 20 20" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="2">
+                    <path d="M6 3h6l3 3v11H6V3z" strokeLinecap="round" strokeLinejoin="round" />
+                    <path d="M12 3v3h3M8 11h4M8 14h2" strokeLinecap="round" strokeLinejoin="round" />
+                  </svg>
+                  Research Studio — LaTeX Editor
+                </Link>
               </div>
 
               <div>
