@@ -83,6 +83,34 @@ export default function Home() {
   const [intentQuery, setIntentQuery] = useState("");
   const [showAllTools, setShowAllTools] = useState(false);
   const [dropToolsOpen, setDropToolsOpen] = useState(false);
+  const [listening, setListening] = useState(false);
+  const recognitionRef = useRef<any>(null);
+
+  function toggleListening() {
+    const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
+    if (!SpeechRecognition) return;
+
+    if (listening) {
+      recognitionRef.current?.stop();
+      setListening(false);
+      return;
+    }
+
+    const rec = new SpeechRecognition();
+    rec.continuous = false;
+    rec.interimResults = false;
+    rec.lang = "en-US";
+    rec.onresult = (event: any) => {
+      const transcript = event.results[0][0].transcript;
+      setIntentQuery(transcript);
+      setListening(false);
+    };
+    rec.onerror = () => setListening(false);
+    rec.onend = () => setListening(false);
+    recognitionRef.current = rec;
+    rec.start();
+    setListening(true);
+  }
 
   /* ── drop-zone state ──────────────────────────────────────────── */
   const [dragOver, setDragOver] = useState(false);
@@ -312,7 +340,7 @@ export default function Home() {
                   </svg>
                 </div>
                 <p className="font-semibold text-slate-900">{dropFile.name}</p>
-                <div className="flex flex-wrap items-center justify-center gap-x-4 gap-y-1 text-sm text-slate-500 dark:text-slate-300">
+                <div className="flex flex-wrap items-center justify-center gap-x-4 gap-y-1 text-sm text-slate-500 dark:text-white/80">
                   <span>{(dropFile.size / 1024 / 1024).toFixed(1)} MB</span>
                   {dropFileInfo?.kind === "pdf" && dropFileInfo.pageCount ? (
                     <span className="inline-flex items-center gap-1 rounded-full bg-slate-200/70 px-2.5 py-0.5 text-xs font-medium text-slate-700">
@@ -325,7 +353,7 @@ export default function Home() {
                     </span>
                   ) : null}
                 </div>
-                <p className="text-sm text-slate-500 dark:text-slate-300">Choose a quick action:</p>
+                <p className="text-sm text-slate-500 dark:text-white/80">Choose a quick action:</p>
                 <div className="flex flex-wrap justify-center gap-2">
                   {suggestedTools.map((tool) => (
                     <button
@@ -410,7 +438,7 @@ export default function Home() {
                 <p className="font-display text-2xl font-semibold tracking-tight bg-gradient-to-r from-red-500 to-pink-500 bg-clip-text text-transparent md:text-3xl">
                   Drop your file here
                 </p>
-                <p className="text-sm text-slate-500 dark:text-slate-300">
+                <p className="text-sm text-slate-500 dark:text-white/80">
                   Or click to browse — PDF, PNG, JPG, WebP accepted
                 </p>
               </div>
@@ -435,30 +463,39 @@ export default function Home() {
                 type="text"
                 value={intentQuery}
                 onChange={(event) => setIntentQuery(event.target.value)}
-                placeholder="Search tools — e.g. remove sensitive text from contracts"
-                className="ai-search-input w-full rounded-xl py-3 pl-9 pr-3 text-base text-slate-800 placeholder:text-slate-400 focus:outline-none"
+                placeholder={listening ? "Listening..." : "Search tools — e.g. remove sensitive text from contracts"}
+                className="ai-search-input w-full rounded-xl py-3 pl-9 pr-20 text-base text-slate-800 placeholder:text-slate-400 focus:outline-none"
               />
-              {intentQuery ? (
+              <div className="absolute right-2 top-1/2 -translate-y-1/2 flex items-center gap-1">
                 <button
                   type="button"
-                  onClick={() => setIntentQuery("")}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
-                  aria-label="Clear search"
+                  onClick={toggleListening}
+                  className={`inline-flex h-8 w-8 items-center justify-center rounded-full transition-all ${
+                    listening
+                      ? "bg-red-500 text-white animate-pulse shadow-lg shadow-red-300/50"
+                      : "bg-slate-100 text-slate-500 hover:bg-cyan-100 hover:text-cyan-700"
+                  }`}
+                  aria-label={listening ? "Stop listening" : "Search by voice"}
+                  title={listening ? "Stop listening" : "Search by voice"}
                 >
-                  <svg
-                    viewBox="0 0 20 20"
-                    className="h-4 w-4"
-                    fill="none"
-                    stroke="currentColor"
-                    strokeWidth="1.8"
-                  >
-                    <path
-                      d="M5 5l10 10M15 5L5 15"
-                      strokeLinecap="round"
-                    />
+                  <svg viewBox="0 0 20 20" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="1.8">
+                    <path d="M10 1a3 3 0 0 0-3 3v4a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z" strokeLinecap="round" strokeLinejoin="round" />
+                    <path d="M18 10a8 8 0 1 1-16 0" strokeLinecap="round" />
                   </svg>
                 </button>
-              ) : null}
+                {intentQuery ? (
+                  <button
+                    type="button"
+                    onClick={() => setIntentQuery("")}
+                    className="inline-flex h-8 w-8 items-center justify-center rounded-full bg-slate-100 text-slate-500 hover:bg-slate-200"
+                    aria-label="Clear search"
+                  >
+                    <svg viewBox="0 0 20 20" className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth="1.8">
+                      <path d="M5 5l10 10M15 5L5 15" strokeLinecap="round" />
+                    </svg>
+                  </button>
+                ) : null}
+              </div>
 
               {/* Inline search results: cards */}
               {intentQuery.trim() && searchResults !== null ? (
