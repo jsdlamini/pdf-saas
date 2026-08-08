@@ -692,8 +692,6 @@ async function htmlContentToPdfBlob(htmlContent: string, extraStyles?: string): 
       backgroundColor: "#ffffff",
     });
 
-    document.body.removeChild(container);
-
     const pageWidth = 595;
     const pageHeight = 842;
     const scale = pageWidth / canvas.width;
@@ -3079,6 +3077,12 @@ export default function ToolWorkbench({ tool }: WorkbenchProps) {
         if (!firstFile) throw new Error("Missing Word file.");
         const convertResult = await mammoth.convertToHtml({ arrayBuffer: await readAsArrayBuffer(firstFile) });
         const html = convertResult.value || "<p>No content extracted from Word file.</p>";
+        const warnings = convertResult.messages
+          .filter((m) => m.type === "warning")
+          .map((m) => m.message);
+        const warningNote = warnings.length
+          ? ` (${warnings.length} formatting warning${warnings.length !== 1 ? "s" : ""} — some content may not be fully preserved)`
+          : "";
         const styles = `
           body { font-family: Arial, Helvetica, sans-serif; font-size: 12px; line-height: 1.6; color: #1a1a1a; }
           h1 { font-size: 24px; margin: 16px 0 8px; }
@@ -3123,8 +3127,9 @@ export default function ToolWorkbench({ tool }: WorkbenchProps) {
               if (cy) slideHeight = parseInt(cy[1], 10);
             }
           }
-        } catch {
-          // Use default slide dimensions.
+        } catch (e) {
+          // Use default slide dimensions. Log for debugging.
+          console.warn("Could not read PPTX presentation dimensions, using defaults.", e);
         }
 
         const scaleX = 515 / slideWidth;
