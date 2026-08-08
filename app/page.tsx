@@ -373,7 +373,7 @@ export default function Home() {
                   <button
                     type="button"
                     onClick={(e) => { e.stopPropagation(); setDropToolsOpen(!dropToolsOpen); }}
-                    className="inline-flex items-center gap-1.5 rounded-full border bg-gradient-to-r from-cyan-100 to-blue-100 px-3 py-1.5 text-xs font-semibold text-cyan-800 transition hover:scale-105 hover:shadow-lg hover:from-cyan-200 hover:to-blue-200"
+                    className="inline-flex items-center gap-1.5 rounded-full border bg-gradient-to-r px-4 py-2 text-sm font-semibold transition-all hover:scale-105 hover:shadow-lg from-slate-100 to-slate-200 text-slate-700 hover:from-cyan-100 hover:to-blue-100 hover:text-cyan-800"
                   >
                     More tools
                     <svg viewBox="0 0 20 20" className={`h-3.5 w-3.5 transition-transform ${dropToolsOpen ? "rotate-180" : ""}`} fill="none" stroke="currentColor" strokeWidth="1.8">
