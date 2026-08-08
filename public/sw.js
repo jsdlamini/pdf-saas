@@ -41,6 +41,7 @@ self.addEventListener("fetch", (event) => {
 
   event.respondWith(
     caches.match(event.request).then((cached) => {
+      // Stale-while-revalidate: return cached first, update cache in background
       const fetched = fetch(event.request).then((response) => {
         if (!response || response.status !== 200 || response.type !== "basic") {
           return response;
@@ -50,7 +51,7 @@ self.addEventListener("fetch", (event) => {
           cache.put(event.request, clone);
         });
         return response;
-      });
+      }).catch(() => cached); // Offline fallback
 
       return cached || fetched;
     })
