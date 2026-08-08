@@ -521,7 +521,7 @@ export default function Home() {
         </header>
 
         {/* ── Animated tool carousel ─────────────────────────────── */}
-        <div className="overflow-hidden rounded-2xl bg-white/60 py-4">
+        <div className="overflow-hidden py-4">
           <div className="animate-tool-scroll flex gap-3 whitespace-nowrap">
             {[...TOOL_ITEMS, ...TOOL_ITEMS].map((tool, i) => (
               <Link
