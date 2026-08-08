@@ -556,7 +556,15 @@ export default function Home() {
         {/* ── Animated tool carousel ─────────────────────────────── */}
         <div className="overflow-hidden py-4">
           <div className="animate-tool-scroll flex gap-3 whitespace-nowrap">
-            {[...TOOL_ITEMS, ...TOOL_ITEMS].map((tool, i) => (
+            {(() => {
+              const TOP_TOOLS = new Set([
+                "merge-pdf", "split-pdf", "compress-pdf", "ocr-pdf",
+                "sign-pdf", "pdf-to-word", "jpg-to-pdf", "protect-pdf",
+              ]);
+              const topDuplicates = TOOL_ITEMS.filter((t) => TOP_TOOLS.has(t.slug));
+              const weighted = [...TOOL_ITEMS, ...topDuplicates];
+              return [...weighted, ...weighted];
+            })().map((tool, i) => (
               <Link
                 key={`${tool.slug}-${i}`}
                 href={`/tools/${tool.slug}`}
