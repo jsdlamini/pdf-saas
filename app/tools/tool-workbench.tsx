@@ -4111,6 +4111,9 @@ export default function ToolWorkbench({ tool }: WorkbenchProps) {
             <p className="field-help">
               {OCR_LANGUAGE_OPTIONS.find((option) => option.value === ocrLanguage)?.hint} Matching Tesseract language data must be installed on the server.
             </p>
+            <p className="mt-1 text-xs text-slate-400 italic">
+              Available languages depend on installed language packs. Current installation supports: English, German, French, Spanish, Italian, Portuguese, Dutch, Polish. Additional languages require server configuration.
+            </p>
           </div>
 
           <div className="space-y-2 rounded-2xl border border-slate-200 bg-slate-50 p-3">
