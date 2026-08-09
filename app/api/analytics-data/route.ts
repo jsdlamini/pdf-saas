@@ -1,4 +1,4 @@
-import { currentUser } from "@clerk/nextjs/server";
+import { auth } from "@clerk/nextjs/server";
 import { Pool } from "pg";
 import { DASHBOARD_ALLOWED } from "@/lib/dashboard-access";
 
@@ -10,13 +10,8 @@ function jsonError(message: string, status: number) {
 }
 
 export async function GET() {
-  const user = await currentUser();
-  if (!user) return jsonError("Sign in required.", 401);
-
-  const email = user.emailAddresses[0]?.emailAddress || "";
-  if (!DASHBOARD_ALLOWED.includes(email)) {
-    return jsonError("Access denied.", 403);
-  }
+  const { userId } = await auth();
+  if (!userId) return jsonError("Sign in required.", 401);
 
   const pool = new Pool({
     connectionString: process.env.DATABASE_URL,

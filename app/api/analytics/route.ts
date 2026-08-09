@@ -33,6 +33,10 @@ export async function POST(request: NextRequest) {
       )`
     );
 
+    // Add country/city columns if they don't exist (migration for existing tables)
+    await pool.query(`ALTER TABLE wiserfiles_analytics ADD COLUMN IF NOT EXISTS country TEXT`);
+    await pool.query(`ALTER TABLE wiserfiles_analytics ADD COLUMN IF NOT EXISTS city TEXT`);
+
     const forwarded = request.headers.get("x-forwarded-for");
     const ip = forwarded?.split(",")[0]?.trim() || "unknown";
     const ipHash = ip;

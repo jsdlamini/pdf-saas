@@ -1,6 +1,4 @@
-import { currentUser } from "@clerk/nextjs/server";
-import { DASHBOARD_ALLOWED } from "@/lib/dashboard-access";
-import { getUserRole, ensureUserRecord } from "@/lib/user-roles";
+import { auth } from "@clerk/nextjs/server";
 import fs from "fs";
 import path from "path";
 
@@ -36,14 +34,8 @@ function jsonError(msg: string, status: number) {
 }
 
 async function checkAccess() {
-  const user = await currentUser();
-  if (!user) throw new Error("signin");
-  const email = user.emailAddresses[0]?.emailAddress || "";
-  if (!DASHBOARD_ALLOWED.includes(email)) {
-    const role = await getUserRole(user.id);
-    if (role !== "admin") throw new Error("denied");
-  }
-  await ensureUserRecord(user.id, email);
+  const { userId } = await auth();
+  if (!userId) throw new Error("signin");
 }
 
 export async function GET(request: Request) {
