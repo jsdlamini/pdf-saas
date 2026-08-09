@@ -8,6 +8,7 @@ import MobileToolNav from "./mobile-tool-nav";
 import FooterShareLink from "./components/footer-share-link";
 import OfflineIndicator from "./components/offline-indicator";
 import Onboarding from "./components/onboarding";
+import AnalyticsTracker from "./components/analytics-client";
 import ThemeToggle from "./theme-toggle";
 import ToastContainer from "./components/toast";
 import "./globals.css";
@@ -132,6 +133,7 @@ export default async function RootLayout({
         </a>
         <ClerkProvider>
           <ToastContainer />
+          <AnalyticsTracker />
           <Onboarding />
           <MobileToolNav />
 
