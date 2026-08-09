@@ -1,4 +1,4 @@
-import { auth } from "@clerk/nextjs/server";
+import { auth, clerkClient } from "@clerk/nextjs/server";
 import { Pool } from "pg";
 import { DASHBOARD_ALLOWED } from "@/lib/dashboard-access";
 
@@ -13,9 +13,9 @@ export async function GET() {
   const { userId } = await auth();
   if (!userId) return jsonError("Sign in required.", 401);
 
-  const { users } = await import("@clerk/nextjs/server");
-  const clerk = (await users.getUser(userId)) as { emailAddresses: Array<{ emailAddress: string }> };
-  const email = clerk.emailAddresses[0]?.emailAddress || "";
+  const client = await clerkClient();
+  const clerkUser = await client.users.getUser(userId);
+  const email = clerkUser.emailAddresses[0]?.emailAddress || "";
   if (!DASHBOARD_ALLOWED.includes(email)) {
     return jsonError("Access denied.", 403);
   }
