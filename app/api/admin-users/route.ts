@@ -1,4 +1,4 @@
-import { auth, clerkClient } from "@clerk/nextjs/server";
+import { currentUser, clerkClient } from "@clerk/nextjs/server";
 import { DASHBOARD_ALLOWED } from "@/lib/dashboard-access";
 import {
   getUserRole,
@@ -15,18 +15,18 @@ function jsonError(message: string, status: number) {
 }
 
 async function checkAdmin() {
-  const { userId } = await auth();
-  if (!userId) throw new Error("Sign in required");
+  const user = await currentUser();
+  if (!user) throw new Error("Sign in required");
 
-  const client = await clerkClient();
-  const clerkUser = await client.users.getUser(userId);
-  const email = clerkUser.emailAddresses[0]?.emailAddress || "";
+  const email = user.emailAddresses[0]?.emailAddress || "";
+  // email extracted from currentUser above
+  //
 
   if (!DASHBOARD_ALLOWED.includes(email)) {
-    const role = await getUserRole(userId);
+    const role = await getUserRole(user.id);
     if (role !== "admin") throw new Error("Access denied");
   }
-  await ensureUserRecord(userId, email);
+  await ensureUserRecord(user.id, email);
 
   return email;
 }
@@ -55,8 +55,8 @@ export async function POST(request: Request) {
     if (!["admin", "user"].includes(role)) return jsonError("Invalid role", 400);
 
     const client = await clerkClient();
-    const clerkUser = await client.users.getUser(userId);
-    const email = clerkUser.emailAddresses[0]?.emailAddress || "";
+    const targetUser = await client.users.getUser(userId);
+    const email = targetUser.emailAddresses[0]?.emailAddress || "";
 
     await setUserRole(userId, role as "admin" | "user", email);
     return Response.json({ ok: true, userId, role });

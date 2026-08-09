@@ -1,4 +1,4 @@
-import { auth, clerkClient } from "@clerk/nextjs/server";
+import { currentUser } from "@clerk/nextjs/server";
 import { DASHBOARD_ALLOWED } from "@/lib/dashboard-access";
 import { getUserRole, ensureUserRecord } from "@/lib/user-roles";
 import fs from "fs";
@@ -36,16 +36,14 @@ function jsonError(msg: string, status: number) {
 }
 
 async function checkAccess() {
-  const { userId } = await auth();
-  if (!userId) throw new Error("signin");
-  const client = await clerkClient();
-  const user = await client.users.getUser(userId);
+  const user = await currentUser();
+  if (!user) throw new Error("signin");
   const email = user.emailAddresses[0]?.emailAddress || "";
   if (!DASHBOARD_ALLOWED.includes(email)) {
-    const role = await getUserRole(userId);
+    const role = await getUserRole(user.id);
     if (role !== "admin") throw new Error("denied");
   }
-  await ensureUserRecord(userId, email);
+  await ensureUserRecord(user.id, email);
 }
 
 export async function GET(request: Request) {
