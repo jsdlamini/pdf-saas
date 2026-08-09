@@ -246,8 +246,11 @@ function downloadBlob(blob: Blob, fileName: string) {
   URL.revokeObjectURL(href);
 }
 
-function readAsArrayBuffer(file: File) {
-  return file.arrayBuffer();
+async function readAsArrayBuffer(file: File) {
+  const buffer = await file.arrayBuffer();
+  // Return a copy to prevent ArrayBuffer detachment issues
+  // when the buffer is shared across multiple pdfjs-dist calls
+  return buffer.slice(0);
 }
 
 function readAsText(file: File) {
@@ -985,6 +988,8 @@ export default function ToolWorkbench({ tool }: WorkbenchProps) {
   const [mergePages, setMergePages] = useState<MergePageNode[]>([]);
   const [rotateAngle, setRotateAngle] = useState(90);
   const [pageRotations, setPageRotations] = useState<Record<number, number>>({});
+  const rotateAngleRef = useRef(90);
+  const pageRotationsRef = useRef<Record<number, number>>({});
   const [mergePageOrder, setMergePageOrder] = useState<string[]>([]);
   const [mergeLoading, setMergeLoading] = useState(false);
   const [mergeDraggedId, setMergeDraggedId] = useState<string | null>(null);
@@ -2868,8 +2873,10 @@ export default function ToolWorkbench({ tool }: WorkbenchProps) {
       if (tool.slug === "rotate-pdf") {
         if (!firstFile) throw new Error("Missing PDF file.");
         const source = await PDFDocument.load(await readAsArrayBuffer(firstFile));
+        const rotations = pageRotationsRef.current;
+        const defaultAngle = rotateAngleRef.current;
         source.getPages().forEach((page, index) => {
-          const angle = pageRotations[index + 1] ?? rotateAngle;
+          const angle = rotations[index + 1] ?? defaultAngle;
           page.setRotation(degrees(angle));
         });
         stageOutput(
@@ -2877,7 +2884,7 @@ export default function ToolWorkbench({ tool }: WorkbenchProps) {
           `${normalizeFileName(firstFile.name)}-rotated.pdf`,
           "Preview rotated pages before downloading."
         );
-        complete(`Rotated PDF (${rotateAngle}°) ready for preview.`);
+        complete(`Rotated PDF ready for preview.`);
         return;
       }
 
@@ -5116,7 +5123,13 @@ export default function ToolWorkbench({ tool }: WorkbenchProps) {
                   <button
                     key={deg}
                     type="button"
-                    onClick={() => { setRotateAngle(deg); setPageRotations({}); setTimeout(() => runTool(), 50); }}
+                    onClick={() => {
+                      setRotateAngle(deg);
+                      setPageRotations({});
+                      rotateAngleRef.current = deg;
+                      pageRotationsRef.current = {};
+                      setTimeout(() => runTool(), 50);
+                    }}
                     className={`inline-flex items-center gap-1 rounded-full border px-3 py-1 text-xs font-semibold transition ${
                       rotateAngle === deg && Object.keys(pageRotations).length === 0
                         ? "border-cyan-500 bg-cyan-100 text-cyan-800"
@@ -5275,11 +5288,9 @@ export default function ToolWorkbench({ tool }: WorkbenchProps) {
                                     e.stopPropagation();
                                     setPageRotations((prev) => {
                                       const next = { ...prev };
-                                      if (deg === 0) {
-                                        delete next[thumb.pageNumber];
-                                      } else {
-                                        next[thumb.pageNumber] = deg;
-                                      }
+                                      if (deg === 0) delete next[thumb.pageNumber];
+                                      else next[thumb.pageNumber] = deg;
+                                      pageRotationsRef.current = next;
                                       return next;
                                     });
                                     setTimeout(() => runTool(), 50);
