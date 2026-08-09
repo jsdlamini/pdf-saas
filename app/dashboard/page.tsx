@@ -137,6 +137,7 @@ export default function DashboardPage() {
 
       {/* User Management */}
       <UserManagement />
+      <MarketingSection />
     </main>
   );
 }
@@ -218,6 +219,91 @@ function UserManagement() {
           </tbody>
         </table>
       </div>
+      )}
+    </div>
+  );
+}
+
+function MarketingSection() {
+  const [snippets, setSnippets] = useState<Array<{ platform: string; text: string; id: number }>>([]);
+  const [platform, setPlatform] = useState("twitter");
+  const [copied, setCopied] = useState<number | null>(null);
+  const [loading, setLoading] = useState(false);
+
+  async function fetchSnippets(p: string, rotate = false) {
+    setLoading(true);
+    try {
+      const r = await fetch(`/api/marketing-snippets?platform=${p}${rotate ? "&rotate=1" : ""}`);
+      if (!r.ok) throw new Error("Failed");
+      const d = await r.json();
+      if (d.snippets) setSnippets(d.snippets.map((s: any) => ({ ...s, platform: p })));
+    } catch {
+      setSnippets([]);
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  function loadPlatform(p: string) {
+    setPlatform(p);
+    setSnippets([]);
+    fetchSnippets(p);
+  }
+
+  async function copyToClipboard(text: string, id: number) {
+    await navigator.clipboard.writeText(text);
+    setCopied(id);
+    setTimeout(() => setCopied(null), 2000);
+  }
+
+  return (
+    <div className="mt-6 rounded-2xl border border-slate-200 bg-white p-5">
+      <h2 className="text-sm font-semibold text-slate-800">Marketing Snippets</h2>
+      <p className="text-xs text-slate-500 mt-1">Ready-to-post content for each platform. Click to copy.</p>
+
+      <div className="mt-3 flex flex-wrap gap-2">
+        {["twitter", "linkedin", "tiktok"].map((p) => (
+          <button
+            key={p}
+            type="button"
+            onClick={() => loadPlatform(p)}
+            className={`rounded-full px-3 py-1 text-xs font-semibold transition ${
+              platform === p
+                ? "bg-cyan-100 text-cyan-800 border border-cyan-300"
+                : "bg-slate-100 text-slate-600 hover:bg-slate-200"
+            }`}
+          >
+            {p === "twitter" ? "Twitter/X" : p === "linkedin" ? "LinkedIn" : "TikTok Captions"}
+          </button>
+        ))}
+      </div>
+
+      {loading ? (
+        <p className="mt-4 text-sm text-slate-400">Loading...</p>
+      ) : snippets.length > 0 ? (
+        <div className="mt-4 space-y-3">
+          {snippets.map((s) => (
+            <div
+              key={s.id}
+              className="group relative rounded-xl border border-slate-200 bg-slate-50 p-3 pr-12 cursor-pointer hover:border-cyan-300 hover:bg-cyan-50/30 transition"
+              onClick={() => copyToClipboard(s.text, s.id)}
+            >
+              <p className="text-sm text-slate-700 leading-relaxed">{s.text}</p>
+              <span className="absolute right-3 top-3 text-[10px] font-semibold text-slate-400 group-hover:text-cyan-600">
+                {copied === s.id ? "Copied!" : "Copy"}
+              </span>
+            </div>
+          ))}
+          <button
+            type="button"
+            onClick={() => fetchSnippets(platform, true)}
+            className="mt-2 text-xs font-semibold text-cyan-700 hover:text-cyan-900 underline"
+          >
+            🔄 Regenerate snippets
+          </button>
+        </div>
+      ) : (
+        <p className="mt-4 text-sm text-slate-400 italic">Select a platform to load marketing snippets.</p>
       )}
     </div>
   );
