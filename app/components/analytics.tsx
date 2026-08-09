@@ -34,7 +34,7 @@ export function useAnalytics() {
     track("pageview", {
       path: pathname,
       referrer: document.referrer || "direct",
-      tool: pathname.startsWith("/tools/") ? pathname.split("/")[2] : undefined,
+      tool: pathname.startsWith("/tools/") ? pathname.split("/")[2] : "home",
     });
   }, [pathname, searchParams]);
 }
