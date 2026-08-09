@@ -850,9 +850,10 @@ async function renderComparePageWithDiffs(
 ) {
   const pdfjs = await import("pdfjs-dist/legacy/build/pdf.mjs");
   configurePdfJsWorker(pdfjs);
-  const task = pdfjs.getDocument({ data: bytes });
+  // Use copies to prevent ArrayBuffer detachment
+  const task = pdfjs.getDocument({ data: new Uint8Array(bytes) });
   const pdf = await task.promise;
-  const otherTask = pdfjs.getDocument({ data: otherBytes });
+  const otherTask = pdfjs.getDocument({ data: new Uint8Array(otherBytes) });
   const otherPdf = await otherTask.promise;
 
   if (pageNumber > pdf.numPages && pageNumber > otherPdf.numPages) return null;
@@ -3746,10 +3747,15 @@ export default function ToolWorkbench({ tool }: WorkbenchProps) {
 
         setProgress({ current: 0, total: 1, label: "Loading PDF pages for comparison…" });
 
-        // Get page counts
+        // Get page counts — use copies to prevent ArrayBuffer detachment
         const pdfjs = await import("pdfjs-dist/legacy/build/pdf.mjs");
         configurePdfJsWorker(pdfjs);
-        const [taskA, taskB] = [pdfjs.getDocument({ data: bytesA }), pdfjs.getDocument({ data: bytesB })];
+        const bytesAForCount = new Uint8Array(bytesA);
+        const bytesBForCount = new Uint8Array(bytesB);
+        const [taskA, taskB] = [
+          pdfjs.getDocument({ data: bytesAForCount }),
+          pdfjs.getDocument({ data: bytesBForCount }),
+        ];
         const [pdfA, pdfB] = [await taskA.promise, await taskB.promise];
         const maxPages = Math.max(pdfA.numPages, pdfB.numPages);
         setComparePageCountA(pdfA.numPages);
@@ -3765,9 +3771,9 @@ export default function ToolWorkbench({ tool }: WorkbenchProps) {
         setCompareRenderA(renderA?.dataUrl ?? "");
         setCompareRenderB(renderB?.dataUrl ?? "");
 
-        // Build text diff report
-        const pagesA = await loadPdfPagesText(bytesA);
-        const pagesB = await loadPdfPagesText(bytesB);
+        // Build text diff report — use fresh copies
+        const pagesA = await loadPdfPagesText(new Uint8Array(bytesA));
+        const pagesB = await loadPdfPagesText(new Uint8Array(bytesB));
         const textA = pagesA.join("\n");
         const textB = pagesB.join("\n");
         const linesA = splitLines(textA);
@@ -5293,6 +5299,7 @@ export default function ToolWorkbench({ tool }: WorkbenchProps) {
                                       pageRotationsRef.current = next;
                                       return next;
                                     });
+                                    rotateAngleRef.current = 0;
                                     setTimeout(() => runTool(), 50);
                                   }}
                                   className={`flex-1 rounded border px-1 py-0.5 text-[10px] font-semibold transition ${
