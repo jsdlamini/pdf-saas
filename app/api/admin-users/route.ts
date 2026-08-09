@@ -58,7 +58,7 @@ export async function POST(request: Request) {
     const clerkUser = await client.users.getUser(userId);
     const email = clerkUser.emailAddresses[0]?.emailAddress || "";
 
-    await setUserRole(userId, role, email);
+    await setUserRole(userId, role as "admin" | "user", email);
     return Response.json({ ok: true, userId, role });
   } catch (e) {
     const msg = e instanceof Error ? e.message : "Error";
