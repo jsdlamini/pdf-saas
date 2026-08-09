@@ -27,7 +27,7 @@ export async function GET() {
   });
 
   try {
-    const [pageviews, tools, daily, referrers, totalUsers] = await Promise.all([
+    const [pageviews, tools, daily, referrers, totalUsers, countries, cities] = await Promise.all([
       pool.query(`SELECT COUNT(*) as total FROM wiserfiles_analytics WHERE event = 'pageview'`),
       pool.query(
         `SELECT tool, COUNT(*) as count FROM wiserfiles_analytics WHERE event = 'pageview' AND tool IS NOT NULL GROUP BY tool ORDER BY count DESC LIMIT 15`
@@ -39,6 +39,12 @@ export async function GET() {
         `SELECT referrer, COUNT(*) as count FROM wiserfiles_analytics WHERE event = 'pageview' AND referrer IS NOT NULL AND referrer != 'direct' GROUP BY referrer ORDER BY count DESC LIMIT 10`
       ),
       pool.query(`SELECT COUNT(DISTINCT ip_hash) as total FROM wiserfiles_analytics`),
+      pool.query(
+        `SELECT country, COUNT(*) as count FROM wiserfiles_analytics WHERE event = 'pageview' AND country IS NOT NULL GROUP BY country ORDER BY count DESC LIMIT 20`
+      ),
+      pool.query(
+        `SELECT city, country, COUNT(*) as count FROM wiserfiles_analytics WHERE event = 'pageview' AND city IS NOT NULL GROUP BY city, country ORDER BY count DESC LIMIT 20`
+      ),
     ]);
 
     await pool.end();
@@ -49,6 +55,8 @@ export async function GET() {
       daily: daily.rows,
       referrers: referrers.rows,
       uniqueVisitors: parseInt(totalUsers.rows[0]?.total || "0"),
+      countries: countries.rows,
+      cities: cities.rows,
     });
   } catch (e) {
     await pool.end().catch(() => {});

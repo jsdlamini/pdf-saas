@@ -27,6 +27,8 @@ export async function POST(request: NextRequest) {
         tool TEXT,
         user_agent TEXT,
         ip_hash TEXT,
+        country TEXT,
+        city TEXT,
         created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
       )`
     );
@@ -35,9 +37,23 @@ export async function POST(request: NextRequest) {
     const ip = forwarded?.split(",")[0]?.trim() || "unknown";
     const ipHash = ip;
 
+    // Geo lookup (free, no API key)
+    let country = null;
+    let city = null;
+    if (ip !== "unknown" && !ip.startsWith("127.") && !ip.startsWith("192.168.") && !ip.startsWith("10.")) {
+      try {
+        const geo = await fetch(`http://ip-api.com/json/${ip}?fields=country,city`);
+        if (geo.ok) {
+          const geoData = await geo.json();
+          country = geoData.country || null;
+          city = geoData.city || null;
+        }
+      } catch { /* geo lookup is best-effort */ }
+    }
+
     await pool.query(
-      `INSERT INTO wiserfiles_analytics (event, path, referrer, tool, user_agent, ip_hash)
-       VALUES ($1, $2, $3, $4, $5, $6)`,
+      `INSERT INTO wiserfiles_analytics (event, path, referrer, tool, user_agent, ip_hash, country, city)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
       [
         event,
         path || null,
@@ -45,6 +61,8 @@ export async function POST(request: NextRequest) {
         tool || null,
         request.headers.get("user-agent") || null,
         ipHash,
+        country,
+        city,
       ]
     );
 

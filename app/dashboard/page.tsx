@@ -9,6 +9,8 @@ type AnalyticsData = {
   tools: Array<{ tool: string; count: string }>;
   daily: Array<{ date: string; count: string }>;
   referrers: Array<{ referrer: string; count: string }>;
+  countries: Array<{ country: string; count: string }>;
+  cities: Array<{ city: string; country: string; count: string }>;
 };
 
 export default function DashboardPage() {
@@ -260,6 +262,28 @@ export default function DashboardPage() {
               </div>
             )}
           </div>
+        </div>
+
+        {/* Geo distribution */}
+        <div className="rounded-2xl border border-slate-200/60 bg-white p-6 shadow-sm">
+          <h2 className="text-base font-semibold text-slate-900 mb-4">Visitors by Country</h2>
+          {data.countries && data.countries.length > 0 ? (
+            <div className="grid gap-2 sm:grid-cols-2 md:grid-cols-3">
+              {data.countries.slice(0, 15).map((c, i) => (
+                <div key={c.country} className="flex items-center gap-2 rounded-lg border border-slate-100 px-3 py-2 text-sm">
+                  <span className="text-lg">{
+                    { 'South Africa': '🇿🇦', 'Eswatini': '🇸🇿', 'United States': '🇺🇸', 'United Kingdom': '🇬🇧', 'Germany': '🇩🇪', 'France': '🇫🇷', 'India': '🇮🇳', 'Canada': '🇨🇦', 'Australia': '🇦🇺', 'Nigeria': '🇳🇬', 'Kenya': '🇰🇪', 'Botswana': '🇧🇼', 'Zimbabwe': '🇿🇼', 'Namibia': '🇳🇦', 'Mozambique': '🇲🇿', 'Lesotho': '🇱🇸', 'Malawi': '🇲🇼', 'Zambia': '🇿🇲', 'Tanzania': '🇹🇿', 'Ghana': '🇬🇭' }[c.country] || '🌍'
+                  }</span>
+                  <span className="flex-1 font-medium text-slate-700">{c.country}</span>
+                  <span className="text-xs font-semibold text-slate-500">{c.count}</span>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <div className="flex flex-col items-center justify-center py-10 text-slate-400">
+              <p className="text-sm">No geo data collected yet</p>
+            </div>
+          )}
         </div>
 
         {/* User Management */}
