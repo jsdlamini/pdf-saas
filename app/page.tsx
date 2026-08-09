@@ -591,7 +591,7 @@ export default function Home() {
 
         {/* ── Trust badge ──────────────────────────────────────── */}
         <div className="flex justify-center">
-          <div className="inline-flex items-center gap-2 rounded-full border border-emerald-200 bg-emerald-50/80 px-4 py-2 text-sm text-emerald-800 shadow-sm">
+          <div className="inline-flex items-center gap-2 rounded-full border border-emerald-200 bg-white px-4 py-2 text-sm text-emerald-800 shadow-sm">
             <svg viewBox="0 0 20 20" className="h-4 w-4 text-emerald-600" fill="none" stroke="currentColor" strokeWidth="1.8">
               <path d="M10 2l1.5 4.5h4.8l-3.9 2.8 1.5 4.7L10 11.5l-3.9 2.5 1.5-4.7-3.9-2.8h4.8z" strokeLinecap="round" strokeLinejoin="round" />
               <path d="M10 6v13M6 14l4 4 4-4" strokeLinecap="round" strokeLinejoin="round" />
