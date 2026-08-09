@@ -25,8 +25,8 @@ async function checkAdmin() {
   if (!DASHBOARD_ALLOWED.includes(email)) {
     const role = await getUserRole(userId);
     if (role !== "admin") throw new Error("Access denied");
-    await ensureUserRecord(userId, email);
   }
+  await ensureUserRecord(userId, email);
 
   return email;
 }

@@ -167,12 +167,15 @@ function UserManagement() {
     }
   }
 
-  if (!loaded || !users.length) return null;
+  if (!loaded) return null;
 
   return (
     <div className="mt-6 rounded-2xl border border-slate-200 bg-white p-5">
       <h2 className="text-sm font-semibold text-slate-800">User Management</h2>
       <p className="text-xs text-slate-500 mt-1">Promote registered users to admin or demote them.</p>
+      {!users.length ? (
+        <p className="mt-4 text-sm text-slate-400 italic">No registered users yet. Users appear here after they sign in and access the app.</p>
+      ) : (
       <div className="mt-3 overflow-x-auto">
         <table className="w-full text-sm">
           <thead>
@@ -215,6 +218,7 @@ function UserManagement() {
           </tbody>
         </table>
       </div>
+      )}
     </div>
   );
 }
