@@ -134,6 +134,87 @@ export default function DashboardPage() {
           </div>
         </div>
       ) : null}
+
+      {/* User Management */}
+      <UserManagement />
     </main>
+  );
+}
+
+function UserManagement() {
+  const [users, setUsers] = useState<Array<{ user_id: string; email: string; role: string; created_at: string }>>([]);
+  const [loaded, setLoaded] = useState(false);
+
+  useEffect(() => {
+    fetch("/api/admin-users")
+      .then((r) => r.json())
+      .then((d) => setUsers(d.users || []))
+      .catch(() => {})
+      .finally(() => setLoaded(true));
+  }, []);
+
+  async function toggleRole(userId: string, currentRole: string) {
+    const newRole = currentRole === "admin" ? "user" : "admin";
+    const r = await fetch("/api/admin-users", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ userId, role: newRole }),
+    });
+    if (r.ok) {
+      setUsers((prev) =>
+        prev.map((u) => (u.user_id === userId ? { ...u, role: newRole } : u))
+      );
+    }
+  }
+
+  if (!loaded || !users.length) return null;
+
+  return (
+    <div className="mt-6 rounded-2xl border border-slate-200 bg-white p-5">
+      <h2 className="text-sm font-semibold text-slate-800">User Management</h2>
+      <p className="text-xs text-slate-500 mt-1">Promote registered users to admin or demote them.</p>
+      <div className="mt-3 overflow-x-auto">
+        <table className="w-full text-sm">
+          <thead>
+            <tr className="border-b border-slate-200 text-left text-xs uppercase tracking-[0.1em] text-slate-500">
+              <th className="py-2 pr-4">Email</th>
+              <th className="py-2 pr-4">Role</th>
+              <th className="py-2 pr-4">Joined</th>
+              <th className="py-2">Action</th>
+            </tr>
+          </thead>
+          <tbody>
+            {users.map((u) => (
+              <tr key={u.user_id} className="border-b border-slate-100">
+                <td className="py-2 pr-4 text-slate-700">{u.email}</td>
+                <td className="py-2 pr-4">
+                  <span
+                    className={`inline-flex rounded-full px-2 py-0.5 text-xs font-semibold ${
+                      u.role === "admin"
+                        ? "bg-purple-100 text-purple-800"
+                        : "bg-slate-100 text-slate-600"
+                    }`}
+                  >
+                    {u.role}
+                  </span>
+                </td>
+                <td className="py-2 pr-4 text-xs text-slate-500">
+                  {new Date(u.created_at).toLocaleDateString()}
+                </td>
+                <td className="py-2">
+                  <button
+                    type="button"
+                    onClick={() => toggleRole(u.user_id, u.role)}
+                    className="text-xs font-semibold text-cyan-700 hover:text-cyan-900 underline"
+                  >
+                    {u.role === "admin" ? "Demote to user" : "Promote to admin"}
+                  </button>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </div>
   );
 }
