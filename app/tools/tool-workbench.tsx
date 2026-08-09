@@ -431,7 +431,7 @@ function configurePdfJsWorker(pdfjs: { GlobalWorkerOptions?: { workerSrc: string
 async function loadPdfPagesText(bytes: Uint8Array, password?: string) {
   const pdfjs = await import("pdfjs-dist/legacy/build/pdf.mjs");
   configurePdfJsWorker(pdfjs);
-  const task = pdfjs.getDocument({ data: bytes, password: password || undefined });
+  const task = pdfjs.getDocument({ data: new Uint8Array(bytes), password: password || undefined });
   const pdf = await task.promise;
   const pages: string[] = [];
 
@@ -451,7 +451,7 @@ async function loadPdfPagesText(bytes: Uint8Array, password?: string) {
 async function samplePdfTextCoverage(bytes: Uint8Array, password?: string) {
   const pdfjs = await import("pdfjs-dist/legacy/build/pdf.mjs");
   configurePdfJsWorker(pdfjs);
-  const task = pdfjs.getDocument({ data: bytes, password: password || undefined });
+  const task = pdfjs.getDocument({ data: new Uint8Array(bytes), password: password || undefined });
   const pdf = await task.promise;
   const sampledPages = Math.min(pdf.numPages, 6);
   let pagesWithText = 0;
@@ -485,7 +485,7 @@ async function samplePdfTextCoverage(bytes: Uint8Array, password?: string) {
 async function renderPdfToImages(bytes: Uint8Array, password?: string) {
   const pdfjs = await import("pdfjs-dist/legacy/build/pdf.mjs");
   configurePdfJsWorker(pdfjs);
-  const task = pdfjs.getDocument({ data: bytes, password: password || undefined });
+  const task = pdfjs.getDocument({ data: new Uint8Array(bytes), password: password || undefined });
   const pdf = await task.promise;
   const images: Array<{ dataUrl: string; width: number; height: number }> = [];
 
@@ -513,7 +513,7 @@ async function renderPdfToImages(bytes: Uint8Array, password?: string) {
 async function renderPdfThumbnails(bytes: Uint8Array, password?: string) {
   const pdfjs = await import("pdfjs-dist/legacy/build/pdf.mjs");
   configurePdfJsWorker(pdfjs);
-  const task = pdfjs.getDocument({ data: bytes, password: password || undefined });
+  const task = pdfjs.getDocument({ data: new Uint8Array(bytes), password: password || undefined });
   const pdf = await task.promise;
   const thumbs: PageThumbnail[] = [];
 
@@ -537,7 +537,7 @@ async function renderPdfThumbnails(bytes: Uint8Array, password?: string) {
 async function renderPdfFirstPagePreview(bytes: Uint8Array, password?: string) {
   const pdfjs = await import("pdfjs-dist/legacy/build/pdf.mjs");
   configurePdfJsWorker(pdfjs);
-  const task = pdfjs.getDocument({ data: bytes, password: password || undefined });
+  const task = pdfjs.getDocument({ data: new Uint8Array(bytes), password: password || undefined });
   const pdf = await task.promise;
   const page = await pdf.getPage(1);
   const viewport = page.getViewport({ scale: 0.5 });
@@ -554,7 +554,7 @@ async function renderPdfFirstPagePreview(bytes: Uint8Array, password?: string) {
 async function renderPdfPagePreview(bytes: Uint8Array, pageNumber = 1, password?: string) {
   const pdfjs = await import("pdfjs-dist/legacy/build/pdf.mjs");
   configurePdfJsWorker(pdfjs);
-  const task = pdfjs.getDocument({ data: bytes, password: password || undefined });
+  const task = pdfjs.getDocument({ data: new Uint8Array(bytes), password: password || undefined });
   const pdf = await task.promise;
   const safePage = Math.min(Math.max(1, pageNumber), pdf.numPages);
   const page = await pdf.getPage(safePage);
@@ -5116,7 +5116,7 @@ export default function ToolWorkbench({ tool }: WorkbenchProps) {
                   <button
                     key={deg}
                     type="button"
-                    onClick={() => { setRotateAngle(deg); setPageRotations({}); requestAutoRun("rotation-angle-changed"); }}
+                    onClick={() => { setRotateAngle(deg); setPageRotations({}); setTimeout(() => runTool(), 50); }}
                     className={`inline-flex items-center gap-1 rounded-full border px-3 py-1 text-xs font-semibold transition ${
                       rotateAngle === deg && Object.keys(pageRotations).length === 0
                         ? "border-cyan-500 bg-cyan-100 text-cyan-800"
@@ -5282,7 +5282,7 @@ export default function ToolWorkbench({ tool }: WorkbenchProps) {
                                       }
                                       return next;
                                     });
-                                    requestAutoRun("rotation-angle-changed");
+                                    setTimeout(() => runTool(), 50);
                                   }}
                                   className={`flex-1 rounded border px-1 py-0.5 text-[10px] font-semibold transition ${
                                     (pageRotations[thumb.pageNumber] ?? 0) === deg
