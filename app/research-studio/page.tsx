@@ -2,9 +2,12 @@
 
 import { SignInButton, SignUpButton, useAuth } from "@clerk/nextjs";
 import JSZip from "jszip";
+import katex from "katex";
+import "katex/dist/katex.min.css";
 import Link from "next/link";
-import { useEffect, useEffectEvent, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useEffectEvent, useMemo, useRef, useState } from "react";
 import Swal from "sweetalert2";
+import { getTemplateBySlug, RESEARCH_TEMPLATES, type ResearchTemplate } from "@/lib/research-templates";
 
 type ProjectEntry = {
   path: string;
@@ -43,6 +46,26 @@ type AiFixSuggestion = {
   steps: string[];
   patch?: string;
   files?: string[];
+};
+
+type CitationItem = {
+  key: string;
+  author: string;
+  year: string;
+  title: string;
+};
+
+type LabelItem = {
+  name: string;
+  file: string;
+};
+
+type SynctexRecord = {
+  page: number;
+  x: number;
+  y: number;
+  file: string;
+  line: number;
 };
 
 function normalizeAiPatchSnippet(raw: string) {
@@ -156,6 +179,138 @@ Start writing your paper.
 
 function clamp(value: number, min: number, max: number) {
   return Math.min(Math.max(value, min), max);
+}
+
+function scanCitationKeys(entries: ProjectEntry[]): CitationItem[] {
+  const bibFiles = entries.filter((e) => e.kind === "file" && e.path.endsWith(".bib"));
+  const keys = new Map<string, CitationItem>();
+  for (const bib of bibFiles) {
+    const content = bib.content;
+    const entryRegex = /@\w+\{\s*([^,]+),/g;
+    let match = entryRegex.exec(content);
+    while (match) {
+      const key = match[1].trim();
+      if (!keys.has(key)) {
+        const authorMatch = content.slice(match.index).match(/author\s*=\s*\{([^}]+)\}/);
+        const yearMatch = content.slice(match.index).match(/year\s*=\s*\{?(\d{4})\}?/);
+        const titleMatch = content.slice(match.index).match(/title\s*=\s*\{([^}]+)\}/);
+        keys.set(key, {
+          key,
+          author: authorMatch?.[1]?.trim() || "",
+          year: yearMatch?.[1]?.trim() || "",
+          title: titleMatch?.[1]?.trim() || "",
+        });
+      }
+      match = entryRegex.exec(content);
+    }
+  }
+  return Array.from(keys.values());
+}
+
+function scanLabels(entries: ProjectEntry[]): LabelItem[] {
+  const texFiles = entries.filter((e) => e.kind === "file" && e.path.endsWith(".tex"));
+  const labels: LabelItem[] = [];
+  const seen = new Set<string>();
+  for (const tex of texFiles) {
+    const content = tex.content;
+    const labelRegex = /\\label\{([^}]+)\}/g;
+    let match = labelRegex.exec(content);
+    while (match) {
+      const name = match[1].trim();
+      if (!seen.has(name)) {
+        seen.add(name);
+        labels.push({ name, file: tex.path });
+      }
+      match = labelRegex.exec(content);
+    }
+  }
+  return labels;
+}
+
+function parseAbstractContent(source: string): string {
+  const absStart = source.indexOf("\\begin{abstract}");
+  const absEnd = source.indexOf("\\end{abstract}");
+  if (absStart < 0 || absEnd <= absStart) return "";
+  return source.slice(absStart + "\\begin{abstract}".length, absEnd).trim();
+}
+
+function countWords(text: string): number {
+  const cleaned = text.replace(/\\[a-zA-Z]+(?:\[[^\]]*\])?(?:\{[^}]*\})?/g, " ");
+  const words = cleaned.match(/\b[\w'-]+\b/g);
+  return words ? words.length : 0;
+}
+
+function parseEquationAtLine(line: string): string | null {
+  const trimmed = line.trim();
+  const displayMatch = trimmed.match(/^\$\$([\s\S]*?)\$\$/);
+  if (displayMatch) return displayMatch[1].trim();
+  const beginMatch = trimmed.match(/\\begin\{equation\*?\}([\s\S]*?)\\end\{equation\*?\}/);
+  if (beginMatch) return beginMatch[1].replace(/\\label\{[^}]*\}/g, "").trim();
+  return null;
+}
+
+function findEquationAtPosition(source: string, cursorPos: number): string | null {
+  const lines = source.split("\n");
+  let offset = 0;
+  for (const line of lines) {
+    const lineEnd = offset + line.length;
+    if (cursorPos >= offset && cursorPos <= lineEnd) {
+      return parseEquationAtLine(line);
+    }
+    offset = lineEnd + 1;
+  }
+  return null;
+}
+
+async function parseSynctexGzBuffer(buffer: ArrayBuffer): Promise<SynctexRecord[]> {
+  try {
+    const bytes = new Uint8Array(buffer);
+    let text: string;
+    if (bytes[0] === 0x1f && bytes[1] === 0x8b) {
+      try {
+        const ds = new DecompressionStream("gzip");
+        const readable = new Blob([buffer]).stream().pipeThrough(ds);
+        const decompressed = await new Response(readable).arrayBuffer();
+        text = new TextDecoder("utf-8").decode(decompressed);
+      } catch {
+        return [];
+      }
+    } else {
+      text = new TextDecoder("utf-8").decode(bytes);
+    }
+
+    if (!text.includes("SyncTeX")) return [];
+
+    const records: SynctexRecord[] = [];
+    const lines = text.split("\n");
+    let currentFile = "";
+    for (let i = 0; i < lines.length; i++) {
+      const line = lines[i];
+      if (line.startsWith("Input:")) {
+        const parts = line.split(":");
+        if (parts.length >= 3) {
+          currentFile = parts.slice(1).join(":").trim();
+        }
+      } else if (line.startsWith("{")) {
+        const record: SynctexRecord = { page: 0, x: 0, y: 0, file: currentFile, line: 0 };
+        i++;
+        while (i < lines.length && lines[i] !== "}") {
+          const rl = lines[i];
+          if (rl.startsWith("Page:")) record.page = parseInt(rl.split(":")[1]) || 0;
+          else if (rl.startsWith("h:")) record.x = parseInt(rl.slice(2)) || 0;
+          else if (rl.startsWith("v:")) record.y = parseInt(rl.slice(2)) || 0;
+          else if (rl.startsWith("Line:")) record.line = parseInt(rl.split(":")[1]) || 0;
+          i++;
+        }
+        if (record.page > 0 && record.file) {
+          records.push(record);
+        }
+      }
+    }
+    return records;
+  } catch {
+    return [];
+  }
 }
 
 function buildPreview(source: string) {
@@ -666,6 +821,17 @@ export default function ResearchStudioPage() {
   const [treeContextMenu, setTreeContextMenu] = useState<TreeContextMenuState | null>(null);
   const [treeContextActiveIndex, setTreeContextActiveIndex] = useState(0);
   const [editorScroll, setEditorScroll] = useState({ top: 0, left: 0 });
+  const [autoSaveStatus, setAutoSaveStatus] = useState<"saved" | "unsaved" | "saving">("saved");
+  const [autoSaveTimestamp, setAutoSaveTimestamp] = useState<string | null>(null);
+  const [equationTooltip, setEquationTooltip] = useState<{ top: number; left: number; latex: string } | null>(null);
+  const [wordCount, setWordCount] = useState<{ words: number; chars: number; abstractWords: number }>({ words: 0, chars: 0, abstractWords: 0 });
+  const [loadingProject, setLoadingProject] = useState(false);
+  const [synctexRecords, setSynctexRecords] = useState<SynctexRecord[]>([]);
+  const [synctexNotice, setSynctexNotice] = useState("");
+  const [showShortcuts, setShowShortcuts] = useState(false);
+  const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const equationHoverRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const wordCountTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const panesRef = useRef<HTMLElement | null>(null);
   const editorRef = useRef<HTMLTextAreaElement | null>(null);
   const findInputRef = useRef<HTMLInputElement | null>(null);
@@ -689,6 +855,8 @@ export default function ResearchStudioPage() {
   const preview = useMemo(() => buildPreview(activeSource), [activeSource]);
   const projectTree = useMemo(() => buildProjectTree(projectEntries), [projectEntries]);
   const highlightedSource = useMemo(() => highlightLatexSource(activeSource), [activeSource]);
+  const citationKeys = useMemo(() => scanCitationKeys(projectEntries), [projectEntries]);
+  const labelItems = useMemo(() => scanLabels(projectEntries), [projectEntries]);
   const autoExpandedFolders = useMemo(
     () => buildActiveAncestorExpansion(activeEntry?.path ?? "", projectEntries),
     [activeEntry?.path, projectEntries]
@@ -789,6 +957,45 @@ export default function ResearchStudioPage() {
     window.requestAnimationFrame(() => findInputRef.current?.focus());
   }, [findPanelOpen]);
 
+  // Word count debounce
+  useEffect(() => {
+    if (wordCountTimerRef.current) clearTimeout(wordCountTimerRef.current);
+    wordCountTimerRef.current = setTimeout(() => {
+      const absContent = parseAbstractContent(activeSource);
+      setWordCount({
+        words: countWords(activeSource),
+        chars: activeSource.length,
+        abstractWords: countWords(absContent),
+      });
+    }, 300);
+    return () => {
+      if (wordCountTimerRef.current) clearTimeout(wordCountTimerRef.current);
+    };
+  }, [activeSource]);
+
+  // Auto-save debounce
+  const triggerAutoSave = useCallback(() => {
+    setAutoSaveStatus("unsaved");
+    if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
+    saveTimerRef.current = setTimeout(() => {
+      try {
+        const snapshot = buildCurrentProjectSnapshot();
+        persistProjectSnapshot(snapshot);
+        if (userId && !accountSyncUnavailable) {
+          void upsertProjectSnapshotToServer(snapshot).catch(() => {});
+        }
+        setAutoSaveTimestamp(new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" }));
+        setAutoSaveStatus("saved");
+      } catch {
+        // silent fail
+      }
+    }, 2000);
+  }, [projectEntries, activeProjectId, projectName, selectedPath, lastCompileAt, userId, accountSyncUnavailable]);
+
+  useEffect(() => {
+    triggerAutoSave();
+  }, [triggerAutoSave]);
+
   useEffect(() => {
     if (!findPanelOpen && !replacePanelOpen) return;
 
@@ -849,6 +1056,51 @@ export default function ResearchStudioPage() {
   }
 
   function updateIntellisenseFromInput(source: string, cursor: number, textarea?: HTMLTextAreaElement) {
+    // Check for \cite{ context
+    const citePrefix = source.slice(0, Math.max(0, cursor)).match(/\\cite\{([^}]*)$/);
+    if (citePrefix) {
+      const query = citePrefix[1].toLowerCase();
+      const matches = citationKeys
+        .filter((c) => !query || c.key.toLowerCase().includes(query))
+        .slice(0, 8);
+      if (matches.length) {
+        setIntellisenseOptions(
+          matches.map((c) => ({
+            label: c.key,
+            insert: `${c.key}`,
+            detail: [c.author, c.year, c.title].filter(Boolean).join(" | ") || "Citation",
+          }))
+        );
+        setIntellisenseStart(cursor - citePrefix[1].length);
+        setIntellisenseIndex(0);
+        if (textarea) setIntellisensePosition(getCaretViewportPosition(textarea, cursor));
+        return;
+      }
+    }
+
+    // Check for \ref{ context
+    const refPrefix = source.slice(0, Math.max(0, cursor)).match(/\\ref\{([^}]*)$/);
+    if (refPrefix) {
+      const query = refPrefix[1].toLowerCase();
+      const matches = labelItems
+        .filter((l) => !query || l.name.toLowerCase().includes(query))
+        .slice(0, 8);
+      if (matches.length) {
+        setIntellisenseOptions(
+          matches.map((l) => ({
+            label: l.name,
+            insert: `${l.name}`,
+            detail: `In file: ${l.file}`,
+          }))
+        );
+        setIntellisenseStart(cursor - refPrefix[1].length);
+        setIntellisenseIndex(0);
+        if (textarea) setIntellisensePosition(getCaretViewportPosition(textarea, cursor));
+        return;
+      }
+    }
+
+    // Standard \command intellisense
     const prefixMatch = source.slice(0, cursor).match(/\\[a-zA-Z ]*$/);
     if (!prefixMatch) {
       closeIntellisense();
@@ -905,6 +1157,79 @@ export default function ResearchStudioPage() {
     const target = event.currentTarget;
     setEditorScroll({ top: target.scrollTop, left: target.scrollLeft });
     updateIntellisenseFromInput(target.value, target.selectionStart, target);
+  }
+
+  function onEditorMouseMove(event: React.MouseEvent<HTMLTextAreaElement>) {
+    if (equationHoverRef.current) {
+      clearTimeout(equationHoverRef.current);
+      equationHoverRef.current = null;
+    }
+    if (equationTooltip) {
+      setEquationTooltip(null);
+    }
+    const textarea = event.currentTarget;
+    const cursorPos = textarea.selectionStart;
+    equationHoverRef.current = setTimeout(() => {
+      const eq = findEquationAtPosition(textarea.value, cursorPos);
+      if (eq) {
+        try {
+          const rect = textarea.getBoundingClientRect();
+          setEquationTooltip({
+            top: event.clientY + 12,
+            left: event.clientX + 12,
+            latex: eq,
+          });
+        } catch {
+          // KaTeX render failed, don't show tooltip
+        }
+      }
+    }, 500);
+  }
+
+  function onEditorDragOver(event: React.DragEvent<HTMLTextAreaElement>) {
+    event.preventDefault();
+    event.dataTransfer.dropEffect = "copy";
+  }
+
+  function onEditorDrop(event: React.DragEvent<HTMLTextAreaElement>) {
+    event.preventDefault();
+    const files = event.dataTransfer.files;
+    if (!files || !files.length) return;
+
+    const imageFile = files[0];
+    if (!imageFile.type.startsWith("image/")) return;
+
+    const reader = new FileReader();
+    reader.onload = () => {
+      const base64 = reader.result as string;
+      const safeName = imageFile.name.replace(/[^a-zA-Z0-9._-]/g, "_");
+      const figurePath = `figures/${safeName}`;
+
+      // Add or update the figure entry
+      setProjectEntries((current) => {
+        const withoutExisting = current.filter((e) => e.path !== figurePath);
+        return [
+          ...withoutExisting,
+          { path: figurePath, kind: "file", content: base64 },
+        ];
+      });
+
+      // Insert LaTeX code at cursor
+      const textarea = editorRef.current;
+      if (!textarea) return;
+      const cursor = textarea.selectionStart;
+      const snippet = `\begin{figure}[htbp]
+  \centering
+  \includegraphics[width=0.8\\linewidth]{${figurePath}}
+  \caption{Figure caption}
+  \label{fig:${safeName.replace(/\.[^.]+$/, "")}}
+\end{figure}
+`;
+      const nextText = activeSource.slice(0, cursor) + snippet + activeSource.slice(cursor);
+      updateActiveFile(nextText);
+      setCompileNotice(`Image "${safeName}" added to figures/ and inserted at cursor.`);
+    };
+    reader.readAsDataURL(imageFile);
   }
 
   function openTreeContextMenu(
@@ -1371,6 +1696,49 @@ export default function ResearchStudioPage() {
           : entry
       )
     );
+    setAutoSaveStatus("unsaved");
+  }
+
+  function createProjectFromTemplate(template: ResearchTemplate) {
+    if (!userId && savedProjects.length >= GUEST_PROJECT_LIMIT) {
+      setCompileNotice("Guest limit reached: sign in to create more than 5 projects.");
+      return;
+    }
+    const nextProjectId = makeProjectId();
+    const name = template.name;
+    const createdAt = new Date().toISOString();
+    const snapshot: SavedProjectData = {
+      id: nextProjectId,
+      name,
+      entries: template.entries,
+      selectedPath: "main.tex",
+      lastCompileAt: "Not compiled yet",
+      updatedAt: createdAt,
+    };
+    persistProjectSnapshot(snapshot);
+    queueServerProjectSync(snapshot);
+    setSavedProjects((current) => [
+      { id: nextProjectId, name, updatedAt: createdAt },
+      ...current.filter((item) => item.id !== nextProjectId),
+    ]);
+    if (compiledPdfUrl) URL.revokeObjectURL(compiledPdfUrl);
+    closeIntellisense();
+    setActiveProjectId(nextProjectId);
+    setProjectName(name);
+    setProjectEntries(template.entries);
+    setSelectedPath("main.tex");
+    setAddFileError("");
+    setCompileBusy(false);
+    setCompiledPdfBlob(null);
+    setCompiledPdfUrl("");
+    setCompiledPdfFileName("compiled-main.pdf");
+    setAiFixBusy(false);
+    setAiFixError("");
+    setAiFixSummary("");
+    setAiFixSuggestions([]);
+    setLastCompileAt("Not compiled yet");
+    setCompileNotice(`Created project from "${template.name}" template.`);
+    setWorkspaceScreen("editor");
   }
 
   async function addProjectFile() {
@@ -1639,6 +2007,25 @@ export default function ResearchStudioPage() {
 
       const engine = response.headers.get("X-Latex-Engine") || "server engine";
       setCompileNotice(`Compiled ${rootPath} using ${engine}.`);
+
+      // Try to fetch SyncTeX data
+      try {
+        const synctexRes = await fetch(`/api/latex-compile?synctex=1&root=${encodeURIComponent(rootPath)}`, {
+          cache: "no-store",
+        });
+        if (synctexRes.ok) {
+          const synctexBuf = await synctexRes.arrayBuffer();
+          const records = await parseSynctexGzBuffer(synctexBuf);
+          setSynctexRecords(records);
+          if (records.length) {
+            setSynctexNotice("");
+          } else {
+            setSynctexNotice("SyncTeX data available but no records parsed.");
+          }
+        }
+      } catch {
+        setSynctexNotice("SyncTeX not available for this compile.");
+      }
       const compiledAt = new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" });
       setLastCompileAt(compiledAt);
 
@@ -2146,19 +2533,53 @@ export default function ResearchStudioPage() {
 
         <section className="rounded-2xl border border-slate-200 bg-white/90 p-3">
           <div className="mb-2 flex items-center justify-between gap-2">
-            <button
-              type="button"
-              onClick={createNewProject}
-              className="group relative inline-flex h-9 w-9 items-center justify-center rounded-md border border-cyan-300 bg-cyan-50 text-cyan-900 transition hover:bg-cyan-100"
-              aria-label="Create new project"
-            >
-              <svg viewBox="0 0 20 20" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="1.8">
-                <path d="M10 4v12M4 10h12" strokeLinecap="round" strokeLinejoin="round" />
-              </svg>
-              <span className="pointer-events-none absolute left-1/2 top-full z-20 mt-1 hidden -translate-x-1/2 whitespace-nowrap rounded bg-slate-900 px-2 py-1 text-[10px] font-semibold text-white group-hover:block">
-                Create project
-              </span>
-            </button>
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={createNewProject}
+                className="group relative inline-flex h-9 w-9 items-center justify-center rounded-md border border-cyan-300 bg-cyan-50 text-cyan-900 transition hover:bg-cyan-100"
+                aria-label="Create new project"
+              >
+                <svg viewBox="0 0 20 20" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="1.8">
+                  <path d="M10 4v12M4 10h12" strokeLinecap="round" strokeLinejoin="round" />
+                </svg>
+                <span className="pointer-events-none absolute left-1/2 top-full z-20 mt-1 hidden -translate-x-1/2 whitespace-nowrap rounded bg-slate-900 px-2 py-1 text-[10px] font-semibold text-white group-hover:block">
+                  Create project
+                </span>
+              </button>
+              <button
+                type="button"
+                onClick={async () => {
+                  const templateOptions = RESEARCH_TEMPLATES.reduce((acc, t) => {
+                    acc[t.slug] = t.name;
+                    return acc;
+                  }, {} as Record<string, string>);
+                  const result = await Swal.fire({
+                    title: "New from Template",
+                    input: "select",
+                    inputOptions: templateOptions,
+                    inputPlaceholder: "Select a template",
+                    showCancelButton: true,
+                    confirmButtonText: "Create",
+                    cancelButtonText: "Cancel",
+                    confirmButtonColor: "#0f766e",
+                    cancelButtonColor: "#e2e8f0",
+                    background: "#ffffff",
+                  });
+                  if (result.isConfirmed && result.value) {
+                    const template = getTemplateBySlug(result.value);
+                    if (template) createProjectFromTemplate(template);
+                  }
+                }}
+                className="group relative inline-flex items-center gap-1 rounded-md border border-purple-300 bg-purple-50 px-2.5 py-1.5 text-xs font-semibold text-purple-800 transition hover:bg-purple-100"
+              >
+                <svg viewBox="0 0 20 20" className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth="1.8">
+                  <path d="M4 3h9l3 3v11H4V3z" strokeLinecap="round" strokeLinejoin="round" />
+                  <path d="M12 3v3h3" strokeLinecap="round" strokeLinejoin="round" />
+                </svg>
+                New from Template
+              </button>
+            </div>
             <p className="text-[11px] text-slate-500">
               {usesAccountStorage
                 ? "Projects sync to your signed-in account and are also cached in this browser."
@@ -2243,9 +2664,67 @@ export default function ResearchStudioPage() {
                   );
                 })}
               </div>
+            ) : loadingProject ? (
+              <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-3">
+                {[1, 2, 3].map((i) => (
+                  <div key={i} className="animate-pulse rounded-xl border border-slate-200 bg-slate-100 p-4">
+                    <div className="flex items-start gap-3">
+                      <div className="h-8 w-8 rounded-md bg-slate-200" />
+                      <div className="flex-1 space-y-2">
+                        <div className="h-4 w-3/4 rounded bg-slate-200" />
+                        <div className="h-3 w-1/2 rounded bg-slate-200" />
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
             ) : (
-              <div className="rounded-xl border border-dashed border-slate-300 bg-slate-50 p-4 text-sm text-slate-500">
-                No saved projects yet. Create one to start editing.
+              <div className="rounded-xl border border-dashed border-slate-300 bg-slate-50 p-8 text-center">
+                <div className="mx-auto mb-3 flex h-14 w-14 items-center justify-center rounded-full bg-cyan-100 text-cyan-700">
+                  <svg viewBox="0 0 20 20" className="h-7 w-7" fill="none" stroke="currentColor" strokeWidth="1.6">
+                    <path d="M6 3h6l4 4v10H6V3z" strokeLinecap="round" strokeLinejoin="round" />
+                    <path d="M12 3v4h4" strokeLinecap="round" strokeLinejoin="round" />
+                  </svg>
+                </div>
+                <p className="mb-1 text-sm font-semibold text-slate-700">Create your first research project</p>
+                <p className="mb-4 text-xs text-slate-500">Start with a blank project or choose a journal template to get going faster.</p>
+                <div className="flex items-center justify-center gap-2">
+                  <button
+                    type="button"
+                    onClick={createNewProject}
+                    className="rounded-md bg-gradient-to-r from-cyan-500 to-cyan-700 px-4 py-2 text-xs font-bold text-white shadow-md shadow-cyan-500/20 transition hover:from-cyan-600 hover:to-cyan-800"
+                  >
+                    Create Blank Project
+                  </button>
+                  <button
+                    type="button"
+                    onClick={async () => {
+                      const templateOptions = RESEARCH_TEMPLATES.reduce((acc, t) => {
+                        acc[t.slug] = t.name;
+                        return acc;
+                      }, {} as Record<string, string>);
+                      const result = await Swal.fire({
+                        title: "New from Template",
+                        input: "select",
+                        inputOptions: templateOptions,
+                        inputPlaceholder: "Select a template",
+                        showCancelButton: true,
+                        confirmButtonText: "Create",
+                        cancelButtonText: "Cancel",
+                        confirmButtonColor: "#0f766e",
+                        cancelButtonColor: "#e2e8f0",
+                        background: "#ffffff",
+                      });
+                      if (result.isConfirmed && result.value) {
+                        const template = getTemplateBySlug(result.value);
+                        if (template) createProjectFromTemplate(template);
+                      }
+                    }}
+                    className="rounded-md border border-purple-300 bg-purple-50 px-4 py-2 text-xs font-semibold text-purple-800 transition hover:bg-purple-100"
+                  >
+                    From Template
+                  </button>
+                </div>
               </div>
             )}
         </section>
@@ -2521,13 +3000,13 @@ export default function ResearchStudioPage() {
                   type="button"
                   onClick={() => void compileProject()}
                   disabled={compileBusy}
-                  className="inline-flex h-8 items-center gap-1 rounded-md border border-cyan-300 bg-cyan-50 px-2 text-cyan-900 transition hover:bg-cyan-100 disabled:opacity-60"
+                  className="inline-flex h-10 w-full items-center justify-center gap-2 rounded-md bg-gradient-to-r from-cyan-500 to-cyan-700 px-4 text-sm font-bold text-white shadow-md shadow-cyan-500/30 transition hover:from-cyan-600 hover:to-cyan-800 hover:shadow-lg disabled:opacity-60"
                   aria-label={compileBusy ? "Compiling project" : "Compile project"}
                 >
-                  <svg viewBox="0 0 20 20" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="1.8">
+                  <svg viewBox="0 0 20 20" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="1.8">
                     <path d="M7 6l7 4-7 4V6z" strokeLinecap="round" strokeLinejoin="round" />
                   </svg>
-                  <span>Compile</span>
+                  <span>{compileBusy ? "Compiling..." : "Compile"}</span>
                 </button>
                 <button
                   type="button"
@@ -2987,9 +3466,14 @@ export default function ResearchStudioPage() {
                 onKeyUp={onEditorCursorEvent}
                 onScroll={onEditorCursorEvent}
                 onKeyDown={onEditorKeyDown}
+                onMouseMove={onEditorMouseMove}
+                onMouseLeave={() => { if (equationHoverRef.current) clearTimeout(equationHoverRef.current); setEquationTooltip(null); }}
+                onDragOver={onEditorDragOver}
+                onDrop={onEditorDrop}
                 disabled={!activeEntry}
-                className="latex-editor-input relative z-10 min-h-[68vh] w-full resize-none border-0 bg-transparent p-3 font-mono text-sm leading-6 outline-none ring-cyan-400 focus:ring-2 disabled:opacity-60"
-                spellCheck={false}
+                className="latex-editor-input research-editor relative z-10 min-h-[68vh] w-full resize-none border-0 bg-transparent p-3 font-mono text-sm leading-6 outline-none ring-cyan-400 focus:ring-2 disabled:opacity-60"
+                spellCheck={true}
+                lang="en"
               />
 
               {intellisenseOptions.length && intellisensePosition ? (
@@ -3023,7 +3507,68 @@ export default function ResearchStudioPage() {
                   </ul>
                 </div>
               ) : null}
+
+              {equationTooltip ? (
+                <div
+                  className="equation-preview-tooltip fixed z-30 max-w-sm rounded-lg border border-cyan-300 bg-white p-3 shadow-xl"
+                  style={{ top: `${equationTooltip.top}px`, left: `${equationTooltip.left}px` }}
+                  dangerouslySetInnerHTML={{
+                    __html: (() => {
+                      try {
+                        return katex.renderToString(equationTooltip.latex, { displayMode: true, throwOnError: true });
+                      } catch {
+                        return '<span class="text-xs text-rose-600">Could not render equation</span>';
+                      }
+                    })(),
+                  }}
+                />
+              ) : null}
             </div>
+
+            {/* Status bar */}
+            <div className="mt-1.5 flex flex-wrap items-center justify-between gap-2 rounded-md border border-slate-200 bg-white px-2 py-1 text-[11px] text-slate-600">
+              <div className="flex flex-wrap items-center gap-3">
+                <span>
+                  <span className="font-semibold">Words:</span> {wordCount.words} · <span className="font-semibold">Chars:</span> {wordCount.chars}
+                </span>
+                {wordCount.abstractWords > 0 ? (
+                  <span className={wordCount.abstractWords > 250 ? "font-semibold text-rose-600" : "text-slate-500"}>
+                    Abstract: {wordCount.abstractWords}/250 words
+                    {wordCount.abstractWords > 250 ? " (over limit!)" : ""}
+                  </span>
+                ) : null}
+              </div>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => setShowShortcuts((c) => !c)}
+                  className="rounded border border-slate-300 bg-white px-1.5 py-0.5 text-[10px] font-semibold text-slate-600 hover:bg-slate-100"
+                >
+                  {showShortcuts ? "Hide Shortcuts" : "Shortcuts"}
+                </button>
+                <span className={autoSaveStatus === "saved" ? "text-emerald-600" : autoSaveStatus === "saving" ? "text-slate-500" : "text-amber-600"}>
+                  {autoSaveStatus === "saved" ? `Saved ${autoSaveTimestamp || ""}` : autoSaveStatus === "saving" ? "Saving..." : "Unsaved changes"}
+                </span>
+              </div>
+            </div>
+
+            {/* Keyboard shortcuts panel */}
+            {showShortcuts ? (
+              <div className="mt-1 rounded-md border border-slate-200 bg-slate-50 p-1.5">
+                <p className="mb-1 text-[10px] font-semibold uppercase tracking-[0.12em] text-slate-500">Keyboard Shortcuts</p>
+                <div className="grid grid-cols-2 gap-x-4 gap-y-0.5 text-[11px] text-slate-600">
+                  <div><kbd className="rounded bg-white px-1 py-0.5 text-[10px] font-semibold shadow">Ctrl+S</kbd> / <kbd className="rounded bg-white px-1 py-0.5 text-[10px] font-semibold shadow">Cmd+Enter</kbd> Compile</div>
+                  <div><kbd className="rounded bg-white px-1 py-0.5 text-[10px] font-semibold shadow">Ctrl+F</kbd> Find</div>
+                  <div><kbd className="rounded bg-white px-1 py-0.5 text-[10px] font-semibold shadow">Ctrl+H</kbd> Find & Replace</div>
+                  <div><kbd className="rounded bg-white px-1 py-0.5 text-[10px] font-semibold shadow">Ctrl+G</kbd> Next match</div>
+                  <div><kbd className="rounded bg-white px-1 py-0.5 text-[10px] font-semibold shadow">Ctrl+D</kbd> Duplicate line</div>
+                  <div><kbd className="rounded bg-white px-1 py-0.5 text-[10px] font-semibold shadow">Ctrl+/</kbd> Toggle comment</div>
+                  <div><kbd className="rounded bg-white px-1 py-0.5 text-[10px] font-semibold shadow">Tab</kbd> Indent · <kbd className="rounded bg-white px-1 py-0.5 text-[10px] font-semibold shadow">Shift+Tab</kbd> Outdent</div>
+                  <div><kbd className="rounded bg-white px-1 py-0.5 text-[10px] font-semibold shadow">Ctrl+Click PDF</kbd> Sync to source</div>
+                  <div className="col-span-2 mt-1 text-[10px] text-slate-400">Right-click for browser spellcheck suggestions (spellcheck enabled)</div>
+                </div>
+              </div>
+            ) : null}
           </div>
         </div>
 
@@ -3049,7 +3594,14 @@ export default function ResearchStudioPage() {
         >
           <div className={`flex items-center gap-2 ${rightPaneCollapsed ? "justify-center" : "justify-between"}`}>
             {!rightPaneCollapsed ? (
-              <p className="text-xs font-semibold uppercase tracking-[0.14em] text-slate-600">Preview Pane</p>
+              <p className="text-xs font-semibold uppercase tracking-[0.14em] text-slate-600">
+                Preview Pane
+                {synctexNotice ? (
+                  <span className="ml-2 text-[10px] font-normal text-amber-600">
+                    Ctrl+click for sync · {synctexNotice}
+                  </span>
+                ) : null}
+              </p>
             ) : null}
             <button
               type="button"
@@ -3213,6 +3765,45 @@ export default function ResearchStudioPage() {
                     src={compiledPdfUrl}
                     title="Compiled LaTeX PDF preview"
                     className="h-full w-full rounded-md border border-slate-200 bg-white"
+                    onClick={(event) => {
+                      if (!event.ctrlKey && !event.metaKey) return;
+                      if (!synctexRecords.length) {
+                        setSynctexNotice("No SyncTeX data available. Recompile with synctex enabled.");
+                        return;
+                      }
+                      // Approximate page detection from click position
+                      const iframe = event.currentTarget;
+                      const rect = iframe.getBoundingClientRect();
+                      const relY = event.clientY - rect.top;
+                      const approxPage = Math.floor(relY / (rect.height / Math.max(1, synctexRecords.reduce((max, r) => Math.max(max, r.page), 0)))) + 1;
+                      const match = synctexRecords.find((r) => r.page === approxPage);
+                      if (match) {
+                        const targetFile = match.file.replace(/^\.\//, "");
+                        const fileEntry = projectEntries.find(
+                          (e) => e.kind === "file" &&
+                            (e.path === targetFile || e.path.endsWith("/" + targetFile.split("/").pop() || ""))
+                        );
+                        if (fileEntry) {
+                          setSelectedPath(fileEntry.path);
+                          setSynctexNotice(`Navigated to ${targetFile} line ${match.line}`);
+                          window.requestAnimationFrame(() => {
+                            const textarea = editorRef.current;
+                            if (!textarea) return;
+                            textarea.focus();
+                            const lines = activeSource.split("\n");
+                            let targetLinePos = 0;
+                            for (let i = 0; i < Math.min(match.line - 1, lines.length); i++) {
+                              targetLinePos += lines[i].length + 1;
+                            }
+                            textarea.setSelectionRange(targetLinePos, targetLinePos);
+                          });
+                        } else {
+                          setSynctexNotice(`File ${targetFile} not found in project.`);
+                        }
+                      } else {
+                        setSynctexNotice(`No source mapping for page ${approxPage}.`);
+                      }
+                    }}
                   />
                 </div>
               ) : (
