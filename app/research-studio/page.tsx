@@ -803,10 +803,7 @@ export default function ResearchStudioPage() {
   const [leftPaneWidth, setLeftPaneWidth] = useState(220);
   const [rightPaneWidth, setRightPaneWidth] = useState(300);
   const [leftPaneCollapsed, setLeftPaneCollapsed] = useState(false);
-  const [showPreview, setShowPreview] = useState(false);
-  const [showFormatting, setShowFormatting] = useState(false);
-  const [cursorLine, setCursorLine] = useState(1);
-  const [cursorCol, setCursorCol] = useState(1);
+  const [rightPaneCollapsed, setRightPaneCollapsed] = useState(false);
   const [activeResizer, setActiveResizer] = useState<"left" | "right" | null>(null);
   const [collapsedOutlineSections, setCollapsedOutlineSections] = useState<Record<string, boolean>>({});
   const [findPanelOpen, setFindPanelOpen] = useState(false);
@@ -1162,10 +1159,6 @@ export default function ResearchStudioPage() {
     const target = event.currentTarget;
     setEditorScroll({ top: target.scrollTop, left: target.scrollLeft });
     updateIntellisenseFromInput(target.value, target.selectionStart, target);
-    const pos = target.selectionStart;
-    const beforeCursor = target.value.slice(0, pos);
-    setCursorLine(beforeCursor.split('\n').length);
-    setCursorCol(pos - beforeCursor.lastIndexOf('\n'));
   }
 
   function onEditorMouseMove(event: React.MouseEvent<HTMLTextAreaElement>) {
@@ -2386,20 +2379,20 @@ export default function ResearchStudioPage() {
       return (
         <li key={node.path || node.name}>
           <div
-            className="flex items-center gap-0.5 group"
-            style={{ paddingLeft: `${depth * 12}px` }}
+            className="flex items-center gap-1"
+            style={{ paddingLeft: `${depth * 10}px` }}
             onContextMenu={(event) => openTreeContextMenu(event, node, explicitFolder)}
           >
             {isFolder ? (
               <button
                 type="button"
                 onClick={() => toggleFolder(node.path)}
-                className="inline-flex h-5 w-5 shrink-0 items-center justify-center text-slate-400 hover:text-slate-600"
+                className="inline-flex h-6 w-6 items-center justify-center rounded-md border border-slate-200 bg-white text-slate-600"
                 aria-label={expanded ? `Collapse ${node.path}` : `Expand ${node.path}`}
               >
                 <svg
                   viewBox="0 0 20 20"
-                  className={`h-3 w-3 transition-transform ${expanded ? "rotate-90" : "rotate-0"}`}
+                  className={`h-3.5 w-3.5 transition-transform ${expanded ? "rotate-90" : "rotate-0"}`}
                   fill="none"
                   stroke="currentColor"
                   strokeWidth="1.8"
@@ -2408,7 +2401,7 @@ export default function ResearchStudioPage() {
                 </svg>
               </button>
             ) : (
-              <span className="h-5 w-5 shrink-0" aria-hidden="true" />
+              <span className="h-6 w-6" aria-hidden="true" />
             )}
 
             <button
@@ -2419,63 +2412,69 @@ export default function ResearchStudioPage() {
                   setSelectedPath(node.path);
                 }
               }}
-              className={`flex-1 truncate rounded px-1.5 py-0.5 text-left text-[11px] leading-5 transition ${
+              className={`flex-1 rounded-md border px-2 py-1 text-left text-xs ${
                 isFolder
-                  ? "text-slate-500 hover:text-slate-700"
+                  ? "border-slate-200 bg-slate-100 text-slate-600"
                   : selectedPath === node.path
-                    ? "border-l-[2px] border-l-cyan-500 pl-[4px] text-cyan-900 font-medium"
-                    : "border-l-[2px] border-l-transparent pl-[4px] text-slate-600 hover:text-slate-900 hover:bg-slate-100"
+                    ? "border-cyan-300 bg-cyan-50 text-cyan-900"
+                    : "border-slate-200 bg-slate-50 text-slate-700"
               }`}
             >
               {isFolder ? `${node.name || "root"}/` : node.name}
             </button>
 
             {isFolder ? (
-              <span className="hidden group-hover:flex items-center gap-0.5">
+              <>
                 <button
                   type="button"
                   onClick={() => void addProjectEntryAt(node.path, "file")}
-                  className="inline-flex h-5 w-5 items-center justify-center rounded text-slate-400 transition hover:bg-slate-100 hover:text-slate-600"
+                  className="inline-flex h-7 w-7 items-center justify-center rounded-md border border-slate-300 bg-white text-slate-700 transition hover:bg-slate-100"
                   aria-label={`Add file in ${node.path || "root"}`}
                 >
-                  <svg viewBox="0 0 20 20" className="h-3 w-3" fill="none" stroke="currentColor" strokeWidth="1.8">
+                  <svg viewBox="0 0 20 20" className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth="1.8">
                     <path d="M10 4v12M4 10h12" strokeLinecap="round" strokeLinejoin="round" />
                   </svg>
                 </button>
                 <button
                   type="button"
                   onClick={() => void addProjectEntryAt(node.path, "folder")}
-                  className="inline-flex h-5 w-5 items-center justify-center rounded text-slate-400 transition hover:bg-slate-100 hover:text-slate-600"
+                  className="inline-flex h-7 w-7 items-center justify-center rounded-md border border-slate-300 bg-white text-slate-700 transition hover:bg-slate-100"
                   aria-label={`Add folder in ${node.path || "root"}`}
                 >
-                  <svg viewBox="0 0 20 20" className="h-3 w-3" fill="none" stroke="currentColor" strokeWidth="1.8">
+                  <svg viewBox="0 0 20 20" className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth="1.8">
                     <path d="M3 6h5l1.2 1.5H17v7.5H3V6z" strokeLinecap="round" strokeLinejoin="round" />
                   </svg>
                 </button>
-              </span>
+              </>
             ) : null}
 
             {isFolder && !explicitFolder ? null : (
               <button
                 type="button"
                 onClick={() => void showProjectEntryActions(explicitFolder || { path: node.path, kind: "file", content: "" })}
-                className="hidden group-hover:inline-flex h-5 w-5 items-center justify-center rounded text-slate-400 transition hover:bg-slate-100 hover:text-slate-600"
+                className="group relative inline-flex h-7 w-7 items-center justify-center rounded-md border border-slate-300 bg-white text-slate-700 transition hover:bg-slate-100"
                 aria-label={`Entry actions for ${node.path}`}
               >
-                <svg viewBox="0 0 20 20" className="h-3 w-3" fill="none" stroke="currentColor" strokeWidth="1.8">
+                <svg viewBox="0 0 20 20" className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth="1.8">
                   <path d="M4 10h.01M10 10h.01M16 10h.01" strokeLinecap="round" strokeLinejoin="round" />
                 </svg>
+                <span className="pointer-events-none absolute left-1/2 top-full z-20 mt-1 hidden -translate-x-1/2 whitespace-nowrap rounded bg-slate-900 px-2 py-1 text-[10px] font-semibold text-white group-hover:block">
+                  Actions
+                </span>
               </button>
             )}
           </div>
 
           {isFolder && expanded && node.children?.length ? (
-            <ul className="mt-0.5">{renderProjectTree(node.children, depth + 1)}</ul>
+            <ul className="mt-1 space-y-1">{renderProjectTree(node.children, depth + 1)}</ul>
           ) : null}
         </li>
       );
     });
   }
+
+  const effectiveLeftPaneWidth = leftPaneCollapsed ? 34 : leftPaneWidth;
+  const effectiveRightPaneWidth = rightPaneCollapsed ? 34 : rightPaneWidth;
 
   if (workspaceScreen === "projects") {
     return (
@@ -2758,526 +2757,215 @@ export default function ResearchStudioPage() {
     );
   }
 
-  const lineNumbers = useMemo(() => {
-    const lineCount = activeSource.split('\n').length;
-    return Array.from({ length: lineCount }, (_, i) => i + 1).join('\n');
-  }, [activeSource]);
-
   return (
-    <main className="depth-stage flex h-full w-full flex-col bg-slate-50">
-      {/* ── Unified Toolbar ──────────────────────────── */}
-      <header className="flex items-center gap-3 border-b border-slate-200 bg-white px-3 py-1.5">
-        {/* Left: breadcrumb */}
-        <div className="flex items-center gap-1.5 min-w-0">
+    <main className="depth-stage mx-auto flex w-full max-w-[1600px] flex-1 flex-col gap-3 px-3 py-3 md:px-4 md:py-4">
+      <header className="rounded-2xl border border-slate-200 bg-white/90 p-3">
+        <div className="flex flex-col gap-2">
           <button
             type="button"
             onClick={openProjectsBoard}
-            className="inline-flex shrink-0 items-center gap-1 rounded px-1.5 py-0.5 text-xs font-medium text-slate-500 transition hover:bg-slate-100 hover:text-slate-700"
-            aria-label="Back to projects"
+            className="group relative inline-flex h-8 w-fit items-center gap-1 rounded-md border border-slate-300 bg-white px-2 text-xs font-semibold uppercase tracking-[0.1em] text-slate-700 transition hover:bg-slate-100"
+            aria-label="Back to projects board"
           >
-            <svg viewBox="0 0 20 20" className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth="1.8">
+            <svg viewBox="0 0 20 20" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="1.8">
               <path d="M12 4l-6 6 6 6" strokeLinecap="round" strokeLinejoin="round" />
             </svg>
-            <span className="hidden sm:inline">Projects</span>
-          </button>
-          <span className="text-xs text-slate-300">/</span>
-          <span className="truncate text-xs font-semibold text-slate-800">{projectName}</span>
-          <span className="text-xs text-slate-300">/</span>
-          <span className="truncate text-xs text-slate-500">{activeEntry?.path || "No file"}</span>
-        </div>
-
-        {/* Center: compile */}
-        <div className="flex-1 flex justify-center">
-          <button
-            type="button"
-            onClick={() => void compileProject()}
-            disabled={compileBusy}
-            className="inline-flex items-center gap-1.5 rounded-md bg-gradient-to-r from-cyan-500 to-cyan-700 px-4 py-1.5 text-xs font-bold text-white shadow-sm shadow-cyan-500/25 transition hover:from-cyan-600 hover:to-cyan-800 disabled:opacity-60"
-            aria-label={compileBusy ? "Compiling project" : "Compile project"}
-          >
-            <svg viewBox="0 0 20 20" className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth="2">
-              <path d="M7 6l7 4-7 4V6z" strokeLinecap="round" strokeLinejoin="round" />
-            </svg>
-            <span>{compileBusy ? "Compiling..." : "Compile"}</span>
-          </button>
-        </div>
-
-        {/* Right: actions */}
-        <div className="flex items-center gap-1">
-          <button
-            type="button"
-            onClick={saveCurrentProject}
-            className="group relative inline-flex h-7 items-center gap-1 rounded px-2 text-xs font-medium text-slate-600 transition hover:bg-slate-100 hover:text-slate-800"
-            aria-label="Save project"
-          >
-            <svg viewBox="0 0 20 20" className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth="1.8">
-              <path d="M4 3h10l2 2v12H4V3z" strokeLinecap="round" strokeLinejoin="round" />
-              <path d="M7 3v5h6V3M7 14h6" strokeLinecap="round" strokeLinejoin="round" />
-            </svg>
-            <span className="hidden sm:inline">Save</span>
+            <span>Projects</span>
             <span className="pointer-events-none absolute left-1/2 top-full z-20 mt-1 hidden -translate-x-1/2 whitespace-nowrap rounded bg-slate-900 px-2 py-1 text-[10px] font-semibold text-white group-hover:block">
-              Save project (Ctrl+S)
+              Back to projects
             </span>
           </button>
 
-          <button
-            type="button"
-            onClick={() => void downloadProjectBundle()}
-            className="group relative inline-flex h-7 items-center gap-1 rounded px-2 text-xs font-medium text-slate-600 transition hover:bg-slate-100 hover:text-slate-800"
-            aria-label="Download project"
-          >
-            <svg viewBox="0 0 20 20" className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth="1.8">
-              <path d="M10 3v9m0 0l-3-3m3 3l3-3M4 14v2h12v-2" strokeLinecap="round" strokeLinejoin="round" />
-            </svg>
-            <span className="hidden sm:inline">Download</span>
-            <span className="pointer-events-none absolute left-1/2 top-full z-20 mt-1 hidden -translate-x-1/2 whitespace-nowrap rounded bg-slate-900 px-2 py-1 text-[10px] font-semibold text-white group-hover:block">
-              Download project bundle
-            </span>
-          </button>
-
-          {compileMainLog ? (
-            <button
-              type="button"
-              onClick={() => void fetchAiFixSuggestions()}
-              disabled={aiFixBusy}
-              className="group relative inline-flex h-7 items-center gap-1 rounded px-2 text-xs font-medium text-amber-600 transition hover:bg-amber-50 hover:text-amber-800 disabled:opacity-60"
-              aria-label="AI fix suggestions"
-            >
-              <svg viewBox="0 0 20 20" className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth="1.8">
-                <path d="M9.813 3.5L3 16.5h13.626L9.813 3.5z" strokeLinecap="round" strokeLinejoin="round" />
-                <circle cx="9.813" cy="13" r="0.6" fill="currentColor" stroke="none" />
-                <path d="M9.813 8v3" strokeLinecap="round" />
-              </svg>
-              <span className="hidden sm:inline">{aiFixBusy ? "Analyzing..." : "AI Fix"}</span>
-              <span className="pointer-events-none absolute left-1/2 top-full z-20 mt-1 hidden -translate-x-1/2 whitespace-nowrap rounded bg-slate-900 px-2 py-1 text-[10px] font-semibold text-white group-hover:block">
-                Get AI suggestions for compile errors
-              </span>
-            </button>
-          ) : null}
-
-          <button
-            type="button"
-            onClick={() => setShowPreview((current) => !current)}
-            className={`group relative inline-flex h-7 items-center gap-1 rounded px-2 text-xs font-medium transition ${
-              showPreview
-                ? "bg-cyan-100 text-cyan-800 hover:bg-cyan-200"
-                : "text-slate-600 hover:bg-slate-100 hover:text-slate-800"
-            }`}
-            aria-label={showPreview ? "Hide preview" : "Show preview"}
-          >
-            <svg viewBox="0 0 20 20" className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth="1.8">
-              <rect x="3" y="4" width="14" height="12" rx="1.5" />
-              {showPreview ? (
-                <path d="M7 7l6 6M13 7l-6 6" strokeLinecap="round" />
-              ) : (
-                <path d="M7 4l6 6-6 6" strokeLinecap="round" strokeLinejoin="round" />
-              )}
-            </svg>
-            <span className="hidden sm:inline">{showPreview ? "Hide Preview" : "Preview"}</span>
-            <span className="pointer-events-none absolute left-1/2 top-full z-20 mt-1 hidden -translate-x-1/2 whitespace-nowrap rounded bg-slate-900 px-2 py-1 text-[10px] font-semibold text-white group-hover:block">
-              {showPreview ? "Hide PDF preview" : "Show PDF preview"}
-            </span>
-          </button>
-
-          <button
-            type="button"
-            onClick={() => setFindPanelOpen((current) => !current)}
-            className={`group relative inline-flex h-7 items-center gap-1 rounded px-2 text-xs font-medium transition ${
-              findPanelOpen
-                ? "bg-slate-200 text-slate-800"
-                : "text-slate-600 hover:bg-slate-100 hover:text-slate-800"
-            }`}
-            aria-label={findPanelOpen ? "Hide find" : "Find"}
-          >
-            <svg viewBox="0 0 20 20" className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth="1.8">
-              <circle cx="9" cy="9" r="4" />
-              <path d="M12.5 12.5L16 16" strokeLinecap="round" />
-            </svg>
-            <span className="hidden sm:inline">Find</span>
-            <span className="pointer-events-none absolute left-1/2 top-full z-20 mt-1 hidden -translate-x-1/2 whitespace-nowrap rounded bg-slate-900 px-2 py-1 text-[10px] font-semibold text-white group-hover:block">
-              Find in file (Ctrl+F)
-            </span>
-          </button>
-
-          <button
-            type="button"
-            onClick={() => setShowFormatting((current) => !current)}
-            className={`group relative inline-flex h-7 items-center gap-1 rounded px-2 text-xs font-medium transition ${
-              showFormatting
-                ? "bg-slate-200 text-slate-800"
-                : "text-slate-600 hover:bg-slate-100 hover:text-slate-800"
-            }`}
-            aria-label={showFormatting ? "Hide formatting tools" : "Show formatting tools"}
-          >
-            <svg viewBox="0 0 20 20" className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth="1.8">
-              <path d="M3 5h14M3 10h14M3 15h10" strokeLinecap="round" strokeLinejoin="round" />
-            </svg>
-            <span className="hidden sm:inline">Format</span>
-            <span className="pointer-events-none absolute left-1/2 top-full z-20 mt-1 hidden -translate-x-1/2 whitespace-nowrap rounded bg-slate-900 px-2 py-1 text-[10px] font-semibold text-white group-hover:block">
-              LaTeX formatting tools
-            </span>
-          </button>
+          <div className="flex flex-wrap items-center justify-between gap-3">
+          <div>
+            <p className="text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">Scientific Workspace</p>
+            <h1 className="font-display text-3xl font-semibold tracking-tight text-slate-950 md:text-4xl">
+              Research Document Studio
+            </h1>
+            <p className="mt-1 max-w-3xl text-sm text-slate-700 md:text-base">
+              Focused LaTeX editing layout with file tree, shortcuts, and live PDF preview.
+            </p>
+            <p className="mt-2 text-xs font-semibold uppercase tracking-[0.12em] text-cyan-900">
+              Project: {projectName}
+            </p>
+            <p className="mt-2 text-xs text-slate-600">
+              {usesAccountStorage
+                ? "Signed in: projects are synced to your account-backed workspace."
+                : isSignedIn
+                  ? "Signed in: account sync storage is unavailable here, so projects stay in this browser."
+                  : "Guest mode: projects stay in this browser until you sign in."}
+            </p>
+          </div>
+          </div>
         </div>
       </header>
 
-      {/* ── Formatting bar (collapsible) ────────────── */}
-      {showFormatting ? (
-        <div className="border-b border-slate-200 bg-white px-3 py-1.5">
-          <div className="flex flex-wrap items-start gap-1.5">
-            <div className="rounded border border-slate-200 bg-slate-50 px-2 py-1">
-              <p className="mb-0.5 text-[10px] font-semibold uppercase tracking-[0.12em] text-slate-500">Text</p>
-              <div className="flex flex-wrap items-center gap-0.5">
-                <button
-                  type="button"
-                  onClick={() => insertEditorSnippet({ before: "\\textbf{", after: "}", placeholder: "bold text" })}
-                  className="group relative inline-flex h-7 w-7 items-center justify-center rounded border border-slate-200 bg-white text-slate-700 transition hover:bg-slate-100"
-                  aria-label="Insert bold text"
-                >
-                  <span className="text-[11px] font-bold">B</span>
-                  <span className="pointer-events-none absolute left-1/2 top-full z-20 mt-1 hidden -translate-x-1/2 whitespace-nowrap rounded bg-slate-900 px-2 py-1 text-[10px] font-semibold text-white group-hover:block">
-                    Bold
-                  </span>
-                </button>
-                <button
-                  type="button"
-                  onClick={() => insertEditorSnippet({ before: "\\textit{", after: "}", placeholder: "italic text" })}
-                  className="group relative inline-flex h-7 w-7 items-center justify-center rounded border border-slate-200 bg-white text-slate-700 transition hover:bg-slate-100"
-                  aria-label="Insert italic text"
-                >
-                  <span className="text-[11px] font-semibold italic">I</span>
-                  <span className="pointer-events-none absolute left-1/2 top-full z-20 mt-1 hidden -translate-x-1/2 whitespace-nowrap rounded bg-slate-900 px-2 py-1 text-[10px] font-semibold text-white group-hover:block">
-                    Italic
-                  </span>
-                </button>
-                <button
-                  type="button"
-                  onClick={() => insertEditorSnippet({ before: "\\underline{", after: "}", placeholder: "underlined text" })}
-                  className="group relative inline-flex h-7 w-7 items-center justify-center rounded border border-slate-200 bg-white text-slate-700 transition hover:bg-slate-100"
-                  aria-label="Insert underlined text"
-                >
-                  <span className="text-[11px] font-bold underline">U</span>
-                  <span className="pointer-events-none absolute left-1/2 top-full z-20 mt-1 hidden -translate-x-1/2 whitespace-nowrap rounded bg-slate-900 px-2 py-1 text-[10px] font-semibold text-white group-hover:block">
-                    Underline
-                  </span>
-                </button>
-                <button
-                  type="button"
-                  onClick={() => insertEditorSnippet({ before: "\\footnote{", after: "}", placeholder: "footnote text" })}
-                  className="group relative inline-flex h-7 w-7 items-center justify-center rounded border border-slate-200 bg-white text-slate-700 transition hover:bg-slate-100"
-                  aria-label="Insert footnote"
-                >
-                  <span className="text-[10px] font-semibold">fn</span>
-                  <span className="pointer-events-none absolute left-1/2 top-full z-20 mt-1 hidden -translate-x-1/2 whitespace-nowrap rounded bg-slate-900 px-2 py-1 text-[10px] font-semibold text-white group-hover:block">
-                    Footnote
-                  </span>
-                </button>
-              </div>
-            </div>
-
-            <div className="rounded border border-slate-200 bg-slate-50 px-2 py-1">
-              <p className="mb-0.5 text-[10px] font-semibold uppercase tracking-[0.12em] text-slate-500">Structure</p>
-              <div className="flex flex-wrap items-center gap-0.5">
-                <button
-                  type="button"
-                  onClick={() => insertEditorSnippet({ block: "\\section{Section Title}\n", before: "", after: "", cursorOffset: 9 })}
-                  className="group relative inline-flex h-7 w-7 items-center justify-center rounded border border-slate-200 bg-white text-slate-700 transition hover:bg-slate-100"
-                  aria-label="Insert section"
-                >
-                  <span className="text-[10px] font-semibold">S1</span>
-                  <span className="pointer-events-none absolute left-1/2 top-full z-20 mt-1 hidden -translate-x-1/2 whitespace-nowrap rounded bg-slate-900 px-2 py-1 text-[10px] font-semibold text-white group-hover:block">
-                    Section
-                  </span>
-                </button>
-                <button
-                  type="button"
-                  onClick={() => insertEditorSnippet({ block: "\\subsection{Subsection Title}\n", before: "", after: "", cursorOffset: 12 })}
-                  className="group relative inline-flex h-7 w-7 items-center justify-center rounded border border-slate-200 bg-white text-slate-700 transition hover:bg-slate-100"
-                  aria-label="Insert subsection"
-                >
-                  <span className="text-[10px] font-semibold">S2</span>
-                  <span className="pointer-events-none absolute left-1/2 top-full z-20 mt-1 hidden -translate-x-1/2 whitespace-nowrap rounded bg-slate-900 px-2 py-1 text-[10px] font-semibold text-white group-hover:block">
-                    Subsection
-                  </span>
-                </button>
-                <button
-                  type="button"
-                  onClick={() => insertEditorSnippet({ block: "\\begin{itemize}\n  \\item Item one\n  \\item Item two\n\\end{itemize}\n", before: "", after: "", cursorOffset: 18 })}
-                  className="group relative inline-flex h-7 w-7 items-center justify-center rounded border border-slate-200 bg-white text-slate-700 transition hover:bg-slate-100"
-                  aria-label="Insert itemize list"
-                >
-                  <svg viewBox="0 0 20 20" className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth="1.8">
-                    <path d="M7 5h9M7 10h9M7 15h9M4 5h.01M4 10h.01M4 15h.01" strokeLinecap="round" strokeLinejoin="round" />
-                  </svg>
-                  <span className="pointer-events-none absolute left-1/2 top-full z-20 mt-1 hidden -translate-x-1/2 whitespace-nowrap rounded bg-slate-900 px-2 py-1 text-[10px] font-semibold text-white group-hover:block">
-                    Itemize
-                  </span>
-                </button>
-                <button
-                  type="button"
-                  onClick={() => insertEditorSnippet({ block: "\\begin{enumerate}\n  \\item First\n  \\item Second\n\\end{enumerate}\n", before: "", after: "", cursorOffset: 19 })}
-                  className="group relative inline-flex h-7 w-7 items-center justify-center rounded border border-slate-200 bg-white text-slate-700 transition hover:bg-slate-100"
-                  aria-label="Insert enumerated list"
-                >
-                  <span className="text-[10px] font-semibold">1.</span>
-                  <span className="pointer-events-none absolute left-1/2 top-full z-20 mt-1 hidden -translate-x-1/2 whitespace-nowrap rounded bg-slate-900 px-2 py-1 text-[10px] font-semibold text-white group-hover:block">
-                    Enumerate
-                  </span>
-                </button>
-              </div>
-            </div>
-
-            <div className="rounded border border-slate-200 bg-slate-50 px-2 py-1">
-              <p className="mb-0.5 text-[10px] font-semibold uppercase tracking-[0.12em] text-slate-500">Math</p>
-              <div className="flex flex-wrap items-center gap-0.5">
-                <button
-                  type="button"
-                  onClick={() => insertEditorSnippet({ before: "$", after: "$", placeholder: "math" })}
-                  className="group relative inline-flex h-7 w-7 items-center justify-center rounded border border-slate-200 bg-white text-slate-700 transition hover:bg-slate-100"
-                  aria-label="Insert inline math"
-                >
-                  <span className="text-[11px] font-semibold">$</span>
-                  <span className="pointer-events-none absolute left-1/2 top-full z-20 mt-1 hidden -translate-x-1/2 whitespace-nowrap rounded bg-slate-900 px-2 py-1 text-[10px] font-semibold text-white group-hover:block">
-                    Inline math
-                  </span>
-                </button>
-                <button
-                  type="button"
-                  onClick={() => insertEditorSnippet({ block: "\\[\n  a^2 + b^2 = c^2\n\\]\n", before: "", after: "", cursorOffset: 4 })}
-                  className="group relative inline-flex h-7 w-7 items-center justify-center rounded border border-slate-200 bg-white text-slate-700 transition hover:bg-slate-100"
-                  aria-label="Insert display math"
-                >
-                  <span className="text-[10px] font-semibold">[]</span>
-                  <span className="pointer-events-none absolute left-1/2 top-full z-20 mt-1 hidden -translate-x-1/2 whitespace-nowrap rounded bg-slate-900 px-2 py-1 text-[10px] font-semibold text-white group-hover:block">
-                    Display math
-                  </span>
-                </button>
-                <button
-                  type="button"
-                  onClick={() => insertEditorSnippet({ block: "\\begin{equation}\n  E = mc^2\n  \\label{eq:key}\n\\end{equation}\n", before: "", after: "", cursorOffset: 18 })}
-                  className="group relative inline-flex h-7 w-7 items-center justify-center rounded border border-slate-200 bg-white text-slate-700 transition hover:bg-slate-100"
-                  aria-label="Insert equation environment"
-                >
-                  <span className="text-[9px] font-semibold">eq</span>
-                  <span className="pointer-events-none absolute left-1/2 top-full z-20 mt-1 hidden -translate-x-1/2 whitespace-nowrap rounded bg-slate-900 px-2 py-1 text-[10px] font-semibold text-white group-hover:block">
-                    Equation
-                  </span>
-                </button>
-                <button
-                  type="button"
-                  onClick={() => insertEditorSnippet({ block: "\\begin{align}\n  y &= mx + b \\\\n  z &= ax^2 + bx + c\n\\end{align}\n", before: "", after: "", cursorOffset: 15 })}
-                  className="group relative inline-flex h-7 w-7 items-center justify-center rounded border border-slate-200 bg-white text-slate-700 transition hover:bg-slate-100"
-                  aria-label="Insert align environment"
-                >
-                  <span className="text-[9px] font-semibold">al</span>
-                  <span className="pointer-events-none absolute left-1/2 top-full z-20 mt-1 hidden -translate-x-1/2 whitespace-nowrap rounded bg-slate-900 px-2 py-1 text-[10px] font-semibold text-white group-hover:block">
-                    Align
-                  </span>
-                </button>
-              </div>
-            </div>
-
-            <div className="rounded border border-slate-200 bg-slate-50 px-2 py-1">
-              <p className="mb-0.5 text-[10px] font-semibold uppercase tracking-[0.12em] text-slate-500">Figures & Tables</p>
-              <div className="flex flex-wrap items-center gap-0.5">
-                <button
-                  type="button"
-                  onClick={() =>
-                    insertEditorSnippet({
-                      block:
-                        "\\begin{figure}[htbp]\n  \\centering\n  \\includegraphics[width=0.8\\linewidth]{figures/plot.png}\n  \\caption{Figure caption}\n  \\label{fig:plot}\n\\end{figure}\n",
-                      before: "",
-                      after: "",
-                      cursorOffset: 62,
-                    })
-                  }
-                  className="group relative inline-flex h-7 w-7 items-center justify-center rounded border border-slate-200 bg-white text-slate-700 transition hover:bg-slate-100"
-                  aria-label="Insert figure environment"
-                >
-                  <svg viewBox="0 0 20 20" className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth="1.8">
-                    <rect x="3" y="4" width="14" height="12" rx="1.5" />
-                    <circle cx="8" cy="8" r="1.2" />
-                    <path d="M4.5 14l4.5-4 2.6 2 1.9-1.7L15.5 14" strokeLinecap="round" strokeLinejoin="round" />
-                  </svg>
-                  <span className="pointer-events-none absolute left-1/2 top-full z-20 mt-1 hidden -translate-x-1/2 whitespace-nowrap rounded bg-slate-900 px-2 py-1 text-[10px] font-semibold text-white group-hover:block">
-                    Figure
-                  </span>
-                </button>
-                <button
-                  type="button"
-                  onClick={() => insertEditorSnippet({ before: "\\includegraphics[width=0.8\\linewidth]{", after: "}", placeholder: "figures/image.png" })}
-                  className="group relative inline-flex h-7 w-7 items-center justify-center rounded border border-slate-200 bg-white text-slate-700 transition hover:bg-slate-100"
-                  aria-label="Insert includegraphics"
-                >
-                  <span className="text-[9px] font-semibold">img</span>
-                  <span className="pointer-events-none absolute left-1/2 top-full z-20 mt-1 hidden -translate-x-1/2 whitespace-nowrap rounded bg-slate-900 px-2 py-1 text-[10px] font-semibold text-white group-hover:block">
-                    Include image
-                  </span>
-                </button>
-                <button
-                  type="button"
-                  onClick={() =>
-                    insertEditorSnippet({
-                      block:
-                        "\\begin{table}[htbp]\n  \\centering\n  \\caption{Table caption}\n  \\label{tab:results}\n  \\begin{tabular}{lcc}\n    \\toprule\n    Item & Value A & Value B \\\\n    \\midrule\n    A & 1.0 & 2.0 \\\\n    B & 3.0 & 4.0 \\\\n    \\bottomrule\n  \\end{tabular}\n\\end{table}\n",
-                      before: "",
-                      after: "",
-                      cursorOffset: 56,
-                    })
-                  }
-                  className="group relative inline-flex h-7 w-7 items-center justify-center rounded border border-slate-200 bg-white text-slate-700 transition hover:bg-slate-100"
-                  aria-label="Insert table environment"
-                >
-                  <svg viewBox="0 0 20 20" className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth="1.8">
-                    <rect x="3" y="4" width="14" height="12" rx="1" />
-                    <path d="M3 8h14M3 12h14M8 4v12M12 4v12" />
-                  </svg>
-                  <span className="pointer-events-none absolute left-1/2 top-full z-20 mt-1 hidden -translate-x-1/2 whitespace-nowrap rounded bg-slate-900 px-2 py-1 text-[10px] font-semibold text-white group-hover:block">
-                    Table
-                  </span>
-                </button>
-                <button
-                  type="button"
-                  onClick={() => insertEditorSnippet({ before: "\\begin{tabular}{lcc}\n", after: "\\end{tabular}\n", placeholder: "  Header A & Header B & Header C \\\\n  \\hline\n  A & B & C \\\\" })}
-                  className="group relative inline-flex h-7 w-7 items-center justify-center rounded border border-slate-200 bg-white text-slate-700 transition hover:bg-slate-100"
-                  aria-label="Insert tabular"
-                >
-                  <span className="text-[9px] font-semibold">tab</span>
-                  <span className="pointer-events-none absolute left-1/2 top-full z-20 mt-1 hidden -translate-x-1/2 whitespace-nowrap rounded bg-slate-900 px-2 py-1 text-[10px] font-semibold text-white group-hover:block">
-                    Tabular
-                  </span>
-                </button>
-              </div>
-            </div>
-
-            <div className="rounded border border-slate-200 bg-slate-50 px-2 py-1">
-              <p className="mb-0.5 text-[10px] font-semibold uppercase tracking-[0.12em] text-slate-500">References</p>
-              <div className="flex flex-wrap items-center gap-0.5">
-                <button
-                  type="button"
-                  onClick={() => insertEditorSnippet({ before: "\\label{", after: "}", placeholder: "sec:key" })}
-                  className="group relative inline-flex h-7 w-7 items-center justify-center rounded border border-slate-200 bg-white text-slate-700 transition hover:bg-slate-100"
-                  aria-label="Insert label"
-                >
-                  <span className="text-[9px] font-semibold">lbl</span>
-                  <span className="pointer-events-none absolute left-1/2 top-full z-20 mt-1 hidden -translate-x-1/2 whitespace-nowrap rounded bg-slate-900 px-2 py-1 text-[10px] font-semibold text-white group-hover:block">
-                    Label
-                  </span>
-                </button>
-                <button
-                  type="button"
-                  onClick={() => insertEditorSnippet({ before: "\\ref{", after: "}", placeholder: "sec:key" })}
-                  className="group relative inline-flex h-7 w-7 items-center justify-center rounded border border-slate-200 bg-white text-slate-700 transition hover:bg-slate-100"
-                  aria-label="Insert ref"
-                >
-                  <span className="text-[9px] font-semibold">ref</span>
-                  <span className="pointer-events-none absolute left-1/2 top-full z-20 mt-1 hidden -translate-x-1/2 whitespace-nowrap rounded bg-slate-900 px-2 py-1 text-[10px] font-semibold text-white group-hover:block">
-                    Reference
-                  </span>
-                </button>
-                <button
-                  type="button"
-                  onClick={() => insertEditorSnippet({ before: "\\cite{", after: "}", placeholder: "wiserfiles2026" })}
-                  className="group relative inline-flex h-7 w-7 items-center justify-center rounded border border-slate-200 bg-white text-slate-700 transition hover:bg-slate-100"
-                  aria-label="Insert citation"
-                >
-                  <span className="text-[9px] font-semibold">cite</span>
-                  <span className="pointer-events-none absolute left-1/2 top-full z-20 mt-1 hidden -translate-x-1/2 whitespace-nowrap rounded bg-slate-900 px-2 py-1 text-[10px] font-semibold text-white group-hover:block">
-                    Citation
-                  </span>
-                </button>
-                <button
-                  type="button"
-                  onClick={() => insertEditorSnippet({ before: "\\href{", after: "}{link text}", placeholder: "https://example.com" })}
-                  className="group relative inline-flex h-7 w-7 items-center justify-center rounded border border-slate-200 bg-white text-slate-700 transition hover:bg-slate-100"
-                  aria-label="Insert hyperlink"
-                >
-                  <svg viewBox="0 0 20 20" className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth="1.8">
-                    <path d="M8 12l4-4M7 7l-2 2a2.5 2.5 0 003.5 3.5l2-2M13 13l2-2a2.5 2.5 0 00-3.5-3.5l-2 2" strokeLinecap="round" strokeLinejoin="round" />
-                  </svg>
-                  <span className="pointer-events-none absolute left-1/2 top-full z-20 mt-1 hidden -translate-x-1/2 whitespace-nowrap rounded bg-slate-900 px-2 py-1 text-[10px] font-semibold text-white group-hover:block">
-                    Hyperlink
-                  </span>
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
-      ) : null}
-
-      {/* ── Main workspace ──────────────────────────── */}
-      <section ref={panesRef} className="flex flex-1 overflow-hidden">
-
-        {/* ── File tree sidebar ──────────────────────── */}
-        {!leftPaneCollapsed ? (
-          <aside
-            style={{ width: `${leftPaneWidth}px` }}
-            className="flex-shrink-0 flex flex-col overflow-hidden border-r border-slate-200"
-          >
-            <div className="flex items-center justify-between px-2 py-1.5">
-              <button
-                type="button"
-                onClick={() => setLeftPaneCollapsed(true)}
-                className="group relative rounded p-0.5 text-slate-400 transition hover:bg-slate-100 hover:text-slate-600"
-                aria-label="Collapse file tree"
+      <section
+        ref={panesRef}
+        className="grid grid-cols-1 gap-1.5 lg:gap-0 lg:[grid-template-columns:var(--left-pane-width)_10px_minmax(0,1fr)_10px_var(--right-pane-width)]"
+        style={
+          {
+            "--left-pane-width": `${effectiveLeftPaneWidth}px`,
+            "--right-pane-width": `${effectiveRightPaneWidth}px`,
+          } as React.CSSProperties
+        }
+      >
+        <aside
+          className={`rounded-xl border border-slate-200 bg-white/90 transition-[padding] ${leftPaneCollapsed ? "cursor-pointer p-1" : "p-1.5"}`}
+          onClick={() => {
+            if (leftPaneCollapsed) setLeftPaneCollapsed(false);
+          }}
+          role={leftPaneCollapsed ? "button" : undefined}
+          aria-label={leftPaneCollapsed ? "Expand project files pane" : undefined}
+        >
+          <div className={`flex items-center gap-2 ${leftPaneCollapsed ? "justify-center" : "justify-between"}`}>
+            {!leftPaneCollapsed ? (
+              <p className="text-xs font-semibold uppercase tracking-[0.14em] text-slate-600">Project Files</p>
+            ) : null}
+            <button
+              type="button"
+              onClick={(event) => {
+                event.stopPropagation();
+                setLeftPaneCollapsed((current) => !current);
+              }}
+              className="group relative rounded-md border border-slate-300 bg-white p-1 text-slate-700"
+              aria-label={leftPaneCollapsed ? "Expand project files pane" : "Collapse project files pane"}
+            >
+              <svg
+                viewBox="0 0 20 20"
+                className={`h-4 w-4 transition-transform duration-200 ${leftPaneCollapsed ? "rotate-180" : "rotate-0"}`}
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="1.8"
               >
-                <svg viewBox="0 0 20 20" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="1.8">
+                {leftPaneCollapsed ? (
+                  <path d="M7 4l6 6-6 6" strokeLinecap="round" strokeLinejoin="round" />
+                ) : (
                   <path d="M13 4l-6 6 6 6" strokeLinecap="round" strokeLinejoin="round" />
-                </svg>
-                <span className="pointer-events-none absolute left-0 top-7 z-20 hidden whitespace-nowrap rounded-md bg-slate-900 px-2 py-1 text-[11px] font-semibold text-white group-hover:block">
-                  Collapse files
-                </span>
-              </button>
-            </div>
+                )}
+              </svg>
+              <span className="pointer-events-none absolute right-0 top-7 z-20 hidden whitespace-nowrap rounded-md bg-slate-900 px-2 py-1 text-[11px] font-semibold text-white group-hover:block">
+                {leftPaneCollapsed ? "Expand project files" : "Collapse project files"}
+              </span>
+            </button>
+          </div>
 
-            <div className="flex-1 overflow-auto px-1.5 pb-2">
-              {/* Add file input */}
-              <div className="mb-1.5 flex gap-1">
+          {!leftPaneCollapsed ? (
+            <p className="mt-1 truncate text-[11px] font-semibold uppercase tracking-[0.12em] text-cyan-900">
+              Active: {projectName}
+            </p>
+          ) : null}
+
+          {!leftPaneCollapsed ? (
+            <>
+              <div className="mt-1.5 grid gap-1">
+                <div className="grid grid-cols-4 gap-1">
+                  <button
+                    type="button"
+                    onClick={() => void compileProject()}
+                    disabled={compileBusy}
+                    className="group relative inline-flex h-8 items-center justify-center rounded-md border border-cyan-300 bg-cyan-50 text-cyan-900 transition hover:bg-cyan-100 disabled:opacity-60"
+                    aria-label={compileBusy ? "Compiling project" : "Compile project"}
+                  >
+                    <svg viewBox="0 0 20 20" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="1.8">
+                      <path d="M7 6l7 4-7 4V6z" strokeLinecap="round" strokeLinejoin="round" />
+                    </svg>
+                    <span className="pointer-events-none absolute left-1/2 top-full z-20 mt-1 hidden -translate-x-1/2 whitespace-nowrap rounded bg-slate-900 px-2 py-1 text-[10px] font-semibold text-white group-hover:block">
+                      {compileBusy ? "Compiling..." : "Compile project"}
+                    </span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => void downloadProjectBundle()}
+                    className="group relative inline-flex h-8 items-center justify-center rounded-md border border-slate-300 bg-white text-slate-800 transition hover:bg-slate-100"
+                    aria-label="Download project bundle"
+                  >
+                    <svg viewBox="0 0 20 20" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="1.8">
+                      <path d="M10 3v9m0 0l-3-3m3 3l3-3M4 14v2h12v-2" strokeLinecap="round" strokeLinejoin="round" />
+                    </svg>
+                    <span className="pointer-events-none absolute left-1/2 top-full z-20 mt-1 hidden -translate-x-1/2 whitespace-nowrap rounded bg-slate-900 px-2 py-1 text-[10px] font-semibold text-white group-hover:block">
+                      Download project
+                    </span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={saveCurrentProject}
+                    className="group relative inline-flex h-8 items-center justify-center rounded-md border border-slate-300 bg-white text-slate-800 transition hover:bg-slate-100"
+                    aria-label="Save current project"
+                  >
+                    <svg viewBox="0 0 20 20" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="1.8">
+                      <path d="M4 3h10l2 2v12H4V3z" strokeLinecap="round" strokeLinejoin="round" />
+                      <path d="M7 3v5h6V3M7 14h6" strokeLinecap="round" strokeLinejoin="round" />
+                    </svg>
+                    <span className="pointer-events-none absolute left-1/2 top-full z-20 mt-1 hidden -translate-x-1/2 whitespace-nowrap rounded bg-slate-900 px-2 py-1 text-[10px] font-semibold text-white group-hover:block">
+                      Save project
+                    </span>
+                  </button>
+
+                  <Link
+                    href="/tools/pdf-to-latex"
+                    className="group relative inline-flex h-8 items-center justify-center rounded-md border border-slate-300 bg-white text-slate-800 transition hover:bg-slate-100"
+                    aria-label="Import PDF as TeX"
+                  >
+                    <svg viewBox="0 0 20 20" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="1.8">
+                      <path d="M6 3h6l3 3v11H6V3z" strokeLinecap="round" strokeLinejoin="round" />
+                      <path d="M12 3v3h3" strokeLinecap="round" strokeLinejoin="round" />
+                    </svg>
+                    <span className="pointer-events-none absolute left-1/2 top-full z-20 mt-1 hidden -translate-x-1/2 whitespace-nowrap rounded bg-slate-900 px-2 py-1 text-[10px] font-semibold text-white group-hover:block">
+                      Import PDF as .tex
+                    </span>
+                  </Link>
+                </div>
+              </div>
+
+              <div className="mt-1.5 flex gap-1">
                 <input
                   value={newPath}
                   onChange={(event) => setNewPath(event.target.value)}
                   placeholder="sections/new.tex"
-                  className="flex-1 rounded border border-slate-200 bg-white px-2 py-1 text-[11px] text-slate-600 outline-none focus:border-cyan-300"
-                  onKeyDown={(event) => {
-                    if (event.key === "Enter") void addProjectFile();
-                  }}
+                  className="w-full rounded-md border border-slate-300 bg-white px-2 py-1 text-xs text-slate-700"
                 />
                 <button
                   type="button"
                   onClick={addProjectFile}
-                  className="group relative inline-flex h-6 w-6 shrink-0 items-center justify-center rounded border border-slate-200 bg-white text-slate-500 transition hover:bg-slate-100 hover:text-slate-700"
+                  className="group relative inline-flex h-8 w-8 items-center justify-center rounded-md border border-cyan-300 bg-cyan-50 text-cyan-900 transition hover:bg-cyan-100"
                   aria-label="Add file or folder"
                 >
-                  <svg viewBox="0 0 20 20" className="h-3 w-3" fill="none" stroke="currentColor" strokeWidth="2">
+                  <svg viewBox="0 0 20 20" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="1.8">
                     <path d="M10 4v12M4 10h12" strokeLinecap="round" strokeLinejoin="round" />
                   </svg>
+                  <span className="pointer-events-none absolute left-1/2 top-full z-20 mt-1 hidden -translate-x-1/2 whitespace-nowrap rounded bg-slate-900 px-2 py-1 text-[10px] font-semibold text-white group-hover:block">
+                    Add
+                  </span>
                 </button>
                 <button
                   type="button"
                   onClick={() => void addProjectEntryAt("", "folder")}
-                  className="group relative inline-flex h-6 w-6 shrink-0 items-center justify-center rounded border border-slate-200 bg-white text-slate-500 transition hover:bg-slate-100 hover:text-slate-700"
+                  className="group relative inline-flex h-8 w-8 items-center justify-center rounded-md border border-slate-300 bg-white text-slate-700 transition hover:bg-slate-100"
                   aria-label="Add root folder"
                 >
-                  <svg viewBox="0 0 20 20" className="h-3 w-3" fill="none" stroke="currentColor" strokeWidth="1.8">
+                  <svg viewBox="0 0 20 20" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="1.8">
                     <path d="M3 6h5l1.2 1.5H17v7.5H3V6z" strokeLinecap="round" strokeLinejoin="round" />
                   </svg>
+                  <span className="pointer-events-none absolute left-1/2 top-full z-20 mt-1 hidden -translate-x-1/2 whitespace-nowrap rounded bg-slate-900 px-2 py-1 text-[10px] font-semibold text-white group-hover:block">
+                    New folder
+                  </span>
                 </button>
               </div>
-              {addFileError ? <p className="mb-1 text-[10px] text-rose-600">{addFileError}</p> : null}
-
-              {/* File tree */}
-              <ul className="space-y-0.5">{renderProjectTree(projectTree)}</ul>
-
-              {/* Section outline */}
-              <div className="mt-3 border-t border-slate-100 pt-2">
-                <p className="mb-1 text-[10px] font-semibold uppercase tracking-[0.1em] text-slate-400">
-                  Outline
+              {addFileError ? <p className="mt-1 text-xs text-rose-700">{addFileError}</p> : null}
+              <ul className="mt-2 space-y-1 text-sm text-slate-700">{renderProjectTree(projectTree)}</ul>
+              <div className="mt-2.5 rounded-xl border border-slate-200 bg-slate-50 p-1.5">
+                <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-slate-500">
+                  Section Outline (active file)
                 </p>
-                <ul className="space-y-0.5">
+                <ul className="mt-1.5 space-y-1 text-xs text-slate-700">
                   {preview.sections.length ? (
                     preview.sections.map((section) => {
                       const isCollapsed = Boolean(collapsedOutlineSections[section.title]);
                       return (
-                        <li key={section.title}>
+                        <li key={section.title} className="rounded-md border border-slate-200 bg-white px-2 py-1.5">
                           <button
                             type="button"
                             onClick={() =>
@@ -3286,40 +2974,29 @@ export default function ResearchStudioPage() {
                                 [section.title]: !current[section.title],
                               }))
                             }
-                            className="flex w-full items-center justify-between rounded px-1.5 py-0.5 text-left text-[11px] text-slate-500 transition hover:bg-slate-100 hover:text-slate-700"
+                            className="flex w-full items-center justify-between text-left font-medium text-slate-800"
                           >
-                            <span className="truncate font-medium">{section.title}</span>
-                            <span className="ml-1 shrink-0 text-[9px] text-slate-400">{isCollapsed ? "▶" : "▼"}</span>
+                            <span className="truncate">{section.title}</span>
+                            <span className="ml-2 text-[10px] text-slate-500">{isCollapsed ? "Expand" : "Collapse"}</span>
                           </button>
-                          {!isCollapsed ? (
-                            <p className="mt-0.5 px-1.5 text-[10px] leading-relaxed text-slate-400 line-clamp-3">{section.body}</p>
-                          ) : null}
+                          {!isCollapsed ? <p className="mt-1 text-[11px] text-slate-600">{section.body}</p> : null}
                         </li>
                       );
                     })
                   ) : (
-                    <li className="px-1.5 text-[10px] text-slate-400">No sections found.</li>
+                    <li className="text-slate-500">No sections found in current source.</li>
                   )}
                 </ul>
               </div>
-            </div>
-          </aside>
-        ) : (
-          <button
-            type="button"
-            onClick={() => setLeftPaneCollapsed(false)}
-            className="flex-shrink-0 flex w-[28px] flex-col items-center border-r border-slate-200 pt-2 text-slate-400 transition hover:bg-slate-100 hover:text-slate-600"
-            aria-label="Expand file tree"
-          >
-            <svg viewBox="0 0 20 20" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="1.8">
-              <path d="M7 4l6 6-6 6" strokeLinecap="round" strokeLinejoin="round" />
-            </svg>
-          </button>
-        )}
+              <div className="mt-2.5 rounded-xl border border-amber-200 bg-amber-50 p-1.5 text-xs text-amber-900">
+                Navigate folders with expand/collapse controls. Use + buttons on folders to add nested files and subfolders.
+              </div>
+            </>
+          ) : null}
+        </aside>
 
-        {/* ── Left resizer ──────────────────────────── */}
         <div
-          className={`group relative w-[6px] flex-shrink-0 ${leftPaneCollapsed ? "cursor-default" : "cursor-col-resize"}`}
+          className={`hidden items-center justify-center lg:flex ${leftPaneCollapsed ? "cursor-default" : "cursor-col-resize"}`}
           onMouseDown={() => {
             if (!leftPaneCollapsed) setActiveResizer("left");
           }}
@@ -3327,158 +3004,479 @@ export default function ResearchStudioPage() {
           aria-orientation="vertical"
           aria-label="Resize project files pane"
         >
-          <div className="absolute inset-y-0 left-1/2 w-[2px] -translate-x-1/2 bg-transparent transition-colors group-hover:bg-cyan-400" />
+          <span className="h-20 w-1 rounded-full bg-slate-300" />
         </div>
 
-        {/* ── Editor area ───────────────────────────── */}
-        <div className="flex min-w-0 flex-1 flex-col overflow-hidden">
-          {/* Find panel */}
+          <div className="rounded-xl border border-slate-200 bg-white/90 p-1.5">
+            <div className="mb-1.5 border-b border-slate-200 pb-1">
+              <p className="text-xs font-semibold uppercase tracking-[0.12em] text-slate-500">Editor</p>
+            </div>
+
+            <p className="text-xs uppercase tracking-[0.12em] text-slate-500">{activeEntry?.path || "No file selected"}</p>
+
+          <div className="mb-1.5 space-y-1.5 rounded-lg border border-slate-200 bg-slate-50 p-1.5 text-[11px] text-slate-600">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <span className="font-semibold uppercase tracking-[0.12em] text-slate-500">Document</span>
+              <span className="font-semibold uppercase tracking-[0.12em] text-slate-500">
+                Last compile: {lastCompileAt} {compileBusy ? "Compiling..." : "Ready"}
+              </span>
+              <div className="flex flex-wrap items-center gap-1">
+                <button
+                  type="button"
+                  onClick={() => void compileProject()}
+                  disabled={compileBusy}
+                  className="inline-flex h-10 w-full items-center justify-center gap-2 rounded-md bg-gradient-to-r from-cyan-500 to-cyan-700 px-4 text-sm font-bold text-white shadow-md shadow-cyan-500/30 transition hover:from-cyan-600 hover:to-cyan-800 hover:shadow-lg disabled:opacity-60"
+                  aria-label={compileBusy ? "Compiling project" : "Compile project"}
+                >
+                  <svg viewBox="0 0 20 20" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="1.8">
+                    <path d="M7 6l7 4-7 4V6z" strokeLinecap="round" strokeLinejoin="round" />
+                  </svg>
+                  <span>{compileBusy ? "Compiling..." : "Compile"}</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={saveCurrentProject}
+                  className="inline-flex h-8 items-center gap-1 rounded-md border border-slate-300 bg-white px-2 text-slate-800 transition hover:bg-slate-100"
+                  aria-label="Save current project"
+                >
+                  <svg viewBox="0 0 20 20" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="1.8">
+                    <path d="M4 3h10l2 2v12H4V3z" strokeLinecap="round" strokeLinejoin="round" />
+                    <path d="M7 3v5h6V3M7 14h6" strokeLinecap="round" strokeLinejoin="round" />
+                  </svg>
+                  <span>Save</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => void downloadProjectBundle()}
+                  className="inline-flex h-8 items-center gap-1 rounded-md border border-slate-300 bg-white px-2 text-slate-800 transition hover:bg-slate-100"
+                  aria-label="Download project bundle"
+                >
+                  <svg viewBox="0 0 20 20" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="1.8">
+                    <path d="M10 3v9m0 0l-3-3m3 3l3-3M4 14v2h12v-2" strokeLinecap="round" strokeLinejoin="round" />
+                  </svg>
+                  <span>Download</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setFindPanelOpen((current) => !current)}
+                  className="inline-flex h-8 items-center gap-1 rounded-md border border-slate-300 bg-white px-2 text-slate-800 transition hover:bg-slate-100"
+                  aria-label={findPanelOpen ? "Hide find panel" : "Show find panel"}
+                >
+                  <svg viewBox="0 0 20 20" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="1.8">
+                    <circle cx="9" cy="9" r="4" />
+                    <path d="M12.5 12.5L16 16" strokeLinecap="round" />
+                  </svg>
+                  <span>{findPanelOpen ? "Hide Find" : "Find"}</span>
+                </button>
+              </div>
+            </div>
+            <div className="grid gap-1.5">
+              <div className="flex flex-wrap items-start gap-1.5">
+                <div className="rounded-md border border-slate-200 bg-white px-2 py-1.5">
+                  <p className="mb-1 text-[10px] font-semibold uppercase tracking-[0.12em] text-slate-500">Text</p>
+                  <div className="flex flex-wrap items-center gap-1">
+                    <button
+                      type="button"
+                      onClick={() => insertEditorSnippet({ before: "\\textbf{", after: "}", placeholder: "bold text" })}
+                      className="group relative inline-flex h-8 w-8 items-center justify-center rounded-md border border-slate-300 bg-white text-slate-800 transition hover:bg-slate-100"
+                      aria-label="Insert bold text"
+                    >
+                      <span className="text-xs font-bold">B</span>
+                      <span className="pointer-events-none absolute left-1/2 top-full z-20 mt-1 hidden -translate-x-1/2 whitespace-nowrap rounded bg-slate-900 px-2 py-1 text-[10px] font-semibold text-white group-hover:block">
+                        Bold
+                      </span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => insertEditorSnippet({ before: "\\textit{", after: "}", placeholder: "italic text" })}
+                      className="group relative inline-flex h-8 w-8 items-center justify-center rounded-md border border-slate-300 bg-white text-slate-800 transition hover:bg-slate-100"
+                      aria-label="Insert italic text"
+                    >
+                      <span className="text-xs font-semibold italic">I</span>
+                      <span className="pointer-events-none absolute left-1/2 top-full z-20 mt-1 hidden -translate-x-1/2 whitespace-nowrap rounded bg-slate-900 px-2 py-1 text-[10px] font-semibold text-white group-hover:block">
+                        Italic
+                      </span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => insertEditorSnippet({ before: "\\underline{", after: "}", placeholder: "underlined text" })}
+                      className="group relative inline-flex h-8 w-8 items-center justify-center rounded-md border border-slate-300 bg-white text-slate-800 transition hover:bg-slate-100"
+                      aria-label="Insert underlined text"
+                    >
+                      <span className="text-xs font-bold underline">U</span>
+                      <span className="pointer-events-none absolute left-1/2 top-full z-20 mt-1 hidden -translate-x-1/2 whitespace-nowrap rounded bg-slate-900 px-2 py-1 text-[10px] font-semibold text-white group-hover:block">
+                        Underline
+                      </span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => insertEditorSnippet({ before: "\\footnote{", after: "}", placeholder: "footnote text" })}
+                      className="group relative inline-flex h-8 w-8 items-center justify-center rounded-md border border-slate-300 bg-white text-slate-800 transition hover:bg-slate-100"
+                      aria-label="Insert footnote"
+                    >
+                      <span className="text-[10px] font-semibold">fn</span>
+                      <span className="pointer-events-none absolute left-1/2 top-full z-20 mt-1 hidden -translate-x-1/2 whitespace-nowrap rounded bg-slate-900 px-2 py-1 text-[10px] font-semibold text-white group-hover:block">
+                        Footnote
+                      </span>
+                    </button>
+                  </div>
+                </div>
+
+                <div className="rounded-md border border-slate-200 bg-white px-2 py-1.5">
+                  <p className="mb-1 text-[10px] font-semibold uppercase tracking-[0.12em] text-slate-500">Structure</p>
+                  <div className="flex flex-wrap items-center gap-1">
+                    <button
+                      type="button"
+                      onClick={() => insertEditorSnippet({ block: "\\section{Section Title}\n", before: "", after: "", cursorOffset: 9 })}
+                      className="group relative inline-flex h-8 w-8 items-center justify-center rounded-md border border-slate-300 bg-white text-slate-800 transition hover:bg-slate-100"
+                      aria-label="Insert section"
+                    >
+                      <span className="text-xs font-semibold">S1</span>
+                      <span className="pointer-events-none absolute left-1/2 top-full z-20 mt-1 hidden -translate-x-1/2 whitespace-nowrap rounded bg-slate-900 px-2 py-1 text-[10px] font-semibold text-white group-hover:block">
+                        Section
+                      </span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => insertEditorSnippet({ block: "\\subsection{Subsection Title}\n", before: "", after: "", cursorOffset: 12 })}
+                      className="group relative inline-flex h-8 w-8 items-center justify-center rounded-md border border-slate-300 bg-white text-slate-800 transition hover:bg-slate-100"
+                      aria-label="Insert subsection"
+                    >
+                      <span className="text-xs font-semibold">S2</span>
+                      <span className="pointer-events-none absolute left-1/2 top-full z-20 mt-1 hidden -translate-x-1/2 whitespace-nowrap rounded bg-slate-900 px-2 py-1 text-[10px] font-semibold text-white group-hover:block">
+                        Subsection
+                      </span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => insertEditorSnippet({ block: "\\begin{itemize}\n  \\item Item one\n  \\item Item two\n\\end{itemize}\n", before: "", after: "", cursorOffset: 18 })}
+                      className="group relative inline-flex h-8 w-8 items-center justify-center rounded-md border border-slate-300 bg-white text-slate-800 transition hover:bg-slate-100"
+                      aria-label="Insert itemize list"
+                    >
+                      <svg viewBox="0 0 20 20" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="1.8">
+                        <path d="M7 5h9M7 10h9M7 15h9M4 5h.01M4 10h.01M4 15h.01" strokeLinecap="round" strokeLinejoin="round" />
+                      </svg>
+                      <span className="pointer-events-none absolute left-1/2 top-full z-20 mt-1 hidden -translate-x-1/2 whitespace-nowrap rounded bg-slate-900 px-2 py-1 text-[10px] font-semibold text-white group-hover:block">
+                        Itemize
+                      </span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => insertEditorSnippet({ block: "\\begin{enumerate}\n  \\item First\n  \\item Second\n\\end{enumerate}\n", before: "", after: "", cursorOffset: 19 })}
+                      className="group relative inline-flex h-8 w-8 items-center justify-center rounded-md border border-slate-300 bg-white text-slate-800 transition hover:bg-slate-100"
+                      aria-label="Insert enumerated list"
+                    >
+                      <span className="text-xs font-semibold">1.</span>
+                      <span className="pointer-events-none absolute left-1/2 top-full z-20 mt-1 hidden -translate-x-1/2 whitespace-nowrap rounded bg-slate-900 px-2 py-1 text-[10px] font-semibold text-white group-hover:block">
+                        Enumerate
+                      </span>
+                    </button>
+                  </div>
+                </div>
+
+                <div className="rounded-md border border-slate-200 bg-white px-2 py-1.5">
+                  <p className="mb-1 text-[10px] font-semibold uppercase tracking-[0.12em] text-slate-500">Math</p>
+                  <div className="flex flex-wrap items-center gap-1">
+                    <button
+                      type="button"
+                      onClick={() => insertEditorSnippet({ before: "$", after: "$", placeholder: "math" })}
+                      className="group relative inline-flex h-8 w-8 items-center justify-center rounded-md border border-slate-300 bg-white text-slate-800 transition hover:bg-slate-100"
+                      aria-label="Insert inline math"
+                    >
+                      <span className="text-xs font-semibold">$</span>
+                      <span className="pointer-events-none absolute left-1/2 top-full z-20 mt-1 hidden -translate-x-1/2 whitespace-nowrap rounded bg-slate-900 px-2 py-1 text-[10px] font-semibold text-white group-hover:block">
+                        Inline math
+                      </span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => insertEditorSnippet({ block: "\\[\n  a^2 + b^2 = c^2\n\\]\n", before: "", after: "", cursorOffset: 4 })}
+                      className="group relative inline-flex h-8 w-8 items-center justify-center rounded-md border border-slate-300 bg-white text-slate-800 transition hover:bg-slate-100"
+                      aria-label="Insert display math"
+                    >
+                      <span className="text-[10px] font-semibold">[]</span>
+                      <span className="pointer-events-none absolute left-1/2 top-full z-20 mt-1 hidden -translate-x-1/2 whitespace-nowrap rounded bg-slate-900 px-2 py-1 text-[10px] font-semibold text-white group-hover:block">
+                        Display math
+                      </span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => insertEditorSnippet({ block: "\\begin{equation}\n  E = mc^2\n  \\label{eq:key}\n\\end{equation}\n", before: "", after: "", cursorOffset: 18 })}
+                      className="group relative inline-flex h-8 w-8 items-center justify-center rounded-md border border-slate-300 bg-white text-slate-800 transition hover:bg-slate-100"
+                      aria-label="Insert equation environment"
+                    >
+                      <span className="text-[10px] font-semibold">eq</span>
+                      <span className="pointer-events-none absolute left-1/2 top-full z-20 mt-1 hidden -translate-x-1/2 whitespace-nowrap rounded bg-slate-900 px-2 py-1 text-[10px] font-semibold text-white group-hover:block">
+                        Equation
+                      </span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => insertEditorSnippet({ block: "\\begin{align}\n  y &= mx + b \\\\n  z &= ax^2 + bx + c\n\\end{align}\n", before: "", after: "", cursorOffset: 15 })}
+                      className="group relative inline-flex h-8 w-8 items-center justify-center rounded-md border border-slate-300 bg-white text-slate-800 transition hover:bg-slate-100"
+                      aria-label="Insert align environment"
+                    >
+                      <span className="text-[10px] font-semibold">al</span>
+                      <span className="pointer-events-none absolute left-1/2 top-full z-20 mt-1 hidden -translate-x-1/2 whitespace-nowrap rounded bg-slate-900 px-2 py-1 text-[10px] font-semibold text-white group-hover:block">
+                        Align
+                      </span>
+                    </button>
+                  </div>
+                </div>
+
+                <div className="rounded-md border border-slate-200 bg-white px-2 py-1.5">
+                  <p className="mb-1 text-[10px] font-semibold uppercase tracking-[0.12em] text-slate-500">Figures and Tables</p>
+                  <div className="flex flex-wrap items-center gap-1">
+                    <button
+                      type="button"
+                      onClick={() =>
+                        insertEditorSnippet({
+                          block:
+                            "\\begin{figure}[htbp]\n  \\centering\n  \\includegraphics[width=0.8\\linewidth]{figures/plot.png}\n  \\caption{Figure caption}\n  \\label{fig:plot}\n\\end{figure}\n",
+                          before: "",
+                          after: "",
+                          cursorOffset: 62,
+                        })
+                      }
+                      className="group relative inline-flex h-8 w-8 items-center justify-center rounded-md border border-slate-300 bg-white text-slate-800 transition hover:bg-slate-100"
+                      aria-label="Insert figure environment"
+                    >
+                      <svg viewBox="0 0 20 20" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="1.8">
+                        <rect x="3" y="4" width="14" height="12" rx="1.5" />
+                        <circle cx="8" cy="8" r="1.2" />
+                        <path d="M4.5 14l4.5-4 2.6 2 1.9-1.7L15.5 14" strokeLinecap="round" strokeLinejoin="round" />
+                      </svg>
+                      <span className="pointer-events-none absolute left-1/2 top-full z-20 mt-1 hidden -translate-x-1/2 whitespace-nowrap rounded bg-slate-900 px-2 py-1 text-[10px] font-semibold text-white group-hover:block">
+                        Figure
+                      </span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => insertEditorSnippet({ before: "\\includegraphics[width=0.8\\linewidth]{", after: "}", placeholder: "figures/image.png" })}
+                      className="group relative inline-flex h-8 w-8 items-center justify-center rounded-md border border-slate-300 bg-white text-slate-800 transition hover:bg-slate-100"
+                      aria-label="Insert includegraphics"
+                    >
+                      <span className="text-[10px] font-semibold">img</span>
+                      <span className="pointer-events-none absolute left-1/2 top-full z-20 mt-1 hidden -translate-x-1/2 whitespace-nowrap rounded bg-slate-900 px-2 py-1 text-[10px] font-semibold text-white group-hover:block">
+                        Include image
+                      </span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() =>
+                        insertEditorSnippet({
+                          block:
+                            "\\begin{table}[htbp]\n  \\centering\n  \\caption{Table caption}\n  \\label{tab:results}\n  \\begin{tabular}{lcc}\n    \\toprule\n    Item & Value A & Value B \\\\n    \\midrule\n    A & 1.0 & 2.0 \\\\n    B & 3.0 & 4.0 \\\\n    \\bottomrule\n  \\end{tabular}\n\\end{table}\n",
+                          before: "",
+                          after: "",
+                          cursorOffset: 56,
+                        })
+                      }
+                      className="group relative inline-flex h-8 w-8 items-center justify-center rounded-md border border-slate-300 bg-white text-slate-800 transition hover:bg-slate-100"
+                      aria-label="Insert table environment"
+                    >
+                      <svg viewBox="0 0 20 20" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="1.8">
+                        <rect x="3" y="4" width="14" height="12" rx="1" />
+                        <path d="M3 8h14M3 12h14M8 4v12M12 4v12" />
+                      </svg>
+                      <span className="pointer-events-none absolute left-1/2 top-full z-20 mt-1 hidden -translate-x-1/2 whitespace-nowrap rounded bg-slate-900 px-2 py-1 text-[10px] font-semibold text-white group-hover:block">
+                        Table
+                      </span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => insertEditorSnippet({ before: "\\begin{tabular}{lcc}\n", after: "\\end{tabular}\n", placeholder: "  Header A & Header B & Header C \\\\n  \\hline\n  A & B & C \\\\" })}
+                      className="group relative inline-flex h-8 w-8 items-center justify-center rounded-md border border-slate-300 bg-white text-slate-800 transition hover:bg-slate-100"
+                      aria-label="Insert tabular"
+                    >
+                      <span className="text-[10px] font-semibold">tab</span>
+                      <span className="pointer-events-none absolute left-1/2 top-full z-20 mt-1 hidden -translate-x-1/2 whitespace-nowrap rounded bg-slate-900 px-2 py-1 text-[10px] font-semibold text-white group-hover:block">
+                        Tabular
+                      </span>
+                    </button>
+                  </div>
+                </div>
+
+                <div className="rounded-md border border-slate-200 bg-white px-2 py-1.5">
+                  <p className="mb-1 text-[10px] font-semibold uppercase tracking-[0.12em] text-slate-500">References</p>
+                  <div className="flex flex-wrap items-center gap-1">
+                    <button
+                      type="button"
+                      onClick={() => insertEditorSnippet({ before: "\\label{", after: "}", placeholder: "sec:key" })}
+                      className="group relative inline-flex h-8 w-8 items-center justify-center rounded-md border border-slate-300 bg-white text-slate-800 transition hover:bg-slate-100"
+                      aria-label="Insert label"
+                    >
+                      <span className="text-[10px] font-semibold">lbl</span>
+                      <span className="pointer-events-none absolute left-1/2 top-full z-20 mt-1 hidden -translate-x-1/2 whitespace-nowrap rounded bg-slate-900 px-2 py-1 text-[10px] font-semibold text-white group-hover:block">
+                        Label
+                      </span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => insertEditorSnippet({ before: "\\ref{", after: "}", placeholder: "sec:key" })}
+                      className="group relative inline-flex h-8 w-8 items-center justify-center rounded-md border border-slate-300 bg-white text-slate-800 transition hover:bg-slate-100"
+                      aria-label="Insert ref"
+                    >
+                      <span className="text-[10px] font-semibold">ref</span>
+                      <span className="pointer-events-none absolute left-1/2 top-full z-20 mt-1 hidden -translate-x-1/2 whitespace-nowrap rounded bg-slate-900 px-2 py-1 text-[10px] font-semibold text-white group-hover:block">
+                        Reference
+                      </span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => insertEditorSnippet({ before: "\\cite{", after: "}", placeholder: "wiserfiles2026" })}
+                      className="group relative inline-flex h-8 w-8 items-center justify-center rounded-md border border-slate-300 bg-white text-slate-800 transition hover:bg-slate-100"
+                      aria-label="Insert citation"
+                    >
+                      <span className="text-[10px] font-semibold">cite</span>
+                      <span className="pointer-events-none absolute left-1/2 top-full z-20 mt-1 hidden -translate-x-1/2 whitespace-nowrap rounded bg-slate-900 px-2 py-1 text-[10px] font-semibold text-white group-hover:block">
+                        Citation
+                      </span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => insertEditorSnippet({ before: "\\href{", after: "}{link text}", placeholder: "https://example.com" })}
+                      className="group relative inline-flex h-8 w-8 items-center justify-center rounded-md border border-slate-300 bg-white text-slate-800 transition hover:bg-slate-100"
+                      aria-label="Insert hyperlink"
+                    >
+                      <svg viewBox="0 0 20 20" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="1.8">
+                        <path d="M8 12l4-4M7 7l-2 2a2.5 2.5 0 003.5 3.5l2-2M13 13l2-2a2.5 2.5 0 00-3.5-3.5l-2 2" strokeLinecap="round" strokeLinejoin="round" />
+                      </svg>
+                      <span className="pointer-events-none absolute left-1/2 top-full z-20 mt-1 hidden -translate-x-1/2 whitespace-nowrap rounded bg-slate-900 px-2 py-1 text-[10px] font-semibold text-white group-hover:block">
+                        Hyperlink
+                      </span>
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
           {findPanelOpen ? (
-            <div className="border-b border-slate-200 bg-white px-2 py-1">
-              <div className="flex flex-wrap items-center gap-1.5">
+            <div className="mb-2 space-y-1.5 rounded-lg border border-slate-200 bg-slate-50 p-1.5">
+              <div className="flex flex-wrap items-center gap-2">
                 <input
                   ref={findInputRef}
                   value={findQuery}
                   onChange={(event) => setFindQuery(event.target.value)}
                   placeholder="Find"
-                  className="min-w-[140px] flex-1 rounded border border-slate-200 bg-slate-50 px-2 py-0.5 text-xs text-slate-700 outline-none focus:border-cyan-300"
-                  onKeyDown={(event) => {
-                    if (event.key === "Enter") jumpToNextMatch(event.shiftKey ? -1 : 1);
-                    if (event.key === "Escape") { setFindPanelOpen(false); setReplacePanelOpen(false); }
-                  }}
+                  className="min-w-[180px] flex-1 rounded border border-slate-300 bg-white px-2 py-1 text-xs text-slate-700"
                 />
-                <span className="text-[10px] tabular-nums text-slate-400">
+                <span className="text-xs text-slate-500">
                   {findMatches.length ? `${boundedActiveMatchIndex + 1}/${findMatches.length}` : "0/0"}
                 </span>
                 <button
                   type="button"
                   onClick={() => jumpToNextMatch(-1)}
-                  className="rounded border border-slate-200 bg-white px-1.5 py-0.5 text-[10px] font-semibold text-slate-600 transition hover:bg-slate-50"
+                  className="rounded border border-slate-300 bg-white px-2 py-1 text-xs font-semibold text-slate-700"
                 >
                   Prev
                 </button>
                 <button
                   type="button"
                   onClick={() => jumpToNextMatch(1)}
-                  className="rounded border border-slate-200 bg-white px-1.5 py-0.5 text-[10px] font-semibold text-slate-600 transition hover:bg-slate-50"
+                  className="rounded border border-slate-300 bg-white px-2 py-1 text-xs font-semibold text-slate-700"
                 >
                   Next
                 </button>
                 <button
                   type="button"
                   onClick={() => setReplacePanelOpen((current) => !current)}
-                  className="rounded border border-slate-200 bg-white px-1.5 py-0.5 text-[10px] font-semibold text-slate-600 transition hover:bg-slate-50"
+                  className="rounded border border-slate-300 bg-white px-2 py-1 text-xs font-semibold text-slate-700"
                 >
-                  {replacePanelOpen ? "Hide Replace" : "Replace"}
+                  {replacePanelOpen ? "Hide Replace" : "Show Replace"}
                 </button>
-                <label className="flex items-center gap-0.5 text-[10px] text-slate-500">
+                <label className="flex items-center gap-1 text-xs text-slate-600">
                   <input
                     type="checkbox"
                     checked={findCaseSensitive}
                     onChange={(event) => setFindCaseSensitive(event.target.checked)}
-                    className="h-3 w-3"
                   />
                   Case
                 </label>
-                <label className="flex items-center gap-0.5 text-[10px] text-slate-500">
+                <label className="flex items-center gap-1 text-xs text-slate-600">
                   <input
                     type="checkbox"
                     checked={findUseRegex}
                     onChange={(event) => setFindUseRegex(event.target.checked)}
-                    className="h-3 w-3"
                   />
                   Regex
                 </label>
-                <label className="flex items-center gap-0.5 text-[10px] text-slate-500">
+                <label className="flex items-center gap-1 text-xs text-slate-600">
                   <input
                     type="checkbox"
                     checked={findWholeWord}
                     onChange={(event) => setFindWholeWord(event.target.checked)}
-                    className="h-3 w-3"
                   />
-                  Word
+                  Whole word
                 </label>
                 <button
                   type="button"
-                  onClick={() => { setFindPanelOpen(false); setReplacePanelOpen(false); }}
-                  className="rounded px-1 py-0.5 text-[10px] font-semibold text-slate-400 transition hover:text-slate-600"
+                  onClick={() => {
+                    setFindPanelOpen(false);
+                    setReplacePanelOpen(false);
+                  }}
+                  className="rounded border border-slate-300 bg-white px-2 py-1 text-xs font-semibold text-slate-700"
                 >
-                  ✕
+                  Close
                 </button>
               </div>
 
               {replacePanelOpen ? (
-                <div className="mt-1 flex flex-wrap items-center gap-1.5">
+                <div className="flex flex-wrap items-center gap-2">
                   <input
                     value={replaceQuery}
                     onChange={(event) => setReplaceQuery(event.target.value)}
-                    placeholder="Replace with"
-                    className="min-w-[140px] flex-1 rounded border border-slate-200 bg-slate-50 px-2 py-0.5 text-xs text-slate-700 outline-none focus:border-cyan-300"
-                    onKeyDown={(event) => {
-                      if (event.key === "Enter") replaceCurrentMatch();
-                      if (event.key === "Escape") { setFindPanelOpen(false); setReplacePanelOpen(false); }
-                    }}
+                    placeholder="Replace"
+                    className="min-w-[180px] flex-1 rounded border border-slate-300 bg-white px-2 py-1 text-xs text-slate-700"
                   />
                   <button
                     type="button"
                     onClick={replaceCurrentMatch}
-                    className="rounded border border-slate-200 bg-white px-1.5 py-0.5 text-[10px] font-semibold text-slate-600 transition hover:bg-slate-50"
+                    className="rounded border border-slate-300 bg-white px-2 py-1 text-xs font-semibold text-slate-700"
                   >
                     Replace
                   </button>
                   <button
                     type="button"
                     onClick={replaceAllMatches}
-                    className="rounded border border-slate-200 bg-white px-1.5 py-0.5 text-[10px] font-semibold text-slate-600 transition hover:bg-slate-50"
+                    className="rounded border border-slate-300 bg-white px-2 py-1 text-xs font-semibold text-slate-700"
                   >
                     Replace All
                   </button>
                 </div>
               ) : null}
 
-              {findRegexError ? <p className="mt-1 text-[10px] font-medium text-rose-600">{findRegexError}</p> : null}
+              {findRegexError ? <p className="text-xs font-medium text-rose-700">{findRegexError}</p> : null}
             </div>
           ) : null}
 
-          {/* Match gutter */}
-          {showMatchGutter ? (
-            <div className="border-b border-slate-200 bg-slate-50 px-2 py-1">
-              <div className="flex flex-wrap items-center gap-1.5">
-                <p className="text-[10px] font-semibold uppercase tracking-[0.1em] text-slate-400">Matches</p>
-                {matchLines.slice(0, 20).map((line) => (
-                  <button
-                    key={`match-line-${line.lineNumber}`}
-                    type="button"
-                    onClick={() => focusMatch(line.firstMatchIndex)}
-                    className="rounded border border-slate-200 bg-white px-1.5 py-0.5 text-[10px] text-slate-600 transition hover:border-cyan-300 hover:bg-cyan-50"
-                  >
-                    L{line.lineNumber} ({line.count})
-                  </button>
-                ))}
+          <div className={`grid gap-1.5 ${showMatchGutter ? "lg:grid-cols-[140px_minmax(0,1fr)]" : ""}`}>
+            {showMatchGutter ? (
+              <div className="max-h-[520px] overflow-auto rounded-xl border border-slate-200 bg-slate-50 p-1.5">
+                <p className="mb-1.5 text-[11px] font-semibold uppercase tracking-[0.12em] text-slate-500">Match gutter</p>
+                {matchLines.length ? (
+                  <ul className="space-y-1">
+                    {matchLines.map((line) => (
+                      <li key={`match-line-${line.lineNumber}`}>
+                        <button
+                          type="button"
+                          onClick={() => focusMatch(line.firstMatchIndex)}
+                          className="w-full rounded border border-slate-200 bg-white px-2 py-1 text-left text-xs text-slate-700 transition hover:border-cyan-300 hover:bg-cyan-50"
+                        >
+                          <p className="font-semibold text-cyan-900">L{line.lineNumber} ({line.count})</p>
+                          <p className="truncate text-slate-600">{line.preview}</p>
+                        </button>
+                      </li>
+                    ))}
+                  </ul>
+                ) : (
+                  <p className="text-xs text-slate-500">No matches.</p>
+                )}
               </div>
-            </div>
-          ) : null}
+            ) : null}
 
-          {/* Editor + line numbers */}
-          <div className="flex flex-1 overflow-hidden">
-            {/* Line numbers gutter */}
-            <div
-              className="select-none overflow-hidden border-r border-slate-100 bg-slate-50/60 pt-3 text-right font-mono text-xs leading-6 text-slate-300"
-              style={{
-                width: `${Math.max(32, String(activeSource.split('\n').length).length * 8 + 12)}px`,
-                flexShrink: 0,
-              }}
-            >
-              <pre
-                className="px-2"
-                style={{ transform: `translateY(${-editorScroll.top}px)` }}
-              >
-                {lineNumbers}
-              </pre>
-            </div>
-
-            {/* Editor shell */}
-            <div className="latex-editor-shell relative flex-1 overflow-hidden bg-white">
+            <div className="latex-editor-shell relative min-h-[68vh] overflow-hidden rounded-xl border border-slate-200">
               <pre
                 aria-hidden="true"
                 className="latex-highlight-layer pointer-events-none absolute inset-0 m-0 overflow-hidden p-3 font-mono text-sm leading-6"
@@ -3498,7 +3496,7 @@ export default function ResearchStudioPage() {
                 onDragOver={onEditorDragOver}
                 onDrop={onEditorDrop}
                 disabled={!activeEntry}
-                className="research-editor latex-editor-input relative z-10 min-h-full w-full resize-none border-0 bg-transparent p-3 font-mono text-sm leading-6 outline-none focus:outline-none disabled:opacity-60"
+                className="latex-editor-input research-editor relative z-10 min-h-[68vh] w-full resize-none border-0 bg-transparent p-3 font-mono text-sm leading-6 outline-none ring-cyan-400 focus:ring-2 disabled:opacity-60"
                 spellCheck={true}
                 lang="en"
               />
@@ -3551,251 +3549,254 @@ export default function ResearchStudioPage() {
                 />
               ) : null}
             </div>
-          </div>
 
-          {/* Status bar */}
-          <div className="flex items-center justify-between border-t border-slate-200 bg-white px-3 py-0.5 text-[11px] text-slate-400">
-            <div className="flex items-center gap-3">
-              <span>Ln {cursorLine}, Col {cursorCol}</span>
-              <span>UTF-8</span>
-              <span className="font-medium text-cyan-600">LaTeX</span>
-            </div>
-            <div className="flex items-center gap-3">
-              <span>Words: {wordCount.words}</span>
-              {wordCount.abstractWords > 0 ? (
-                <span className={wordCount.abstractWords > 250 ? "font-semibold text-rose-500" : ""}>
-                  Abstract: {wordCount.abstractWords}/250
+            {/* Status bar */}
+            <div className="mt-1.5 flex flex-wrap items-center justify-between gap-2 rounded-md border border-slate-200 bg-white px-2 py-1 text-[11px] text-slate-600">
+              <div className="flex flex-wrap items-center gap-3">
+                <span>
+                  <span className="font-semibold">Words:</span> {wordCount.words} · <span className="font-semibold">Chars:</span> {wordCount.chars}
                 </span>
-              ) : null}
-              <button
-                type="button"
-                onClick={() => setShowShortcuts((c) => !c)}
-                className="rounded px-1 py-0.5 text-[10px] font-medium text-slate-400 transition hover:bg-slate-100 hover:text-slate-600"
-              >
-                {showShortcuts ? "Hide Shortcuts" : "Shortcuts"}
-              </button>
-              <span className={autoSaveStatus === "saved" ? "text-emerald-500" : autoSaveStatus === "saving" ? "text-slate-300" : "text-amber-500"}>
-                {autoSaveStatus === "saved" ? `Saved ${autoSaveTimestamp || ""}` : autoSaveStatus === "saving" ? "Saving..." : "Unsaved changes"}
-              </span>
-            </div>
-          </div>
-
-          {/* Keyboard shortcuts */}
-          {showShortcuts ? (
-            <div className="border-t border-slate-200 bg-slate-50 px-3 py-1.5">
-              <p className="mb-1 text-[10px] font-semibold uppercase tracking-[0.1em] text-slate-400">Keyboard Shortcuts</p>
-              <div className="grid grid-cols-2 gap-x-4 gap-y-0.5 text-[10px] text-slate-500">
-                <div><kbd className="rounded bg-white px-1 py-0.5 text-[9px] font-semibold shadow-sm">Ctrl+S</kbd> / <kbd className="rounded bg-white px-1 py-0.5 text-[9px] font-semibold shadow-sm">Cmd+Enter</kbd> Compile</div>
-                <div><kbd className="rounded bg-white px-1 py-0.5 text-[9px] font-semibold shadow-sm">Ctrl+F</kbd> Find</div>
-                <div><kbd className="rounded bg-white px-1 py-0.5 text-[9px] font-semibold shadow-sm">Ctrl+H</kbd> Find & Replace</div>
-                <div><kbd className="rounded bg-white px-1 py-0.5 text-[9px] font-semibold shadow-sm">Ctrl+G</kbd> Next match</div>
-                <div><kbd className="rounded bg-white px-1 py-0.5 text-[9px] font-semibold shadow-sm">Ctrl+D</kbd> Duplicate line</div>
-                <div><kbd className="rounded bg-white px-1 py-0.5 text-[9px] font-semibold shadow-sm">Ctrl+/</kbd> Toggle comment</div>
-                <div><kbd className="rounded bg-white px-1 py-0.5 text-[9px] font-semibold shadow-sm">Tab</kbd> Indent · <kbd className="rounded bg-white px-1 py-0.5 text-[9px] font-semibold shadow-sm">Shift+Tab</kbd> Outdent</div>
-                <div><kbd className="rounded bg-white px-1 py-0.5 text-[9px] font-semibold shadow-sm">Ctrl+Click PDF</kbd> Sync to source</div>
-                <div className="col-span-2 mt-1 text-[9px] text-slate-300">Right-click for browser spellcheck suggestions (spellcheck enabled)</div>
+                {wordCount.abstractWords > 0 ? (
+                  <span className={wordCount.abstractWords > 250 ? "font-semibold text-rose-600" : "text-slate-500"}>
+                    Abstract: {wordCount.abstractWords}/250 words
+                    {wordCount.abstractWords > 250 ? " (over limit!)" : ""}
+                  </span>
+                ) : null}
+              </div>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => setShowShortcuts((c) => !c)}
+                  className="rounded border border-slate-300 bg-white px-1.5 py-0.5 text-[10px] font-semibold text-slate-600 hover:bg-slate-100"
+                >
+                  {showShortcuts ? "Hide Shortcuts" : "Shortcuts"}
+                </button>
+                <span className={autoSaveStatus === "saved" ? "text-emerald-600" : autoSaveStatus === "saving" ? "text-slate-500" : "text-amber-600"}>
+                  {autoSaveStatus === "saved" ? `Saved ${autoSaveTimestamp || ""}` : autoSaveStatus === "saving" ? "Saving..." : "Unsaved changes"}
+                </span>
               </div>
             </div>
-          ) : null}
+
+            {/* Keyboard shortcuts panel */}
+            {showShortcuts ? (
+              <div className="mt-1 rounded-md border border-slate-200 bg-slate-50 p-1.5">
+                <p className="mb-1 text-[10px] font-semibold uppercase tracking-[0.12em] text-slate-500">Keyboard Shortcuts</p>
+                <div className="grid grid-cols-2 gap-x-4 gap-y-0.5 text-[11px] text-slate-600">
+                  <div><kbd className="rounded bg-white px-1 py-0.5 text-[10px] font-semibold shadow">Ctrl+S</kbd> / <kbd className="rounded bg-white px-1 py-0.5 text-[10px] font-semibold shadow">Cmd+Enter</kbd> Compile</div>
+                  <div><kbd className="rounded bg-white px-1 py-0.5 text-[10px] font-semibold shadow">Ctrl+F</kbd> Find</div>
+                  <div><kbd className="rounded bg-white px-1 py-0.5 text-[10px] font-semibold shadow">Ctrl+H</kbd> Find & Replace</div>
+                  <div><kbd className="rounded bg-white px-1 py-0.5 text-[10px] font-semibold shadow">Ctrl+G</kbd> Next match</div>
+                  <div><kbd className="rounded bg-white px-1 py-0.5 text-[10px] font-semibold shadow">Ctrl+D</kbd> Duplicate line</div>
+                  <div><kbd className="rounded bg-white px-1 py-0.5 text-[10px] font-semibold shadow">Ctrl+/</kbd> Toggle comment</div>
+                  <div><kbd className="rounded bg-white px-1 py-0.5 text-[10px] font-semibold shadow">Tab</kbd> Indent · <kbd className="rounded bg-white px-1 py-0.5 text-[10px] font-semibold shadow">Shift+Tab</kbd> Outdent</div>
+                  <div><kbd className="rounded bg-white px-1 py-0.5 text-[10px] font-semibold shadow">Ctrl+Click PDF</kbd> Sync to source</div>
+                  <div className="col-span-2 mt-1 text-[10px] text-slate-400">Right-click for browser spellcheck suggestions (spellcheck enabled)</div>
+                </div>
+              </div>
+            ) : null}
+          </div>
         </div>
 
-        {/* ── Right divider (when preview shown) ────── */}
-        {showPreview ? (
-          <div
-            className="group relative w-[6px] flex-shrink-0 cursor-col-resize"
-            onMouseDown={() => setActiveResizer("right")}
-            role="separator"
-            aria-orientation="vertical"
-            aria-label="Resize preview pane"
-          >
-            <div className="absolute inset-y-0 left-1/2 w-[1px] -translate-x-1/2 bg-transparent transition-colors group-hover:bg-cyan-400" />
-          </div>
-        ) : null}
+        <div
+          className={`hidden items-center justify-center lg:flex ${rightPaneCollapsed ? "cursor-default" : "cursor-col-resize"}`}
+          onMouseDown={() => {
+            if (!rightPaneCollapsed) setActiveResizer("right");
+          }}
+          role="separator"
+          aria-orientation="vertical"
+          aria-label="Resize preview pane"
+        >
+          <span className="h-20 w-1 rounded-full bg-slate-300" />
+        </div>
 
-        {/* ── PDF Preview slide-over ────────────────── */}
-        {showPreview ? (
-          <aside
-            style={{ width: `${rightPaneWidth}px` }}
-            className="flex-shrink-0 flex flex-col overflow-hidden bg-white"
-          >
-            <div className="flex items-center justify-between border-b border-slate-200 px-2 py-1">
-              <p className="text-[10px] font-semibold uppercase tracking-[0.1em] text-slate-400">
-                PDF Preview
+        <aside
+          className={`rounded-xl border border-slate-200 bg-white/90 transition-[padding] ${rightPaneCollapsed ? "cursor-pointer p-1" : "p-1.5"}`}
+          onClick={() => {
+            if (rightPaneCollapsed) setRightPaneCollapsed(false);
+          }}
+          role={rightPaneCollapsed ? "button" : undefined}
+          aria-label={rightPaneCollapsed ? "Expand preview pane" : undefined}
+        >
+          <div className={`flex items-center gap-2 ${rightPaneCollapsed ? "justify-center" : "justify-between"}`}>
+            {!rightPaneCollapsed ? (
+              <p className="text-xs font-semibold uppercase tracking-[0.14em] text-slate-600">
+                Preview Pane
                 {synctexNotice ? (
-                  <span className="ml-2 font-normal text-amber-500">
-                    Ctrl+click for sync
+                  <span className="ml-2 text-[10px] font-normal text-amber-600">
+                    Ctrl+click for sync · {synctexNotice}
                   </span>
                 ) : null}
               </p>
-              <div className="flex items-center gap-1">
-                {compiledPdfUrl ? (
-                  <a
-                    href={compiledPdfUrl}
-                    download={compiledPdfFileName}
-                    className="inline-flex h-6 w-6 items-center justify-center rounded text-slate-400 transition hover:bg-slate-100 hover:text-slate-600"
-                    aria-label="Download compiled PDF"
-                    title="Download compiled PDF"
-                  >
-                    <svg viewBox="0 0 20 20" className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth="1.8">
-                      <path d="M10 3v9m0 0l-3-3m3 3l3-3M4 14v2h12v-2" strokeLinecap="round" strokeLinejoin="round" />
-                    </svg>
-                  </a>
-                ) : null}
-                <button
-                  type="button"
-                  onClick={() => void compileProject()}
-                  disabled={compileBusy}
-                  className="inline-flex h-6 items-center gap-1 rounded border border-cyan-200 bg-cyan-50 px-2 text-[10px] font-semibold text-cyan-800 transition hover:bg-cyan-100 disabled:opacity-60"
-                  aria-label={compileBusy ? "Compiling" : "Compile"}
-                >
-                  <svg viewBox="0 0 20 20" className="h-3 w-3" fill="none" stroke="currentColor" strokeWidth="1.8">
-                    <path d="M7 6l7 4-7 4V6z" strokeLinecap="round" strokeLinejoin="round" />
-                  </svg>
-                  {compileBusy ? "Compiling..." : "Compile"}
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setShowPreview(false)}
-                  className="inline-flex h-6 w-6 items-center justify-center rounded text-slate-400 transition hover:bg-slate-100 hover:text-slate-600"
-                  aria-label="Close preview"
-                >
-                  <svg viewBox="0 0 20 20" className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth="1.8">
-                    <path d="M6 6l8 8M14 6l-8 8" strokeLinecap="round" strokeLinejoin="round" />
-                  </svg>
-                </button>
-              </div>
-            </div>
+            ) : null}
+            <button
+              type="button"
+              onClick={(event) => {
+                event.stopPropagation();
+                setRightPaneCollapsed((current) => !current);
+              }}
+              className="group relative rounded-md border border-slate-300 bg-white p-1 text-slate-700"
+              aria-label={rightPaneCollapsed ? "Expand preview pane" : "Collapse preview pane"}
+            >
+              <svg
+                viewBox="0 0 20 20"
+                className={`h-4 w-4 transition-transform duration-200 ${rightPaneCollapsed ? "rotate-180" : "rotate-0"}`}
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="1.8"
+              >
+                {rightPaneCollapsed ? (
+                  <path d="M13 4l-6 6 6 6" strokeLinecap="round" strokeLinejoin="round" />
+                ) : (
+                  <path d="M7 4l6 6-6 6" strokeLinecap="round" strokeLinejoin="round" />
+                )}
+              </svg>
+              <span className="pointer-events-none absolute right-0 top-7 z-20 hidden whitespace-nowrap rounded-md bg-slate-900 px-2 py-1 text-[11px] font-semibold text-white group-hover:block">
+                {rightPaneCollapsed ? "Expand preview" : "Collapse preview"}
+              </span>
+            </button>
+          </div>
 
-            <div className="flex-1 overflow-auto">
-              <div className="p-2">
-                <p className="mb-1.5 text-[10px] text-slate-400">
-                  {compileBusy ? "Compiling project..." : compileNotice}
-                </p>
+          {!rightPaneCollapsed ? (
+            <div className="mt-2 h-[68vh] rounded-xl border border-slate-200 bg-slate-50 p-1.5">
+              <p className="mb-1.5 text-[11px] font-semibold uppercase tracking-[0.12em] text-slate-600">
+                {compileBusy ? "Compiling project..." : compileNotice}
+              </p>
 
-                {compileMainLog ? (
-                  <details className="mb-1.5 rounded border border-slate-200 bg-slate-50">
-                    <summary className="cursor-pointer px-2 py-1 text-[10px] font-semibold uppercase tracking-[0.1em] text-slate-600">
-                      View {compileMainLogFileName}
-                    </summary>
-                    <div className="px-2 pb-1">
-                      <div className="flex items-center justify-end">
-                        <button
-                          type="button"
-                          onClick={() =>
-                            downloadBlob(
-                              new Blob([compileMainLog], { type: "text/plain;charset=utf-8" }),
-                              compileMainLogFileName
-                            )
-                          }
-                          className="rounded border border-slate-200 bg-white px-2 py-0.5 text-[10px] font-semibold text-slate-600"
-                        >
-                          Download log
-                        </button>
-                      </div>
-                      <pre className="mt-1 max-h-48 overflow-auto rounded border border-slate-200 bg-white p-1.5 text-[10px] leading-5 text-slate-600">
-                        {compileMainLog}
-                      </pre>
-                    </div>
-                  </details>
-                ) : null}
-
-                {compileMainLog ? (
-                  <div className="mb-1.5 rounded border border-slate-200 bg-slate-50 p-1.5">
-                    <div className="flex items-center justify-between gap-2">
-                      <p className="text-[10px] font-semibold uppercase tracking-[0.1em] text-slate-600">
-                        AI Fix Suggestions
-                      </p>
-                      <button
-                        type="button"
-                        onClick={() => void fetchAiFixSuggestions()}
-                        disabled={aiFixBusy}
-                        className="rounded border border-cyan-200 bg-cyan-50 px-2 py-0.5 text-[10px] font-semibold text-cyan-800 transition hover:bg-cyan-100 disabled:opacity-60"
-                      >
-                        {aiFixBusy ? "Analyzing..." : "Get suggestions"}
-                      </button>
-                    </div>
-
-                    {aiFixSummary ? <p className="mt-1 text-[10px] text-slate-600">{aiFixSummary}</p> : null}
-                    {aiFixError ? <p className="mt-1 text-[10px] text-rose-600">{aiFixError}</p> : null}
-
-                    {aiFixSuggestions.length ? (
-                      <ul className="mt-1 max-h-52 space-y-1 overflow-auto">
-                        {aiFixSuggestions.map((suggestion, index) => (
-                          <li key={`${suggestion.title}-${index}`} className="rounded border border-slate-200 bg-white p-1">
-                            <p className="text-[10px] font-semibold text-slate-800">{suggestion.title}</p>
-                            <p className="mt-0.5 text-[10px] text-slate-600">{suggestion.why}</p>
-
-                            {suggestion.files?.length ? (
-                              <p className="mt-0.5 text-[9px] uppercase tracking-[0.1em] text-slate-400">
-                                Files: {suggestion.files.join(", ")}
-                              </p>
-                            ) : null}
-
-                            {suggestion.steps?.length ? (
-                              <ol className="mt-0.5 list-decimal space-y-0.5 pl-4 text-[10px] text-slate-600">
-                                {suggestion.steps.map((step, stepIndex) => (
-                                  <li key={`${index}-step-${stepIndex}`}>{step}</li>
-                                ))}
-                              </ol>
-                            ) : null}
-
-                            {suggestion.patch ? (
-                              <>
-                                <div className="mt-1 flex items-center justify-end">
-                                  <button
-                                    type="button"
-                                    onClick={() => applyAiPatchToActiveFile(suggestion.patch || "")}
-                                    disabled={!isValidAiPatchSnippet(suggestion.patch || "") || !activeEntry}
-                                    className="rounded border border-cyan-200 bg-cyan-50 px-2 py-0.5 text-[10px] font-semibold text-cyan-800 transition hover:bg-cyan-100 disabled:opacity-60"
-                                  >
-                                    Apply to active file
-                                  </button>
-                                </div>
-                                <pre className="mt-0.5 max-h-32 overflow-auto rounded border border-slate-200 bg-slate-50 p-1 text-[10px] leading-5 text-slate-600">
-                                  {suggestion.patch}
-                                </pre>
-                              </>
-                            ) : null}
-                          </li>
-                        ))}
-                      </ul>
-                    ) : null}
+              {compileMainLog ? (
+                <details className="mb-1.5 rounded-md border border-slate-300 bg-white p-1.5">
+                  <summary className="cursor-pointer text-[11px] font-semibold uppercase tracking-[0.12em] text-slate-700">
+                    View {compileMainLogFileName}
+                  </summary>
+                  <div className="mt-1.5 flex items-center justify-end">
+                    <button
+                      type="button"
+                      onClick={() =>
+                        downloadBlob(
+                          new Blob([compileMainLog], { type: "text/plain;charset=utf-8" }),
+                          compileMainLogFileName
+                        )
+                      }
+                      className="rounded border border-slate-300 bg-white px-2 py-1 text-[10px] font-semibold text-slate-700"
+                    >
+                      Download log
+                    </button>
                   </div>
-                ) : null}
+                  <pre className="mt-1.5 max-h-48 overflow-auto rounded border border-slate-200 bg-slate-50 p-1.5 text-[11px] leading-5 text-slate-700">
+                    {compileMainLog}
+                  </pre>
+                </details>
+              ) : null}
 
-                {previewErrorLogs.length ? (
-                  <div className="mb-1.5 rounded border border-rose-200 bg-rose-50 p-1.5">
-                    <div className="mb-1 flex items-center justify-between gap-2">
-                      <p className="text-[10px] font-semibold uppercase tracking-[0.1em] text-rose-700">Error log</p>
-                      <button
-                        type="button"
-                        onClick={() => setPreviewErrorLogs([])}
-                        className="rounded border border-rose-200 bg-white px-1.5 py-0.5 text-[10px] font-semibold text-rose-600"
-                      >
-                        Clear
-                      </button>
-                    </div>
-                    <ul className="space-y-0.5 text-[10px] text-rose-600">
-                      {previewErrorLogs.map((entry) => (
-                        <li key={entry}>{entry}</li>
+              {compileMainLog ? (
+                <div className="mb-1.5 rounded-md border border-slate-300 bg-white p-1.5">
+                  <div className="flex items-center justify-between gap-2">
+                    <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-slate-700">
+                      AI Compile Fix Suggestions
+                    </p>
+                    <button
+                      type="button"
+                      onClick={() => void fetchAiFixSuggestions()}
+                      disabled={aiFixBusy}
+                      className="rounded border border-cyan-300 bg-cyan-50 px-2 py-1 text-[10px] font-semibold text-cyan-900 transition hover:bg-cyan-100 disabled:opacity-60"
+                    >
+                      {aiFixBusy ? "Analyzing..." : "Get suggestions"}
+                    </button>
+                  </div>
+
+                  {aiFixSummary ? <p className="mt-1.5 text-[11px] text-slate-700">{aiFixSummary}</p> : null}
+                  {aiFixError ? <p className="mt-1.5 text-[11px] text-rose-700">{aiFixError}</p> : null}
+
+                  {aiFixSuggestions.length ? (
+                    <ul className="mt-1.5 max-h-52 space-y-1.5 overflow-auto">
+                      {aiFixSuggestions.map((suggestion, index) => (
+                        <li key={`${suggestion.title}-${index}`} className="rounded border border-slate-200 bg-slate-50 p-1.5">
+                          <p className="text-[11px] font-semibold text-slate-900">{suggestion.title}</p>
+                          <p className="mt-1 text-[11px] text-slate-700">{suggestion.why}</p>
+
+                          {suggestion.files?.length ? (
+                            <p className="mt-1 text-[10px] uppercase tracking-[0.1em] text-slate-500">
+                              Files: {suggestion.files.join(", ")}
+                            </p>
+                          ) : null}
+
+                          {suggestion.steps?.length ? (
+                            <ol className="mt-1 list-decimal space-y-1 pl-4 text-[11px] text-slate-700">
+                              {suggestion.steps.map((step, stepIndex) => (
+                                <li key={`${index}-step-${stepIndex}`}>{step}</li>
+                              ))}
+                            </ol>
+                          ) : null}
+
+                          {suggestion.patch ? (
+                            <>
+                              <div className="mt-1.5 flex items-center justify-end">
+                                <button
+                                  type="button"
+                                  onClick={() => applyAiPatchToActiveFile(suggestion.patch || "")}
+                                  disabled={!isValidAiPatchSnippet(suggestion.patch || "") || !activeEntry}
+                                  className="rounded border border-cyan-300 bg-cyan-50 px-2 py-1 text-[10px] font-semibold text-cyan-900 transition hover:bg-cyan-100 disabled:opacity-60"
+                                >
+                                  Apply to active file
+                                </button>
+                              </div>
+                              <pre className="mt-1.5 max-h-32 overflow-auto rounded border border-slate-200 bg-white p-1.5 text-[11px] leading-5 text-slate-700">
+                                {suggestion.patch}
+                              </pre>
+                            </>
+                          ) : null}
+                        </li>
                       ))}
                     </ul>
+                  ) : null}
+                </div>
+              ) : null}
+
+              {previewErrorLogs.length ? (
+                <div className="mb-1.5 rounded-md border border-rose-200 bg-rose-50 p-1.5">
+                  <div className="mb-1 flex items-center justify-between gap-2">
+                    <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-rose-800">Error log</p>
+                    <button
+                      type="button"
+                      onClick={() => setPreviewErrorLogs([])}
+                      className="rounded border border-rose-300 bg-white px-1.5 py-0.5 text-[10px] font-semibold text-rose-700"
+                    >
+                      Clear
+                    </button>
                   </div>
-                ) : null}
-              </div>
+                  <ul className="space-y-1 text-[11px] text-rose-700">
+                    {previewErrorLogs.map((entry) => (
+                      <li key={entry}>{entry}</li>
+                    ))}
+                  </ul>
+                </div>
+              ) : null}
 
               {compiledPdfUrl ? (
-                <div className="h-[calc(100%-8rem)] min-h-[400px] px-2 pb-2">
+                <div className="flex h-full flex-col gap-1.5">
+                  <div className="flex justify-end">
+                    <a
+                      href={compiledPdfUrl}
+                      download={compiledPdfFileName}
+                      className="inline-flex h-8 w-8 items-center justify-center rounded-md border border-slate-300 bg-white text-slate-700 transition hover:bg-slate-100"
+                      aria-label="Download compiled PDF"
+                      title="Download compiled PDF"
+                    >
+                      <svg viewBox="0 0 20 20" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="1.8">
+                        <path d="M10 3v9m0 0l-3-3m3 3l3-3M4 14v2h12v-2" strokeLinecap="round" strokeLinejoin="round" />
+                      </svg>
+                    </a>
+                  </div>
                   <iframe
                     src={compiledPdfUrl}
                     title="Compiled LaTeX PDF preview"
-                    className="h-full w-full rounded border border-slate-200 bg-white"
+                    className="h-full w-full rounded-md border border-slate-200 bg-white"
                     onClick={(event) => {
                       if (!event.ctrlKey && !event.metaKey) return;
                       if (!synctexRecords.length) {
                         setSynctexNotice("No SyncTeX data available. Recompile with synctex enabled.");
                         return;
                       }
+                      // Approximate page detection from click position
                       const iframe = event.currentTarget;
                       const rect = iframe.getBoundingClientRect();
                       const relY = event.clientY - rect.top;
@@ -3831,11 +3832,11 @@ export default function ResearchStudioPage() {
                   />
                 </div>
               ) : (
-                <div className="flex flex-1 items-center justify-center px-2">
+                <div className="flex h-full items-center justify-center rounded-md border border-dashed border-slate-300 bg-white">
                   <button
                     type="button"
                     onClick={() => void compileProject()}
-                    className="inline-flex items-center gap-2 rounded border border-dashed border-slate-300 bg-slate-50 px-3 py-2 text-xs font-semibold text-slate-500 transition hover:border-cyan-300 hover:bg-cyan-50 hover:text-cyan-700"
+                    className="inline-flex items-center gap-2 rounded-md border border-cyan-300 bg-cyan-50 px-3 py-2 text-xs font-semibold text-cyan-900 transition hover:bg-cyan-100"
                   >
                     <svg viewBox="0 0 20 20" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="1.8">
                       <path d="M7 6l7 4-7 4V6z" strokeLinecap="round" strokeLinejoin="round" />
@@ -3845,8 +3846,8 @@ export default function ResearchStudioPage() {
                 </div>
               )}
             </div>
-          </aside>
-        ) : null}
+          ) : null}
+        </aside>
       </section>
 
       {treeContextMenu ? (
