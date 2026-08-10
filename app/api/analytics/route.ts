@@ -41,6 +41,21 @@ export async function POST(request: NextRequest) {
     const ip = forwarded?.split(",")[0]?.trim() || "unknown";
     const ipHash = ip;
 
+    // Dedup: count each IP+path once per day
+    if (event === "pageview" && ip !== "unknown") {
+      const existing = await pool.query(
+        `SELECT id FROM wiserfiles_analytics 
+         WHERE event = 'pageview' AND ip_hash = $1 AND path = $2 
+         AND created_at > CURRENT_DATE 
+         LIMIT 1`,
+        [ipHash, path || null]
+      );
+      if (existing.rows.length > 0) {
+        await pool.end();
+        return NextResponse.json({ ok: true, deduped: true });
+      }
+    }
+
     // Geo lookup (free, no API key)
     let country = null;
     let city = null;
