@@ -755,10 +755,10 @@ function renderTreeContextIcon(action: TreeContextAction) {
 function loadInitialResearchStudioState(): InitialResearchStudioState {
   return {
     savedProjects: [],
-    activeProjectId: "starter-project",
-    projectName: "WiserFiles Research Draft",
-    projectEntries: STARTER_PROJECT,
-    selectedPath: "main.tex",
+    activeProjectId: "",
+    projectName: "",
+    projectEntries: [],
+    selectedPath: "",
     lastCompileAt: "Not compiled yet",
     workspaceScreen: "projects",
   };

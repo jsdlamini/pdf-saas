@@ -94,6 +94,7 @@ keyword1, keyword2, keyword3
 \section{Conclusion}
 
 \bibliographystyle{IEEEtran}
+\nocite{*}
 \bibliography{refs}
 
 \end{document}
@@ -166,6 +167,7 @@ Start writing your introduction here.
 \section{Conclusion}
 
 \bibliographystyle{ACM-Reference-Format}
+\nocite{*}
 \bibliography{refs}
 
 \end{document}
@@ -231,6 +233,7 @@ Start writing your introduction here.
 \section{Conclusions}
 
 \bibliographystyle{elsarticle-num}
+\nocite{*}
 \bibliography{refs}
 
 \end{document}
@@ -289,6 +292,7 @@ Start writing your introduction here.
 \section{Conclusion}
 
 \bibliographystyle{splncs04}
+\nocite{*}
 \bibliography{refs}
 
 \end{document}
@@ -353,6 +357,7 @@ Start writing your introduction here. Use \texttt{\textbackslash citep\{\}} for 
 Thanks to our funding sources.
 
 \bibliographystyle{plain}
+\nocite{*}
 \bibliography{refs}
 
 \end{document}
