@@ -2759,7 +2759,7 @@ export default function ResearchStudioPage() {
 
   return (
     <main className="depth-stage mx-auto flex w-full max-w-[1600px] flex-1 flex-col gap-3 px-3 py-3 md:px-4 md:py-4">
-      <header className="rounded-2xl border border-slate-200 bg-white/90 p-3">
+      <header className="border-b border-slate-200 bg-white px-4 py-2">
         <div className="flex flex-col gap-2">
           <button
             type="button"
@@ -2802,7 +2802,7 @@ export default function ResearchStudioPage() {
 
       <section
         ref={panesRef}
-        className="grid grid-cols-1 gap-1.5 lg:gap-0 lg:[grid-template-columns:var(--left-pane-width)_10px_minmax(0,1fr)_10px_var(--right-pane-width)]"
+        className="grid grid-cols-1 lg:gap-0 lg:[grid-template-columns:var(--left-pane-width)_1px_minmax(0,1fr)_1px_var(--right-pane-width)]"
         style={
           {
             "--left-pane-width": `${effectiveLeftPaneWidth}px`,
@@ -2811,16 +2811,16 @@ export default function ResearchStudioPage() {
         }
       >
         <aside
-          className={`rounded-xl border border-slate-200 bg-white/90 transition-[padding] ${leftPaneCollapsed ? "cursor-pointer p-1" : "p-1.5"}`}
+          className={`transition-[padding] border-r border-slate-200 ${leftPaneCollapsed ? "cursor-pointer p-1" : "p-1.5"}`}
           onClick={() => {
             if (leftPaneCollapsed) setLeftPaneCollapsed(false);
           }}
           role={leftPaneCollapsed ? "button" : undefined}
           aria-label={leftPaneCollapsed ? "Expand project files pane" : undefined}
         >
-          <div className={`flex items-center gap-2 ${leftPaneCollapsed ? "justify-center" : "justify-between"}`}>
+          <div className={`flex items-center gap-2 ${leftPaneCollapsed ? "justify-center" : "justify-end"}`}>
             {!leftPaneCollapsed ? (
-              <p className="text-xs font-semibold uppercase tracking-[0.14em] text-slate-600">Project Files</p>
+              <span className="text-[10px] font-semibold uppercase tracking-[0.12em] text-slate-400">Files</span>
             ) : null}
             <button
               type="button"
@@ -3007,7 +3007,7 @@ export default function ResearchStudioPage() {
           <span className="h-20 w-1 rounded-full bg-slate-300" />
         </div>
 
-          <div className="rounded-xl border border-slate-200 bg-white/90 p-1.5">
+          <div className="bg-white p-1.5">
             <div className="mb-1.5 border-b border-slate-200 pb-1">
               <p className="text-xs font-semibold uppercase tracking-[0.12em] text-slate-500">Editor</p>
             </div>
@@ -3610,7 +3610,7 @@ export default function ResearchStudioPage() {
         </div>
 
         <aside
-          className={`rounded-xl border border-slate-200 bg-white/90 transition-[padding] ${rightPaneCollapsed ? "cursor-pointer p-1" : "p-1.5"}`}
+          className={`transition-[padding] border-l border-slate-200 ${rightPaneCollapsed ? "cursor-pointer p-1" : "p-1.5"}`}
           onClick={() => {
             if (rightPaneCollapsed) setRightPaneCollapsed(false);
           }}
@@ -3619,8 +3619,8 @@ export default function ResearchStudioPage() {
         >
           <div className={`flex items-center gap-2 ${rightPaneCollapsed ? "justify-center" : "justify-between"}`}>
             {!rightPaneCollapsed ? (
-              <p className="text-xs font-semibold uppercase tracking-[0.14em] text-slate-600">
-                Preview Pane
+              <p className="text-xs font-semibold text-slate-600">
+                PDF Preview
                 {synctexNotice ? (
                   <span className="ml-2 text-[10px] font-normal text-amber-600">
                     Ctrl+click for sync · {synctexNotice}
