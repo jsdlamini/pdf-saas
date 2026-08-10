@@ -148,11 +148,12 @@ This is the introduction section. Start writing your paper here. Provide context
 \email{second@university.edu}
 
 \begin{document}
-\maketitle
 
 \begin{abstract}
 This is your ACM paper abstract. Summarize the problem, approach, and key findings.
 \end{abstract}
+
+\maketitle
 
 \ccsdesc[500]{Computing methodologies~Machine learning}
 
