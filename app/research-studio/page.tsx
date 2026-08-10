@@ -753,12 +753,14 @@ function renderTreeContextIcon(action: TreeContextAction) {
 }
 
 function loadInitialResearchStudioState(): InitialResearchStudioState {
+  // Start with no projects — users create their own via "New From Scratch" or "New from Template"
+  // The "starter-project" ID is a sentinel that means "no project selected"
   return {
     savedProjects: [],
-    activeProjectId: "",
-    projectName: "",
-    projectEntries: [],
-    selectedPath: "",
+    activeProjectId: "starter-project",
+    projectName: "WiserFiles Research Draft",
+    projectEntries: STARTER_PROJECT,
+    selectedPath: "main.tex",
     lastCompileAt: "Not compiled yet",
     workspaceScreen: "projects",
   };
