@@ -68,7 +68,7 @@ const ENGINES: LatexEngine[] = [
     binary: "texliveonfly",
     buildArgs: (rootFile) => [
       "--compiler",
-      "latexmk -pdf -interaction=nonstopmode -halt-on-error -file-line-error",
+      "latexmk -pdf -interaction=nonstopmode -file-line-error",
       rootFile,
     ],
   },
@@ -80,7 +80,7 @@ const ENGINES: LatexEngine[] = [
   {
     name: "latexmk",
     binary: "latexmk",
-    buildArgs: (rootFile) => ["-pdf", "-interaction=nonstopmode", "-halt-on-error", "-file-line-error", rootFile],
+    buildArgs: (rootFile) => ["-pdf", "-interaction=nonstopmode", "-file-line-error", rootFile],
   },
 ];
 

@@ -86,7 +86,7 @@ keyword1, keyword2, keyword3
 \end{IEEEkeywords}
 
 \section{Introduction}
-\IEEEPARstart{T}{his} is the introduction section. Start writing your paper here. Provide context, motivation, and outline your contributions.
+This is the introduction section. Start writing your paper here. Provide context, motivation, and outline your contributions.
 
 \section{Related Work}
 \section{Methodology}
