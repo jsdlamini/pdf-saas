@@ -157,6 +157,22 @@ html[data-theme="dark"] .trust-badge-icon {
   color: rgba(255,255,255,0.6) !important;
 }
 
+/* ── SweetAlert2 template select styling ───── */
+.swal-template-select {
+  background: #f1f5f9 !important;
+  border: 1px solid #cbd5e1 !important;
+  border-radius: 8px !important;
+  padding: 8px 12px !important;
+  font-size: 14px !important;
+  color: #1e293b !important;
+}
+
+html[data-theme="dark"] .swal-template-select {
+  background: #1e293b !important;
+  border-color: #475569 !important;
+  color: #e2e8f0 !important;
+}
+
 html[data-theme="dark"] .trust-badge {
   border-color: rgba(255,255,255,0.2) !important;
   background: rgba(255,255,255,0.05) !important;

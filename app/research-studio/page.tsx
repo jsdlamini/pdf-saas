@@ -2567,7 +2567,10 @@ export default function ResearchStudioPage() {
                     cancelButtonText: "Cancel",
                     confirmButtonColor: "#0f766e",
                     cancelButtonColor: "#e2e8f0",
-                    background: "#ffffff",
+                    background: "#f8fafc",
+                    customClass: {
+                      input: "swal-template-select",
+                    },
                   });
                   if (result.isConfirmed && result.value) {
                     const template = getTemplateBySlug(result.value);
@@ -2734,7 +2737,10 @@ export default function ResearchStudioPage() {
                         cancelButtonText: "Cancel",
                         confirmButtonColor: "#0f766e",
                         cancelButtonColor: "#e2e8f0",
-                        background: "#ffffff",
+                        background: "#f8fafc",
+                        customClass: {
+                          input: "swal-template-select",
+                        },
                       });
                       if (result.isConfirmed && result.value) {
                         const template = getTemplateBySlug(result.value);
