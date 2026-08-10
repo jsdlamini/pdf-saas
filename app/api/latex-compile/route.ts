@@ -39,6 +39,7 @@ type AutoInstallResult =
 
 const STY_TO_APT_HINTS: Record<string, string[]> = {
   siunitx: ["texlive-science"],
+  ieeetran: ["texlive-publishers"],
   pgfplots: ["texlive-pictures"],
   tikz: ["texlive-pictures"],
   algorithm2e: ["texlive-science"],
@@ -158,8 +159,10 @@ function extractErrorDetail(error: unknown) {
 }
 
 function extractMissingStyName(detail: string) {
-  const missingMatch = detail.match(/File [`']([^`']+)\.sty['`] not found/i);
-  return missingMatch?.[1]?.toLowerCase() || "";
+  const styMatch = detail.match(/File [`']([^`']+)\.sty['`] not found/i);
+  if (styMatch?.[1]) return styMatch[1].toLowerCase();
+  const clsMatch = detail.match(/File [`']([^`']+)\.cls['`] not found/i);
+  return clsMatch?.[1]?.toLowerCase() || "";
 }
 
 function getMissingStyPackageHint(detail: string) {
