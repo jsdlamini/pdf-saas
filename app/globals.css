@@ -153,6 +153,16 @@ html[data-theme="dark"] .border-slate-300 {
   border-color: var(--border) !important;
 }
 
+html[data-theme="dark"] .trust-badge-icon {
+  color: rgba(255,255,255,0.6) !important;
+}
+
+html[data-theme="dark"] .trust-badge {
+  border-color: rgba(255,255,255,0.2) !important;
+  background: rgba(255,255,255,0.05) !important;
+  color: rgba(255,255,255,0.85) !important;
+}
+
 html[data-theme="dark"] .text-slate-500,
 html[data-theme="dark"] .text-slate-600,
 html[data-theme="dark"] .text-slate-700,
