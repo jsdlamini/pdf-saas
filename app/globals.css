@@ -1100,3 +1100,21 @@ textarea:focus-visible,
 .bg-slate-50 {
   background-color: #f8fafc;
 }
+
+/* ── Research Studio dark mode editor ─────────────────────────── */
+
+html[data-theme="dark"] .research-editor {
+  background: #0f172a;
+  color: #e2e8f0;
+  border-color: #334155;
+}
+
+html[data-theme="dark"] .equation-preview-tooltip {
+  background: #0f172a !important;
+  border-color: #334155 !important;
+  color: #e2e8f0;
+}
+
+html[data-theme="dark"] .equation-preview-tooltip .katex {
+  color: #e2e8f0;
+}
