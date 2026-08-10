@@ -418,6 +418,28 @@ export async function POST(request: Request) {
       await writeFile(targetPath, content, "utf8");
     }
 
+    // Create empty .bib files for any \bibliography{} references that have no matching file
+    // Also ensure existing .bib files have at least minimal content so bibtex doesn't fail
+    for (const [path, content] of fileMap.entries()) {
+      if (!path.endsWith(".tex")) continue;
+      const bibMatches = content.matchAll(/\\bibliography\{([^}]+)\}/g);
+      for (const match of bibMatches) {
+        const bibFiles = match[1].split(",").map((s) => s.trim());
+        for (const bibFile of bibFiles) {
+          const bibPath = bibFile.endsWith(".bib") ? bibFile : `${bibFile}.bib`;
+          const relPath = bibPath.startsWith("/") ? bibPath.slice(1) : bibPath;
+          const targetPath = join(tempDir, relPath);
+          if (!fileMap.has(relPath)) {
+            await mkdir(dirname(targetPath), { recursive: true });
+            await writeFile(targetPath, "% Auto-generated empty bibliography\n", "utf8");
+          } else if (!content || !content.trim()) {
+            await mkdir(dirname(targetPath), { recursive: true });
+            await writeFile(targetPath, "% Auto-generated empty bibliography\n", "utf8");
+          }
+        }
+      }
+    }
+
     let hasMissingEngine = false;
     const engineErrors: string[] = [];
     const autoInstallAttempts = new Set<string>();

@@ -2559,6 +2559,7 @@ export default function ResearchStudioPage() {
                     input: "select",
                     inputOptions: templateOptions,
                     inputPlaceholder: "Select a template",
+                    inputValue: Object.keys(templateOptions)[0] || "",
                     showCancelButton: true,
                     confirmButtonText: "Create",
                     cancelButtonText: "Cancel",
@@ -2586,6 +2587,19 @@ export default function ResearchStudioPage() {
                 : "Projects are stored locally in this browser."}
             </p>
           </div>
+
+          {savedProjects.length === 0 && !usesAccountStorage ? (
+            <div className="flex flex-col items-center justify-center gap-3 py-12 text-center">
+              <div className="inline-flex h-14 w-14 items-center justify-center rounded-2xl bg-slate-100">
+                <svg viewBox="0 0 24 24" className="h-7 w-7 text-slate-400" fill="none" stroke="currentColor" strokeWidth="1.5">
+                  <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8l-6-6z" />
+                  <path d="M14 2v6h6M8 13h4M8 17h8" strokeLinecap="round" strokeLinejoin="round" />
+                </svg>
+              </div>
+              <p className="text-sm font-semibold text-slate-700">No projects yet</p>
+              <p className="text-xs text-slate-500 max-w-xs">Create a new project from scratch or choose a journal template to get started.</p>
+            </div>
+          ) : null}
 
             {savedProjects.length ? (
               <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-3">
@@ -2712,6 +2726,7 @@ export default function ResearchStudioPage() {
                         input: "select",
                         inputOptions: templateOptions,
                         inputPlaceholder: "Select a template",
+                        inputValue: Object.keys(templateOptions)[0] || "",
                         showCancelButton: true,
                         confirmButtonText: "Create",
                         cancelButtonText: "Cancel",
