@@ -29,6 +29,10 @@ export function useAnalytics() {
   useEffect(() => {
     const full = pathname + (searchParams.toString() ? `?${searchParams}` : "");
     if (tracked.current === full) return;
+    
+    // Skip dashboard and API routes from analytics
+    if (pathname.startsWith("/dashboard") || pathname.startsWith("/api")) return;
+    
     tracked.current = full;
 
     track("pageview", {
