@@ -321,14 +321,16 @@ Start writing your introduction here.
         kind: "file",
         content: String.raw`\documentclass{article}
 
-\usepackage[final]{neurips}
-
+% NeurIPS-compatible formatting using standard packages
 \usepackage[utf8]{inputenc}
 \usepackage[T1]{fontenc}
+\usepackage{mathptmx}
 \usepackage{graphicx}
 \usepackage{amsmath,amssymb}
 \usepackage{booktabs}
+\usepackage[margin=1in]{geometry}
 \usepackage{hyperref}
+\usepackage[numbers,sort&compress]{natbib}
 
 \title{Your NeurIPS Paper Title}
 
@@ -347,7 +349,7 @@ This is your NeurIPS paper abstract. Summarize the problem, approach, and key in
 \end{abstract}
 
 \section{Introduction}
-Start writing your introduction here. Use \texttt{\textbackslash citep\{\}} for parenthetical citations and \texttt{\textbackslash citet\{\}} for textual citations.
+Start writing your introduction here. Use \texttt{\textbackslash citet\{\}} for textual citations and \texttt{\textbackslash citep\{\}} for parenthetical citations.
 
 \section{Related Work}
 \section{Method}
@@ -357,7 +359,7 @@ Start writing your introduction here. Use \texttt{\textbackslash citep\{\}} for 
 \section*{Acknowledgments}
 Thanks to our funding sources.
 
-\bibliographystyle{plain}
+\bibliographystyle{plainnat}
 \nocite{*}
 \bibliography{refs}
 
