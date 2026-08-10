@@ -40,6 +40,7 @@ type AutoInstallResult =
 const STY_TO_APT_HINTS: Record<string, string[]> = {
   siunitx: ["texlive-science"],
   ieeetran: ["texlive-publishers"],
+  xstring: ["texlive-latex-extra"],
   pgfplots: ["texlive-pictures"],
   tikz: ["texlive-pictures"],
   algorithm2e: ["texlive-science"],
