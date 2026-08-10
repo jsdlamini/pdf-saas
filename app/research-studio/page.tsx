@@ -834,6 +834,7 @@ export default function ResearchStudioPage() {
   const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const equationHoverRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const wordCountTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const zipImportRef = useRef<HTMLInputElement | null>(null);
   const panesRef = useRef<HTMLElement | null>(null);
   const editorRef = useRef<HTMLTextAreaElement | null>(null);
   const findInputRef = useRef<HTMLInputElement | null>(null);
@@ -2148,6 +2149,66 @@ export default function ResearchStudioPage() {
     downloadBlob(blob, "research-project.zip");
   }
 
+  async function importProjectFromZip(file: File) {
+    try {
+      const zip = await JSZip.loadAsync(file);
+      const entries: ProjectEntry[] = [];
+      const folderSet = new Set<string>();
+      let mainTexPath = "main.tex";
+
+      for (const [zipPath, zipEntry] of Object.entries(zip.files)) {
+        if (zipEntry.dir || zipPath.startsWith("__MACOSX") || zipPath.startsWith(".")) continue;
+        const name = zipPath.split("/").pop() || zipPath;
+        if (name.startsWith(".")) continue;
+
+        const content = await zipEntry.async("string");
+        entries.push({ path: zipPath, kind: "file", content });
+
+        // Add implicit parent folders
+        const parts = zipPath.split("/");
+        let cursor = "";
+        for (let i = 0; i < parts.length - 1; i++) {
+          cursor += parts[i] + "/";
+          folderSet.add(cursor);
+        }
+
+        // Detect main .tex file
+        if (content.includes("\\documentclass") && zipPath.toLowerCase().endsWith(".tex")) {
+          mainTexPath = zipPath;
+        }
+      }
+
+      for (const folder of folderSet) {
+        if (!entries.some((e) => e.path === folder)) {
+          entries.push({ path: folder, kind: "folder", content: "" });
+        }
+      }
+
+      const projectName = file.name.replace(/\.zip$/i, "") || "Imported Project";
+      const projectId = makeProjectId();
+      const now = new Date().toISOString();
+      const snapshot: SavedProjectData = {
+        id: projectId,
+        name: projectName,
+        entries,
+        selectedPath: mainTexPath,
+        lastCompileAt: "Not compiled yet",
+        updatedAt: now,
+      };
+
+      persistProjectSnapshot(snapshot);
+      queueServerProjectSync(snapshot);
+      setActiveProjectId(projectId);
+      setProjectName(projectName);
+      setProjectEntries(entries);
+      setSelectedPath(mainTexPath);
+      setCompileNotice(`Imported ${entries.filter((e) => e.kind === "file").length} files from ${file.name}.`);
+      setWorkspaceScreen("editor");
+    } catch (e) {
+      setCompileNotice("Import failed. Make sure the file is a valid .zip archive.");
+    }
+  }
+
   function applyEditorUpdate(nextText: string, selectionStart: number, selectionEnd: number) {
     updateActiveFile(nextText);
     window.requestAnimationFrame(() => {
@@ -2585,6 +2646,27 @@ export default function ResearchStudioPage() {
                 </svg>
                 New from Template
               </button>
+              <input
+                ref={zipImportRef}
+                type="file"
+                accept=".zip"
+                className="hidden"
+                onChange={(e) => {
+                  const f = e.target.files?.[0];
+                  if (f) importProjectFromZip(f);
+                  e.currentTarget.value = "";
+                }}
+              />
+              <button
+                type="button"
+                onClick={() => zipImportRef.current?.click()}
+                className="inline-flex items-center gap-2 rounded-lg bg-gradient-to-r from-amber-400 to-orange-500 px-4 py-2.5 text-sm font-bold text-white shadow-lg shadow-amber-400/30 transition hover:scale-105 hover:shadow-xl hover:shadow-amber-400/40"
+              >
+                <svg viewBox="0 0 20 20" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="2">
+                  <path d="M3 10h14M10 3v14" strokeLinecap="round" strokeLinejoin="round" />
+                </svg>
+                Import .zip
+              </button>
             </div>
             <p className="text-[11px] text-slate-500">
               {usesAccountStorage
@@ -2754,6 +2836,27 @@ export default function ResearchStudioPage() {
                       <path d="M12 3v3h3M8 11h4M8 14h2" strokeLinecap="round" strokeLinejoin="round" />
                     </svg>
                     New from Template
+                  </button>
+                  <input
+                    type="file"
+                    accept=".zip"
+                    className="hidden"
+                    id="zip-import-editor"
+                    onChange={(e) => {
+                      const f = e.target.files?.[0];
+                      if (f) importProjectFromZip(f);
+                      e.currentTarget.value = "";
+                    }}
+                  />
+                  <button
+                    type="button"
+                    onClick={() => document.getElementById("zip-import-editor")?.click()}
+                    className="inline-flex items-center gap-2 rounded-lg bg-gradient-to-r from-amber-400 to-orange-500 px-4 py-2.5 text-sm font-bold text-white shadow-lg shadow-amber-400/30 transition hover:scale-105 hover:shadow-xl hover:shadow-amber-400/40"
+                  >
+                    <svg viewBox="0 0 20 20" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="2">
+                      <path d="M3 10h14M10 3v14" strokeLinecap="round" strokeLinejoin="round" />
+                    </svg>
+                    Import .zip
                   </button>
                 </div>
               </div>
