@@ -2168,72 +2168,62 @@ export default function ResearchStudioPage() {
     applyEditorUpdate(nextText, cursor, cursor);
   }
 
-  async function shareProject() {
-    try {
-      const snapshot = buildCurrentProjectSnapshot();
-      const res = await fetch("/api/share-project", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ projectData: snapshot }),
-      });
-      if (!res.ok) throw new Error("Failed");
-      const { shareId } = await res.json();
-      const url = `${window.location.origin}/research-studio?share=${shareId}`;
-      await navigator.clipboard.writeText(url);
-      setCompileNotice("Share link copied! Anyone with this link can view and copy your project.");
-    } catch {
-      setCompileNotice("Could not create share link. Try again.");
-    }
-  }
-
-  async function inviteToProject() {
+  async function openCollaborateDialog() {
     const result = await Swal.fire({
-      title: "Invite Collaborator",
+      title: "Collaborate",
       html: `
-        <div style="text-align:left;display:flex;flex-direction:column;gap:8px">
-          <label style="font-size:13px;font-weight:600;color:#e2e8f0">Email address</label>
-          <input id="swal-invite-email" class="swal2-input" placeholder="colleague@university.edu" style="background:#1e293b;color:#e2e8f0;border-color:#334155">
-          <label style="font-size:13px;font-weight:600;color:#e2e8f0;margin-top:8px">Access level</label>
-          <select id="swal-invite-access" class="swal2-input" style="background:#1e293b;color:#e2e8f0;border-color:#334155">
-            <option value="read">Read only — can view and compile</option>
-            <option value="write">Write — can edit files</option>
-            <option value="admin">Admin — full access</option>
-          </select>
+        <div style="text-align:left;display:flex;flex-direction:column;gap:12px">
+          <div style="background:#1e293b;border-radius:8px;padding:12px">
+            <p style="font-size:13px;font-weight:600;color:#e2e8f0;margin:0 0 4px">📋 Share Link</p>
+            <p style="font-size:11px;color:#94a3b8;margin:0 0 8px">Anyone with the link can view and copy this project.</p>
+            <button type="button" id="swal-share-btn" class="swal2-confirm swal2-styled" style="width:100%;background:#4ade80;font-size:12px;padding:8px">Copy Share Link</button>
+          </div>
+          <div style="background:#1e293b;border-radius:8px;padding:12px">
+            <p style="font-size:13px;font-weight:600;color:#e2e8f0;margin:0 0 4px">✉ Invite by Email</p>
+            <p style="font-size:11px;color:#94a3b8;margin:0 0 8px">Send an invitation with specific access permissions.</p>
+            <input id="swal-invite-email" class="swal2-input" placeholder="colleague@university.edu" style="background:#0f172a;color:#e2e8f0;border-color:#334155;margin-bottom:8px">
+            <select id="swal-invite-access" class="swal2-input" style="background:#0f172a;color:#e2e8f0;border-color:#334155;margin-bottom:8px">
+              <option value="read">Read only — can view and compile</option>
+              <option value="write">Write — can edit files</option>
+              <option value="admin">Admin — full access</option>
+            </select>
+            <button type="button" id="swal-invite-btn" class="swal2-confirm swal2-styled" style="width:100%;background:#818cf8;font-size:12px;padding:8px">Send Invite</button>
+          </div>
         </div>
       `,
+      showConfirmButton: false,
       showCancelButton: true,
-      confirmButtonText: "Send Invite",
-      cancelButtonText: "Cancel",
-      confirmButtonColor: "#4ade80",
+      cancelButtonText: "Close",
       cancelButtonColor: "#475569",
       background: "#1a1d2b",
       color: "#e2e8f0",
-      preConfirm: () => {
-        const email = (document.getElementById("swal-invite-email") as HTMLInputElement)?.value?.trim();
-        const access = (document.getElementById("swal-invite-access") as HTMLSelectElement)?.value;
-        if (!email) { Swal.showValidationMessage("Enter an email address"); return false; }
-        return { email, access };
+      didOpen: () => {
+        document.getElementById("swal-share-btn")?.addEventListener("click", async () => {
+          try {
+            const snapshot = buildCurrentProjectSnapshot();
+            const res = await fetch("/api/share-project", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ projectData: snapshot }) });
+            const { shareId } = await res.json();
+            await navigator.clipboard.writeText(`${window.location.origin}/research-studio?share=${shareId}`);
+            setCompileNotice("Share link copied! Anyone with this link can view and copy your project.");
+          } catch { setCompileNotice("Could not create share link."); }
+          Swal.close();
+        });
+        document.getElementById("swal-invite-btn")?.addEventListener("click", async () => {
+          const email = (document.getElementById("swal-invite-email") as HTMLInputElement)?.value?.trim();
+          const access = (document.getElementById("swal-invite-access") as HTMLSelectElement)?.value;
+          if (!email) { Swal.showValidationMessage("Enter an email address"); return; }
+          try {
+            await fetch("/api/project-invites", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ projectId: activeProjectId, projectName, email, accessLevel: access }) });
+            setCompileNotice(`Invitation sent to ${email} (${access} access).`);
+          } catch { setCompileNotice("Could not send invitation."); }
+          Swal.close();
+        });
       },
     });
+  }
 
-    if (result.isConfirmed && result.value) {
-      try {
-        const res = await fetch("/api/project-invites", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            projectId: activeProjectId,
-            projectName,
-            email: result.value.email,
-            accessLevel: result.value.access,
-          }),
-        });
-        if (!res.ok) throw new Error("Failed");
-        setCompileNotice(`Invitation sent to ${result.value.email} (${result.value.access} access).`);
-      } catch {
-        setCompileNotice("Could not send invitation. Try again.");
-      }
-    }
+  async function shareProject() {
+    await openCollaborateDialog();
   }
 
   async function downloadProjectBundle() {
@@ -3007,25 +2997,14 @@ export default function ResearchStudioPage() {
           </button>
           <button
             type="button"
-            onClick={shareProject}
-            className="studio-btn studio-btn-secondary"
-            aria-label="Share project"
+            onClick={openCollaborateDialog}
+            className="studio-btn inline-flex items-center gap-1.5 rounded-lg bg-gradient-to-r from-purple-500 to-indigo-500 px-3 py-1.5 text-xs font-bold text-white shadow-lg shadow-purple-500/30 transition hover:scale-105 hover:shadow-xl hover:shadow-purple-500/40"
+            aria-label="Collaborate"
           >
-            <svg viewBox="0 0 20 20" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="1.8">
-              <path d="M4 10h8m0 0l-3-3m3 3l-3 3M15 4v1a3 3 0 0 1 3 3v4a3 3 0 0 1-3 3H5a3 3 0 0 1-3-3v-3" strokeLinecap="round" strokeLinejoin="round" />
-            </svg>
-            <span className="hidden sm:inline">Share</span>
-          </button>
-          <button
-            type="button"
-            onClick={inviteToProject}
-            className="studio-btn studio-btn-secondary"
-            aria-label="Invite collaborators"
-          >
-            <svg viewBox="0 0 20 20" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="1.8">
+            <svg viewBox="0 0 20 20" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="2">
               <path d="M13 7a3 3 0 1 1-6 0 3 3 0 0 1 6 0zM3 17v-1a4 4 0 0 1 4-4h2.5M14 12h4m-2-2v4" strokeLinecap="round" strokeLinejoin="round" />
             </svg>
-            <span className="hidden sm:inline">Invite</span>
+            <span className="hidden sm:inline">Collaborate</span>
           </button>
           <button
             type="button"
