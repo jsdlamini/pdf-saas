@@ -190,22 +190,25 @@ export default function DashboardPage() {
               (() => {
                 const sorted = [...data.daily].sort((a, b) => (a.date || "").toString().localeCompare((b.date || "").toString()));
                 const max = Math.max(...sorted.map((d) => Number(d.count) || 0), 1);
+                const barCount = sorted.length;
+                const barWidth = barCount > 0 ? Math.max(8, Math.floor(100 / barCount) - 1) : 8;
                 return sorted.slice(0, 30).map((d, i) => {
                   const count = Number(d.count) || 0;
-                  const pct = Math.round((count / max) * 100);
+                  const heightPx = Math.max(4, Math.round((count / max) * 152));
                   return (
-                    <div key={(d.date || "").toString() || i} className="group relative flex-1 flex flex-col justify-end">
+                    <div key={(d.date || "").toString() || i} className="group relative flex flex-col justify-end items-center"
+                      style={{ width: `${barWidth}%`, minWidth: 8 }}>
                       <div
                         className="w-full rounded-t transition-all duration-300"
                         style={{
-                          height: `${Math.max(pct, 2)}%`,
-                          minHeight: count > 0 ? "4px" : "2px",
+                          height: `${heightPx}px`,
+                          minWidth: 8,
                           background: "linear-gradient(to top, #06b6d4, #0ea5e9)",
                         }}
                       />
                       <div className="absolute -bottom-7 left-1/2 -translate-x-1/2 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none">
                         <span className="whitespace-nowrap rounded-md bg-slate-800 px-2 py-1 text-[10px] font-semibold text-white shadow">
-                          {(d.date || "").toString().slice(0, 10)} — {count}
+                          {(d.date || "").toString().slice(5, 10)} — {count}
                         </span>
                       </div>
                     </div>
