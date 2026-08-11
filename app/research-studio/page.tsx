@@ -804,6 +804,8 @@ export default function ResearchStudioPage() {
   const [leftPaneCollapsed, setLeftPaneCollapsed] = useState(false);
   const [rightPaneCollapsed, setRightPaneCollapsed] = useState(false);
   const [isMobile, setIsMobile] = useState(false);
+  const [searchQuery, setSearchQuery] = useState("");
+  const [openTabs, setOpenTabs] = useState<string[]>([]);
 
   // Auto-collapse file tree on mobile
   useEffect(() => {
@@ -2451,97 +2453,67 @@ export default function ResearchStudioPage() {
       const explicitFolder = isFolder
         ? projectEntries.find((entry) => entry.path === node.path && entry.kind === "folder")
         : undefined;
+      const isActive = !isFolder && selectedPath === node.path;
 
       return (
         <li key={node.path || node.name}>
           <div
-            className="group flex items-center gap-1 py-0.5"
-            style={{ paddingLeft: `${depth * 10}px` }}
+            className={`studio-tree-node ${isActive ? "studio-tree-node-active" : ""}`}
+            style={{ "--depth": depth } as React.CSSProperties}
             onContextMenu={(event) => openTreeContextMenu(event, node, explicitFolder)}
           >
             {isFolder ? (
-              <button
-                type="button"
-                onClick={() => toggleFolder(node.path)}
-                className="inline-flex h-5 w-5 items-center justify-center text-slate-400 hover:text-slate-600"
-                aria-label={expanded ? `Collapse ${node.path}` : `Expand ${node.path}`}
+              <span
+                className={`studio-tree-chevron ${expanded ? "studio-tree-chevron-expanded" : ""}`}
+                onClick={(e) => { e.stopPropagation(); toggleFolder(node.path); }}
               >
-                <svg
-                  viewBox="0 0 20 20"
-                  className={`h-3 w-3 transition-transform ${expanded ? "rotate-90" : "rotate-0"}`}
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth="2"
-                >
+                <svg viewBox="0 0 20 20" style={{ width: 12, height: 12 }} fill="none" stroke="currentColor" strokeWidth="2">
                   <path d="M7 4l6 6-6 6" strokeLinecap="round" strokeLinejoin="round" />
                 </svg>
-              </button>
+              </span>
             ) : (
-              <span className="h-5 w-5" aria-hidden="true" />
+              <span className="studio-tree-icon">
+                <svg viewBox="0 0 20 20" style={{ width: 14, height: 14 }} fill="none" stroke="currentColor" strokeWidth="1.8">
+                  <path d="M6 3h6l4 4v10H6V3z" strokeLinecap="round" strokeLinejoin="round" />
+                  <path d="M12 3v4h4" strokeLinecap="round" strokeLinejoin="round" />
+                </svg>
+              </span>
             )}
 
-            <button
-              type="button"
+            <span
               onClick={() => {
                 if (!isFolder) {
                   closeIntellisense();
                   setSelectedPath(node.path);
+                  setOpenTabs((prev) => prev.includes(node.path) ? prev : [...prev, node.path]);
                 } else {
                   toggleFolder(node.path);
                 }
               }}
-              className={`flex-1 rounded px-2 py-1 text-left text-xs transition truncate ${
-                isFolder
-                  ? "text-slate-500 hover:text-slate-700"
-                  : selectedPath === node.path
-                    ? "border-l-2 border-slate-900 bg-slate-100 text-slate-900 font-medium"
-                    : "text-slate-600 hover:bg-slate-50 hover:text-slate-800"
-              }`}
+              style={{ flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", cursor: "pointer" }}
             >
               {isFolder ? `${node.name || "root"}/` : node.name}
-            </button>
+            </span>
 
             {isFolder ? (
               <>
                 <button
                   type="button"
-                  onClick={() => void addProjectEntryAt(node.path, "file")}
-                  className="inline-flex h-5 w-5 items-center justify-center rounded text-slate-400 hover:text-slate-600 hover:bg-slate-100 transition opacity-0 group-hover:opacity-100"
+                  onClick={(e) => { e.stopPropagation(); void addProjectEntryAt(node.path, "file"); }}
+                  className="studio-btn studio-btn-ghost"
+                  style={{ width: 20, height: 20, padding: 0, opacity: 0, fontSize: 0 }}
                   aria-label={`Add file in ${node.path || "root"}`}
                 >
-                  <svg viewBox="0 0 20 20" className="h-3 w-3" fill="none" stroke="currentColor" strokeWidth="2">
+                  <svg viewBox="0 0 20 20" style={{ width: 12, height: 12 }} fill="none" stroke="currentColor" strokeWidth="2">
                     <path d="M10 4v12M4 10h12" strokeLinecap="round" strokeLinejoin="round" />
-                  </svg>
-                </button>
-                <button
-                  type="button"
-                  onClick={() => void addProjectEntryAt(node.path, "folder")}
-                  className="inline-flex h-5 w-5 items-center justify-center rounded text-slate-400 hover:text-slate-600 hover:bg-slate-100 transition opacity-0 group-hover:opacity-100"
-                  aria-label={`Add folder in ${node.path || "root"}`}
-                >
-                  <svg viewBox="0 0 20 20" className="h-3 w-3" fill="none" stroke="currentColor" strokeWidth="2">
-                    <path d="M3 6h5l1.2 1.5H17v7.5H3V6z" strokeLinecap="round" strokeLinejoin="round" />
                   </svg>
                 </button>
               </>
             ) : null}
-
-            {isFolder && !explicitFolder ? null : (
-              <button
-                type="button"
-                onClick={() => void showProjectEntryActions(explicitFolder || { path: node.path, kind: "file", content: "" })}
-                className="inline-flex h-5 w-5 items-center justify-center rounded text-slate-400 hover:text-slate-600 hover:bg-slate-100 transition opacity-0 group-hover:opacity-100"
-                aria-label={`Entry actions for ${node.path}`}
-              >
-                <svg viewBox="0 0 20 20" className="h-3 w-3" fill="none" stroke="currentColor" strokeWidth="2">
-                  <path d="M4 10h.01M10 10h.01M16 10h.01" strokeLinecap="round" strokeLinejoin="round" />
-                </svg>
-              </button>
-            )}
           </div>
 
           {isFolder && expanded && node.children?.length ? (
-            <ul className="mt-1 space-y-1">{renderProjectTree(node.children, depth + 1)}</ul>
+            <ul>{renderProjectTree(node.children, depth + 1)}</ul>
           ) : null}
         </li>
       );
@@ -2551,206 +2523,40 @@ export default function ResearchStudioPage() {
   const effectiveLeftPaneWidth = leftPaneCollapsed ? 34 : leftPaneWidth;
   const effectiveRightPaneWidth = rightPaneCollapsed ? 34 : rightPaneWidth;
 
+  // Ensure openTabs always includes the selected file
+  const activeOpenTabs = useMemo(() => {
+    if (!activeEntry) return [];
+    const tabs = openTabs.includes(activeEntry.path)
+      ? openTabs
+      : [...openTabs, activeEntry.path];
+    return tabs.filter((path) => editableFiles.some((f) => f.path === path));
+  }, [openTabs, activeEntry, editableFiles]);
+
+  // Filter projects by search query
+  const filteredProjects = useMemo(() => {
+    if (!searchQuery.trim()) return savedProjects;
+    const q = searchQuery.toLowerCase();
+    return savedProjects.filter(
+      (p) => p.name.toLowerCase().includes(q)
+    );
+  }, [savedProjects, searchQuery]);
+
   if (workspaceScreen === "projects") {
     return (
-      <main className="mx-auto flex w-full max-w-4xl flex-1 flex-col gap-4 px-4 py-6 md:px-8 md:py-8">
-        {/* Clean header */}
-        <div>
-          <h1 className="text-2xl font-semibold tracking-tight text-slate-900">Research Studio</h1>
-          <p className="mt-1 text-sm text-slate-500">Create, open, and manage your LaTeX research projects.</p>
-          {usesAccountStorage ? (
-            <p className="mt-1 text-xs text-slate-400">Projects sync to your account.</p>
-          ) : isSignedIn ? (
-            <p className="mt-1 text-xs text-slate-400">Account sync unavailable — projects stay local.</p>
-          ) : authLoaded ? (
-            <div className="mt-2 flex items-center gap-2">
-              <p className="text-xs text-slate-500">Sign in to sync projects across devices.</p>
-              <SignUpButton mode="modal">
-                <button type="button" className="rounded-md bg-slate-900 px-3 py-1.5 text-xs font-medium text-white hover:bg-slate-800 transition">
-                  Create account
-                </button>
-              </SignUpButton>
-              <SignInButton mode="modal">
-                <button type="button" className="rounded-md border border-slate-200 bg-white px-3 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-50 transition">
-                  Sign in
-                </button>
-              </SignInButton>
-            </div>
-          ) : (
-            <p className="mt-1 text-xs text-slate-400">Checking account status...</p>
-          )}
-        </div>
-
-        {/* Action bar */}
-        <div className="flex flex-wrap items-center justify-between gap-2">
-          <div className="flex flex-wrap items-center gap-2">
-            <button
-              type="button"
-              onClick={createNewProject}
-              className="inline-flex items-center gap-2 rounded-lg bg-slate-900 px-4 py-2.5 text-sm font-semibold text-white hover:bg-slate-800 transition"
-            >
-              <svg viewBox="0 0 20 20" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="2">
-                <path d="M10 4v12M4 10h12" strokeLinecap="round" strokeLinejoin="round" />
-              </svg>
-              New Project
-            </button>
-            <button
-              type="button"
-              onClick={async () => {
-                const templateOptions = RESEARCH_TEMPLATES.reduce((acc, t) => {
-                  acc[t.slug] = t.name;
-                  return acc;
-                }, {} as Record<string, string>);
-                const result = await Swal.fire({
-                  title: "New from Template",
-                  input: "select",
-                  inputOptions: templateOptions,
-                  inputPlaceholder: "Select a template",
-                  inputValue: Object.keys(templateOptions)[0] || "",
-                  showCancelButton: true,
-                  confirmButtonText: "Create",
-                  cancelButtonText: "Cancel",
-                  confirmButtonColor: "#0f766e",
-                  cancelButtonColor: "#e2e8f0",
-                  background: "#f8fafc",
-                  customClass: { input: "swal-template-select" },
-                });
-                if (result.isConfirmed && result.value) {
-                  const template = getTemplateBySlug(result.value);
-                  if (template) createProjectFromTemplate(template);
-                }
-              }}
-              className="inline-flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-4 py-2.5 text-sm font-medium text-slate-700 hover:bg-slate-50 transition"
-            >
-              <svg viewBox="0 0 20 20" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="2">
-                <path d="M4 3h9l3 3v11H4V3z" strokeLinecap="round" strokeLinejoin="round" />
-                <path d="M12 3v3h3M8 11h4M8 14h2" strokeLinecap="round" strokeLinejoin="round" />
-              </svg>
-              Template
-            </button>
-            <input
-              ref={zipImportRef}
-              type="file"
-              accept=".zip"
-              className="hidden"
-              onChange={(e) => {
-                const f = e.target.files?.[0];
-                if (f) importProjectFromZip(f);
-                e.currentTarget.value = "";
-              }}
-            />
-            <button
-              type="button"
-              onClick={() => zipImportRef.current?.click()}
-              className="inline-flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-4 py-2.5 text-sm font-medium text-slate-700 hover:bg-slate-50 transition"
-            >
-              <svg viewBox="0 0 20 20" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="2">
-                <path d="M3 10h14M10 3v14" strokeLinecap="round" strokeLinejoin="round" />
-              </svg>
-              Import
-            </button>
-          </div>
-          <p className="text-xs text-slate-400">
-            {usesAccountStorage ? "Synced to account" : "Stored locally"}
-          </p>
-        </div>
-
-        {/* Project cards */}
-        {savedProjects.length === 0 && !usesAccountStorage ? (
-          <div className="flex flex-col items-center justify-center gap-3 py-12 text-center">
-            <div className="inline-flex h-12 w-12 items-center justify-center rounded-xl bg-slate-100">
-              <svg viewBox="0 0 24 24" className="h-6 w-6 text-slate-400" fill="none" stroke="currentColor" strokeWidth="1.5">
-                <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8l-6-6z" />
-                <path d="M14 2v6h6M8 13h4M8 17h8" strokeLinecap="round" strokeLinejoin="round" />
-              </svg>
-            </div>
-            <p className="text-sm font-medium text-slate-700">No projects yet</p>
-            <p className="text-xs text-slate-500 max-w-xs">Create a new project or choose a template to get started.</p>
-          </div>
-        ) : null}
-
-        {savedProjects.length ? (
-          <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
-            {savedProjects.map((item) => {
-              const isActive = item.id === activeProjectId;
-              return (
-                <article
-                  key={item.id}
-                  className={`group rounded-xl border p-4 transition ${isActive ? "border-slate-300 bg-slate-50" : "border-slate-200 bg-white hover:border-slate-300"}`}
-                >
-                  <div className="flex items-start justify-between gap-2">
-                    <div className="min-w-0 flex-1">
-                      <p className="truncate text-sm font-semibold text-slate-900">{item.name}</p>
-                      <p className="mt-0.5 text-[11px] text-slate-500">
-                        Updated {new Date(item.updatedAt).toLocaleString()}
-                      </p>
-                    </div>
-                    <div className="flex items-center gap-1 shrink-0">
-                      <button
-                        type="button"
-                        onClick={() => {
-                          if (item.id !== activeProjectId) saveCurrentProject();
-                          loadSavedProject(item.id);
-                        }}
-                        className="inline-flex h-7 w-7 items-center justify-center rounded-md border border-slate-200 bg-white text-slate-500 hover:text-slate-700 hover:bg-slate-50 transition"
-                        aria-label={`Open ${item.name}`}
-                      >
-                        <svg viewBox="0 0 20 20" className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth="1.8">
-                          <path d="M6 4l9 6-9 6V4z" strokeLinecap="round" strokeLinejoin="round" />
-                        </svg>
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => renameSavedProject(item.id)}
-                        className="inline-flex h-7 w-7 items-center justify-center rounded-md border border-slate-200 bg-white text-slate-500 hover:text-slate-700 hover:bg-slate-50 transition opacity-0 group-hover:opacity-100"
-                        aria-label={`Rename ${item.name}`}
-                      >
-                        <svg viewBox="0 0 20 20" className="h-3 w-3" fill="none" stroke="currentColor" strokeWidth="1.8">
-                          <path d="M4 14.5V16h1.5L15 6.5 13.5 5 4 14.5z" strokeLinecap="round" strokeLinejoin="round" />
-                        </svg>
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => deleteSavedProject(item.id)}
-                        className="inline-flex h-7 w-7 items-center justify-center rounded-md border border-slate-200 bg-white text-slate-500 hover:text-rose-600 hover:border-rose-200 hover:bg-rose-50 transition opacity-0 group-hover:opacity-100"
-                        aria-label={`Delete ${item.name}`}
-                      >
-                        <svg viewBox="0 0 20 20" className="h-3 w-3" fill="none" stroke="currentColor" strokeWidth="1.8">
-                          <path d="M5 6h10M8 6V4h4v2m-5 0l.5 10h5L13 6" strokeLinecap="round" strokeLinejoin="round" />
-                        </svg>
-                      </button>
-                    </div>
-                  </div>
-                </article>
-              );
-            })}
-          </div>
-        ) : loadingProject ? (
-          <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
-            {[1, 2, 3].map((i) => (
-              <div key={i} className="animate-pulse rounded-xl border border-slate-200 bg-white p-4">
-                <div className="h-4 w-3/4 rounded bg-slate-100" />
-                <div className="mt-2 h-3 w-1/2 rounded bg-slate-50" />
-              </div>
-            ))}
-          </div>
-        ) : (
-          <div className="flex flex-col items-center justify-center gap-4 rounded-xl border border-dashed border-slate-200 bg-slate-50/50 py-12 text-center">
-            <div className="inline-flex h-12 w-12 items-center justify-center rounded-xl bg-slate-100">
-              <svg viewBox="0 0 20 20" className="h-6 w-6 text-slate-400" fill="none" stroke="currentColor" strokeWidth="1.6">
-                <path d="M6 3h6l4 4v10H6V3z" strokeLinecap="round" strokeLinejoin="round" />
-                <path d="M12 3v4h4" strokeLinecap="round" strokeLinejoin="round" />
-              </svg>
-            </div>
+      <main className="studio-dark studio-shell">
+        <div className="studio-dashboard studio-scrollbar" style={{ overflowY: "auto" }}>
+        {/* Dashboard header */}
+        <div className="studio-dashboard-header">
+          <div className="flex items-center justify-between gap-4 flex-wrap">
             <div>
-              <p className="text-sm font-medium text-slate-700">Create your first project</p>
-              <p className="mt-0.5 text-xs text-slate-500">Start with a blank project or choose a template.</p>
+              <h1 className="studio-dashboard-title">Research Studio</h1>
+              <p className="studio-dashboard-subtitle">Create, open, and manage your LaTeX research projects</p>
             </div>
             <div className="flex items-center gap-2">
               <button
                 type="button"
                 onClick={createNewProject}
-                className="inline-flex items-center gap-2 rounded-lg bg-slate-900 px-4 py-2.5 text-sm font-semibold text-white hover:bg-slate-800 transition"
+                className="studio-btn studio-btn-primary"
               >
                 <svg viewBox="0 0 20 20" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="2">
                   <path d="M10 4v12M4 10h12" strokeLinecap="round" strokeLinejoin="round" />
@@ -2773,9 +2579,9 @@ export default function ResearchStudioPage() {
                     showCancelButton: true,
                     confirmButtonText: "Create",
                     cancelButtonText: "Cancel",
-                    confirmButtonColor: "#0f766e",
-                    cancelButtonColor: "#e2e8f0",
-                    background: "#f8fafc",
+                    confirmButtonColor: "#4ade80",
+                    cancelButtonColor: "#334155",
+                    background: "#1e2130",
                     customClass: { input: "swal-template-select" },
                   });
                   if (result.isConfirmed && result.value) {
@@ -2783,30 +2589,236 @@ export default function ResearchStudioPage() {
                     if (template) createProjectFromTemplate(template);
                   }
                 }}
-                className="inline-flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-4 py-2.5 text-sm font-medium text-slate-700 hover:bg-slate-50 transition"
+                className="studio-btn studio-btn-secondary"
               >
                 <svg viewBox="0 0 20 20" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="2">
                   <path d="M4 3h9l3 3v11H4V3z" strokeLinecap="round" strokeLinejoin="round" />
-                  <path d="M12 3v3h3M8 11h4M8 14h2" strokeLinecap="round" strokeLinejoin="round" />
+                  <path d="M12 3v3h3" strokeLinecap="round" strokeLinejoin="round" />
                 </svg>
                 Template
               </button>
+              <input
+                ref={zipImportRef}
+                type="file"
+                accept=".zip"
+                className="hidden"
+                onChange={(e) => {
+                  const f = e.target.files?.[0];
+                  if (f) importProjectFromZip(f);
+                  e.currentTarget.value = "";
+                }}
+              />
+              <button
+                type="button"
+                onClick={() => zipImportRef.current?.click()}
+                className="studio-btn studio-btn-secondary"
+              >
+                <svg viewBox="0 0 20 20" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="2">
+                  <path d="M3 10h14M10 3v14" strokeLinecap="round" strokeLinejoin="round" />
+                </svg>
+                Import
+              </button>
             </div>
           </div>
+
+          {/* Search bar */}
+          <div className="studio-search-wrapper" style={{ marginTop: 16 }}>
+            <svg viewBox="0 0 20 20" className="studio-search-icon" fill="none" stroke="currentColor" strokeWidth="1.8">
+              <circle cx="9" cy="9" r="4" />
+              <path d="M12.5 12.5L16 16" strokeLinecap="round" />
+            </svg>
+            <input
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              placeholder="Search projects..."
+              className="studio-search"
+            />
+          </div>
+
+          {/* Auth info */}
+          {usesAccountStorage ? (
+            <p style={{ marginTop: 8, fontSize: 11, color: "var(--text-muted, #64748b)" }}>
+              Projects sync to your account
+            </p>
+          ) : isSignedIn ? (
+            <p style={{ marginTop: 8, fontSize: 11, color: "var(--text-muted, #64748b)" }}>
+              Account sync unavailable — projects stay local
+            </p>
+          ) : authLoaded ? (
+            <div className="studio-auth-cta">
+              <span>Sign in to sync projects across devices.</span>
+              <SignUpButton mode="modal">
+                <button type="button">Create account</button>
+              </SignUpButton>
+              <SignInButton mode="modal">
+                <button type="button">Sign in</button>
+              </SignInButton>
+            </div>
+          ) : null}
+
+          {/* Storage indicator */}
+          <p style={{ marginTop: 6, fontSize: 10, color: "var(--text-muted, #64748b)" }}>
+            {usesAccountStorage ? "Synced to account" : "Stored locally"}
+            {searchQuery.trim() ? ` · ${filteredProjects.length} of ${savedProjects.length} projects` : ` · ${savedProjects.length} project${savedProjects.length !== 1 ? "s" : ""}`}
+          </p>
+        </div>
+
+        {/* Project cards grid */}
+        {savedProjects.length === 0 && !loadingProject ? (
+          <div style={{ textAlign: "center", padding: "60px 20px" }}>
+            <div style={{ display: "inline-flex", alignItems: "center", justifyContent: "center", width: 56, height: 56, borderRadius: 14, background: "var(--bg-secondary, #131620)", marginBottom: 16 }}>
+              <svg viewBox="0 0 24 24" style={{ width: 28, height: 28, color: "var(--text-muted, #64748b)" }} fill="none" stroke="currentColor" strokeWidth="1.5">
+                <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8l-6-6z" />
+                <path d="M14 2v6h6M8 13h4M8 17h8" strokeLinecap="round" strokeLinejoin="round" />
+              </svg>
+            </div>
+            <p style={{ fontSize: 14, fontWeight: 600, color: "var(--text-primary, #e2e8f0)", marginBottom: 4 }}>No projects yet</p>
+            <p style={{ fontSize: 12, color: "var(--text-muted, #64748b)", maxWidth: 280, margin: "0 auto" }}>Create a new project or choose a template to get started.</p>
+          </div>
+        ) : loadingProject ? (
+          <div className="studio-project-grid">
+            {[1, 2, 3].map((i) => (
+              <div key={i} className="studio-project-card" style={{ minHeight: 100 }}>
+                <div className="studio-skeleton" style={{ height: 16, width: "60%", marginBottom: 8 }} />
+                <div className="studio-skeleton" style={{ height: 12, width: "40%" }} />
+              </div>
+            ))}
+          </div>
+        ) : filteredProjects.length === 0 ? (
+          <div style={{ textAlign: "center", padding: "40px 20px" }}>
+            <p style={{ fontSize: 14, fontWeight: 500, color: "var(--text-secondary, #94a3b8)" }}>No projects match &ldquo;{searchQuery}&rdquo;</p>
+            <button
+              type="button"
+              onClick={() => setSearchQuery("")}
+              className="studio-btn studio-btn-secondary"
+              style={{ marginTop: 12 }}
+            >
+              Clear search
+            </button>
+          </div>
+        ) : (
+          <div className="studio-project-grid">
+            {filteredProjects.map((item) => {
+              const isActive = item.id === activeProjectId;
+              const templateSlugs = RESEARCH_TEMPLATES.map((t) => t.slug);
+              const snapshot = savedProjectSnapshots.find((s) => s.id === item.id);
+              const fileCount = snapshot?.entries?.filter((e) => e.kind === "file").length ?? 0;
+              const tagName = snapshot?.entries?.some((e) => e.path === "main.tex" && e.content.includes("\\documentclass"))
+                ? templateSlugs.find((slug) => {
+                    const t = getTemplateBySlug(slug);
+                    return t && snapshot?.entries?.some((e) => e.path === "main.tex" && e.content === t.entries.find((te) => te.path === "main.tex")?.content);
+                  }) ?? "Custom"
+                : "Custom";
+
+              return (
+                <article
+                  key={item.id}
+                  className="studio-project-card"
+                  style={isActive ? { borderColor: "rgba(74,222,128,0.35)" } : undefined}
+                >
+                  <p className="studio-project-card-name">{item.name}</p>
+                  <p className="studio-project-card-meta">
+                    Updated {new Date(item.updatedAt).toLocaleString()}
+                    {fileCount > 0 ? ` · ${fileCount} file${fileCount !== 1 ? "s" : ""}` : ""}
+                  </p>
+                  <div className="studio-project-card-tags">
+                    {tagName !== "Custom" ? (
+                      <span className="studio-tag">
+                        <span className="studio-tag-dot" style={{ background: tagName === "ieee" ? "#60a5fa" : tagName === "acm" ? "#f472b6" : tagName === "neurips" ? "#a78bfa" : tagName === "lncs" ? "#fbbf24" : "#4ade80" }} />
+                        {RESEARCH_TEMPLATES.find((t) => t.slug === tagName)?.name || tagName}
+                      </span>
+                    ) : null}
+                    <span className="studio-tag">
+                      <span className="studio-tag-dot" style={{ background: "#4ade80" }} />
+                      LaTeX
+                    </span>
+                  </div>
+                  <div className="studio-project-card-actions">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        if (item.id !== activeProjectId) saveCurrentProject();
+                        loadSavedProject(item.id);
+                      }}
+                      className="studio-btn studio-btn-primary"
+                      style={{ height: 28, fontSize: 11 }}
+                      aria-label={`Open ${item.name}`}
+                    >
+                      <svg viewBox="0 0 20 20" style={{ width: 14, height: 14 }} fill="none" stroke="currentColor" strokeWidth="2">
+                        <path d="M6 4l9 6-9 6V4z" strokeLinecap="round" strokeLinejoin="round" />
+                      </svg>
+                      Open
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        if (item.id !== activeProjectId) saveCurrentProject();
+                        loadSavedProject(item.id);
+                        setTimeout(() => {
+                          void downloadProjectBundle();
+                        }, 500);
+                      }}
+                      className="studio-btn studio-btn-secondary"
+                      style={{ height: 28, fontSize: 11 }}
+                      aria-label={`Download ${item.name}`}
+                    >
+                      <svg viewBox="0 0 20 20" style={{ width: 14, height: 14 }} fill="none" stroke="currentColor" strokeWidth="2">
+                        <path d="M10 3v9m0 0l-3-3m3 3l3-3M4 14v2h12v-2" strokeLinecap="round" strokeLinejoin="round" />
+                      </svg>
+                      Download
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => deleteSavedProject(item.id)}
+                      className="studio-btn studio-btn-danger"
+                      style={{ height: 28, fontSize: 11 }}
+                      aria-label={`Delete ${item.name}`}
+                    >
+                      <svg viewBox="0 0 20 20" style={{ width: 14, height: 14 }} fill="none" stroke="currentColor" strokeWidth="2">
+                        <path d="M5 6h10M8 6V4h4v2m-5 0l.5 10h5L13 6" strokeLinecap="round" strokeLinejoin="round" />
+                      </svg>
+                      Delete
+                    </button>
+                  </div>
+                </article>
+              );
+            })}
+          </div>
         )}
+
+        {/* Template quick-start section */}
+        <div style={{ marginTop: 32 }}>
+          <h3 style={{ fontSize: 14, fontWeight: 600, color: "var(--text-primary, #e2e8f0)", marginBottom: 12 }}>Start from a template</h3>
+          <div className="studio-template-grid">
+            {RESEARCH_TEMPLATES.map((template) => (
+              <div
+                key={template.slug}
+                className="studio-template-card"
+                onClick={() => createProjectFromTemplate(template)}
+                role="button"
+                tabIndex={0}
+                onKeyDown={(e) => { if (e.key === "Enter") createProjectFromTemplate(template); }}
+              >
+                <h4>{template.name}</h4>
+                <p>{template.description}</p>
+              </div>
+            ))}
+          </div>
+        </div>
+        </div>
       </main>
     );
   }
 
   return (
-    <main className="mx-auto flex w-full max-w-[1600px] flex-1 flex-col min-h-0">
-      {/* Minimal single-row toolbar */}
-      <header className="flex items-center justify-between gap-3 border-b border-slate-200 bg-white px-4 py-2">
-        <div className="flex items-center gap-3 min-w-0">
+    <main className="studio-dark studio-shell">
+      {/* Top bar */}
+      <header className="studio-topbar">
+        <div className="studio-topbar-left">
           <button
             type="button"
             onClick={openProjectsBoard}
-            className="inline-flex items-center gap-1.5 rounded-md px-2 py-1.5 text-sm font-medium text-slate-500 hover:bg-slate-100 hover:text-slate-800 transition shrink-0"
+            className="studio-btn studio-btn-ghost"
             aria-label="Back to projects board"
           >
             <svg viewBox="0 0 20 20" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="1.8">
@@ -2814,30 +2826,27 @@ export default function ResearchStudioPage() {
             </svg>
             <span className="hidden sm:inline">Back</span>
           </button>
-          <span className="text-slate-300 hidden sm:inline select-none">|</span>
-          <h2 className="text-base font-semibold text-slate-900 truncate">{projectName}</h2>
+          <span style={{ color: "var(--border-color, #334155)" }} className="hidden sm:inline">|</span>
+          <span className="studio-topbar-title">{projectName}</span>
+          <span className={`studio-topbar-meta ${autoSaveStatus === "saved" ? "studio-status-saved" : autoSaveStatus === "unsaved" ? "studio-status-unsaved" : ""}`}>
+            {autoSaveStatus === "saved" ? `Saved ${autoSaveTimestamp || ""}` : autoSaveStatus === "saving" ? "Saving..." : "Unsaved"}
+          </span>
         </div>
-        <div className="flex items-center gap-2 shrink-0">
+        <div className="studio-topbar-right">
           {isMobile ? (
             <>
               <button
                 type="button"
                 onClick={() => setLeftPaneCollapsed(!leftPaneCollapsed)}
-                className="inline-flex h-8 items-center gap-1 rounded-md border border-slate-200 bg-white px-2.5 text-xs font-medium text-slate-600 hover:bg-slate-50"
+                className="studio-btn studio-btn-secondary"
               >
-                <svg viewBox="0 0 20 20" className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth="1.8">
-                  <path d="M3 7h14M3 11h14M3 15h14" strokeLinecap="round" strokeLinejoin="round" />
-                </svg>
                 {leftPaneCollapsed ? "Files" : "Hide"}
               </button>
               <button
                 type="button"
                 onClick={() => setRightPaneCollapsed(!rightPaneCollapsed)}
-                className="inline-flex h-8 items-center gap-1 rounded-md border border-slate-200 bg-white px-2.5 text-xs font-medium text-slate-600 hover:bg-slate-50"
+                className="studio-btn studio-btn-secondary"
               >
-                <svg viewBox="0 0 20 20" className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth="1.8">
-                  <path d="M4 4h12v12H4zM8 4v12M14 4v12" strokeLinecap="round" strokeLinejoin="round" />
-                </svg>
                 {rightPaneCollapsed ? "Preview" : "Hide"}
               </button>
             </>
@@ -2846,7 +2855,7 @@ export default function ResearchStudioPage() {
             type="button"
             onClick={() => void compileProject()}
             disabled={compileBusy}
-            className="inline-flex items-center gap-2 rounded-md bg-slate-900 px-4 py-2 text-sm font-semibold text-white hover:bg-slate-800 disabled:opacity-60 transition shadow-sm"
+            className="studio-btn studio-btn-primary"
             aria-label={compileBusy ? "Compiling project" : "Compile project"}
           >
             <svg viewBox="0 0 20 20" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="2">
@@ -2857,7 +2866,7 @@ export default function ResearchStudioPage() {
           <button
             type="button"
             onClick={() => void downloadProjectBundle()}
-            className="inline-flex items-center gap-1.5 rounded-md border border-slate-200 bg-white px-3 py-1.5 text-xs font-medium text-slate-600 hover:bg-slate-50 transition"
+            className="studio-btn studio-btn-secondary"
             aria-label="Download project bundle"
           >
             <svg viewBox="0 0 20 20" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="1.8">
@@ -2868,7 +2877,7 @@ export default function ResearchStudioPage() {
           <button
             type="button"
             onClick={saveCurrentProject}
-            className="inline-flex items-center gap-1.5 rounded-md border border-slate-200 bg-white px-3 py-1.5 text-xs font-medium text-slate-600 hover:bg-slate-50 transition"
+            className="studio-btn studio-btn-secondary"
             aria-label="Save current project"
           >
             <svg viewBox="0 0 20 20" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="1.8">
@@ -2880,323 +2889,218 @@ export default function ResearchStudioPage() {
         </div>
       </header>
 
+      {/* Tab bar */}
+      {activeOpenTabs.length > 0 ? (
+        <div className="studio-tabbar">
+          {activeOpenTabs.map((path) => (
+            <div
+              key={path}
+              className={`studio-tab ${selectedPath === path ? "studio-tab-active" : ""}`}
+              onClick={() => { closeIntellisense(); setSelectedPath(path); }}
+            >
+              <span>{path.split("/").pop() || path}</span>
+              <button
+                type="button"
+                className="studio-tab-close"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setOpenTabs((current) => {
+                    const next = current.filter((t) => t !== path);
+                    if (path === selectedPath && next.length) {
+                      setSelectedPath(next[next.length - 1]);
+                    }
+                    return next;
+                  });
+                }}
+              >
+                ×
+              </button>
+            </div>
+          ))}
+        </div>
+      ) : null}
+
+      {/* Main panes */}
       <section
         ref={panesRef}
-        className="flex-1 grid min-h-0 lg:[grid-template-columns:var(--left-pane-width)_1px_minmax(0,1fr)_1px_var(--right-pane-width)]"
-        style={
-          {
-            "--left-pane-width": `${effectiveLeftPaneWidth}px`,
-            "--right-pane-width": `${effectiveRightPaneWidth}px`,
-          } as React.CSSProperties
-        }
+        className="studio-panes"
+        style={{
+          "--left-width": leftPaneCollapsed ? "40px" : `${leftPaneWidth}px`,
+          "--right-width": rightPaneCollapsed ? "40px" : `${rightPaneWidth}px`,
+        } as React.CSSProperties}
       >
-        {/* Minimal file tree sidebar */}
-        <aside
-          className={`transition-[padding] ${leftPaneCollapsed ? "cursor-pointer p-1" : "overflow-y-auto"}`}
-          onClick={() => {
-            if (leftPaneCollapsed) setLeftPaneCollapsed(false);
-          }}
-          role={leftPaneCollapsed ? "button" : undefined}
-          aria-label={leftPaneCollapsed ? "Expand project files pane" : undefined}
-        >
-          <div className={`flex items-center gap-2 ${leftPaneCollapsed ? "justify-center" : "justify-between"}`}>
-            {!leftPaneCollapsed ? (
-              <div className="flex items-center gap-1">
+        {/* File tree sidebar */}
+        <aside className="studio-filetree">
+          {leftPaneCollapsed ? (
+            <button
+              type="button"
+              className="studio-collapsed-btn"
+              onClick={() => setLeftPaneCollapsed(false)}
+            >
+              <svg viewBox="0 0 20 20" style={{ width: 14, height: 14 }} fill="none" stroke="currentColor" strokeWidth="2">
+                <path d="M7 4l6 6-6 6" strokeLinecap="round" strokeLinejoin="round" />
+              </svg>
+              Files
+            </button>
+          ) : (
+            <>
+              <div className="studio-filetree-header">
+                <span className="studio-filetree-title">Files</span>
+                <div style={{ display: "flex", gap: 4 }}>
+                  <button
+                    type="button"
+                    onClick={() => void addProjectEntryAt("", "file")}
+                    className="studio-btn studio-btn-ghost"
+                    style={{ width: 24, height: 24, padding: 0 }}
+                    aria-label="Add file"
+                  >
+                    <svg viewBox="0 0 20 20" style={{ width: 14, height: 14 }} fill="none" stroke="currentColor" strokeWidth="2">
+                      <path d="M10 4v12M4 10h12" strokeLinecap="round" strokeLinejoin="round" />
+                    </svg>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => void addProjectEntryAt("", "folder")}
+                    className="studio-btn studio-btn-ghost"
+                    style={{ width: 24, height: 24, padding: 0 }}
+                    aria-label="Add folder"
+                  >
+                    <svg viewBox="0 0 20 20" style={{ width: 14, height: 14 }} fill="none" stroke="currentColor" strokeWidth="2">
+                      <path d="M3 6h5l1.2 1.5H17v7.5H3V6z" strokeLinecap="round" strokeLinejoin="round" />
+                    </svg>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setLeftPaneCollapsed(true)}
+                    className="studio-btn studio-btn-ghost"
+                    style={{ width: 24, height: 24, padding: 0 }}
+                    aria-label="Collapse"
+                  >
+                    <svg viewBox="0 0 20 20" style={{ width: 14, height: 14 }} fill="none" stroke="currentColor" strokeWidth="2">
+                      <path d="M13 4l-6 6 6 6" strokeLinecap="round" strokeLinejoin="round" />
+                    </svg>
+                  </button>
+                </div>
+              </div>
+              <div className="studio-filetree-header" style={{ borderBottom: "none", padding: "4px 12px" }}>
                 <input
                   value={newPath}
                   onChange={(event) => setNewPath(event.target.value)}
-                  placeholder="Add file or folder..."
-                  className="w-full rounded border border-slate-200 bg-white px-2 py-1 text-xs text-slate-600 placeholder:text-slate-400 focus:outline-none focus:border-slate-300"
+                  onKeyDown={(e) => { if (e.key === "Enter") addProjectFile(); }}
+                  placeholder="Add file/folder..."
+                  style={{
+                    flex: 1,
+                    height: 24,
+                    padding: "0 8px",
+                    background: "var(--bg-primary, #0d0f17)",
+                    border: "1px solid var(--border-color, #334155)",
+                    borderRadius: 4,
+                    color: "var(--text-primary, #e2e8f0)",
+                    fontSize: 11,
+                    outline: "none",
+                  }}
                 />
                 <button
                   type="button"
                   onClick={addProjectFile}
-                  className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded border border-slate-200 bg-white text-slate-500 hover:bg-slate-50 hover:text-slate-700 transition"
-                  aria-label="Add file or folder"
+                  className="studio-btn studio-btn-ghost"
+                  style={{ height: 24, fontSize: 10, padding: "0 6px" }}
                 >
-                  <svg viewBox="0 0 20 20" className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth="1.8">
-                    <path d="M10 4v12M4 10h12" strokeLinecap="round" strokeLinejoin="round" />
-                  </svg>
-                </button>
-                <button
-                  type="button"
-                  onClick={() => void addProjectEntryAt("", "folder")}
-                  className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded border border-slate-200 bg-white text-slate-500 hover:bg-slate-50 hover:text-slate-700 transition"
-                  aria-label="Add root folder"
-                >
-                  <svg viewBox="0 0 20 20" className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth="1.8">
-                    <path d="M3 6h5l1.2 1.5H17v7.5H3V6z" strokeLinecap="round" strokeLinejoin="round" />
-                  </svg>
+                  Add
                 </button>
               </div>
-            ) : null}
-            <button
-              type="button"
-              onClick={(event) => {
-                event.stopPropagation();
-                setLeftPaneCollapsed((current) => !current);
-              }}
-              className="rounded border border-slate-200 bg-white p-1 text-slate-400 hover:text-slate-600 transition shrink-0"
-              aria-label={leftPaneCollapsed ? "Expand project files pane" : "Collapse project files pane"}
-            >
-              <svg
-                viewBox="0 0 20 20"
-                className={`h-3.5 w-3.5 transition-transform duration-200 ${leftPaneCollapsed ? "rotate-180" : "rotate-0"}`}
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="1.8"
-              >
-                {leftPaneCollapsed ? (
-                  <path d="M7 4l6 6-6 6" strokeLinecap="round" strokeLinejoin="round" />
-                ) : (
-                  <path d="M13 4l-6 6 6 6" strokeLinecap="round" strokeLinejoin="round" />
-                )}
-              </svg>
-            </button>
-          </div>
-
-          {!leftPaneCollapsed ? (
-            <>
-              {addFileError ? <p className="mt-1.5 text-xs text-rose-600">{addFileError}</p> : null}
-              <ul className="mt-2 space-y-0.5 text-sm text-slate-700">{renderProjectTree(projectTree)}</ul>
-              {/* Section outline */}
-              <div className="mt-3 border-t border-slate-100 pt-2">
-                <p className="mb-1.5 text-[10px] font-medium text-slate-400">Outline</p>
-                <ul className="space-y-0.5 text-xs text-slate-600">
-                  {preview.sections.length ? (
-                    preview.sections.map((section) => {
-                      const isCollapsed = Boolean(collapsedOutlineSections[section.title]);
-                      return (
-                        <li key={section.title}>
-                          <button
-                            type="button"
-                            onClick={() =>
-                              setCollapsedOutlineSections((current) => ({
-                                ...current,
-                                [section.title]: !current[section.title],
-                              }))
-                            }
-                            className="flex w-full items-center justify-between rounded px-2 py-1 text-left hover:bg-slate-50 transition"
-                          >
-                            <span className="truncate text-[11px]">{section.title}</span>
-                            <svg
-                              viewBox="0 0 20 20"
-                              className={`h-3 w-3 shrink-0 text-slate-400 transition-transform ${isCollapsed ? "" : "rotate-90"}`}
-                              fill="none"
-                              stroke="currentColor"
-                              strokeWidth="2"
-                            >
-                              <path d="M7 4l6 6-6 6" strokeLinecap="round" strokeLinejoin="round" />
-                            </svg>
-                          </button>
-                          {!isCollapsed ? <p className="mt-0.5 px-2 text-[11px] text-slate-500 leading-relaxed">{section.body}</p> : null}
-                        </li>
-                      );
-                    })
-                  ) : (
-                    <li className="px-2 text-slate-400">No sections found.</li>
-                  )}
-                </ul>
+              {addFileError ? <p style={{ padding: "4px 12px", fontSize: 11, color: "#ef4444" }}>{addFileError}</p> : null}
+              <div className="studio-filetree-body">
+                {renderProjectTree(projectTree)}
               </div>
             </>
-          ) : null}
+          )}
         </aside>
 
-        {/* Left resize divider */}
+        {/* Left resize */}
         <div
-          className={`hidden items-center justify-center lg:flex ${leftPaneCollapsed ? "cursor-default" : "cursor-col-resize hover:bg-slate-200"}`}
-          onMouseDown={() => {
-            if (!leftPaneCollapsed) setActiveResizer("left");
-          }}
-          role="separator"
-          aria-orientation="vertical"
-          aria-label="Resize project files pane"
+          className="studio-resize-handle"
+          onMouseDown={() => { if (!leftPaneCollapsed) setActiveResizer("left"); }}
         >
-          <span className="h-12 w-0.5 rounded-full bg-slate-200" />
+          <div className="studio-resize-handle-inner" />
         </div>
 
-        {/* Editor with full-bleed styling */}
-        <div className="bg-slate-50 flex flex-col min-h-0">
-          {/* Minimal toolbar row */}
-          <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-100 bg-white px-3 py-1.5">
-            <div className="flex items-center gap-2">
-              <p className="text-[11px] text-slate-500">{activeEntry?.path || "No file selected"}</p>
-            </div>
-            <div className="flex flex-wrap items-center gap-1">
-              <div className="flex items-center gap-0.5 mr-1 border-r border-slate-200 pr-1">
-                <button
-                  type="button"
-                  onClick={() => insertEditorSnippet({ before: "\\textbf{", after: "}", placeholder: "bold text" })}
-                  className="inline-flex h-7 w-7 items-center justify-center rounded text-xs font-bold text-slate-500 hover:bg-slate-100 hover:text-slate-700"
-                  aria-label="Insert bold text"
-                >B</button>
-                <button
-                  type="button"
-                  onClick={() => insertEditorSnippet({ before: "\\textit{", after: "}", placeholder: "italic text" })}
-                  className="inline-flex h-7 w-7 items-center justify-center rounded text-xs font-semibold italic text-slate-500 hover:bg-slate-100 hover:text-slate-700"
-                  aria-label="Insert italic text"
-                >I</button>
-                <button
-                  type="button"
-                  onClick={() => insertEditorSnippet({ block: "\\section{Section Title}\n", before: "", after: "", cursorOffset: 9 })}
-                  className="inline-flex h-7 w-7 items-center justify-center rounded text-[10px] font-semibold text-slate-500 hover:bg-slate-100 hover:text-slate-700"
-                  aria-label="Insert section"
-                >S1</button>
-                <button
-                  type="button"
-                  onClick={() => insertEditorSnippet({ before: "$", after: "$", placeholder: "math" })}
-                  className="inline-flex h-7 w-7 items-center justify-center rounded text-[10px] font-semibold text-slate-500 hover:bg-slate-100 hover:text-slate-700"
-                  aria-label="Insert inline math"
-                >$</button>
-                <button
-                  type="button"
-                  onClick={() => insertEditorSnippet({
-                    block: "\\begin{equation}\n  E = mc^2\n  \\label{eq:key}\n\\end{equation}\n",
-                    before: "", after: "", cursorOffset: 18
-                  })}
-                  className="inline-flex h-7 w-7 items-center justify-center rounded text-[10px] font-semibold text-slate-500 hover:bg-slate-100 hover:text-slate-700"
-                  aria-label="Insert equation"
-                >eq</button>
-                <button
-                  type="button"
-                  onClick={() =>
-                    insertEditorSnippet({
-                      block: "\\begin{figure}[htbp]\n  \\centering\n  \\includegraphics[width=0.8\\linewidth]{figures/plot.png}\n  \\caption{Figure caption}\n  \\label{fig:plot}\n\\end{figure}\n",
-                      before: "", after: "", cursorOffset: 62,
-                    })
-                  }
-                  className="inline-flex h-7 w-7 items-center justify-center rounded text-slate-500 hover:bg-slate-100 hover:text-slate-700"
-                  aria-label="Insert figure"
-                >
-                  <svg viewBox="0 0 20 20" className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth="1.8">
-                    <rect x="3" y="4" width="14" height="12" rx="1.5" />
-                    <circle cx="8" cy="8" r="1.2" />
-                    <path d="M4.5 14l4.5-4 2.6 2 1.9-1.7L15.5 14" strokeLinecap="round" strokeLinejoin="round" />
-                  </svg>
-                </button>
-              </div>
-              <button
-                type="button"
-                onClick={() => setFindPanelOpen((current) => !current)}
-                className="inline-flex items-center gap-1 rounded px-2 py-1 text-[11px] font-medium text-slate-500 hover:bg-slate-100 hover:text-slate-700"
-                aria-label={findPanelOpen ? "Hide find panel" : "Show find panel"}
-              >
-                <svg viewBox="0 0 20 20" className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth="1.8">
-                  <circle cx="9" cy="9" r="4" />
-                  <path d="M12.5 12.5L16 16" strokeLinecap="round" />
-                </svg>
-                <span className="hidden sm:inline">Find</span>
-              </button>
-            </div>
+        {/* Editor area */}
+        <div className="studio-editor-wrapper">
+          {/* Editor toolbar */}
+          <div className="studio-editor-toolbar">
+            <button type="button" onClick={() => insertEditorSnippet({ before: "\\textbf{", after: "}", placeholder: "bold text" })} className="studio-btn studio-btn-ghost" style={{ height: 26, fontSize: 11, fontWeight: 700, padding: "0 8px" }}>B</button>
+            <button type="button" onClick={() => insertEditorSnippet({ before: "\\textit{", after: "}", placeholder: "italic text" })} className="studio-btn studio-btn-ghost" style={{ height: 26, fontSize: 11, fontStyle: "italic", padding: "0 8px" }}>I</button>
+            <button type="button" onClick={() => insertEditorSnippet({ block: "\\section{Section Title}\n", before: "", after: "", cursorOffset: 9 })} className="studio-btn studio-btn-ghost" style={{ height: 26, fontSize: 10, fontWeight: 600, padding: "0 8px" }}>S1</button>
+            <button type="button" onClick={() => insertEditorSnippet({ before: "$", after: "$", placeholder: "math" })} className="studio-btn studio-btn-ghost" style={{ height: 26, fontSize: 11, padding: "0 8px" }}>$</button>
+            <button type="button" onClick={() => insertEditorSnippet({ block: "\\begin{equation}\n  E = mc^2\n  \\label{eq:key}\n\\end{equation}\n", before: "", after: "", cursorOffset: 18 })} className="studio-btn studio-btn-ghost" style={{ height: 26, fontSize: 10, padding: "0 8px" }}>eq</button>
+            <button type="button" onClick={() => insertEditorSnippet({ block: "\\begin{figure}[htbp]\n  \\centering\n  \\includegraphics[width=0.8\\linewidth]{figures/plot.png}\n  \\caption{Figure caption}\n  \\label{fig:plot}\n\\end{figure}\n", before: "", after: "", cursorOffset: 62 })} className="studio-btn studio-btn-ghost" style={{ height: 26, padding: "0 8px" }}>
+              <svg viewBox="0 0 20 20" style={{ width: 14, height: 14 }} fill="none" stroke="currentColor" strokeWidth="2">
+                <rect x="3" y="4" width="14" height="12" rx="1.5" /><circle cx="8" cy="8" r="1.2" /><path d="M4.5 14l4.5-4 2.6 2 1.9-1.7L15.5 14" strokeLinecap="round" strokeLinejoin="round" />
+              </svg>
+            </button>
+            <span style={{ width: 1, height: 18, background: "var(--border-color, #334155)", margin: "0 4px" }} />
+            <button type="button" onClick={() => setFindPanelOpen((c) => !c)} className="studio-btn studio-btn-ghost" style={{ height: 26, fontSize: 11, padding: "0 8px" }}>
+              <svg viewBox="0 0 20 20" style={{ width: 14, height: 14 }} fill="none" stroke="currentColor" strokeWidth="2">
+                <circle cx="9" cy="9" r="4" /><path d="M12.5 12.5L16 16" strokeLinecap="round" />
+              </svg>
+              Find
+            </button>
+            <span style={{ fontSize: 11, color: "var(--text-muted, #64748b)", marginLeft: 8 }}>{activeEntry?.path || "No file selected"}</span>
           </div>
 
+          {/* Find/replace panel */}
           {findPanelOpen ? (
-            <div className="border-b border-slate-100 bg-white px-3 py-1.5">
-              <div className="flex flex-wrap items-center gap-2">
-                <input
-                  ref={findInputRef}
-                  value={findQuery}
-                  onChange={(event) => setFindQuery(event.target.value)}
-                  placeholder="Find..."
-                  className="min-w-[160px] flex-1 rounded border border-slate-200 bg-white px-2 py-1 text-xs text-slate-700 focus:outline-none focus:border-slate-300"
-                />
-                <span className="text-[10px] text-slate-400 tabular-nums">
-                  {findMatches.length ? `${boundedActiveMatchIndex + 1}/${findMatches.length}` : "0/0"}
-                </span>
-                <button
-                  type="button"
-                  onClick={() => jumpToNextMatch(-1)}
-                  className="rounded border border-slate-200 bg-white px-2 py-1 text-[10px] font-medium text-slate-600 hover:bg-slate-50"
-                >Prev</button>
-                <button
-                  type="button"
-                  onClick={() => jumpToNextMatch(1)}
-                  className="rounded border border-slate-200 bg-white px-2 py-1 text-[10px] font-medium text-slate-600 hover:bg-slate-50"
-                >Next</button>
-                <button
-                  type="button"
-                  onClick={() => setReplacePanelOpen((current) => !current)}
-                  className="rounded border border-slate-200 bg-white px-2 py-1 text-[10px] font-medium text-slate-600 hover:bg-slate-50"
-                >{replacePanelOpen ? "Hide Replace" : "Replace"}</button>
-                <label className="flex items-center gap-1 text-[10px] text-slate-500">
-                  <input type="checkbox" checked={findCaseSensitive} onChange={(event) => setFindCaseSensitive(event.target.checked)} className="h-3 w-3" />
-                  Aa
-                </label>
-                <label className="flex items-center gap-1 text-[10px] text-slate-500">
-                  <input type="checkbox" checked={findUseRegex} onChange={(event) => setFindUseRegex(event.target.checked)} className="h-3 w-3" />
-                  .*
-                </label>
-                <label className="flex items-center gap-1 text-[10px] text-slate-500">
-                  <input type="checkbox" checked={findWholeWord} onChange={(event) => setFindWholeWord(event.target.checked)} className="h-3 w-3" />
-                  Word
-                </label>
-                <button
-                  type="button"
-                  onClick={() => { setFindPanelOpen(false); setReplacePanelOpen(false); }}
-                  className="ml-auto rounded p-1 text-slate-400 hover:text-slate-600"
-                >
-                  <svg viewBox="0 0 20 20" className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth="2">
-                    <path d="M6 6l8 8M14 6l-8 8" strokeLinecap="round" strokeLinejoin="round" />
-                  </svg>
-                </button>
-              </div>
-
+            <div className="studio-find-panel">
+              <input ref={findInputRef} value={findQuery} onChange={(e) => setFindQuery(e.target.value)} placeholder="Find..." className="studio-find-input" />
+              <span className="studio-find-count">{findMatches.length ? `${boundedActiveMatchIndex + 1}/${findMatches.length}` : "0/0"}</span>
+              <button type="button" onClick={() => jumpToNextMatch(-1)} className="studio-btn studio-btn-ghost" style={{ height: 24, fontSize: 10 }}>Prev</button>
+              <button type="button" onClick={() => jumpToNextMatch(1)} className="studio-btn studio-btn-ghost" style={{ height: 24, fontSize: 10 }}>Next</button>
+              <button type="button" onClick={() => setReplacePanelOpen((c) => !c)} className="studio-btn studio-btn-ghost" style={{ height: 24, fontSize: 10 }}>{replacePanelOpen ? "Hide Replace" : "Replace"}</button>
+              <label style={{ fontSize: 10, color: "var(--text-muted, #64748b)", display: "flex", alignItems: "center", gap: 2 }}><input type="checkbox" checked={findCaseSensitive} onChange={(e) => setFindCaseSensitive(e.target.checked)} style={{ width: 12, height: 12 }} />Aa</label>
+              <label style={{ fontSize: 10, color: "var(--text-muted, #64748b)", display: "flex", alignItems: "center", gap: 2 }}><input type="checkbox" checked={findUseRegex} onChange={(e) => setFindUseRegex(e.target.checked)} style={{ width: 12, height: 12 }} />.*</label>
+              <label style={{ fontSize: 10, color: "var(--text-muted, #64748b)", display: "flex", alignItems: "center", gap: 2 }}><input type="checkbox" checked={findWholeWord} onChange={(e) => setFindWholeWord(e.target.checked)} style={{ width: 12, height: 12 }} />Word</label>
+              <button type="button" onClick={() => { setFindPanelOpen(false); setReplacePanelOpen(false); }} style={{ background: "none", border: "none", color: "var(--text-muted, #64748b)", cursor: "pointer", marginLeft: "auto", fontSize: 16 }}>×</button>
               {replacePanelOpen ? (
-                <div className="flex flex-wrap items-center gap-2 mt-1.5">
-                  <input
-                    value={replaceQuery}
-                    onChange={(event) => setReplaceQuery(event.target.value)}
-                    placeholder="Replace with..."
-                    className="min-w-[160px] flex-1 rounded border border-slate-200 bg-white px-2 py-1 text-xs text-slate-700 focus:outline-none focus:border-slate-300"
-                  />
-                  <button
-                    type="button"
-                    onClick={replaceCurrentMatch}
-                    className="rounded border border-slate-200 bg-white px-2 py-1 text-[10px] font-medium text-slate-600 hover:bg-slate-50"
-                  >Replace</button>
-                  <button
-                    type="button"
-                    onClick={replaceAllMatches}
-                    className="rounded border border-slate-200 bg-white px-2 py-1 text-[10px] font-medium text-slate-600 hover:bg-slate-50"
-                  >Replace All</button>
-                </div>
+                <>
+                  <input value={replaceQuery} onChange={(e) => setReplaceQuery(e.target.value)} placeholder="Replace with..." className="studio-find-input" style={{ marginTop: 4, width: "100%" }} />
+                  <button type="button" onClick={replaceCurrentMatch} className="studio-btn studio-btn-ghost" style={{ height: 24, fontSize: 10 }}>Replace</button>
+                  <button type="button" onClick={replaceAllMatches} className="studio-btn studio-btn-ghost" style={{ height: 24, fontSize: 10 }}>All</button>
+                </>
               ) : null}
-              {findRegexError ? <p className="mt-1 text-[10px] text-rose-600">{findRegexError}</p> : null}
+              {findRegexError ? <span style={{ fontSize: 10, color: "#ef4444" }}>{findRegexError}</span> : null}
             </div>
           ) : null}
 
-          <div className={`flex-1 flex min-h-0 ${showMatchGutter ? "lg:grid lg:grid-cols-[120px_minmax(0,1fr)]" : ""}`}>
+          {/* Editor with line numbers */}
+          <div className="studio-editor-with-gutter">
             {showMatchGutter ? (
-              <div className="max-h-full overflow-auto border-r border-slate-100 bg-white p-1.5">
-                <p className="mb-1 text-[10px] font-medium text-slate-400">Matches</p>
-                {matchLines.length ? (
-                  <ul className="space-y-0.5">
-                    {matchLines.map((line) => (
-                      <li key={`match-line-${line.lineNumber}`}>
-                        <button
-                          type="button"
-                          onClick={() => focusMatch(line.firstMatchIndex)}
-                          className="w-full rounded px-2 py-1 text-left text-[11px] text-slate-600 hover:bg-slate-50 transition"
-                        >
-                          <span className="font-medium text-slate-900">L{line.lineNumber}</span>{" "}
-                          <span className="text-slate-400">({line.count})</span>
-                          <p className="truncate text-[10px] text-slate-500">{line.preview}</p>
-                        </button>
-                      </li>
-                    ))}
-                  </ul>
-                ) : (
-                  <p className="text-[11px] text-slate-400">No matches.</p>
-                )}
+              <div className="studio-match-gutter">
+                <p style={{ fontSize: 10, fontWeight: 600, color: "var(--text-muted, #64748b)", marginBottom: 4 }}>Matches</p>
+                {matchLines.length ? matchLines.map((line) => (
+                  <button key={`match-line-${line.lineNumber}`} type="button" onClick={() => focusMatch(line.firstMatchIndex)} style={{ display: "block", width: "100%", textAlign: "left", padding: "2px 4px", fontSize: 10, color: "var(--text-secondary, #94a3b8)", background: "none", border: "none", cursor: "pointer", borderRadius: 2 }}>
+                    L{line.lineNumber} ({line.count})
+                  </button>
+                )) : <p style={{ fontSize: 11, color: "var(--text-muted, #64748b)" }}>None</p>}
               </div>
             ) : null}
 
-            <div className="latex-editor-shell relative min-h-0 flex-1 overflow-hidden">
+            {/* Line numbers gutter */}
+            <div className="studio-editor-gutter">
+              {activeSource.split("\n").map((_, i) => (
+                <div key={i} style={{ lineHeight: 1.625 }}>{i + 1}</div>
+              ))}
+            </div>
+
+            <div className="studio-editor-area">
               <pre
                 aria-hidden="true"
-                className="latex-highlight-layer pointer-events-none absolute inset-0 m-0 overflow-hidden p-3 font-mono text-sm leading-6"
+                className="studio-editor-highlight"
                 style={{ transform: `translate(${-editorScroll.left}px, ${-editorScroll.top}px)` }}
-                dangerouslySetInnerHTML={{ __html: `${highlightedSource}\n` }}
+                dangerouslySetInnerHTML={{
+                  __html: `${highlightedSource
+                    .replace(/latex-token-/g, "studio-token-")}\n`,
+                }}
               />
               <textarea
                 ref={editorRef}
@@ -3211,51 +3115,39 @@ export default function ResearchStudioPage() {
                 onDragOver={onEditorDragOver}
                 onDrop={onEditorDrop}
                 disabled={!activeEntry}
-                className="latex-editor-input research-editor relative z-10 h-full w-full resize-none border-0 bg-transparent p-3 font-mono text-sm leading-6 outline-none disabled:opacity-60"
+                className="studio-editor-textarea"
                 spellCheck={true}
                 lang="en"
               />
 
               {intellisenseOptions.length && intellisensePosition ? (
-                <div
-                  className="latex-intellisense-panel fixed z-30 w-72 rounded-lg border border-slate-200 bg-white p-1 shadow-lg"
-                  style={{ top: `${intellisensePosition.top}px`, left: `${intellisensePosition.left}px` }}
-                >
-                  <p className="px-2 pb-1 pt-1 text-[10px] font-medium text-slate-400">Suggestions</p>
-                  <ul className="max-h-56 overflow-auto">
+                <div className="studio-intellisense" style={{ top: `${intellisensePosition.top}px`, left: `${intellisensePosition.left}px` }}>
+                  <div className="studio-intellisense-header">Suggestions</div>
+                  <div className="studio-intellisense-list">
                     {intellisenseOptions.map((item, index) => (
-                      <li key={`${item.label}-${index}`}>
-                        <button
-                          type="button"
-                          onMouseDown={(event) => {
-                            event.preventDefault();
-                            applyIntellisenseSelection(index);
-                          }}
-                          className={`latex-intellisense-option w-full rounded-md px-2 py-1 text-left text-xs transition ${
-                            index === intellisenseIndex
-                              ? "bg-slate-100 text-slate-900"
-                              : "bg-white text-slate-700 hover:bg-slate-50"
-                          }`}
-                        >
-                          <p className="font-semibold">\{item.label}</p>
-                          <p className="text-[11px] text-slate-500">{item.detail}</p>
-                        </button>
-                      </li>
+                      <div
+                        key={`${item.label}-${index}`}
+                        className={`studio-intellisense-item ${index === intellisenseIndex ? "studio-intellisense-item-active" : ""}`}
+                        onMouseDown={(event) => { event.preventDefault(); applyIntellisenseSelection(index); }}
+                      >
+                        <span className="studio-intellisense-item-label">\{item.label}</span>
+                        <span className="studio-intellisense-item-detail">{item.detail}</span>
+                      </div>
                     ))}
-                  </ul>
+                  </div>
                 </div>
               ) : null}
 
               {equationTooltip ? (
                 <div
-                  className="equation-preview-tooltip fixed z-30 max-w-sm rounded-lg border border-slate-200 bg-white p-3 shadow-lg"
+                  className="studio-eq-tooltip"
                   style={{ top: `${equationTooltip.top}px`, left: `${equationTooltip.left}px` }}
                   dangerouslySetInnerHTML={{
                     __html: (() => {
                       try {
                         return katex.renderToString(equationTooltip.latex, { displayMode: true, throwOnError: true });
                       } catch {
-                        return '<span class="text-xs text-rose-600">Could not render equation</span>';
+                        return '<span style="font-size:12px;color:#ef4444">Could not render equation</span>';
                       }
                     })(),
                   }}
@@ -3265,305 +3157,238 @@ export default function ResearchStudioPage() {
           </div>
 
           {/* Status bar */}
-          <div className="flex flex-wrap items-center justify-between gap-2 border-t border-slate-100 bg-white px-3 py-1 text-[10px] text-slate-500">
-            <div className="flex flex-wrap items-center gap-3">
-              <span>Words: {wordCount.words} · Chars: {wordCount.chars}</span>
+          <div className="studio-statusbar">
+            <div className="studio-statusbar-left">
+              <span>Words: {wordCount.words}</span>
+              <span>Chars: {wordCount.chars}</span>
               {wordCount.abstractWords > 0 ? (
-                <span className={wordCount.abstractWords > 250 ? "text-rose-500 font-medium" : "text-slate-400"}>
-                  Abstract: {wordCount.abstractWords}/250
-                </span>
+                <span style={wordCount.abstractWords > 250 ? { color: "#ef4444" } : {}}>Abstract: {wordCount.abstractWords}/250</span>
               ) : null}
-              <span className="text-slate-300 hidden sm:inline">|</span>
-              <span className="hidden sm:inline">UTF-8 · LaTeX</span>
+              <span>UTF-8 · LaTeX</span>
             </div>
-            <div className="flex items-center gap-2">
-              <span>Last compile: {lastCompileAt}</span>
-              <span className={`${autoSaveStatus === "saved" ? "text-emerald-500" : autoSaveStatus === "saving" ? "text-slate-400" : "text-amber-500"}`}>
+            <div className="studio-statusbar-right">
+              <span>Compiled: {lastCompileAt}</span>
+              <span className={autoSaveStatus === "saved" ? "studio-status-saved" : autoSaveStatus === "unsaved" ? "studio-status-unsaved" : ""}>
                 {autoSaveStatus === "saved" ? `Saved ${autoSaveTimestamp || ""}` : autoSaveStatus === "saving" ? "Saving..." : "Unsaved"}
               </span>
-              <button
-                type="button"
-                onClick={() => setShowShortcuts((c) => !c)}
-                className="rounded px-1.5 py-0.5 text-[10px] text-slate-400 hover:bg-slate-100 hover:text-slate-600"
-              >
+              <button type="button" onClick={() => setShowShortcuts((c) => !c)} style={{ background: "none", border: "none", color: "var(--text-muted, #64748b)", cursor: "pointer", fontSize: 11 }}>
                 {showShortcuts ? "Hide shortcuts" : "Shortcuts"}
               </button>
             </div>
           </div>
 
-          {/* Keyboard shortcuts panel */}
+          {/* Keyboard shortcuts */}
           {showShortcuts ? (
-            <div className="border-t border-slate-100 bg-white px-3 py-2">
-              <div className="grid grid-cols-2 sm:grid-cols-3 gap-x-4 gap-y-1 text-[10px] text-slate-600">
-                <div><kbd className="rounded bg-slate-100 px-1 py-0.5 text-[10px] font-medium">Ctrl+S</kbd> Compile</div>
-                <div><kbd className="rounded bg-slate-100 px-1 py-0.5 text-[10px] font-medium">Ctrl+F</kbd> Find</div>
-                <div><kbd className="rounded bg-slate-100 px-1 py-0.5 text-[10px] font-medium">Ctrl+H</kbd> Replace</div>
-                <div><kbd className="rounded bg-slate-100 px-1 py-0.5 text-[10px] font-medium">Ctrl+G</kbd> Next match</div>
-                <div><kbd className="rounded bg-slate-100 px-1 py-0.5 text-[10px] font-medium">Ctrl+D</kbd> Duplicate</div>
-                <div><kbd className="rounded bg-slate-100 px-1 py-0.5 text-[10px] font-medium">Ctrl+/</kbd> Comment</div>
-                <div><kbd className="rounded bg-slate-100 px-1 py-0.5 text-[10px] font-medium">Tab</kbd> Indent</div>
-                <div><kbd className="rounded bg-slate-100 px-1 py-0.5 text-[10px] font-medium">Ctrl+Click</kbd> Sync PDF</div>
-                <div className="text-slate-400">Spellcheck enabled</div>
-              </div>
+            <div className="studio-shortcuts">
+              <div><kbd className="studio-kbd">Ctrl+S</kbd> Compile</div>
+              <div><kbd className="studio-kbd">Ctrl+F</kbd> Find</div>
+              <div><kbd className="studio-kbd">Ctrl+H</kbd> Replace</div>
+              <div><kbd className="studio-kbd">Ctrl+G</kbd> Next match</div>
+              <div><kbd className="studio-kbd">Ctrl+D</kbd> Duplicate</div>
+              <div><kbd className="studio-kbd">Ctrl+/</kbd> Comment</div>
+              <div><kbd className="studio-kbd">Tab</kbd> Indent</div>
+              <div><kbd className="studio-kbd">Ctrl+Click</kbd> Sync PDF</div>
+              <div>Spellcheck enabled</div>
             </div>
           ) : null}
         </div>
 
-        {/* Right resize divider */}
+        {/* Right resize */}
         <div
-          className={`hidden items-center justify-center lg:flex ${rightPaneCollapsed ? "cursor-default" : "cursor-col-resize hover:bg-slate-200"}`}
-          onMouseDown={() => {
-            if (!rightPaneCollapsed) setActiveResizer("right");
-          }}
-          role="separator"
-          aria-orientation="vertical"
-          aria-label="Resize preview pane"
+          className="studio-resize-handle"
+          onMouseDown={() => { if (!rightPaneCollapsed) setActiveResizer("right"); }}
         >
-          <span className="h-12 w-0.5 rounded-full bg-slate-200" />
+          <div className="studio-resize-handle-inner" />
         </div>
 
-        {/* Minimal PDF preview pane */}
-        <aside
-          className={`transition-[padding] border-l border-slate-200 bg-white ${rightPaneCollapsed ? "cursor-pointer p-1" : "overflow-y-auto"}`}
-          onClick={() => {
-            if (rightPaneCollapsed) setRightPaneCollapsed(false);
-          }}
-          role={rightPaneCollapsed ? "button" : undefined}
-          aria-label={rightPaneCollapsed ? "Expand preview pane" : undefined}
-        >
-          <div className={`flex items-center gap-2 ${rightPaneCollapsed ? "justify-center" : "justify-between"}`}>
-            {!rightPaneCollapsed ? (
-              <div className="flex items-center gap-2">
-                <p className="text-xs font-medium text-slate-600">PDF</p>
-                {compiledPdfUrl ? (
-                  <a
-                    href={compiledPdfUrl}
-                    download={compiledPdfFileName}
-                    className="inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-[10px] font-medium text-slate-400 hover:text-slate-600 hover:bg-slate-100 transition"
-                    aria-label="Download compiled PDF"
-                  >
-                    <svg viewBox="0 0 20 20" className="h-3 w-3" fill="none" stroke="currentColor" strokeWidth="1.8">
-                      <path d="M10 3v9m0 0l-3-3m3 3l3-3M4 14v2h12v-2" strokeLinecap="round" strokeLinejoin="round" />
-                    </svg>
-                    Download
-                  </a>
-                ) : null}
-                {synctexNotice ? (
-                  <span className="text-[10px] text-amber-500">{synctexNotice}</span>
-                ) : null}
-              </div>
-            ) : null}
-            <button
-              type="button"
-              onClick={(event) => {
-                event.stopPropagation();
-                setRightPaneCollapsed((current) => !current);
-              }}
-              className="rounded border border-slate-200 bg-white p-1 text-slate-400 hover:text-slate-600 transition shrink-0"
-              aria-label={rightPaneCollapsed ? "Expand preview pane" : "Collapse preview pane"}
-            >
-              <svg
-                viewBox="0 0 20 20"
-                className={`h-3.5 w-3.5 transition-transform duration-200 ${rightPaneCollapsed ? "rotate-180" : "rotate-0"}`}
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="1.8"
-              >
-                {rightPaneCollapsed ? (
-                  <path d="M13 4l-6 6 6 6" strokeLinecap="round" strokeLinejoin="round" />
-                ) : (
-                  <path d="M7 4l6 6-6 6" strokeLinecap="round" strokeLinejoin="round" />
-                )}
+        {/* Preview pane */}
+        <aside className="studio-preview">
+          {rightPaneCollapsed ? (
+            <button type="button" className="studio-collapsed-btn" onClick={() => setRightPaneCollapsed(false)}>
+              <svg viewBox="0 0 20 20" style={{ width: 14, height: 14 }} fill="none" stroke="currentColor" strokeWidth="2">
+                <path d="M13 4l-6 6 6 6" strokeLinecap="round" strokeLinejoin="round" />
               </svg>
+              Preview
             </button>
-          </div>
-
-          {!rightPaneCollapsed ? (
-            <div className="mt-1 flex flex-col h-[calc(100vh-120px)]">
-              <p className="mb-1 text-[10px] text-slate-400 truncate">
-                {compileBusy ? "Compiling..." : compileNotice}
-              </p>
-
-              {compileMainLog ? (
-                <details className="mb-1.5 rounded border border-slate-200 bg-white">
-                  <summary className="cursor-pointer px-2 py-1 text-[10px] font-medium text-slate-600">
-                    {compileMainLogFileName}
-                  </summary>
-                  <div className="px-2 pb-1 flex items-center justify-end">
-                    <button
-                      type="button"
-                      onClick={() =>
-                        downloadBlob(
-                          new Blob([compileMainLog], { type: "text/plain;charset=utf-8" }),
-                          compileMainLogFileName
-                        )
-                      }
-                      className="rounded border border-slate-200 bg-white px-2 py-0.5 text-[10px] font-medium text-slate-600 hover:bg-slate-50"
-                    >
-                      Download log
-                    </button>
-                  </div>
-                  <pre className="max-h-40 overflow-auto border-t border-slate-100 bg-slate-50 p-2 text-[10px] leading-relaxed text-slate-700">
-                    {compileMainLog}
-                  </pre>
-                </details>
-              ) : null}
-
-              {compileMainLog ? (
-                <div className="mb-1.5 rounded border border-slate-200 bg-white p-1.5">
-                  <div className="flex items-center justify-between gap-2">
-                    <p className="text-[10px] font-medium text-slate-600">AI Fix Suggestions</p>
-                    <button
-                      type="button"
-                      onClick={() => void fetchAiFixSuggestions()}
-                      disabled={aiFixBusy}
-                      className="rounded border border-slate-200 bg-white px-2 py-0.5 text-[10px] font-medium text-slate-600 hover:bg-slate-50 disabled:opacity-60"
-                    >
-                      {aiFixBusy ? "Analyzing..." : "Get suggestions"}
-                    </button>
-                  </div>
-
-                  {aiFixSummary ? <p className="mt-1 text-[10px] text-slate-600">{aiFixSummary}</p> : null}
-                  {aiFixError ? <p className="mt-1 text-[10px] text-rose-600">{aiFixError}</p> : null}
-
-                  {aiFixSuggestions.length ? (
-                    <ul className="mt-1 max-h-48 space-y-1 overflow-auto">
-                      {aiFixSuggestions.map((suggestion, index) => (
-                        <li key={`${suggestion.title}-${index}`} className="rounded border border-slate-100 bg-slate-50 p-1.5">
-                          <p className="text-[10px] font-medium text-slate-900">{suggestion.title}</p>
-                          <p className="mt-0.5 text-[10px] text-slate-600">{suggestion.why}</p>
-
-                          {suggestion.files?.length ? (
-                            <p className="mt-0.5 text-[9px] text-slate-400">
-                              Files: {suggestion.files.join(", ")}
-                            </p>
-                          ) : null}
-
-                          {suggestion.steps?.length ? (
-                            <ol className="mt-0.5 list-decimal space-y-0.5 pl-4 text-[10px] text-slate-600">
-                              {suggestion.steps.map((step, stepIndex) => (
-                                <li key={`${index}-step-${stepIndex}`}>{step}</li>
-                              ))}
-                            </ol>
-                          ) : null}
-
-                          {suggestion.patch ? (
-                            <>
-                              <div className="mt-1 flex items-center justify-end">
-                                <button
-                                  type="button"
-                                  onClick={() => applyAiPatchToActiveFile(suggestion.patch || "")}
-                                  disabled={!isValidAiPatchSnippet(suggestion.patch || "") || !activeEntry}
-                                  className="rounded border border-slate-200 bg-white px-2 py-0.5 text-[9px] font-medium text-slate-600 hover:bg-slate-50 disabled:opacity-60"
-                                >
-                                  Apply to active file
-                                </button>
-                              </div>
-                              <pre className="mt-1 max-h-28 overflow-auto rounded border border-slate-100 bg-white p-1 text-[10px] leading-relaxed text-slate-700">
-                                {suggestion.patch}
-                              </pre>
-                            </>
-                          ) : null}
-                        </li>
-                      ))}
-                    </ul>
+          ) : (
+            <>
+              <div className="studio-preview-header">
+                <span className="studio-preview-title">PDF Preview</span>
+                <div style={{ display: "flex", gap: 4 }}>
+                  {compiledPdfUrl ? (
+                    <a href={compiledPdfUrl} download={compiledPdfFileName} className="studio-btn studio-btn-ghost" style={{ height: 24, fontSize: 10, padding: "0 6px", textDecoration: "none" }}>
+                      <svg viewBox="0 0 20 20" style={{ width: 12, height: 12 }} fill="none" stroke="currentColor" strokeWidth="2">
+                        <path d="M10 3v9m0 0l-3-3m3 3l3-3M4 14v2h12v-2" strokeLinecap="round" strokeLinejoin="round" />
+                      </svg>
+                    </a>
                   ) : null}
-                </div>
-              ) : null}
-
-              {previewErrorLogs.length ? (
-                <div className="mb-1.5 rounded border border-rose-200 bg-rose-50 p-1.5">
-                  <div className="mb-1 flex items-center justify-between gap-2">
-                    <p className="text-[10px] font-medium text-rose-700">Errors</p>
-                    <button
-                      type="button"
-                      onClick={() => setPreviewErrorLogs([])}
-                      className="rounded border border-rose-200 bg-white px-1.5 py-0.5 text-[10px] font-medium text-rose-600"
-                    >
-                      Clear
-                    </button>
-                  </div>
-                  <ul className="space-y-0.5 text-[10px] text-rose-600">
-                    {previewErrorLogs.map((entry) => (
-                      <li key={entry}>{entry}</li>
-                    ))}
-                  </ul>
-                </div>
-              ) : null}
-
-              {compiledPdfUrl ? (
-                <iframe
-                  src={compiledPdfUrl}
-                  title="Compiled LaTeX PDF preview"
-                  className="flex-1 w-full rounded border border-slate-100 bg-white"
-                  onClick={(event) => {
-                    if (!event.ctrlKey && !event.metaKey) return;
-                    if (!synctexRecords.length) {
-                      setSynctexNotice("No SyncTeX data available. Recompile with synctex enabled.");
-                      return;
-                    }
-                    const iframe = event.currentTarget;
-                    const rect = iframe.getBoundingClientRect();
-                    const relY = event.clientY - rect.top;
-                    const approxPage = Math.floor(relY / (rect.height / Math.max(1, synctexRecords.reduce((max, r) => Math.max(max, r.page), 0)))) + 1;
-                    const match = synctexRecords.find((r) => r.page === approxPage);
-                    if (match) {
-                      const targetFile = match.file.replace(/^\.\//, "");
-                      const fileEntry = projectEntries.find(
-                        (e) => e.kind === "file" &&
-                          (e.path === targetFile || e.path.endsWith("/" + targetFile.split("/").pop() || ""))
-                      );
-                      if (fileEntry) {
-                        setSelectedPath(fileEntry.path);
-                        setSynctexNotice(`Navigated to ${targetFile} line ${match.line}`);
-                        window.requestAnimationFrame(() => {
-                          const textarea = editorRef.current;
-                          if (!textarea) return;
-                          textarea.focus();
-                          const lines = activeSource.split("\n");
-                          let targetLinePos = 0;
-                          for (let i = 0; i < Math.min(match.line - 1, lines.length); i++) {
-                            targetLinePos += lines[i].length + 1;
-                          }
-                          textarea.setSelectionRange(targetLinePos, targetLinePos);
-                        });
-                      } else {
-                        setSynctexNotice(`File ${targetFile} not found in project.`);
-                      }
-                    } else {
-                      setSynctexNotice(`No source mapping for page ${approxPage}.`);
-                    }
-                  }}
-                />
-              ) : (
-                <div className="flex flex-1 items-center justify-center rounded border border-dashed border-slate-200 bg-slate-50">
-                  <button
-                    type="button"
-                    onClick={() => void compileProject()}
-                    className="inline-flex items-center gap-2 rounded-md border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-600 hover:bg-slate-50 transition"
-                  >
-                    <svg viewBox="0 0 20 20" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="1.8">
-                      <path d="M7 6l7 4-7 4V6z" strokeLinecap="round" strokeLinejoin="round" />
+                  <button type="button" onClick={() => setRightPaneCollapsed(true)} className="studio-btn studio-btn-ghost" style={{ width: 24, height: 24, padding: 0 }}>
+                    <svg viewBox="0 0 20 20" style={{ width: 14, height: 14 }} fill="none" stroke="currentColor" strokeWidth="2">
+                      <path d="M7 4l6 6-6 6" strokeLinecap="round" strokeLinejoin="round" />
                     </svg>
-                    Compile to preview
                   </button>
                 </div>
-              )}
-            </div>
-          ) : null}
+              </div>
+              <div className="studio-preview-body">
+                <p style={{ padding: "4px 12px", fontSize: 10, color: "var(--text-muted, #64748b)" }}>
+                  {compileBusy ? "Compiling..." : compileNotice}
+                </p>
+                {synctexNotice ? <p style={{ padding: "0 12px 4px", fontSize: 10, color: "#f59e0b" }}>{synctexNotice}</p> : null}
+
+                {/* Log viewer */}
+                {compileMainLog ? (
+                  <details style={{ margin: "4px 8px", border: "1px solid var(--border-color, #334155)", borderRadius: 6, overflow: "hidden" }}>
+                    <summary style={{ cursor: "pointer", padding: "6px 10px", fontSize: 11, fontWeight: 600, color: "var(--text-secondary, #94a3b8)", background: "var(--bg-sidebar, #1a1d2b)" }}>
+                      {compileMainLogFileName}
+                    </summary>
+                    <div style={{ padding: "4px 8px", display: "flex", justifyContent: "flex-end" }}>
+                      <button
+                        type="button"
+                        onClick={() => downloadBlob(new Blob([compileMainLog], { type: "text/plain;charset=utf-8" }), compileMainLogFileName)}
+                        className="studio-btn studio-btn-ghost"
+                        style={{ height: 22, fontSize: 10 }}
+                      >
+                        Download log
+                      </button>
+                    </div>
+                    <pre className="studio-log-viewer">{compileMainLog}</pre>
+                  </details>
+                ) : null}
+
+                {/* AI Fix suggestions */}
+                {compileMainLog ? (
+                  <div className="studio-ai-fixes">
+                    <div style={{ padding: "8px", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                      <span style={{ fontSize: 11, fontWeight: 600, color: "var(--text-primary, #e2e8f0)" }}>AI Fix Suggestions</span>
+                      <button
+                        type="button"
+                        onClick={() => void fetchAiFixSuggestions()}
+                        disabled={aiFixBusy}
+                        className="studio-btn studio-btn-primary"
+                        style={{ height: 24, fontSize: 10, padding: "0 8px" }}
+                      >
+                        {aiFixBusy ? "Analyzing..." : "Get suggestions"}
+                      </button>
+                    </div>
+                    {aiFixSummary ? <p style={{ padding: "0 8px", fontSize: 10, color: "var(--text-secondary, #94a3b8)" }}>{aiFixSummary}</p> : null}
+                    {aiFixError ? <p style={{ padding: "0 8px", fontSize: 10, color: "#ef4444" }}>{aiFixError}</p> : null}
+                    {aiFixSuggestions.length ? (
+                      <div style={{ maxHeight: 200, overflow: "auto" }}>
+                        {aiFixSuggestions.map((suggestion, index) => (
+                          <div key={`${suggestion.title}-${index}`} className="studio-ai-fix-item">
+                            <p className="studio-ai-fix-title">{suggestion.title}</p>
+                            <p className="studio-ai-fix-why">{suggestion.why}</p>
+                            {suggestion.files?.length ? <p style={{ fontSize: 10, color: "var(--text-muted, #64748b)" }}>Files: {suggestion.files.join(", ")}</p> : null}
+                            {suggestion.steps?.length ? (
+                              <ol style={{ margin: "4px 0", paddingLeft: 16, fontSize: 10, color: "var(--text-secondary, #94a3b8)" }}>
+                                {suggestion.steps.map((step, si) => <li key={`${index}-step-${si}`}>{step}</li>)}
+                              </ol>
+                            ) : null}
+                            {suggestion.patch ? (
+                              <>
+                                <div style={{ marginTop: 4, textAlign: "right" }}>
+                                  <button
+                                    type="button"
+                                    onClick={() => applyAiPatchToActiveFile(suggestion.patch || "")}
+                                    disabled={!isValidAiPatchSnippet(suggestion.patch || "") || !activeEntry}
+                                    className="studio-btn studio-btn-secondary"
+                                    style={{ height: 22, fontSize: 9 }}
+                                  >
+                                    Apply to active file
+                                  </button>
+                                </div>
+                                <pre className="studio-log-viewer" style={{ margin: "4px 0 0 0" }}>{suggestion.patch}</pre>
+                              </>
+                            ) : null}
+                          </div>
+                        ))}
+                      </div>
+                    ) : null}
+                  </div>
+                ) : null}
+
+                {/* Error logs */}
+                {previewErrorLogs.length ? (
+                  <div className="studio-preview-errors" style={{ padding: 8 }}>
+                    <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 4 }}>
+                      <span style={{ fontSize: 10, fontWeight: 600, color: "#ef4444" }}>Errors</span>
+                      <button type="button" onClick={() => setPreviewErrorLogs([])} className="studio-btn studio-btn-ghost" style={{ height: 20, fontSize: 9 }}>Clear</button>
+                    </div>
+                    {previewErrorLogs.map((entry) => <div key={entry} style={{ fontSize: 10, color: "#f87171" }}>{entry}</div>)}
+                  </div>
+                ) : null}
+
+                {compiledPdfUrl ? (
+                  <iframe
+                    src={compiledPdfUrl}
+                    title="Compiled LaTeX PDF preview"
+                    className="studio-preview-iframe"
+                    onClick={(event) => {
+                      if (!event.ctrlKey && !event.metaKey) return;
+                      if (!synctexRecords.length) {
+                        setSynctexNotice("No SyncTeX data available. Recompile with synctex enabled.");
+                        return;
+                      }
+                      const iframe = event.currentTarget;
+                      const rect = iframe.getBoundingClientRect();
+                      const relY = event.clientY - rect.top;
+                      const approxPage = Math.floor(relY / (rect.height / Math.max(1, synctexRecords.reduce((max, r) => Math.max(max, r.page), 0)))) + 1;
+                      const match = synctexRecords.find((r) => r.page === approxPage);
+                      if (match) {
+                        const targetFile = match.file.replace(/^\.\//, "");
+                        const fileEntry = projectEntries.find(
+                          (e) => e.kind === "file" && (e.path === targetFile || e.path.endsWith("/" + targetFile.split("/").pop() || ""))
+                        );
+                        if (fileEntry) {
+                          setSelectedPath(fileEntry.path);
+                          setOpenTabs((prev) => prev.includes(fileEntry.path) ? prev : [...prev, fileEntry.path]);
+                          setSynctexNotice(`Navigated to ${targetFile} line ${match.line}`);
+                          window.requestAnimationFrame(() => {
+                            const textarea = editorRef.current;
+                            if (!textarea) return;
+                            textarea.focus();
+                            const lines = activeSource.split("\n");
+                            let targetLinePos = 0;
+                            for (let i = 0; i < Math.min(match.line - 1, lines.length); i++) {
+                              targetLinePos += lines[i].length + 1;
+                            }
+                            textarea.setSelectionRange(targetLinePos, targetLinePos);
+                          });
+                        } else {
+                          setSynctexNotice(`File ${targetFile} not found in project.`);
+                        }
+                      } else {
+                        setSynctexNotice(`No source mapping for page ${approxPage}.`);
+                      }
+                    }}
+                  />
+                ) : (
+                  <div className="studio-preview-empty">
+                    <svg viewBox="0 0 24 24" style={{ width: 32, height: 32, opacity: 0.4 }} fill="none" stroke="currentColor" strokeWidth="1.5">
+                      <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8l-6-6z" />
+                      <path d="M14 2v6h6" strokeLinecap="round" strokeLinejoin="round" />
+                    </svg>
+                    <p style={{ fontSize: 13 }}>No PDF compiled</p>
+                    <button type="button" onClick={() => void compileProject()} className="studio-btn studio-btn-primary">
+                      Compile to preview
+                    </button>
+                  </div>
+                )}
+              </div>
+            </>
+          )}
         </aside>
       </section>
 
       {treeContextMenu ? (
         <div
           ref={treeContextMenuRef}
-          className="fixed z-40 w-48 rounded-lg border border-slate-300 bg-white p-1 shadow-xl"
+          className="studio-context-menu"
           style={{ left: `${treeContextMenu.x}px`, top: `${treeContextMenu.y}px` }}
           role="menu"
           tabIndex={0}
-          aria-label="Tree node actions"
-          onClick={(event) => event.stopPropagation()}
-          onContextMenu={(event) => event.preventDefault()}
+          onClick={(e) => e.stopPropagation()}
+          onContextMenu={(e) => e.preventDefault()}
           onKeyDown={onTreeContextMenuKeyDown}
         >
           {treeContextItems.map((item, index) => {
@@ -3576,17 +3401,9 @@ export default function ResearchStudioPage() {
                 role="menuitem"
                 onMouseEnter={() => setTreeContextActiveIndex(index)}
                 onClick={() => void runTreeContextAction(item.action)}
-                className={`flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-xs font-medium transition ${
-                  danger
-                    ? active
-                      ? "bg-rose-100 text-rose-800"
-                      : "text-rose-700 hover:bg-rose-50"
-                    : active
-                      ? "bg-slate-100 text-slate-800"
-                      : "text-slate-700 hover:bg-slate-100"
-                }`}
+                className={`studio-context-menu-item ${danger ? "studio-context-menu-item-danger" : ""} ${active ? "studio-intellisense-item-active" : ""}`}
               >
-                <span className="inline-flex h-4 w-4 items-center justify-center">{renderTreeContextIcon(item.action)}</span>
+                <span style={{ display: "inline-flex", width: 14, height: 14 }}>{renderTreeContextIcon(item.action)}</span>
                 <span>{item.label}</span>
               </button>
             );
