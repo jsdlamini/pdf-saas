@@ -43,6 +43,40 @@
   --warning-color: #f59e0b;
 }
 
+/* Light mode overrides for the studio */
+html[data-theme="light"] .studio-dark {
+  --bg-primary: #f8fafc;
+  --bg-secondary: #ffffff;
+  --bg-sidebar: #f1f5f9;
+  --bg-surface: #ffffff;
+  --text-primary: #0f172a;
+  --text-secondary: #475569;
+  --text-muted: #94a3b8;
+  --border-color: #e2e8f0;
+  --accent-color: #059669;
+  --accent-hover: #047857;
+  --accent-dim: rgba(5, 150, 105, 0.1);
+  --danger-color: #dc2626;
+  --warning-color: #d97706;
+}
+
+/* Button styling for light mode studio */
+html[data-theme="light"] .studio-dark .studio-btn-primary {
+  background: #059669;
+  color: #fff;
+}
+html[data-theme="light"] .studio-dark .studio-btn-primary:hover {
+  background: #047857;
+}
+html[data-theme="light"] .studio-dark .studio-btn-secondary {
+  background: #f1f5f9;
+  color: #334155;
+  border-color: #e2e8f0;
+}
+html[data-theme="light"] .studio-dark .studio-btn-secondary:hover {
+  background: #e2e8f0;
+}
+
 html[data-theme="dark"] {
   --background: #0d0f17;
   --foreground: #e2e8f0;
@@ -1070,6 +1104,20 @@ body {
   background: var(--bg-secondary, #131620) !important;
   color: var(--text-secondary, #94a3b8) !important;
   border: 1px solid var(--border-color, #334155) !important;
+}
+
+/* SweetAlert light mode overrides for studio */
+html[data-theme="light"] .studio-dark .swal2-popup {
+  background: #ffffff !important;
+  color: #0f172a !important;
+}
+html[data-theme="light"] .studio-dark .swal2-title {
+  color: #0f172a !important;
+}
+html[data-theme="light"] .studio-dark .swal2-input {
+  background: #f1f5f9 !important;
+  color: #0f172a !important;
+  border-color: #e2e8f0 !important;
 }
 
 /* ── Template selector ───── */
