@@ -5,6 +5,7 @@ import JSZip from "jszip";
 import katex from "katex";
 import "katex/dist/katex.min.css";
 import { useCallback, useEffect, useEffectEvent, useMemo, useRef, useState } from "react";
+import { useSearchParams } from "next/navigation";
 import Swal from "sweetalert2";
 import { getTemplateBySlug, RESEARCH_TEMPLATES, type ResearchTemplate } from "@/lib/research-templates";
 
@@ -783,6 +784,22 @@ export default function ResearchStudioPage() {
   const [activeProjectId, setActiveProjectId] = useState(initialState.activeProjectId);
   const [projectName, setProjectName] = useState(initialState.projectName);
   const [projectEntries, setProjectEntries] = useState<ProjectEntry[]>(initialState.projectEntries);
+  const searchParams = useSearchParams();
+  const shareId = searchParams.get("share");
+  const [sharedProject, setSharedProject] = useState<any>(null);
+  const [shareLoading, setShareLoading] = useState(!!shareId);
+
+  // Load shared project on mount
+  useEffect(() => {
+    if (!shareId) { setShareLoading(false); return; }
+    fetch(`/api/share-project?id=${shareId}`)
+      .then((r) => r.json())
+      .then((d) => {
+        if (d.project) setSharedProject(d.project);
+        setShareLoading(false);
+      })
+      .catch(() => setShareLoading(false));
+  }, [shareId]);
   const [selectedPath, setSelectedPath] = useState(initialState.selectedPath);
   const [newPath, setNewPath] = useState("");
   const [addFileError, setAddFileError] = useState("");
@@ -2151,6 +2168,24 @@ export default function ResearchStudioPage() {
     applyEditorUpdate(nextText, cursor, cursor);
   }
 
+  async function shareProject() {
+    try {
+      const snapshot = buildCurrentProjectSnapshot();
+      const res = await fetch("/api/share-project", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ projectData: snapshot }),
+      });
+      if (!res.ok) throw new Error("Failed");
+      const { shareId } = await res.json();
+      const url = `${window.location.origin}/research-studio?share=${shareId}`;
+      await navigator.clipboard.writeText(url);
+      setCompileNotice("Share link copied! Anyone with this link can view and copy your project.");
+    } catch {
+      setCompileNotice("Could not create share link. Try again.");
+    }
+  }
+
   async function downloadProjectBundle() {
     const zip = new JSZip();
     for (const entry of projectEntries) {
@@ -2545,6 +2580,52 @@ export default function ResearchStudioPage() {
     return (
       <main className="studio-dark studio-shell">
         <div className="studio-dashboard studio-scrollbar" style={{ overflowY: "auto" }}>
+        {/* Shared project banner */}
+        {shareLoading ? (
+          <div className="mb-4 rounded-xl border border-emerald-500/30 bg-emerald-500/10 p-4 text-center">
+            <p className="text-sm text-emerald-300">Loading shared project...</p>
+          </div>
+        ) : sharedProject ? (
+          <div className="mb-4 rounded-xl border border-emerald-500/30 bg-emerald-500/10 p-4">
+            <div className="flex items-center justify-between gap-4 flex-wrap">
+              <div>
+                <p className="text-sm font-semibold text-emerald-300">📋 Shared Project: {sharedProject.name}</p>
+                <p className="text-xs text-emerald-400/80 mt-0.5">{sharedProject.entries?.filter((e: any) => e.kind === "file").length || 0} files</p>
+              </div>
+              <button
+                type="button"
+                onClick={() => {
+                  const projectId = makeProjectId();
+                  const now = new Date().toISOString();
+                  const snapshot: SavedProjectData = {
+                    id: projectId,
+                    name: `${sharedProject.name} (copy)`,
+                    entries: sharedProject.entries || [],
+                    selectedPath: sharedProject.selectedPath || "main.tex",
+                    lastCompileAt: "Not compiled yet",
+                    updatedAt: now,
+                  };
+                  persistProjectSnapshot(snapshot);
+                  queueServerProjectSync(snapshot);
+                  setActiveProjectId(projectId);
+                  setProjectName(snapshot.name);
+                  setProjectEntries(snapshot.entries);
+                  setSelectedPath(snapshot.selectedPath);
+                  setCompileNotice(`Copied "${sharedProject.name}" to your projects.`);
+                  setWorkspaceScreen("editor");
+                  setSharedProject(null);
+                }}
+                className="rounded-lg bg-emerald-500 px-4 py-2 text-sm font-bold text-white transition hover:bg-emerald-600"
+              >
+                Copy to My Projects
+              </button>
+            </div>
+          </div>
+        ) : shareId ? (
+          <div className="mb-4 rounded-xl border border-rose-500/30 bg-rose-500/10 p-4 text-center">
+            <p className="text-sm text-rose-300">Shared project not found or has expired.</p>
+          </div>
+        ) : null}
         {/* Dashboard header */}
         <div className="studio-dashboard-header">
           <div className="flex items-center justify-between gap-4 flex-wrap">
@@ -2873,6 +2954,17 @@ export default function ResearchStudioPage() {
               <path d="M10 3v9m0 0l-3-3m3 3l3-3M4 14v2h12v-2" strokeLinecap="round" strokeLinejoin="round" />
             </svg>
             <span className="hidden sm:inline">Download</span>
+          </button>
+          <button
+            type="button"
+            onClick={shareProject}
+            className="studio-btn studio-btn-secondary"
+            aria-label="Share project"
+          >
+            <svg viewBox="0 0 20 20" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="1.8">
+              <path d="M4 10h8m0 0l-3-3m3 3l-3 3M15 4v1a3 3 0 0 1 3 3v4a3 3 0 0 1-3 3H5a3 3 0 0 1-3-3v-3" strokeLinecap="round" strokeLinejoin="round" />
+            </svg>
+            <span className="hidden sm:inline">Share</span>
           </button>
           <button
             type="button"
