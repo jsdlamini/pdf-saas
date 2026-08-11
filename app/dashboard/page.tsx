@@ -188,20 +188,21 @@ export default function DashboardPage() {
               </div>
             ) : (
               data.daily.slice(0, 30).reverse().map((d, i) => {
-              const h = maxDaily > 0 ? (parseInt(d.count) / maxDaily) * 100 : 0;
+              const count = parseInt(d.count) || 0;
+              const pct = maxDaily > 0 ? Math.round((count / maxDaily) * 100) : 0;
               return (
-                <div key={d.date} className="group relative flex-1 flex flex-col justify-end">
+                <div key={d.date || i} className="group relative flex-1 flex flex-col justify-end">
                   <div
                     className="w-full rounded-t transition-all duration-300"
                     style={{
-                      height: `${Math.max(h, 2)}%`,
-                      minHeight: h > 0 ? "4px" : "2px",
+                      height: `${Math.max(pct, 2)}%`,
+                      minHeight: count > 0 ? "4px" : "2px",
                       background: "linear-gradient(to top, #06b6d4, #0ea5e9)",
                     }}
                   />
                   <div className="absolute -bottom-7 left-1/2 -translate-x-1/2 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none">
                     <span className="whitespace-nowrap rounded-md bg-slate-800 px-2 py-1 text-[10px] font-semibold text-white shadow">
-                      {d.date.slice(5)} — {d.count} views
+                      {(d.date || "").toString().slice(0, 10)} — {count} views
                     </span>
                   </div>
                 </div>
@@ -210,8 +211,8 @@ export default function DashboardPage() {
             )}
           </div>
           <div className="mt-8 flex justify-between text-[10px] text-slate-400">
-            <span>{data.daily[data.daily.length - 1]?.date || ""}</span>
-            <span>{data.daily[0]?.date || ""}</span>
+            <span>{(data.daily[data.daily.length - 1]?.date || "").toString().slice(0, 10)}</span>
+            <span>{(data.daily[0]?.date || "").toString().slice(0, 10)}</span>
           </div>
         </div>
 
