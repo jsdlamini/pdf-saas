@@ -1356,3 +1356,12 @@ textarea:focus-visible,
   ring-width: 2px;
   ring-color: #4ade80;
 }
+
+/* ── Draggable SweetAlert dialog ───── */
+.swal-drag-handle {
+  cursor: grab !important;
+}
+.swal-drag-handle:active {
+  cursor: grabbing !important;
+}
+

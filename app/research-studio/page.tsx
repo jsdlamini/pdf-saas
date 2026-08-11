@@ -2170,7 +2170,13 @@ export default function ResearchStudioPage() {
 
   async function openCollaborateDialog() {
     const result = await Swal.fire({
-      title: "Collaborate",
+      title: "⋮⋮ Collaborate",
+      titleText: "⋮⋮ Collaborate",
+      position: "top",
+      customClass: {
+        popup: "swal-draggable",
+        title: "swal-drag-handle",
+      },
       html: `
         <div style="text-align:left;display:flex;flex-direction:column;gap:12px">
           <div style="background:#1e293b;border-radius:8px;padding:12px">
@@ -2198,6 +2204,34 @@ export default function ResearchStudioPage() {
       background: "#1a1d2b",
       color: "#e2e8f0",
       didOpen: () => {
+        // Make dialog draggable
+        const modal = Swal.getPopup();
+        if (modal) {
+          modal.style.position = "absolute";
+          modal.style.top = "8%";
+          modal.style.left = "50%";
+          modal.style.transform = "translateX(-50%)";
+          let isDragging = false, startX = 0, startY = 0, startLeft = 0, startTop = 0;
+          modal.addEventListener("mousedown", (e) => {
+            if ((e.target as HTMLElement).tagName === "INPUT" || (e.target as HTMLElement).tagName === "SELECT" || (e.target as HTMLElement).tagName === "BUTTON") return;
+            isDragging = true;
+            startX = e.clientX; startY = e.clientY;
+            const rect = modal.getBoundingClientRect();
+            startLeft = rect.left; startTop = rect.top;
+            modal.style.cursor = "grabbing";
+          });
+          window.addEventListener("mousemove", (e) => {
+            if (!isDragging) return;
+            modal.style.left = `${startLeft + e.clientX - startX}px`;
+            modal.style.top = `${startTop + e.clientY - startY}px`;
+            modal.style.transform = "none";
+          });
+          window.addEventListener("mouseup", () => {
+            isDragging = false;
+            if (modal) modal.style.cursor = "";
+          });
+        }
+        // Share + Invite buttons
         document.getElementById("swal-share-btn")?.addEventListener("click", async () => {
           try {
             const snapshot = buildCurrentProjectSnapshot();
