@@ -1120,13 +1120,13 @@ textarea:focus-visible,
 /* ── Research Studio dark mode editor ─────────────────────────── */
 
 html[data-theme="dark"] .research-editor {
-  background: #0f172a;
+  background: transparent;
   color: #e2e8f0;
   border-color: #334155;
 }
 
 html[data-theme="dark"] .equation-preview-tooltip {
-  background: #0f172a !important;
+  background: #1e293b !important;
   border-color: #334155 !important;
   color: #e2e8f0;
 }
