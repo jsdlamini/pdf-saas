@@ -804,6 +804,22 @@ export default function ResearchStudioPage() {
   const [rightPaneWidth, setRightPaneWidth] = useState(300);
   const [leftPaneCollapsed, setLeftPaneCollapsed] = useState(false);
   const [rightPaneCollapsed, setRightPaneCollapsed] = useState(false);
+  const [isMobile, setIsMobile] = useState(false);
+
+  // Auto-collapse file tree on mobile
+  useEffect(() => {
+    const check = () => setIsMobile(window.innerWidth < 1024);
+    check();
+    window.addEventListener("resize", check);
+    return () => window.removeEventListener("resize", check);
+  }, []);
+
+  useEffect(() => {
+    if (isMobile) {
+      setLeftPaneCollapsed(true);
+      setRightPaneCollapsed(true);
+    }
+  }, [isMobile]);
   const [activeResizer, setActiveResizer] = useState<"left" | "right" | null>(null);
   const [collapsedOutlineSections, setCollapsedOutlineSections] = useState<Record<string, boolean>>({});
   const [findPanelOpen, setFindPanelOpen] = useState(false);
@@ -2884,6 +2900,30 @@ export default function ResearchStudioPage() {
               Back to projects
             </span>
           </button>
+          {isMobile ? (
+            <div className="flex items-center gap-1">
+              <button
+                type="button"
+                onClick={() => setLeftPaneCollapsed(!leftPaneCollapsed)}
+                className="inline-flex h-8 items-center gap-1 rounded-md border border-slate-300 bg-white px-2 text-xs font-semibold text-slate-700"
+              >
+                <svg viewBox="0 0 20 20" className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth="1.8">
+                  <path d="M3 7h14M3 11h14M3 15h14" strokeLinecap="round" strokeLinejoin="round" />
+                </svg>
+                {leftPaneCollapsed ? "Files" : "Hide"}
+              </button>
+              <button
+                type="button"
+                onClick={() => setRightPaneCollapsed(!rightPaneCollapsed)}
+                className="inline-flex h-8 items-center gap-1 rounded-md border border-slate-300 bg-white px-2 text-xs font-semibold text-slate-700"
+              >
+                <svg viewBox="0 0 20 20" className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth="1.8">
+                  <path d="M4 4h12v12H4zM8 4v12M14 4v12" strokeLinecap="round" strokeLinejoin="round" />
+                </svg>
+                {rightPaneCollapsed ? "Preview" : "Hide"}
+              </button>
+            </div>
+          ) : null}
 
           <div className="flex flex-wrap items-center justify-between gap-3">
           <div>
@@ -2911,7 +2951,7 @@ export default function ResearchStudioPage() {
 
       <section
         ref={panesRef}
-        className="grid grid-cols-1 lg:gap-0 lg:[grid-template-columns:var(--left-pane-width)_1px_minmax(0,1fr)_1px_var(--right-pane-width)]"
+        className="grid grid-cols-1 gap-2 lg:gap-0 lg:[grid-template-columns:var(--left-pane-width)_1px_minmax(0,1fr)_1px_var(--right-pane-width)]"
         style={
           {
             "--left-pane-width": `${effectiveLeftPaneWidth}px`,
