@@ -182,7 +182,12 @@ export default function DashboardPage() {
             </span>
           </div>
           <div className="flex items-end gap-1 h-40">
-            {data.daily.slice(0, 30).reverse().map((d, i) => {
+            {data.daily.length === 0 ? (
+              <div className="flex w-full items-center justify-center h-full text-sm text-slate-400">
+                No data yet — activity will appear here as visitors arrive
+              </div>
+            ) : (
+              data.daily.slice(0, 30).reverse().map((d, i) => {
               const h = maxDaily > 0 ? (parseInt(d.count) / maxDaily) * 100 : 0;
               return (
                 <div key={d.date} className="group relative flex-1 flex flex-col justify-end">
@@ -200,7 +205,8 @@ export default function DashboardPage() {
                   </div>
                 </div>
               );
-            })}
+            })
+            )}
           </div>
           <div className="mt-8 flex justify-between text-[10px] text-slate-400">
             <span>{data.daily[data.daily.length - 1]?.date || ""}</span>
