@@ -208,7 +208,7 @@ export default function DashboardPage() {
                       />
                       <div className="absolute -bottom-7 left-1/2 -translate-x-1/2 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none">
                         <span className="whitespace-nowrap rounded-md bg-slate-800 px-2 py-1 text-[10px] font-semibold text-white shadow">
-                          {(d.date || "").toString().slice(5, 10)} — {count}
+                          {count}
                         </span>
                       </div>
                     </div>
