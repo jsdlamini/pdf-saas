@@ -194,8 +194,9 @@ export default function DashboardPage() {
                   <div
                     className="w-full rounded-t transition-all duration-300"
                     style={{
-                      height: `${Math.max(h, 1)}%`,
-                      background: `linear-gradient(to top, rgb(6 182 212 / ${0.3 + (h/100) * 0.7}), rgb(14 165 233 / ${0.2 + (h/100) * 0.5}))`,
+                      height: `${Math.max(h, 2)}%`,
+                      minHeight: h > 0 ? "4px" : "2px",
+                      background: "linear-gradient(to top, #06b6d4, #0ea5e9)",
                     }}
                   />
                   <div className="absolute -bottom-7 left-1/2 -translate-x-1/2 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none">
