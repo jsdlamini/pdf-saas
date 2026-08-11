@@ -2186,6 +2186,56 @@ export default function ResearchStudioPage() {
     }
   }
 
+  async function inviteToProject() {
+    const result = await Swal.fire({
+      title: "Invite Collaborator",
+      html: `
+        <div style="text-align:left;display:flex;flex-direction:column;gap:8px">
+          <label style="font-size:13px;font-weight:600;color:#e2e8f0">Email address</label>
+          <input id="swal-invite-email" class="swal2-input" placeholder="colleague@university.edu" style="background:#1e293b;color:#e2e8f0;border-color:#334155">
+          <label style="font-size:13px;font-weight:600;color:#e2e8f0;margin-top:8px">Access level</label>
+          <select id="swal-invite-access" class="swal2-input" style="background:#1e293b;color:#e2e8f0;border-color:#334155">
+            <option value="read">Read only — can view and compile</option>
+            <option value="write">Write — can edit files</option>
+            <option value="admin">Admin — full access</option>
+          </select>
+        </div>
+      `,
+      showCancelButton: true,
+      confirmButtonText: "Send Invite",
+      cancelButtonText: "Cancel",
+      confirmButtonColor: "#4ade80",
+      cancelButtonColor: "#475569",
+      background: "#1a1d2b",
+      color: "#e2e8f0",
+      preConfirm: () => {
+        const email = (document.getElementById("swal-invite-email") as HTMLInputElement)?.value?.trim();
+        const access = (document.getElementById("swal-invite-access") as HTMLSelectElement)?.value;
+        if (!email) { Swal.showValidationMessage("Enter an email address"); return false; }
+        return { email, access };
+      },
+    });
+
+    if (result.isConfirmed && result.value) {
+      try {
+        const res = await fetch("/api/project-invites", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            projectId: activeProjectId,
+            projectName,
+            email: result.value.email,
+            accessLevel: result.value.access,
+          }),
+        });
+        if (!res.ok) throw new Error("Failed");
+        setCompileNotice(`Invitation sent to ${result.value.email} (${result.value.access} access).`);
+      } catch {
+        setCompileNotice("Could not send invitation. Try again.");
+      }
+    }
+  }
+
   async function downloadProjectBundle() {
     const zip = new JSZip();
     for (const entry of projectEntries) {
@@ -2965,6 +3015,17 @@ export default function ResearchStudioPage() {
               <path d="M4 10h8m0 0l-3-3m3 3l-3 3M15 4v1a3 3 0 0 1 3 3v4a3 3 0 0 1-3 3H5a3 3 0 0 1-3-3v-3" strokeLinecap="round" strokeLinejoin="round" />
             </svg>
             <span className="hidden sm:inline">Share</span>
+          </button>
+          <button
+            type="button"
+            onClick={inviteToProject}
+            className="studio-btn studio-btn-secondary"
+            aria-label="Invite collaborators"
+          >
+            <svg viewBox="0 0 20 20" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="1.8">
+              <path d="M13 7a3 3 0 1 1-6 0 3 3 0 0 1 6 0zM3 17v-1a4 4 0 0 1 4-4h2.5M14 12h4m-2-2v4" strokeLinecap="round" strokeLinejoin="round" />
+            </svg>
+            <span className="hidden sm:inline">Invite</span>
           </button>
           <button
             type="button"
