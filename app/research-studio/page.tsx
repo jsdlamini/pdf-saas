@@ -1145,7 +1145,13 @@ export default function ResearchStudioPage() {
 
   const preview = useMemo(() => buildPreview(activeSource), [activeSource]);
   const projectTree = useMemo(() => buildProjectTree(projectEntries), [projectEntries]);
-  const highlightedSource = useMemo(() => highlightCodeSource(activeSource, editorMode), [activeSource, editorMode]);
+  const highlightedSource = useMemo(() => {
+    // Detect from file extension (belt-and-suspenders — avoids stale editorMode)
+    const detectedMode = selectedPath.endsWith(".py") ? "python"
+      : selectedPath.endsWith(".cpp") || selectedPath.endsWith(".h") ? "cpp"
+      : editorMode;
+    return highlightCodeSource(activeSource, detectedMode);
+  }, [activeSource, editorMode, selectedPath]);
   const citationKeys = useMemo(() => scanCitationKeys(projectEntries), [projectEntries]);
   const labelItems = useMemo(() => scanLabels(projectEntries), [projectEntries]);
   const autoExpandedFolders = useMemo(
