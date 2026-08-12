@@ -49,6 +49,15 @@ OCR requires `ocrmypdf`, `tesseract-ocr` (+ per-language packs), `ghostscript`, 
 - `tmp-tests/` contains throwaway manual test artifacts (sample PDFs, captured response headers), not part of the automated suite.
 - `app/.env` and `app/.env.local` exist but env files are gitignored; do not commit secrets.
 
+## Research Studio Code Mode
+- The Research Studio (`app/research-studio/page.tsx`) supports three editor modes: `"latex"`, `"python"`, `"cpp"`.
+- Mode is selected via `.studio-mode-selector` tabs in the top bar. State is stored in `editorMode` and persisted in project snapshots (`SavedProjectData.editorMode`).
+- When `isCodeMode` (python/cpp), the toolbar shows a Run button (calls `runCode()`) and a Download button for the current file. The LaTeX-specific toolbar (bold, italic, sections, etc.) and PDF preview are hidden.
+- Code execution: `runCode()` calls `/api/run-code` (POST `{ code, language }`). The API route (`app/api/run-code/route.ts`) spawns `python3` or compiles + runs with `g++`, with 10s timeout, 100KB output limit, and basic sandbox restrictions.
+- Syntax highlighting: `highlightPythonSource()` and `highlightCppSource()` are regex-based highlighters in `page.tsx`; their tokens (`.studio-token-keyword`, `.studio-token-string`, `.studio-token-function`, `.studio-token-number`, `.studio-token-preprocessor`, `.studio-token-decorator`) are styled in `globals.css`.
+- Code templates: `"python-script"` and `"cpp-program"` in `lib/research-templates.ts`, each with `main.py`/`main.cpp`, `data/`, and `output/` folders.
+- New files created via the file tree (".py" or ".cpp" extension) get language-appropriate templates from `nextTemplateFor()`.
+
 ## Maintaining this file
 
 Keep this file for knowledge useful to almost every future agent session in this project.

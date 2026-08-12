@@ -156,6 +156,91 @@ body {
   white-space: nowrap;
 }
 
+/* ── Mode selector tabs ───── */
+.studio-mode-selector {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  margin-left: 12px;
+  margin-right: 8px;
+  background: var(--bg-primary, #0d0f17);
+  border-radius: 6px;
+  padding: 2px;
+}
+
+.studio-mode-tab {
+  border: none;
+  background: transparent;
+  color: var(--text-muted, #64748b);
+  font-size: 11px;
+  font-weight: 600;
+  padding: 3px 10px;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.studio-mode-tab:hover {
+  color: var(--text-primary, #e2e8f0);
+}
+
+.studio-mode-tab-active {
+  background: var(--bg-secondary, #131620);
+  color: var(--text-primary, #e2e8f0);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.2);
+}
+
+/* ── Code language select ───── */
+.studio-code-lang-select {
+  background: var(--bg-primary, #0d0f17);
+  border: 1px solid var(--border-color, #334155);
+  border-radius: 6px;
+  color: var(--text-primary, #e2e8f0);
+  font-size: 11px;
+  font-weight: 600;
+  height: 28px;
+  padding: 0 6px;
+  cursor: pointer;
+  outline: none;
+}
+
+.studio-code-lang-select:focus {
+  border-color: #4ade80;
+}
+
+/* ── Code output panel ───── */
+.studio-code-output {
+  border-top: 1px solid var(--border-color, #334155);
+  background: #0a0c14;
+  max-height: 200px;
+  overflow: auto;
+  flex-shrink: 0;
+}
+
+.studio-code-output-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 4px 8px;
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--text-muted, #64748b);
+  border-bottom: 1px solid var(--border-color, #334155);
+}
+
+.studio-code-output-body {
+  padding: 8px;
+  margin: 0;
+  font-size: 12px;
+  font-family: "JetBrains Mono", "Fira Code", "Cascadia Code", monospace;
+  color: var(--text-primary, #e2e8f0);
+  white-space: pre-wrap;
+  word-break: break-all;
+  line-height: 1.5;
+}
+
 /* ── Buttons ───── */
 .studio-btn {
   display: inline-flex;
@@ -535,6 +620,14 @@ body {
 .studio-token-math { color: #f472b6; }
 .studio-token-comment { color: #64748b; font-style: italic; }
 .studio-token-text { color: #e2e8f0; }
+
+/* Code syntax tokens (Python / C++) */
+.studio-token-keyword { color: #569cd6; font-weight: 600; }
+.studio-token-string { color: #6a9955; }
+.studio-token-function { color: #c586c0; }
+.studio-token-number { color: #b5cea8; }
+.studio-token-preprocessor { color: #c586c0; font-weight: 600; }
+.studio-token-decorator { color: #dcdcaa; font-weight: 600; }
 
 /* ── Preview pane ───── */
 .studio-preview {
