@@ -761,17 +761,17 @@ function highlightPythonSource(source: string) {
   // @decorators
   result = result.replace(/(@[a-zA-Z_]\w*)/g, '<span class="studio-hl-dec">$1</span>');
 
-  // Keywords (whole word match)
+  // Keywords (whole word, not inside HTML tags)
   for (const kw of PYTHON_KEYWORDS) {
     const escapedKw = escapeHtml(kw);
-    const regex = new RegExp(`\\b(${escapedKw})\\b`, "g");
+    const regex = new RegExp(`\\b(${escapedKw})\\b(?![^<]*>)`, "g");
     result = result.replace(regex, '<span class="studio-hl-kw">$1</span>');
   }
 
-  // Built-in functions (whole word)
+  // Built-in functions (whole word, not inside HTML tags)
   for (const fn of BUILTIN_PYTHON_FUNCTIONS) {
     const escapedFn = escapeHtml(fn);
-    const regex = new RegExp(`\\b(${escapedFn})\\b`, "g");
+    const regex = new RegExp(`\\b(${escapedFn})\\b(?![^<]*>)`, "g");
     result = result.replace(regex, '<span class="studio-hl-fn">$1</span>');
   }
 
@@ -828,17 +828,17 @@ function highlightCppSource(source: string) {
   // Multi-line comments
   result = result.replace(/(\/\*[\s\S]*?\*\/)/g, '<span class="studio-hl-cmt">$1</span>');
 
-  // Keywords
+  // Keywords (whole word, not inside HTML tags)
   for (const kw of CPP_KEYWORDS) {
     const escapedKw = escapeHtml(kw);
-    const regex = new RegExp(`\\b(${escapedKw})\\b`, "g");
+    const regex = new RegExp(`\\b(${escapedKw})\\b(?![^<]*>)`, "g");
     result = result.replace(regex, '<span class="studio-hl-kw">$1</span>');
   }
 
-  // CPP types / STL
+  // CPP types / STL (whole word, not inside HTML tags)
   for (const t of CPP_TYPES) {
     const escapedT = escapeHtml(t);
-    const regex = new RegExp(`\\b(${escapedT})\\b`, "g");
+    const regex = new RegExp(`\\b(${escapedT})\\b(?![^<]*>)`, "g");
     result = result.replace(regex, '<span class="studio-hl-fn">$1</span>');
   }
 
