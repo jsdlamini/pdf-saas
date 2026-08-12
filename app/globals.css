@@ -724,20 +724,20 @@ body {
 }
 
 /* ── Syntax highlighting ───── */
-.studio-token-command { color: #67e8f9; font-weight: 600; }
-.studio-token-brace { color: #fbbf24; }
-.studio-token-option { color: #4ade80; }
-.studio-token-math { color: #f472b6; }
-.studio-token-comment { color: #64748b; font-style: italic; }
-.studio-token-text { color: #e2e8f0; }
+.studio-hl-cmd { color: #67e8f9; font-weight: 600; }
+.studio-hl-brc { color: #fbbf24; }
+.studio-hl-opt { color: #4ade80; }
+.studio-hl-mth { color: #f472b6; }
+.studio-hl-cmt { color: #64748b; font-style: italic; }
+.studio-hl-text { color: #e2e8f0; }
 
 /* Code syntax tokens (Python / C++) */
-.studio-token-keyword { color: #569cd6; font-weight: 600; }
-.studio-token-string { color: #6a9955; }
-.studio-token-function { color: #c586c0; }
-.studio-token-number { color: #b5cea8; }
-.studio-token-preprocessor { color: #c586c0; font-weight: 600; }
-.studio-token-decorator { color: #dcdcaa; font-weight: 600; }
+.studio-hl-kw { color: #569cd6; font-weight: 600; }
+.studio-hl-str { color: #6a9955; }
+.studio-hl-fn { color: #c586c0; }
+.studio-hl-num { color: #b5cea8; }
+.studio-hl-pp { color: #c586c0; font-weight: 600; }
+.studio-hl-dec { color: #dcdcaa; font-weight: 600; }
 
 /* ── Preview pane ───── */
 .studio-preview {

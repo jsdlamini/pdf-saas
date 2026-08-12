@@ -719,11 +719,11 @@ function highlightLatexSource(source: string) {
   const escaped = escapeHtml(source);
 
   return escaped
-    .replace(/(%[^\n]*)/g, '<span class="studio-token-comment">$1</span>')
-    .replace(/(\\(?:begin|end|section|subsection|subsubsection|paragraph|textbf|textit|underline|footnote|cite|ref|label|includegraphics|caption|author|title|date|maketitle|input|bibliography|bibliographystyle|documentclass|usepackage|item|frac|sqrt|alpha|beta|gamma|today|[a-zA-Z@]+))/g, '<span class="studio-token-command">$1</span>')
-    .replace(/(\$\$[^$\n]*\$\$|\$[^$\n]*\$)/g, '<span class="studio-token-math">$1</span>')
-    .replace(/([{}])/g, '<span class="studio-token-brace">$1</span>')
-    .replace(/(\[[^\]\n]*\])/g, '<span class="studio-token-option">$1</span>');
+    .replace(/(%[^\n]*)/g, '<span class="studio-hl-cmt">$1</span>')
+    .replace(/(\\(?:begin|end|section|subsection|subsubsection|paragraph|textbf|textit|underline|footnote|cite|ref|label|includegraphics|caption|author|title|date|maketitle|input|bibliography|bibliographystyle|documentclass|usepackage|item|frac|sqrt|alpha|beta|gamma|today|[a-zA-Z@]+))/g, '<span class="studio-hl-cmd">$1</span>')
+    .replace(/(\$\$[^$\n]*\$\$|\$[^$\n]*\$)/g, '<span class="studio-hl-mth">$1</span>')
+    .replace(/([{}])/g, '<span class="studio-hl-brc">$1</span>')
+    .replace(/(\[[^\]\n]*\])/g, '<span class="studio-hl-opt">$1</span>');
 }
 
 const PYTHON_KEYWORDS = new Set([
@@ -748,38 +748,38 @@ function highlightPythonSource(source: string) {
   let result = escaped;
 
   // Triple-quoted strings (multi-line)
-  result = result.replace(/("""[\s\S]*?"""|'''[\s\S]*?''')/g, '<span class="studio-token-string">$1</span>');
+  result = result.replace(/("""[\s\S]*?"""|'''[\s\S]*?''')/g, '<span class="studio-hl-str">$1</span>');
 
   // Comments (lines starting with # or # after whitespace, but not inside strings)
   result = result.replace(/(^|\n)(\s*)(#[^\n]*)/g, (_, nl, ws, comment) =>
-    `${nl}${ws}<span class="studio-token-comment">${comment}</span>`
+    `${nl}${ws}<span class="studio-hl-cmt">${comment}</span>`
   );
 
   // Regular strings (single and double quoted, single-line)
-  result = result.replace(/('(?:[^'\\]|\\.)*'|"(?:[^"\\]|\\.)*")/g, '<span class="studio-token-string">$1</span>');
+  result = result.replace(/('(?:[^'\\]|\\.)*'|"(?:[^"\\]|\\.)*")/g, '<span class="studio-hl-str">$1</span>');
 
   // @decorators
-  result = result.replace(/(@[a-zA-Z_]\w*)/g, '<span class="studio-token-decorator">$1</span>');
+  result = result.replace(/(@[a-zA-Z_]\w*)/g, '<span class="studio-hl-dec">$1</span>');
 
   // Keywords (whole word match)
   for (const kw of PYTHON_KEYWORDS) {
     const escapedKw = escapeHtml(kw);
     const regex = new RegExp(`\\b(${escapedKw})\\b`, "g");
-    result = result.replace(regex, '<span class="studio-token-keyword">$1</span>');
+    result = result.replace(regex, '<span class="studio-hl-kw">$1</span>');
   }
 
   // Built-in functions (whole word)
   for (const fn of BUILTIN_PYTHON_FUNCTIONS) {
     const escapedFn = escapeHtml(fn);
     const regex = new RegExp(`\\b(${escapedFn})\\b`, "g");
-    result = result.replace(regex, '<span class="studio-token-function">$1</span>');
+    result = result.replace(regex, '<span class="studio-hl-fn">$1</span>');
   }
 
   // Function definitions: def function_name
-  result = result.replace(/\b(def)\s+(\w+)/g, '<span class="studio-token-keyword">$1</span> <span class="studio-token-function">$2</span>');
+  result = result.replace(/\b(def)\s+(\w+)/g, '<span class="studio-hl-kw">$1</span> <span class="studio-hl-fn">$2</span>');
 
   // Numbers
-  result = result.replace(/\b(\d+\.?\d*|0[xb][\da-fA-F]+)\b/g, '<span class="studio-token-number">$1</span>');
+  result = result.replace(/\b(\d+\.?\d*|0[xb][\da-fA-F]+)\b/g, '<span class="studio-hl-num">$1</span>');
 
   return result;
 }
@@ -816,41 +816,41 @@ function highlightCppSource(source: string) {
   let result = escaped;
 
   // Preprocessor directives (before escapeHtml converts < >)
-  result = escaped.replace(/^(#\s*\w+.*)$/gm, '<span class="studio-token-preprocessor">$1</span>');
+  result = escaped.replace(/^(#\s*\w+.*)$/gm, '<span class="studio-hl-pp">$1</span>');
 
   // String literals (including raw strings)
-  result = result.replace(/(R?"(?:[^"\\]|\\.)*")/g, '<span class="studio-token-string">$1</span>');
-  result = result.replace(/('(?:[^'\\]|\\.)*')/g, '<span class="studio-token-string">$1</span>');
+  result = result.replace(/(R?"(?:[^"\\]|\\.)*")/g, '<span class="studio-hl-str">$1</span>');
+  result = result.replace(/('(?:[^'\\]|\\.)*')/g, '<span class="studio-hl-str">$1</span>');
 
   // Single-line comments
-  result = result.replace(/(\/\/[^\n]*)/g, '<span class="studio-token-comment">$1</span>');
+  result = result.replace(/(\/\/[^\n]*)/g, '<span class="studio-hl-cmt">$1</span>');
 
   // Multi-line comments
-  result = result.replace(/(\/\*[\s\S]*?\*\/)/g, '<span class="studio-token-comment">$1</span>');
+  result = result.replace(/(\/\*[\s\S]*?\*\/)/g, '<span class="studio-hl-cmt">$1</span>');
 
   // Keywords
   for (const kw of CPP_KEYWORDS) {
     const escapedKw = escapeHtml(kw);
     const regex = new RegExp(`\\b(${escapedKw})\\b`, "g");
-    result = result.replace(regex, '<span class="studio-token-keyword">$1</span>');
+    result = result.replace(regex, '<span class="studio-hl-kw">$1</span>');
   }
 
   // CPP types / STL
   for (const t of CPP_TYPES) {
     const escapedT = escapeHtml(t);
     const regex = new RegExp(`\\b(${escapedT})\\b`, "g");
-    result = result.replace(regex, '<span class="studio-token-function">$1</span>');
+    result = result.replace(regex, '<span class="studio-hl-fn">$1</span>');
   }
 
   // Numbers
-  result = result.replace(/\b(\d+\.?\d*[fFLlUu]*|0[xb][\da-fA-F]+[UuLl]*)\b/g, '<span class="studio-token-number">$1</span>');
+  result = result.replace(/\b(\d+\.?\d*[fFLlUu]*|0[xb][\da-fA-F]+[UuLl]*)\b/g, '<span class="studio-hl-num">$1</span>');
 
   // Function calls: identifier followed by (
   result = result.replace(/\b([a-zA-Z_]\w*)\s*(?=\()/g, (match, name) => {
     // Don't recolor already highlighted tokens
     const keywordMatch = CPP_KEYWORDS.has(name);
     if (keywordMatch) return match;
-    return `<span class="studio-token-function">${name}</span>`;
+    return `<span class="studio-hl-fn">${name}</span>`;
   });
 
   return result;
@@ -4058,7 +4058,7 @@ export default function ResearchStudioPage() {
                 style={{ transform: `translate(${-editorScroll.left}px, ${-editorScroll.top}px)` }}
                 dangerouslySetInnerHTML={{
                   __html: `${highlightedSource
-                    .replace(/latex-token-/g, "studio-token-")}\n`,
+                    .replace(/latex-token-/g, "studio-hl-")}\n`,
                 }}
               />
               <textarea
