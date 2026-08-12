@@ -743,64 +743,82 @@ const BUILTIN_PYTHON_FUNCTIONS = new Set([
 
 function highlightPythonSource(source: string) {
   const escaped = escapeHtml(source);
-  let result = escaped;
-  let counter = 0;
-  const subs: { marker: string; html: string }[] = [];
+  const regions: { start: number; end: number; cls: string }[] = [];
 
-  function mark(pattern: RegExp, cls: string, groupIdx = 0) {
-    result = result.replace(pattern, (...args: any[]) => {
-      const match = args[groupIdx];
-      const marker = `\x01m${counter++}\x01`;
-      subs.push({ marker, html: `<span class="${cls}">${match}</span>` });
-      return marker;
-    });
+  function collect(pattern: RegExp, cls: string, groupIdx = 0) {
+    for (const m of escaped.matchAll(pattern)) {
+      const start = (m.index ?? 0) + m[0].indexOf(m[groupIdx]);
+      const text = m[groupIdx];
+      regions.push({ start: start, end: start + text.length, cls });
+    }
   }
 
-  // Wide multi-line patterns first
-  mark(/("""[\s\S]*?"""|'''[\s\S]*?''')/g, "studio-hl-str");
+  function collectReplacer(pattern: RegExp, cls: string, getMatch: (m: RegExpMatchArray) => { start: number; text: string }) {
+    for (const m of escaped.matchAll(pattern)) {
+      const { start, text } = getMatch(m);
+      regions.push({ start, end: start + text.length, cls });
+    }
+  }
 
-  // Line comments
-  result = result.replace(/(^|\n)(\s*)(#[^\n]*)/g, (_, nl, ws, comment) => {
-    const marker = `\x01m${counter++}\x01`;
-    subs.push({ marker, html: `${nl}${ws}<span class="studio-hl-cmt">${comment}</span>` });
-    return marker;
-  });
+  // Triple-quoted strings
+  collect(/("""[\s\S]*?"""|'''[\s\S]*?''')/g, "studio-hl-str");
+
+  // Line comments: capture the # and rest, return the exact match info
+  for (const m of escaped.matchAll(/(^|\n)(\s*)(#[^\n]*)/g)) {
+    const comment = m[3]; // the # part
+    const start = m.index! + m[1].length + m[2].length;
+    regions.push({ start, end: start + comment.length, cls: "studio-hl-cmt" });
+  }
 
   // Regular strings
-  mark(/('(?:[^'\\]|\\.)*'|"(?:[^"\\]|\\.)*")/g, "studio-hl-str");
+  collect(/('(?:[^'\\]|\\.)*'|"(?:[^"\\]|\\.)*")/g, "studio-hl-str");
 
   // @decorators
-  mark(/(@[a-zA-Z_]\w*)/g, "studio-hl-dec");
+  collect(/(@[a-zA-Z_]\w*)/g, "studio-hl-dec");
 
   // Keywords
   for (const kw of PYTHON_KEYWORDS) {
     const escapedKw = escapeHtml(kw);
-    mark(new RegExp(`\\b(${escapedKw})\\b`, "g"), "studio-hl-kw");
+    collect(new RegExp(`\\b(${escapedKw})\\b`, "g"), "studio-hl-kw");
   }
 
   // Built-in functions
   for (const fn of BUILTIN_PYTHON_FUNCTIONS) {
     const escapedFn = escapeHtml(fn);
-    mark(new RegExp(`\\b(${escapedFn})\\b`, "g"), "studio-hl-fn");
+    collect(new RegExp(`\\b(${escapedFn})\\b`, "g"), "studio-hl-fn");
   }
 
   // Function definitions
-  result = result.replace(/\b(def)\s+(\w+)/g, (_, kw: string, name: string) => {
-    const m1 = `\x01m${counter++}\x01`;
-    const m2 = `\x01m${counter++}\x01`;
-    subs.push({ marker: m1, html: `<span class="studio-hl-kw">${kw}</span>` });
-    subs.push({ marker: m2, html: `<span class="studio-hl-fn">${name}</span>` });
-    return `${m1} ${m2}`;
-  });
-
-  // Numbers
-  mark(/\b(\d+\.?\d*|0[xb][\da-fA-F]+)\b/g, "studio-hl-num");
-
-  // Replace all markers with actual HTML
-  for (const { marker, html } of subs) {
-    result = result.split(marker).join(html);
+  for (const m of escaped.matchAll(/\b(def)\s+(\w+)/g)) {
+    regions.push({ start: m.index!, end: m.index! + m[1].length, cls: "studio-hl-kw" });
+    regions.push({ start: m.index! + m[0].indexOf(m[2]), end: m.index! + m[0].length, cls: "studio-hl-fn" });
   }
 
+  // Numbers
+  collect(/\b(\d+\.?\d*|0[xb][\da-fA-F]+)\b/g, "studio-hl-num");
+
+  // Sort by start position. For overlapping regions, keep the one applied first (earlier in regions array = wider patterns applied first).
+  regions.sort((a, b) => a.start - b.start);
+
+  // Remove completely nested regions (keep outer)
+  const filtered: typeof regions = [];
+  for (const r of regions) {
+    const last = filtered[filtered.length - 1];
+    if (last && r.start >= last.start && r.end <= last.end) continue; // nested inside previous
+    if (last && r.start < last.end && r.end > last.end) continue; // partial overlap, skip
+    filtered.push(r);
+  }
+
+  // Build final HTML
+  let result = "";
+  let pos = 0;
+  for (const r of filtered) {
+    if (r.start < pos) continue; // skip if already covered
+    result += escaped.slice(pos, r.start);
+    result += `<span class="${r.cls}">${escaped.slice(r.start, r.end)}</span>`;
+    pos = r.end;
+  }
+  result += escaped.slice(pos);
   return result;
 }
 
@@ -832,62 +850,71 @@ const CPP_TYPES = new Set([
 
 function highlightCppSource(source: string) {
   const escaped = escapeHtml(source);
-  let result = escaped;
-  let counter = 0;
-  const subs: { marker: string; html: string }[] = [];
+  const regions: { start: number; end: number; cls: string }[] = [];
 
-  function mark(pattern: RegExp, cls: string, groupIdx = 0) {
-    result = result.replace(pattern, (...args: any[]) => {
-      const match = args[groupIdx];
-      const marker = `\x01m${counter++}\x01`;
-      subs.push({ marker, html: `<span class="${cls}">${match}</span>` });
-      return marker;
-    });
+  function collect(pattern: RegExp, cls: string, groupIdx = 0) {
+    for (const m of escaped.matchAll(pattern)) {
+      const text = m[groupIdx];
+      if (!text) continue;
+      const start = m.index! + m[0].indexOf(text);
+      regions.push({ start, end: start + text.length, cls });
+    }
   }
 
-  // Multi-line comments first (wide patterns)
-  mark(/(\/\*[\s\S]*?\*\/)/g, "studio-hl-cmt");
+  // Multi-line comments first (widest patterns get priority via array order)
+  collect(/(\/\*[\s\S]*?\*\/)/g, "studio-hl-cmt");
 
   // Preprocessor directives
-  mark(/^(#\s*\w+.*)$/gm, "studio-hl-pp");
+  collect(/^(#\s*\w+.*)$/gm, "studio-hl-pp");
 
   // String literals
-  mark(/(R?"(?:[^"\\]|\\.)*")/g, "studio-hl-str");
-  mark(/('(?:[^'\\]|\\.)*')/g, "studio-hl-str");
+  collect(/(R?"(?:[^"\\]|\\.)*")/g, "studio-hl-str");
+  collect(/('(?:[^'\\]|\\.)*')/g, "studio-hl-str");
 
   // Single-line comments
-  mark(/(\/\/[^\n]*)/g, "studio-hl-cmt");
+  collect(/(\/\/[^\n]*)/g, "studio-hl-cmt");
 
   // Keywords
   for (const kw of CPP_KEYWORDS) {
     const escapedKw = escapeHtml(kw);
-    mark(new RegExp(`\\b(${escapedKw})\\b`, "g"), "studio-hl-kw");
+    collect(new RegExp(`\\b(${escapedKw})\\b`, "g"), "studio-hl-kw");
   }
 
   // Types / STL
   for (const t of CPP_TYPES) {
     const escapedT = escapeHtml(t);
-    mark(new RegExp(`\\b(${escapedT})\\b`, "g"), "studio-hl-fn");
+    collect(new RegExp(`\\b(${escapedT})\\b`, "g"), "studio-hl-fn");
   }
 
   // Numbers
-  mark(/\b(\d+\.?\d*[fFLlUu]*|0[xb][\da-fA-F]+[UuLl]*)\b/g, "studio-hl-num");
+  collect(/\b(\d+\.?\d*[fFLlUu]*|0[xb][\da-fA-F]+[UuLl]*)\b/g, "studio-hl-num");
 
-  // Function calls: wrap just the name, not the paren
-  result = result.replace(/\b([a-zA-Z_]\w*)\s*(?=\()/g, (...args: any[]) => {
-    const match = args[0];
-    const name = args[1];
-    if (CPP_KEYWORDS.has(name)) return match;
-    const marker = `\x01m${counter++}\x01`;
-    subs.push({ marker, html: `<span class="studio-hl-fn">${name}</span>` });
-    return marker + match.slice(name.length);
-  });
-
-  // Replace all markers with actual HTML
-  for (const { marker, html } of subs) {
-    result = result.split(marker).join(html);
+  // Function calls (name before paren, not a keyword)
+  for (const m of escaped.matchAll(/\b([a-zA-Z_]\w*)\s*(?=\()/g)) {
+    const name = m[1];
+    if (CPP_KEYWORDS.has(name)) continue;
+    regions.push({ start: m.index!, end: m.index! + name.length, cls: "studio-hl-fn" });
   }
 
+  // Sort; for overlaps keep wider (earlier in array = wider pattern)
+  regions.sort((a, b) => a.start - b.start);
+  const filtered: typeof regions = [];
+  for (const r of regions) {
+    const last = filtered[filtered.length - 1];
+    if (last && r.start >= last.start && r.end <= last.end) continue;
+    if (last && r.start < last.end && r.end > last.end) continue;
+    filtered.push(r);
+  }
+
+  let result = "";
+  let pos = 0;
+  for (const r of filtered) {
+    if (r.start < pos) continue;
+    result += escaped.slice(pos, r.start);
+    result += `<span class="${r.cls}">${escaped.slice(r.start, r.end)}</span>`;
+    pos = r.end;
+  }
+  result += escaped.slice(pos);
   return result;
 }
 
