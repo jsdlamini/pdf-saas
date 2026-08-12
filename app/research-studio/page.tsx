@@ -7,6 +7,7 @@ import "katex/dist/katex.min.css";
 import { useCallback, useEffect, useEffectEvent, useMemo, useRef, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import Swal from "sweetalert2";
+import { showToast } from "@/app/components/toast";
 import { getTemplateBySlug, RESEARCH_TEMPLATES, type ResearchTemplate } from "@/lib/research-templates";
 
 type ProjectEntry = {
@@ -86,8 +87,6 @@ function isValidAiPatchSnippet(raw: string) {
   if (snippet.length < 3) return false;
   return /\\[a-zA-Z]+|\\begin\{|\\end\{|\$\$|\$[^$]/.test(snippet) || snippet.length > 24;
 }
-
-const GUEST_PROJECT_LIMIT = 5;
 
 const DEFAULT_LATEX = String.raw`\documentclass[11pt]{article}
 \usepackage[margin=1in]{geometry}
@@ -1009,6 +1008,9 @@ export default function ResearchStudioPage() {
   const initialState = useMemo(() => loadInitialResearchStudioState(), []);
   const { isLoaded: authLoaded, userId } = useAuth();
   const hasHydratedServerProjectsRef = useRef(false);
+  const lastHydratedUserIdRef = useRef<string | null>(null);
+  const workspaceScreenRef = useRef<"projects" | "editor">(initialState.workspaceScreen);
+  const activeProjectIdRef = useRef(initialState.activeProjectId);
 
   // Restore workspace state from localStorage on mount
   const [workspaceScreen, setWorkspaceScreen] = useState<"projects" | "editor">(() => {
@@ -1019,16 +1021,10 @@ export default function ResearchStudioPage() {
     } catch { return initialState.workspaceScreen; }
   });
   const [savedProjects, setSavedProjects] = useState<SavedProjectMeta[]>(initialState.savedProjects);
-  const [savedProjectSnapshots, setSavedProjectSnapshots] = useState<SavedProjectData[]>(() => {
-    if (typeof window === "undefined") return [];
-    try {
-      const raw = localStorage.getItem("wiserfiles-project-snapshots");
-      if (!raw) return [];
-      const data = JSON.parse(raw) as SavedProjectData[];
-      // Filter out the old starter project
-      return data.filter((p) => p.id !== "starter-project" && p.name !== "WiserFiles Research Draft");
-    } catch { return []; }
-  });
+  const [savedProjectSnapshots, setSavedProjectSnapshots] = useState<SavedProjectData[]>([]);
+  const [projectsLoading, setProjectsLoading] = useState(true);
+  const [projectsError, setProjectsError] = useState<string | null>(null);
+  const [hydrateNonce, setHydrateNonce] = useState(0);
   const [activeProjectId, setActiveProjectId] = useState(() => {
     if (typeof window === "undefined") return initialState.activeProjectId;
     try {
@@ -1043,19 +1039,6 @@ export default function ResearchStudioPage() {
   const [shareLoading, setShareLoading] = useState(!!shareId);
 
   // Load shared project on mount
-
-  // Clean up old starter project from localStorage on mount
-  useEffect(() => {
-    try {
-      const raw = localStorage.getItem("wiserfiles-project-snapshots");
-      if (raw) {
-        const data = JSON.parse(raw);
-        const cleaned = data.filter((p: any) => p.id !== "starter-project" && p.name !== "WiserFiles Research Draft");
-        if (cleaned.length !== data.length) localStorage.setItem("wiserfiles-project-snapshots", JSON.stringify(cleaned));
-      }
-      if (localStorage.getItem("wiserfiles-active-project") === "starter-project") localStorage.removeItem("wiserfiles-active-project");
-    } catch {}
-  }, []);
 
   useEffect(() => {
     if (!shareId) { setShareLoading(false); return; }
@@ -1076,12 +1059,14 @@ export default function ResearchStudioPage() {
   });
 
   const [codeOutput, setCodeOutput] = useState<{ stdout: string; stderr: string; exitCode: number } | null>(null);
-  // Persist workspace + active project to localStorage
+  // Persist workspace + active project to localStorage (ephemeral UI state only)
   useEffect(() => {
+    workspaceScreenRef.current = workspaceScreen;
     try { localStorage.setItem("wiserfiles-workspace", JSON.stringify(workspaceScreen)); } catch {}
   }, [workspaceScreen]);
 
   useEffect(() => {
+    activeProjectIdRef.current = activeProjectId;
     try { localStorage.setItem("wiserfiles-active-project", activeProjectId); } catch {}
   }, [activeProjectId]);
 
@@ -1089,23 +1074,14 @@ export default function ResearchStudioPage() {
     try { localStorage.setItem("wiserfiles-editor-mode", editorMode); } catch {}
   }, [editorMode]);
 
-  // Restore project data when returning to editor on refresh
+  // Guests cannot use the editor — always route them back to the projects
+  // board where the sign-in call-to-action lives.
   useEffect(() => {
-    if (workspaceScreen === "editor" && activeProjectId && !projectName) {
-      const snapshot = savedProjectSnapshots.find((p) => p.id === activeProjectId);
-      if (snapshot) {
-        setProjectName(snapshot.name);
-        setProjectEntries(snapshot.entries);
-        setSelectedPath(snapshot.selectedPath || "main.tex");
-        setLastCompileAt(snapshot.lastCompileAt || "Not compiled yet");
-        setEditorMode(snapshot.editorMode || (
-          snapshot.entries?.some((e) => e.path.endsWith(".py")) ? "python"
-          : snapshot.entries?.some((e) => e.path.endsWith(".cpp")) ? "cpp"
-          : "latex"
-        ));
-      }
+    if (authLoaded && !userId && workspaceScreen === "editor") {
+      setWorkspaceScreen("projects");
     }
-  }, [workspaceScreen, activeProjectId, projectName, savedProjectSnapshots]);
+  }, [authLoaded, userId, workspaceScreen]);
+
   const [selectedPath, setSelectedPath] = useState(initialState.selectedPath);
   const [newPath, setNewPath] = useState("");
   const [addFileError, setAddFileError] = useState("");
@@ -1116,7 +1092,6 @@ export default function ResearchStudioPage() {
   const [compiledPdfFileName, setCompiledPdfFileName] = useState("compiled-main.pdf");
   const [compileMainLog, setCompileMainLog] = useState("");
   const [compileMainLogFileName, setCompileMainLogFileName] = useState("main.log");
-  const [accountSyncUnavailable, setAccountSyncUnavailable] = useState(false);
   const [aiFixBusy, setAiFixBusy] = useState(false);
   const [aiFixError, setAiFixError] = useState("");
   const [aiFixSummary, setAiFixSummary] = useState("");
@@ -1213,7 +1188,6 @@ export default function ResearchStudioPage() {
   const treeContextMenuRef = useRef<HTMLDivElement | null>(null);
 
   const isSignedIn = authLoaded && Boolean(userId);
-  const usesAccountStorage = isSignedIn && !accountSyncUnavailable;
 
   const editableFiles = useMemo(
     () => projectEntries.filter((entry) => entry.kind === "file"),
@@ -1355,24 +1329,33 @@ export default function ResearchStudioPage() {
     };
   }, [activeSource]);
 
-  // Auto-save debounce
+  // Auto-save debounce (persists to server; never localStorage)
   const triggerAutoSave = useCallback(() => {
     setAutoSaveStatus("unsaved");
     if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
     saveTimerRef.current = setTimeout(() => {
-      try {
-        const snapshot = buildCurrentProjectSnapshot();
-        persistProjectSnapshot(snapshot);
-        if (userId && !accountSyncUnavailable) {
-          void upsertProjectSnapshotToServer(snapshot).catch(() => {});
-        }
-        setAutoSaveTimestamp(new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" }));
+      if (!activeProjectId || projectEntries.length === 0) {
         setAutoSaveStatus("saved");
-      } catch {
-        // silent fail
+        return;
       }
+      const snapshot = buildCurrentProjectSnapshot();
+      persistProjectSnapshot(snapshot);
+      if (!userId) {
+        setAutoSaveStatus("saved");
+        return;
+      }
+      void upsertProjectSnapshotToServer(snapshot)
+        .then(() => {
+          setAutoSaveTimestamp(new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" }));
+          setAutoSaveStatus("saved");
+        })
+        .catch((error) => {
+          const message = error instanceof Error ? error.message : "Could not save the project to your account.";
+          setAutoSaveStatus("unsaved");
+          showToast(`Auto-save failed: ${message}`, "error");
+        });
     }, 2000);
-  }, [projectEntries, activeProjectId, projectName, selectedPath, lastCompileAt, userId, accountSyncUnavailable]);
+  }, [projectEntries, activeProjectId, projectName, selectedPath, lastCompileAt, userId]);
 
   useEffect(() => {
     triggerAutoSave();
@@ -1432,14 +1415,6 @@ export default function ResearchStudioPage() {
   function appendPreviewError(message: string) {
     const stamped = `[${new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" })}] ${message}`;
     setPreviewErrorLogs((current) => [stamped, ...current].slice(0, 8));
-  }
-
-  function isAccountSyncUnavailableMessage(message: string) {
-    const normalized = message.toLowerCase();
-    return (
-      normalized.includes("database_url is not configured") ||
-      normalized.includes("account sync storage is not available")
-    );
   }
 
   function closeIntellisense() {
@@ -1809,21 +1784,28 @@ export default function ResearchStudioPage() {
     };
   }, [compiledPdfUrl]);
 
+  function detectEditorMode(project: SavedProjectData): EditorMode {
+    if (project.editorMode === "python" || project.editorMode === "cpp" || project.editorMode === "latex") {
+      return project.editorMode;
+    }
+    if (project.entries?.some((e) => e.path.endsWith(".py"))) return "python";
+    if (project.entries?.some((e) => e.path.endsWith(".cpp"))) return "cpp";
+    return "latex";
+  }
+
+  function projectToMeta(project: SavedProjectData): SavedProjectMeta {
+    return {
+      id: project.id,
+      name: project.name,
+      updatedAt: project.updatedAt,
+      type: detectEditorMode(project),
+    };
+  }
+
   function persistProjectSnapshot(snapshot: SavedProjectData) {
+    // React state only — project data is persisted via the server POST, never localStorage.
     setSavedProjectSnapshots((current) => [snapshot, ...current.filter((item) => item.id !== snapshot.id)].slice(0, 20));
-    setSavedProjects((current) => {
-      const meta: SavedProjectMeta = {
-        id: snapshot.id,
-        name: snapshot.name,
-        updatedAt: snapshot.updatedAt,
-        type: snapshot.editorMode || (
-          snapshot.entries?.some((e) => e.path.endsWith(".py")) ? "python"
-          : snapshot.entries?.some((e) => e.path.endsWith(".cpp")) ? "cpp"
-          : "latex"
-        ),
-      };
-      return [meta, ...current.filter((item) => item.id !== snapshot.id)].slice(0, 20);
-    });
+    setSavedProjects((current) => [projectToMeta(snapshot), ...current.filter((item) => item.id !== snapshot.id)].slice(0, 20));
   }
 
   async function fetchProjectsFromServer() {
@@ -1851,8 +1833,10 @@ export default function ResearchStudioPage() {
   }
 
   async function deleteProjectSnapshotFromServer(projectId: string) {
-    const response = await fetch(`/api/research-projects/${encodeURIComponent(projectId)}`, {
+    const response = await fetch("/api/research-projects", {
       method: "DELETE",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ id: projectId }),
     });
 
     if (!response.ok) {
@@ -1862,103 +1846,82 @@ export default function ResearchStudioPage() {
   }
 
   function queueServerProjectSync(snapshot: SavedProjectData) {
-    if (!userId || accountSyncUnavailable) return;
+    if (!userId) return;
     void upsertProjectSnapshotToServer(snapshot).catch((error) => {
       const message = error instanceof Error ? error.message : "Could not sync this project.";
-      if (isAccountSyncUnavailableMessage(message)) {
-        setAccountSyncUnavailable(true);
-        setCompileNotice("Saved locally. Account sync is unavailable on this deployment.");
-        return;
-      }
-      appendPreviewError(`Account sync failed: ${message}`);
-      setCompileNotice("Saved locally, but account sync failed.");
+      showToast(`Project save failed: ${message}`, "error");
     });
   }
 
   function queueServerProjectDeletion(projectId: string) {
-    if (!userId || accountSyncUnavailable) return;
+    if (!userId) return;
     void deleteProjectSnapshotFromServer(projectId).catch((error) => {
       const message = error instanceof Error ? error.message : "Could not delete this project from your account.";
-      if (isAccountSyncUnavailableMessage(message)) {
-        setAccountSyncUnavailable(true);
-        return;
-      }
-      appendPreviewError(`Account delete failed: ${message}`);
+      showToast(`Project delete failed: ${message}`, "error");
     });
   }
 
-  const applySyncedProjects = useEffectEvent((projects: SavedProjectData[], notice: string) => {
-    if (!projects.length) return;
-    const nextActive = projects.find((project) => project.id === activeProjectId) ?? projects[0];
-
-    if (compiledPdfUrl) URL.revokeObjectURL(compiledPdfUrl);
-
-    closeIntellisense();
+  const applySyncedProjects = useEffectEvent((projects: SavedProjectData[]) => {
     setSavedProjectSnapshots(projects.slice(0, 20));
-    setSavedProjects(
-      projects.map((project) => ({
-        id: project.id,
-        name: project.name,
-        updatedAt: project.updatedAt,
-        type: project.editorMode || (
-          project.entries?.some((e) => e.path.endsWith(".py")) ? "python"
-          : project.entries?.some((e) => e.path.endsWith(".cpp")) ? "cpp"
-          : "latex"
-        ),
-      })).slice(0, 20)
-    );
-    setActiveProjectId(nextActive.id);
-    setProjectName(nextActive.name);
-    setProjectEntries(nextActive.entries);
-    setSelectedPath(nextActive.selectedPath || "main.tex");
-    setAddFileError("");
-    setCompileBusy(false);
-    setCompiledPdfBlob(null);
-    setCompiledPdfUrl("");
-    setCompiledPdfFileName("compiled-main.pdf");
-    setCompileMainLog("");
-    setCompileMainLogFileName("main.log");
-    setAiFixBusy(false);
-    setAiFixError("");
-    setAiFixSummary("");
-    setAiFixSuggestions([]);
-    setLastCompileAt(nextActive.lastCompileAt || "Not compiled yet");
-    setEditorMode(nextActive.editorMode || (
-      nextActive.entries?.some((e: ProjectEntry) => e.path.endsWith(".py")) ? "python"
-      : nextActive.entries?.some((e: ProjectEntry) => e.path.endsWith(".cpp")) ? "cpp"
-      : "latex"
-    ));
-    setCodeOutput(null);
-    setCodeRunBusy(false);
-    setCompileNotice(notice);
+    setSavedProjects(projects.map(projectToMeta).slice(0, 20));
+
+    // Workspace restore after refresh: only resume the editor when the open
+    // project id still exists on the server. Otherwise fall back to the board.
+    if (workspaceScreenRef.current !== "editor") return;
+
+    const active = projects.find((project) => project.id === activeProjectIdRef.current) ?? null;
+    if (active) {
+      restoreProjectIntoEditor(active);
+      setCompileNotice("Projects synced from your account.");
+    } else {
+      setWorkspaceScreen("projects");
+      setCompileNotice("The previously open project could not be found in your account.");
+    }
   });
 
   useEffect(() => {
-    if (!authLoaded || !userId || hasHydratedServerProjectsRef.current) return;
+    if (!authLoaded) return;
+
+    if (!userId) {
+      lastHydratedUserIdRef.current = null;
+      hasHydratedServerProjectsRef.current = false;
+      setProjectsLoading(false);
+      setProjectsError(null);
+      setSavedProjects([]);
+      setSavedProjectSnapshots([]);
+      setActiveProjectId("");
+      setProjectName("");
+      setProjectEntries([]);
+      setSelectedPath("main.tex");
+      setLastCompileAt("Not compiled yet");
+      if (workspaceScreenRef.current === "editor") {
+        setWorkspaceScreen("projects");
+      }
+      return;
+    }
+
+    if (hasHydratedServerProjectsRef.current && lastHydratedUserIdRef.current === userId) return;
     hasHydratedServerProjectsRef.current = true;
+    lastHydratedUserIdRef.current = userId;
 
     let cancelled = false;
 
     async function hydrateFromServer() {
+      setProjectsLoading(true);
+      setProjectsError(null);
       try {
         const projects = await fetchProjectsFromServer();
-
         if (cancelled) return;
-
-        if (!projects.length) {
-          setCompileNotice("Create a project to start syncing this workspace to your account.");
-          return;
-        }
-
-        applySyncedProjects(projects, "Projects synced from your account.");
+        applySyncedProjects(projects);
       } catch (error) {
-        const message = error instanceof Error ? error.message : "Could not sync your account projects.";
-        if (isAccountSyncUnavailableMessage(message)) {
-          setAccountSyncUnavailable(true);
-          setCompileNotice("Account sync is unavailable on this deployment. Projects stay local in this browser.");
-          return;
+        if (cancelled) return;
+        const message = error instanceof Error ? error.message : "Could not load your account projects.";
+        setProjectsError(message);
+        if (workspaceScreenRef.current === "editor") {
+          setWorkspaceScreen("projects");
         }
-        appendPreviewError(`Account sync failed: ${message}`);
+      } finally {
+        if (!cancelled) setProjectsLoading(false);
       }
     }
 
@@ -1967,7 +1930,7 @@ export default function ResearchStudioPage() {
     return () => {
       cancelled = true;
     };
-  }, [authLoaded, userId]);
+  }, [authLoaded, userId, hydrateNonce]);
 
   function buildCurrentProjectSnapshot(overrides?: Partial<SavedProjectData>): SavedProjectData {
     const now = new Date().toISOString();
@@ -1982,31 +1945,32 @@ export default function ResearchStudioPage() {
     };
   }
 
-  function saveCurrentProject() {
+  async function saveCurrentProject() {
+    if (!activeProjectId || projectEntries.length === 0) return;
+
     try {
       const snapshot = buildCurrentProjectSnapshot();
       persistProjectSnapshot(snapshot);
-      queueServerProjectSync(snapshot);
 
-      setCompileNotice(
-        usesAccountStorage
-          ? "Project saved to your account-backed workspace."
-          : "Project saved. You can reopen it from Saved Projects."
-      );
+      if (!userId) {
+        showToast("Sign in to save your project.", "error");
+        setCompileNotice("Sign in required to save projects.");
+        return;
+      }
+
+      await upsertProjectSnapshotToServer(snapshot);
+      setAutoSaveStatus("saved");
+      setAutoSaveTimestamp(new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" }));
+      setCompileNotice("Project saved to your account.");
     } catch (saveError) {
       const message = saveError instanceof Error ? saveError.message : "Project save failed.";
-      setCompileNotice(message);
-      appendPreviewError(`Save failed: ${message}`);
+      setAutoSaveStatus("unsaved");
+      showToast(`Project save failed: ${message}`, "error");
+      setCompileNotice("Project save failed.");
     }
   }
 
-  function loadSavedProject(projectId: string) {
-    const saved = savedProjectSnapshots.find((project) => project.id === projectId) || null;
-    if (!saved) {
-      setCompileNotice("Could not load this project. It may be corrupted or removed.");
-      return;
-    }
-
+  function restoreProjectIntoEditor(saved: SavedProjectData) {
     closeIntellisense();
 
     if (compiledPdfUrl) URL.revokeObjectURL(compiledPdfUrl);
@@ -2025,13 +1989,19 @@ export default function ResearchStudioPage() {
     setAiFixSummary("");
     setAiFixSuggestions([]);
     setLastCompileAt(saved.lastCompileAt || "Not compiled yet");
-    setEditorMode(saved.editorMode || (
-      saved.entries?.some((e) => e.path.endsWith(".py")) ? "python"
-      : saved.entries?.some((e) => e.path.endsWith(".cpp")) ? "cpp"
-      : "latex"
-    ));
+    setEditorMode(detectEditorMode(saved));
     setCodeOutput(null);
     setCodeRunBusy(false);
+  }
+
+  function loadSavedProject(projectId: string) {
+    const saved = savedProjectSnapshots.find((project) => project.id === projectId) || null;
+    if (!saved) {
+      setCompileNotice("Could not load this project. It may be corrupted or removed.");
+      return;
+    }
+
+    restoreProjectIntoEditor(saved);
     setCompileNotice(`Loaded project: ${saved.name}`);
     setWorkspaceScreen("editor");
   }
@@ -2189,10 +2159,6 @@ export default function ResearchStudioPage() {
   }
 
   function createProjectFromTemplate(template: ResearchTemplate) {
-    if (!userId && savedProjects.length >= GUEST_PROJECT_LIMIT) {
-      setCompileNotice("Guest limit reached: sign in to create more than 5 projects.");
-      return;
-    }
     const nextProjectId = makeProjectId();
     const name = template.name;
     const createdAt = new Date().toISOString();
@@ -2283,19 +2249,6 @@ export default function ResearchStudioPage() {
   }
 
   async function createNewProject() {
-    if (!userId && savedProjects.length >= GUEST_PROJECT_LIMIT) {
-      setCompileNotice("Guest limit reached: sign in to create more than 5 projects.");
-      await Swal.fire({
-        title: "Project limit reached",
-        text: "Guest users can save up to 5 projects. Sign in or create an account to continue creating projects.",
-        icon: "info",
-        confirmButtonText: "OK",
-        confirmButtonColor: "#0f766e",
-        background: "#ffffff",
-      });
-      return;
-    }
-
     // Show dialog with name + type selector
     const result = await Swal.fire({
       title: "New Project",
@@ -3342,6 +3295,7 @@ export default function ResearchStudioPage() {
                 <p className="text-sm font-semibold text-emerald-300">📋 Shared Project: {sharedProject.name}</p>
                 <p className="text-xs text-emerald-400/80 mt-0.5">{sharedProject.entries?.filter((e: any) => e.kind === "file").length || 0} files</p>
               </div>
+              {isSignedIn ? (
               <button
                 type="button"
                 onClick={() => {
@@ -3375,6 +3329,9 @@ export default function ResearchStudioPage() {
               >
                 Copy to My Projects
               </button>
+              ) : (
+                <span className="text-xs text-emerald-400/80">Sign in to copy this project.</span>
+              )}
             </div>
           </div>
         ) : shareId ? (
@@ -3389,6 +3346,7 @@ export default function ResearchStudioPage() {
               <h1 className="studio-dashboard-title">Research Studio</h1>
               <p className="studio-dashboard-subtitle">Create, open, and manage your LaTeX research projects</p>
             </div>
+            {isSignedIn ? (
             <div className="flex items-center gap-2">
               <button
                 type="button"
@@ -3456,50 +3414,89 @@ export default function ResearchStudioPage() {
                 Import
               </button>
             </div>
+            ) : null}
           </div>
 
-          {/* Search bar */}
-          <div className="studio-search-wrapper" style={{ marginTop: 16 }}>
-            <svg viewBox="0 0 20 20" className="studio-search-icon" fill="none" stroke="currentColor" strokeWidth="1.8">
-              <circle cx="9" cy="9" r="4" />
-              <path d="M12.5 12.5L16 16" strokeLinecap="round" />
-            </svg>
-            <input
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              placeholder="Search projects..."
-              className="studio-search"
-            />
-          </div>
+          {isSignedIn ? (
+            <>
+              {/* Search bar */}
+              <div className="studio-search-wrapper" style={{ marginTop: 16 }}>
+                <svg viewBox="0 0 20 20" className="studio-search-icon" fill="none" stroke="currentColor" strokeWidth="1.8">
+                  <circle cx="9" cy="9" r="4" />
+                  <path d="M12.5 12.5L16 16" strokeLinecap="round" />
+                </svg>
+                <input
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  placeholder="Search projects..."
+                  className="studio-search"
+                />
+              </div>
 
-          {/* Auth info */}
-          {usesAccountStorage ? (
-            <p style={{ marginTop: 8, fontSize: 11, color: "var(--text-muted, #64748b)" }}>
-              Projects sync to your account
-            </p>
-          ) : isSignedIn ? (
-            <p style={{ marginTop: 8, fontSize: 11, color: "var(--text-muted, #64748b)" }}>
-              Account sync unavailable — projects stay local
-            </p>
-          ) : authLoaded ? (
-            <div className="studio-auth-cta">
-              <span>Sign in to sync projects across devices.</span>
-              <SignUpButton mode="modal">
-                <button type="button">Create account</button>
-              </SignUpButton>
+              {/* Auth info */}
+              <p style={{ marginTop: 8, fontSize: 11, color: "var(--text-muted, #64748b)" }}>
+                Projects sync to your account
+              </p>
+
+              {/* Storage indicator */}
+              <p style={{ marginTop: 6, fontSize: 10, color: "var(--text-muted, #64748b)" }}>
+                Synced to account
+                {searchQuery.trim() ? ` · ${filteredProjects.length} of ${savedProjects.length} projects` : ` · ${savedProjects.length} project${savedProjects.length !== 1 ? "s" : ""}`}
+              </p>
+            </>
+          ) : null}
+        </div>
+
+        {!authLoaded ? (
+          <div className="studio-project-grid">
+            {[1, 2, 3].map((i) => (
+              <div key={i} className="studio-project-card" style={{ minHeight: 100 }}>
+                <div className="studio-skeleton" style={{ height: 16, width: "60%", marginBottom: 8 }} />
+                <div className="studio-skeleton" style={{ height: 12, width: "40%" }} />
+              </div>
+            ))}
+          </div>
+        ) : !isSignedIn ? (
+          <div style={{ textAlign: "center", padding: "60px 20px", maxWidth: 480, margin: "0 auto" }}>
+            <div style={{ display: "inline-flex", alignItems: "center", justifyContent: "center", width: 56, height: 56, borderRadius: 14, background: "var(--bg-secondary, #131620)", marginBottom: 16 }}>
+              <svg viewBox="0 0 24 24" style={{ width: 28, height: 28, color: "var(--text-muted, #64748b)" }} fill="none" stroke="currentColor" strokeWidth="1.5">
+                <path d="M12 2l3 6 6 1-4.5 4.5L17.5 20 12 17l-5.5 3 1-6.5L3 9l6-1 3-6z" strokeLinecap="round" strokeLinejoin="round" />
+              </svg>
+            </div>
+            <p style={{ fontSize: 15, fontWeight: 600, color: "var(--text-primary, #e2e8f0)", marginBottom: 6 }}>Sign in to use Research Studio</p>
+            <p style={{ fontSize: 12, color: "var(--text-muted, #64748b)", marginBottom: 16 }}>Your projects are stored in your account, so they follow you across devices. Sign in or create an account to start building projects.</p>
+            <div className="studio-auth-cta" style={{ justifyContent: "center" }}>
               <SignInButton mode="modal">
                 <button type="button">Sign in</button>
               </SignInButton>
+              <SignUpButton mode="modal">
+                <button type="button">Create account</button>
+              </SignUpButton>
             </div>
-          ) : null}
-
-          {/* Storage indicator */}
-          <p style={{ marginTop: 6, fontSize: 10, color: "var(--text-muted, #64748b)" }}>
-            {usesAccountStorage ? "Synced to account" : "Stored locally"}
-            {searchQuery.trim() ? ` · ${filteredProjects.length} of ${savedProjects.length} projects` : ` · ${savedProjects.length} project${savedProjects.length !== 1 ? "s" : ""}`}
-          </p>
-        </div>
-
+          </div>
+        ) : projectsError ? (
+          <div style={{ textAlign: "center", padding: "60px 20px" }}>
+            <p style={{ fontSize: 14, fontWeight: 600, color: "var(--text-primary, #e2e8f0)", marginBottom: 4 }}>Could not load your projects</p>
+            <p style={{ fontSize: 12, color: "var(--text-muted, #64748b)", maxWidth: 420, margin: "0 auto 16px" }}>{projectsError}</p>
+            <button
+              type="button"
+              onClick={() => { hasHydratedServerProjectsRef.current = false; setHydrateNonce((n) => n + 1); }}
+              className="studio-btn studio-btn-primary"
+            >
+              Retry
+            </button>
+          </div>
+        ) : projectsLoading ? (
+          <div className="studio-project-grid">
+            {[1, 2, 3].map((i) => (
+              <div key={i} className="studio-project-card" style={{ minHeight: 100 }}>
+                <div className="studio-skeleton" style={{ height: 16, width: "60%", marginBottom: 8 }} />
+                <div className="studio-skeleton" style={{ height: 12, width: "40%" }} />
+              </div>
+            ))}
+          </div>
+        ) : (
+          <>
         {/* Project cards grid */}
         {savedProjects.length === 0 && !loadingProject ? (
           <div style={{ textAlign: "center", padding: "60px 20px" }}>
@@ -3667,6 +3664,8 @@ export default function ResearchStudioPage() {
             ))}
           </div>
         </div>
+          </>
+        )}
         </div>
       </main>
     );
