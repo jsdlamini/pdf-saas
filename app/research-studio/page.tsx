@@ -1816,7 +1816,11 @@ export default function ResearchStudioPage() {
         id: snapshot.id,
         name: snapshot.name,
         updatedAt: snapshot.updatedAt,
-        type: snapshot.editorMode || "latex",
+        type: snapshot.editorMode || (
+          snapshot.entries?.some((e) => e.path.endsWith(".py")) ? "python"
+          : snapshot.entries?.some((e) => e.path.endsWith(".cpp")) ? "cpp"
+          : "latex"
+        ),
       };
       return [meta, ...current.filter((item) => item.id !== snapshot.id)].slice(0, 20);
     });
@@ -1892,7 +1896,16 @@ export default function ResearchStudioPage() {
     closeIntellisense();
     setSavedProjectSnapshots(projects.slice(0, 20));
     setSavedProjects(
-      projects.map((project) => ({ id: project.id, name: project.name, updatedAt: project.updatedAt, type: project.editorMode || "latex" })).slice(0, 20)
+      projects.map((project) => ({
+        id: project.id,
+        name: project.name,
+        updatedAt: project.updatedAt,
+        type: project.editorMode || (
+          project.entries?.some((e) => e.path.endsWith(".py")) ? "python"
+          : project.entries?.some((e) => e.path.endsWith(".cpp")) ? "cpp"
+          : "latex"
+        ),
+      })).slice(0, 20)
     );
     setActiveProjectId(nextActive.id);
     setProjectName(nextActive.name);
@@ -1910,7 +1923,11 @@ export default function ResearchStudioPage() {
     setAiFixSummary("");
     setAiFixSuggestions([]);
     setLastCompileAt(nextActive.lastCompileAt || "Not compiled yet");
-    setEditorMode(nextActive.editorMode || "latex");
+    setEditorMode(nextActive.editorMode || (
+      nextActive.entries?.some((e: ProjectEntry) => e.path.endsWith(".py")) ? "python"
+      : nextActive.entries?.some((e: ProjectEntry) => e.path.endsWith(".cpp")) ? "cpp"
+      : "latex"
+    ));
     setCodeOutput(null);
     setCodeRunBusy(false);
     setCompileNotice(notice);
@@ -2046,7 +2063,11 @@ export default function ResearchStudioPage() {
           setProjectEntries(fallback.entries);
           setSelectedPath(fallback.selectedPath || "main.tex");
           setLastCompileAt(fallback.lastCompileAt || "Not compiled yet");
-          setEditorMode(fallback.editorMode || "latex");
+          setEditorMode(fallback.editorMode || (
+            fallback.entries?.some((e) => e.path.endsWith(".py")) ? "python"
+            : fallback.entries?.some((e) => e.path.endsWith(".cpp")) ? "cpp"
+            : "latex"
+          ));
         } else {
           setActiveProjectId("");
           setProjectName("");
@@ -2666,7 +2687,11 @@ export default function ResearchStudioPage() {
           id: snapshot.id,
           name: snapshot.name,
           updatedAt: snapshot.updatedAt,
-          type: snapshot.editorMode || "latex",
+          type: snapshot.editorMode || (
+            snapshot.entries?.some((e) => e.path.endsWith(".py")) ? "python"
+            : snapshot.entries?.some((e) => e.path.endsWith(".cpp")) ? "cpp"
+            : "latex"
+          ),
         };
         return [meta, ...current.filter((item) => item.id !== snapshot.id)].slice(0, 20);
       });
@@ -3505,11 +3530,9 @@ export default function ResearchStudioPage() {
                 <article
                   key={item.id}
                   className="studio-project-card"
+                  data-mode={mode}
                   style={{
                     ...(isActive ? { borderColor: "rgba(74,222,128,0.35)" } : {}),
-                    borderLeft: `3px solid ${
-                      mode === "python" ? "#4ade80" : mode === "cpp" ? "#f97316" : "#818cf8"
-                    }`,
                   }}
                 >
                   <p className="studio-project-card-name">{item.name}</p>
@@ -3556,14 +3579,12 @@ export default function ResearchStudioPage() {
                         if (item.id !== activeProjectId) saveCurrentProject();
                         loadSavedProject(item.id);
                       }}
-                      className="studio-btn studio-btn-primary"
-                      style={{ height: 28, fontSize: 11 }}
+                      className="studio-btn studio-btn-primary studio-card-btn"
+                      title={`Open ${item.name}`}
                       aria-label={`Open ${item.name}`}
                     >
-                      <svg viewBox="0 0 20 20" style={{ width: 14, height: 14 }} fill="none" stroke="currentColor" strokeWidth="2">
-                        <path d="M6 4l9 6-9 6V4z" strokeLinecap="round" strokeLinejoin="round" />
-                      </svg>
-                      Open
+                      <svg viewBox="0 0 20 20" className="studio-card-btn-icon" aria-hidden="true"><path d="M6 4l9 6-9 6V4z" strokeLinecap="round" strokeLinejoin="round" /></svg>
+                      <span className="studio-card-btn-label">Open</span>
                     </button>
                     <button
                       type="button"
@@ -3574,26 +3595,22 @@ export default function ResearchStudioPage() {
                           void downloadProjectBundle();
                         }, 500);
                       }}
-                      className="studio-btn studio-btn-secondary"
-                      style={{ height: 28, fontSize: 11 }}
+                      className="studio-btn studio-btn-secondary studio-card-btn"
+                      title={`Download ${item.name}`}
                       aria-label={`Download ${item.name}`}
                     >
-                      <svg viewBox="0 0 20 20" style={{ width: 14, height: 14 }} fill="none" stroke="currentColor" strokeWidth="2">
-                        <path d="M10 3v9m0 0l-3-3m3 3l3-3M4 14v2h12v-2" strokeLinecap="round" strokeLinejoin="round" />
-                      </svg>
-                      Download
+                      <svg viewBox="0 0 20 20" className="studio-card-btn-icon" aria-hidden="true"><path d="M10 3v9m0 0l-3-3m3 3l3-3M4 14v2h12v-2" strokeLinecap="round" strokeLinejoin="round" /></svg>
+                      <span className="studio-card-btn-label">Download</span>
                     </button>
                     <button
                       type="button"
                       onClick={() => deleteSavedProject(item.id)}
-                      className="studio-btn studio-btn-danger"
-                      style={{ height: 28, fontSize: 11 }}
+                      className="studio-btn studio-btn-danger studio-card-btn"
+                      title={`Delete ${item.name}`}
                       aria-label={`Delete ${item.name}`}
                     >
-                      <svg viewBox="0 0 20 20" style={{ width: 14, height: 14 }} fill="none" stroke="currentColor" strokeWidth="2">
-                        <path d="M5 6h10M8 6V4h4v2m-5 0l.5 10h5L13 6" strokeLinecap="round" strokeLinejoin="round" />
-                      </svg>
-                      Delete
+                      <svg viewBox="0 0 20 20" className="studio-card-btn-icon" aria-hidden="true"><path d="M5 6h10M8 6V4h4v2m-5 0l.5 10h5L13 6" strokeLinecap="round" strokeLinejoin="round" /></svg>
+                      <span className="studio-card-btn-label">Delete</span>
                     </button>
                   </div>
                 </article>

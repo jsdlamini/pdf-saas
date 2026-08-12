@@ -914,12 +914,35 @@ body {
 }
 
 .studio-project-card {
+  container-type: inline-size;
+  container-name: project-card;
   background: var(--bg-secondary, #131620);
   border: 1px solid var(--border-color, #334155);
   border-radius: 10px;
   padding: 16px;
   transition: border-color 0.15s, background 0.15s;
   cursor: default;
+}
+
+.studio-project-card[data-mode="latex"] {
+  background: rgba(129,140,248,0.08);
+}
+.studio-project-card[data-mode="latex"]:hover {
+  background: rgba(129,140,248,0.12);
+}
+
+.studio-project-card[data-mode="python"] {
+  background: rgba(74,222,128,0.08);
+}
+.studio-project-card[data-mode="python"]:hover {
+  background: rgba(74,222,128,0.12);
+}
+
+.studio-project-card[data-mode="cpp"] {
+  background: rgba(249,115,22,0.08);
+}
+.studio-project-card[data-mode="cpp"]:hover {
+  background: rgba(249,115,22,0.12);
 }
 
 .studio-project-card:hover {
@@ -969,6 +992,51 @@ body {
 .studio-project-card-actions {
   display: flex;
   gap: 6px;
+  flex-wrap: wrap;
+}
+
+/* Card buttons: icon-only at narrow card widths */
+.studio-card-btn {
+  height: 28px;
+  font-size: 11px;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 0 8px;
+}
+.studio-card-btn-icon {
+  width: 14px;
+  height: 14px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2;
+  flex-shrink: 0;
+}
+
+/* Container query: cards narrower than ~260px switch to icon-only buttons */
+@container project-card (max-width: 260px) {
+  .studio-card-btn {
+    width: 28px;
+    height: 28px;
+    padding: 0;
+    justify-content: center;
+  }
+  .studio-card-btn-label {
+    display: none;
+  }
+}
+
+/* Also apply icon-only on very small screens regardless of card width */
+@media (max-width: 380px) {
+  .studio-card-btn {
+    width: 28px;
+    height: 28px;
+    padding: 0;
+    justify-content: center;
+  }
+  .studio-card-btn-label {
+    display: none;
+  }
 }
 
 /* ── IntelliSense ───── */
