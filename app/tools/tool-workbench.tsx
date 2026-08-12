@@ -3521,15 +3521,20 @@ export default function ToolWorkbench({ tool }: WorkbenchProps) {
 
         if (tool.slug === "unlock-pdf") {
           // Unlock: load with ignoreEncryption, save without encryption
-          const source = await PDFDocument.load(await readAsArrayBuffer(firstFile), { ignoreEncryption: true });
-          const bytes = await source.save({ useObjectStreams: true });
-          stageOutput(
-            asPdfBlob(bytes),
-            `${normalizeFileName(firstFile.name)}-unlocked.pdf`,
-            "Encryption removed. Original quality preserved. Preview before downloading."
-          );
-          complete("PDF unlocked — password protection removed.");
-          return;
+          try {
+            const source = await PDFDocument.load(await readAsArrayBuffer(firstFile), { ignoreEncryption: true });
+            const bytes = await source.save({ useObjectStreams: true });
+            stageOutput(
+              asPdfBlob(bytes),
+              `${normalizeFileName(firstFile.name)}-unlocked.pdf`,
+              "Encryption removed. Original quality preserved. Preview before downloading."
+            );
+            complete("PDF unlocked — password protection removed.");
+            return;
+          } catch {
+            logProcessing("Could not unlock with ignoreEncryption — PDF may have owner password. Try Protect tool instead.");
+            throw new Error("This PDF could not be unlocked. It may have an owner password that prevents modification. The Protect PDF tool can add a new password instead.");
+          }
         }
 
         // Protect: require password and encrypt

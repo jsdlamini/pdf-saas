@@ -753,13 +753,12 @@ function renderTreeContextIcon(action: TreeContextAction) {
 }
 
 function loadInitialResearchStudioState(): InitialResearchStudioState {
-  // Start with no projects — users create their own via "New From Scratch" or "New from Template"
-  // The "starter-project" ID is a sentinel that means "no project selected"
+  // Start with no projects — users create their own
   return {
     savedProjects: [],
-    activeProjectId: "starter-project",
-    projectName: "WiserFiles Research Draft",
-    projectEntries: STARTER_PROJECT,
+    activeProjectId: "",
+    projectName: "",
+    projectEntries: [],
     selectedPath: "main.tex",
     lastCompileAt: "Not compiled yet",
     workspaceScreen: "projects",
@@ -778,10 +777,28 @@ export default function ResearchStudioPage() {
   const { isLoaded: authLoaded, userId } = useAuth();
   const hasHydratedServerProjectsRef = useRef(false);
 
-  const [workspaceScreen, setWorkspaceScreen] = useState<"projects" | "editor">(initialState.workspaceScreen);
+  // Restore workspace state from localStorage on mount
+  const [workspaceScreen, setWorkspaceScreen] = useState<"projects" | "editor">(() => {
+    if (typeof window === "undefined") return initialState.workspaceScreen;
+    try {
+      const saved = localStorage.getItem("wiserfiles-workspace");
+      return saved ? (JSON.parse(saved) as "projects" | "editor") : initialState.workspaceScreen;
+    } catch { return initialState.workspaceScreen; }
+  });
   const [savedProjects, setSavedProjects] = useState<SavedProjectMeta[]>(initialState.savedProjects);
-  const [savedProjectSnapshots, setSavedProjectSnapshots] = useState<SavedProjectData[]>([]);
-  const [activeProjectId, setActiveProjectId] = useState(initialState.activeProjectId);
+  const [savedProjectSnapshots, setSavedProjectSnapshots] = useState<SavedProjectData[]>(() => {
+    if (typeof window === "undefined") return [];
+    try {
+      const raw = localStorage.getItem("wiserfiles-project-snapshots");
+      return raw ? JSON.parse(raw) : [];
+    } catch { return []; }
+  });
+  const [activeProjectId, setActiveProjectId] = useState(() => {
+    if (typeof window === "undefined") return initialState.activeProjectId;
+    try {
+      return localStorage.getItem("wiserfiles-active-project") || initialState.activeProjectId;
+    } catch { return initialState.activeProjectId; }
+  });
   const [projectName, setProjectName] = useState(initialState.projectName);
   const [projectEntries, setProjectEntries] = useState<ProjectEntry[]>(initialState.projectEntries);
   const searchParams = useSearchParams();
@@ -800,6 +817,32 @@ export default function ResearchStudioPage() {
       })
       .catch(() => setShareLoading(false));
   }, [shareId]);
+
+  // Persist workspace + active project to localStorage
+  useEffect(() => {
+    try { localStorage.setItem("wiserfiles-workspace", JSON.stringify(workspaceScreen)); } catch {}
+  }, [workspaceScreen]);
+
+  useEffect(() => {
+    try { localStorage.setItem("wiserfiles-active-project", activeProjectId); } catch {}
+  }, [activeProjectId]);
+
+  useEffect(() => {
+    try { localStorage.setItem("wiserfiles-project-snapshots", JSON.stringify(savedProjectSnapshots.slice(0, 20))); } catch {}
+  }, [savedProjectSnapshots]);
+
+  // Restore project data when returning to editor on refresh
+  useEffect(() => {
+    if (workspaceScreen === "editor" && activeProjectId && !projectName) {
+      const snapshot = savedProjectSnapshots.find((p) => p.id === activeProjectId);
+      if (snapshot) {
+        setProjectName(snapshot.name);
+        setProjectEntries(snapshot.entries);
+        setSelectedPath(snapshot.selectedPath || "main.tex");
+        setLastCompileAt(snapshot.lastCompileAt || "Not compiled yet");
+      }
+    }
+  }, [workspaceScreen, activeProjectId, projectName, savedProjectSnapshots]);
   const [selectedPath, setSelectedPath] = useState(initialState.selectedPath);
   const [newPath, setNewPath] = useState("");
   const [addFileError, setAddFileError] = useState("");
@@ -1678,11 +1721,12 @@ export default function ResearchStudioPage() {
           setSelectedPath(fallback.selectedPath || "main.tex");
           setLastCompileAt(fallback.lastCompileAt || "Not compiled yet");
         } else {
-          setActiveProjectId("starter-project");
-          setProjectName("WiserFiles Research Draft");
-          setProjectEntries(STARTER_PROJECT);
+          setActiveProjectId("");
+          setProjectName("");
+          setProjectEntries([]);
           setSelectedPath("main.tex");
           setLastCompileAt("Not compiled yet");
+          setWorkspaceScreen("projects");
         }
       }
 

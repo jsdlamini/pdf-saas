@@ -1413,3 +1413,9 @@ textarea:focus-visible,
   cursor: grabbing !important;
 }
 
+/* Position all SweetAlert2 modals at top of page */
+.swal2-container {
+  align-items: flex-start !important;
+  padding-top: 5vh !important;
+}
+
