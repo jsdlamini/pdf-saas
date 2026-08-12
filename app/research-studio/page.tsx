@@ -3480,7 +3480,9 @@ export default function ResearchStudioPage() {
             </button>
           </div>
         ) : (
-          <div className="studio-project-grid">
+          <div className="studio-project-grid" style={{
+            gridTemplateColumns: `repeat(auto-fill, minmax(${filteredProjects.length > 8 ? 220 : filteredProjects.length > 4 ? 260 : 280}px, 1fr))`,
+          }}>
             {filteredProjects.map((item) => {
               const isActive = item.id === activeProjectId;
               const templateSlugs = RESEARCH_TEMPLATES.map((t) => t.slug);
@@ -3493,11 +3495,22 @@ export default function ResearchStudioPage() {
                   }) ?? "Custom"
                 : "Custom";
 
+              const mode = item.type || snapshot?.editorMode || (
+                snapshot?.entries?.some((e: ProjectEntry) => e.path.endsWith(".py")) ? "python"
+                : snapshot?.entries?.some((e: ProjectEntry) => e.path.endsWith(".cpp")) ? "cpp"
+                : "latex"
+              );
+
               return (
                 <article
                   key={item.id}
                   className="studio-project-card"
-                  style={isActive ? { borderColor: "rgba(74,222,128,0.35)" } : undefined}
+                  style={{
+                    ...(isActive ? { borderColor: "rgba(74,222,128,0.35)" } : {}),
+                    borderLeft: `3px solid ${
+                      mode === "python" ? "#4ade80" : mode === "cpp" ? "#f97316" : "#818cf8"
+                    }`,
+                  }}
                 >
                   <p className="studio-project-card-name">{item.name}</p>
                   <p className="studio-project-card-meta">
@@ -3512,11 +3525,6 @@ export default function ResearchStudioPage() {
                       </span>
                     ) : null}
                     {(() => {
-                      const mode = item.type || snapshot?.editorMode || (
-                        snapshot?.entries?.some((e) => e.path.endsWith(".py")) ? "python"
-                        : snapshot?.entries?.some((e) => e.path.endsWith(".cpp")) ? "cpp"
-                        : "latex"
-                      );
                       if (mode === "python") {
                         return (
                           <span className="studio-tag">
