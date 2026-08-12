@@ -3374,7 +3374,7 @@ export default function ResearchStudioPage() {
               <button
                 type="button"
                 onClick={async () => {
-                  const templateOptions = RESEARCH_TEMPLATES.reduce((acc, t) => {
+                  const templateOptions = RESEARCH_TEMPLATES.filter((t) => t.slug !== "python-script" && t.slug !== "cpp-program").reduce((acc, t) => {
                     acc[t.slug] = t.name;
                     return acc;
                   }, {} as Record<string, string>);
@@ -3621,9 +3621,9 @@ export default function ResearchStudioPage() {
 
         {/* Template quick-start section */}
         <div style={{ marginTop: 32 }}>
-          <h3 style={{ fontSize: 14, fontWeight: 600, color: "var(--text-primary, #e2e8f0)", marginBottom: 12 }}>Start from a template</h3>
+          <h3 style={{ fontSize: 14, fontWeight: 600, color: "var(--text-primary, #e2e8f0)", marginBottom: 12 }}>Start from a LaTeX template</h3>
           <div className="studio-template-grid">
-            {RESEARCH_TEMPLATES.map((template) => (
+            {RESEARCH_TEMPLATES.filter((t) => t.slug !== "python-script" && t.slug !== "cpp-program").map((template) => (
               <div
                 key={template.slug}
                 className="studio-template-card"
