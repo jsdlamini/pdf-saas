@@ -2405,7 +2405,11 @@ export default function ResearchStudioPage() {
   }
 
   async function compileProject() {
-    if (isCodeMode) {
+    // Detect code mode from file extension (belt-and-suspenders — works even if editorMode state hasn't updated)
+    const activeMode = activeEntry?.path?.endsWith(".py") ? "python"
+      : activeEntry?.path?.endsWith(".cpp") ? "cpp"
+      : editorMode;
+    if (activeMode === "python" || activeMode === "cpp") {
       await runCode();
       return;
     }
