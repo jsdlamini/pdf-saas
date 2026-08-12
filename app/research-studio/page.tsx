@@ -1334,6 +1334,8 @@ export default function ResearchStudioPage() {
 
   // Auto-save debounce
   const triggerAutoSave = useCallback(() => {
+    // Never auto-save when there is no active project yet
+    if (!activeProjectId || !projectName.trim()) return;
     setAutoSaveStatus("unsaved");
     if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
     saveTimerRef.current = setTimeout(() => {
@@ -1787,6 +1789,7 @@ export default function ResearchStudioPage() {
   }, [compiledPdfUrl]);
 
   function persistProjectSnapshot(snapshot: SavedProjectData) {
+    if (!snapshot.id || !snapshot.name.trim() || !snapshot.entries.length) return;
     setSavedProjectSnapshots((current) => [snapshot, ...current.filter((item) => item.id !== snapshot.id)].slice(0, 20));
     setSavedProjects((current) => {
       const meta: SavedProjectMeta = {
