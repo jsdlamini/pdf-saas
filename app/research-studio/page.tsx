@@ -764,14 +764,14 @@ function highlightPythonSource(source: string) {
   // Keywords (whole word match)
   for (const kw of PYTHON_KEYWORDS) {
     const escapedKw = escapeHtml(kw);
-    const regex = new RegExp(`\\b(${escapedKw})\\b(?![^<]*>|[^<>]*<\\)`, "g");
+    const regex = new RegExp(`\\b(${escapedKw})\\b`, "g");
     result = result.replace(regex, '<span class="studio-token-keyword">$1</span>');
   }
 
-  // Built-in functions (whole word, not already wrapped)
+  // Built-in functions (whole word)
   for (const fn of BUILTIN_PYTHON_FUNCTIONS) {
     const escapedFn = escapeHtml(fn);
-    const regex = new RegExp(`\\b(${escapedFn})\\b(?![^<]*>|[^<>]*<\\)`, "g");
+    const regex = new RegExp(`\\b(${escapedFn})\\b`, "g");
     result = result.replace(regex, '<span class="studio-token-function">$1</span>');
   }
 
@@ -831,14 +831,14 @@ function highlightCppSource(source: string) {
   // Keywords
   for (const kw of CPP_KEYWORDS) {
     const escapedKw = escapeHtml(kw);
-    const regex = new RegExp(`\\b(${escapedKw})\\b(?![^<]*>|[^<>]*<\\)`, "g");
+    const regex = new RegExp(`\\b(${escapedKw})\\b`, "g");
     result = result.replace(regex, '<span class="studio-token-keyword">$1</span>');
   }
 
   // CPP types / STL
   for (const t of CPP_TYPES) {
     const escapedT = escapeHtml(t);
-    const regex = new RegExp(`\\b(${escapedT})\\b(?![^<]*>|[^<>]*<\\)`, "g");
+    const regex = new RegExp(`\\b(${escapedT})\\b`, "g");
     result = result.replace(regex, '<span class="studio-token-function">$1</span>');
   }
 
