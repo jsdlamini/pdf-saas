@@ -137,43 +137,12 @@ const DEFAULT_BIB = String.raw`@article{wiserfiles2026,
 }
 `;
 
-const STARTER_PROJECT: ProjectEntry[] = [
-  { path: "main.tex", kind: "file", content: DEFAULT_LATEX },
-  { path: "sections/introduction.tex", kind: "file", content: DEFAULT_INTRO },
-  { path: "sections/methods.tex", kind: "file", content: DEFAULT_METHODS },
-  { path: "sections/results.tex", kind: "file", content: DEFAULT_RESULTS },
-  { path: "sections/discussion.tex", kind: "file", content: DEFAULT_DISCUSSION },
-  { path: "refs.bib", kind: "file", content: DEFAULT_BIB },
-  { path: "figures/", kind: "folder", content: "" },
-];
-
 function createFreshProjectEntries(projectName: string): ProjectEntry[] {
   return [
-    {
-      path: "main.tex",
-      kind: "file",
-      content: String.raw`\documentclass[11pt]{article}
-\usepackage[margin=1in]{geometry}
-\title{${projectName || "Untitled Project"}}
-\author{Research Team}
-\date{\today}
-
-\begin{document}
-\maketitle
-
-\begin{abstract}
-Write your abstract.
-\end{abstract}
-
-\section{Introduction}
-Start writing your paper.
-
-\end{document}
-`,
-    },
-    { path: "sections/", kind: "folder", content: "" },
-    { path: "figures/", kind: "folder", content: "" },
-    { path: "refs.bib", kind: "file", content: "" },
+    { path: "main.tex", kind: "file" as const, content: "" },
+    { path: "sections/", kind: "folder" as const, content: "" },
+    { path: "figures/", kind: "folder" as const, content: "" },
+    { path: "refs.bib", kind: "file" as const, content: "" },
   ];
 }
 
