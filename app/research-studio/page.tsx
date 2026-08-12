@@ -2489,6 +2489,18 @@ export default function ResearchStudioPage() {
       return;
     }
 
+    if (isMod && event.key.toLowerCase() === "b") {
+      event.preventDefault();
+      insertEditorSnippet({ before: "\\textbf{", after: "}", placeholder: "bold text" });
+      return;
+    }
+
+    if (isMod && event.key.toLowerCase() === "i") {
+      event.preventDefault();
+      insertEditorSnippet({ before: "\\textit{", after: "}", placeholder: "italic text" });
+      return;
+    }
+
     if (isMod && event.key === "/") {
       event.preventDefault();
       const start = textarea.selectionStart;
@@ -3195,22 +3207,37 @@ export default function ResearchStudioPage() {
         <div className="studio-editor-wrapper">
           {/* Editor toolbar */}
           <div className="studio-editor-toolbar">
-            <button type="button" onClick={() => insertEditorSnippet({ before: "\\textbf{", after: "}", placeholder: "bold text" })} className="studio-btn studio-btn-ghost" style={{ height: 26, fontSize: 11, fontWeight: 700, padding: "0 8px" }}>B</button>
-            <button type="button" onClick={() => insertEditorSnippet({ before: "\\textit{", after: "}", placeholder: "italic text" })} className="studio-btn studio-btn-ghost" style={{ height: 26, fontSize: 11, fontStyle: "italic", padding: "0 8px" }}>I</button>
-            <button type="button" onClick={() => insertEditorSnippet({ block: "\\section{Section Title}\n", before: "", after: "", cursorOffset: 9 })} className="studio-btn studio-btn-ghost" style={{ height: 26, fontSize: 10, fontWeight: 600, padding: "0 8px" }}>S1</button>
-            <button type="button" onClick={() => insertEditorSnippet({ before: "$", after: "$", placeholder: "math" })} className="studio-btn studio-btn-ghost" style={{ height: 26, fontSize: 11, padding: "0 8px" }}>$</button>
-            <button type="button" onClick={() => insertEditorSnippet({ block: "\\begin{equation}\n  E = mc^2\n  \\label{eq:key}\n\\end{equation}\n", before: "", after: "", cursorOffset: 18 })} className="studio-btn studio-btn-ghost" style={{ height: 26, fontSize: 10, padding: "0 8px" }}>eq</button>
-            <button type="button" onClick={() => insertEditorSnippet({ block: "\\begin{figure}[htbp]\n  \\centering\n  \\includegraphics[width=0.8\\linewidth]{figures/plot.png}\n  \\caption{Figure caption}\n  \\label{fig:plot}\n\\end{figure}\n", before: "", after: "", cursorOffset: 62 })} className="studio-btn studio-btn-ghost" style={{ height: 26, padding: "0 8px" }}>
+            <button type="button" onClick={() => insertEditorSnippet({ before: "\\textbf{", after: "}", placeholder: "bold text" })} className="studio-btn studio-btn-ghost" style={{ height: 26, fontSize: 11, fontWeight: 700, padding: "0 8px" }} title="Bold (Ctrl+B)">B</button>
+            <button type="button" onClick={() => insertEditorSnippet({ before: "\\textit{", after: "}", placeholder: "italic text" })} className="studio-btn studio-btn-ghost" style={{ height: 26, fontSize: 11, fontStyle: "italic", padding: "0 8px" }} title="Italic (Ctrl+I)">I</button>
+            <button type="button" onClick={() => insertEditorSnippet({ before: "\\underline{", after: "}", placeholder: "underlined text" })} className="studio-btn studio-btn-ghost" style={{ height: 26, fontSize: 11, textDecoration: "underline", padding: "0 8px" }} title="Underline">U</button>
+            <span style={{ width: 1, height: 18, background: "var(--border-color, #334155)", margin: "0 4px" }} />
+            <button type="button" onClick={() => insertEditorSnippet({ block: "\\section{Section Title}\n", before: "", after: "", cursorOffset: 9 })} className="studio-btn studio-btn-ghost" style={{ height: 26, fontSize: 10, fontWeight: 600, padding: "0 8px" }} title="Section">S1</button>
+            <button type="button" onClick={() => insertEditorSnippet({ block: "\\subsection{Subsection Title}\n", before: "", after: "", cursorOffset: 12 })} className="studio-btn studio-btn-ghost" style={{ height: 26, fontSize: 10, fontWeight: 600, padding: "0 8px" }} title="Subsection">S2</button>
+            <button type="button" onClick={() => insertEditorSnippet({ block: "\\subsubsection{Title}\n", before: "", after: "", cursorOffset: 15 })} className="studio-btn studio-btn-ghost" style={{ height: 26, fontSize: 10, fontWeight: 600, padding: "0 8px" }} title="Subsubsection">S3</button>
+            <span style={{ width: 1, height: 18, background: "var(--border-color, #334155)", margin: "0 4px" }} />
+            <button type="button" onClick={() => insertEditorSnippet({ before: "$", after: "$", placeholder: "math" })} className="studio-btn studio-btn-ghost" style={{ height: 26, fontSize: 11, padding: "0 8px" }} title="Inline math">$</button>
+            <button type="button" onClick={() => insertEditorSnippet({ block: "\\begin{equation}\n  E = mc^2\n  \\label{eq:key}\n\\end{equation}\n", before: "", after: "", cursorOffset: 18 })} className="studio-btn studio-btn-ghost" style={{ height: 26, fontSize: 10, padding: "0 8px" }} title="Equation block">eq</button>
+            <span style={{ width: 1, height: 18, background: "var(--border-color, #334155)", margin: "0 4px" }} />
+            <button type="button" onClick={() => insertEditorSnippet({ block: "\\begin{itemize}\n  \\item First item\n  \\item Second item\n\\end{itemize}\n", before: "", after: "", cursorOffset: 17 })} className="studio-btn studio-btn-ghost" style={{ height: 26, fontSize: 10, padding: "0 8px" }} title="Bullet list">•list</button>
+            <button type="button" onClick={() => insertEditorSnippet({ block: "\\begin{enumerate}\n  \\item First item\n  \\item Second item\n\\end{enumerate}\n", before: "", after: "", cursorOffset: 18 })} className="studio-btn studio-btn-ghost" style={{ height: 26, fontSize: 10, padding: "0 8px" }} title="Numbered list">1.list</button>
+            <span style={{ width: 1, height: 18, background: "var(--border-color, #334155)", margin: "0 4px" }} />
+            <button type="button" onClick={() => insertEditorSnippet({ block: "\\begin{figure}[htbp]\n  \\centering\n  \\includegraphics[width=0.8\\linewidth]{figures/plot.png}\n  \\caption{Figure caption}\n  \\label{fig:plot}\n\\end{figure}\n", before: "", after: "", cursorOffset: 62 })} className="studio-btn studio-btn-ghost" style={{ height: 26, padding: "0 8px" }} title="Figure">
               <svg viewBox="0 0 20 20" style={{ width: 14, height: 14 }} fill="none" stroke="currentColor" strokeWidth="2">
                 <rect x="3" y="4" width="14" height="12" rx="1.5" /><circle cx="8" cy="8" r="1.2" /><path d="M4.5 14l4.5-4 2.6 2 1.9-1.7L15.5 14" strokeLinecap="round" strokeLinejoin="round" />
               </svg>
             </button>
+            <button type="button" onClick={() => insertEditorSnippet({ block: "\\begin{table}[htbp]\n  \\centering\n  \\caption{Table caption}\n  \\label{tab:key}\n  \\begin{tabular}{lcc}\n    \\toprule\n    Item & A & B \\\\\n    \\midrule\n    X & 1 & 2 \\\\\n    Y & 3 & 4 \\\\\n    \\bottomrule\n  \\end{tabular}\n\\end{table}\n", before: "", after: "", cursorOffset: 41 })} className="studio-btn studio-btn-ghost" style={{ height: 26, padding: "0 8px" }} title="Table">
+              <svg viewBox="0 0 20 20" style={{ width: 14, height: 14 }} fill="none" stroke="currentColor" strokeWidth="2">
+                <rect x="3" y="4" width="14" height="12" rx="1" /><path d="M3 9h14M10 4v12" strokeLinecap="round" />
+              </svg>
+            </button>
+            <button type="button" onClick={() => insertEditorSnippet({ before: "\\cite{", after: "}", placeholder: "key" })} className="studio-btn studio-btn-ghost" style={{ height: 26, fontSize: 10, padding: "0 8px" }} title="Citation">cite</button>
+            <button type="button" onClick={() => insertEditorSnippet({ before: "\\ref{", after: "}", placeholder: "key" })} className="studio-btn studio-btn-ghost" style={{ height: 26, fontSize: 10, padding: "0 8px" }} title="Reference">ref</button>
             <span style={{ width: 1, height: 18, background: "var(--border-color, #334155)", margin: "0 4px" }} />
-            <button type="button" onClick={() => setFindPanelOpen((c) => !c)} className="studio-btn studio-btn-ghost" style={{ height: 26, fontSize: 11, padding: "0 8px" }}>
+            <button type="button" onClick={() => setFindPanelOpen((c) => !c)} className="studio-btn studio-btn-ghost" style={{ height: 26, fontSize: 11, padding: "0 8px" }} title="Find & Replace">
               <svg viewBox="0 0 20 20" style={{ width: 14, height: 14 }} fill="none" stroke="currentColor" strokeWidth="2">
                 <circle cx="9" cy="9" r="4" /><path d="M12.5 12.5L16 16" strokeLinecap="round" />
               </svg>
-              Find
             </button>
             <span style={{ fontSize: 11, color: "var(--text-muted, #64748b)", marginLeft: 8 }}>{activeEntry?.path || "No file selected"}</span>
           </div>
@@ -3346,15 +3373,18 @@ export default function ResearchStudioPage() {
           {/* Keyboard shortcuts */}
           {showShortcuts ? (
             <div className="studio-shortcuts">
+              <div><kbd className="studio-kbd">Ctrl+B</kbd> Bold</div>
+              <div><kbd className="studio-kbd">Ctrl+I</kbd> Italic</div>
               <div><kbd className="studio-kbd">Ctrl+S</kbd> Compile</div>
+              <div><kbd className="studio-kbd">Ctrl+Enter</kbd> Compile</div>
               <div><kbd className="studio-kbd">Ctrl+F</kbd> Find</div>
               <div><kbd className="studio-kbd">Ctrl+H</kbd> Replace</div>
               <div><kbd className="studio-kbd">Ctrl+G</kbd> Next match</div>
               <div><kbd className="studio-kbd">Ctrl+D</kbd> Duplicate</div>
               <div><kbd className="studio-kbd">Ctrl+/</kbd> Comment</div>
               <div><kbd className="studio-kbd">Tab</kbd> Indent</div>
+              <div><kbd className="studio-kbd">Esc</kbd> Close panels</div>
               <div><kbd className="studio-kbd">Ctrl+Click</kbd> Sync PDF</div>
-              <div>Spellcheck enabled</div>
             </div>
           ) : null}
         </div>
