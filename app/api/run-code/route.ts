@@ -20,7 +20,7 @@ type RunCodeResponse = {
   exitCode: number;
 };
 
-const TIMEOUT_MS = 10_000;
+const TIMEOUT_MS = 15_000;
 const MAX_OUTPUT_BYTES = 100_000;
 
 function truncateOutput(raw: string): string {
@@ -57,7 +57,7 @@ async function runPython(code: string, tempDir: string): Promise<RunCodeResponse
     if (error.killed) {
       return {
         output: "",
-        error: "Execution timed out after 10 seconds.",
+        error: "Execution timed out after 15 seconds.",
         exitCode: 124,
       };
     }
@@ -124,7 +124,7 @@ async function runCpp(code: string, tempDir: string): Promise<RunCodeResponse> {
     if (error.killed) {
       return {
         output: "",
-        error: "Execution timed out after 10 seconds.",
+        error: "Execution timed out after 15 seconds.",
         exitCode: 124,
       };
     }

@@ -19,6 +19,7 @@ type SavedProjectMeta = {
   id: string;
   name: string;
   updatedAt: string;
+  type?: EditorMode;
 };
 
 type SavedProjectData = {
@@ -140,7 +141,31 @@ const DEFAULT_BIB = String.raw`@article{wiserfiles2026,
 }
 `;
 
-function createFreshProjectEntries(projectName: string): ProjectEntry[] {
+function getTodayString(): string {
+  return new Date().toLocaleDateString("en-US", { year: "numeric", month: "long", day: "numeric" });
+}
+
+function createFreshProjectEntries(projectName: string, type: EditorMode = "latex"): ProjectEntry[] {
+  if (type === "python") {
+    const pyTemplate = getTemplateBySlug("python-script");
+    const pyContent = (pyTemplate?.entries.find((e) => e.path === "main.py")?.content || "")
+      .replace("{today}", getTodayString());
+    return [
+      { path: "main.py", kind: "file" as const, content: pyContent },
+      { path: "data/", kind: "folder" as const, content: "" },
+      { path: "output/", kind: "folder" as const, content: "" },
+    ];
+  }
+  if (type === "cpp") {
+    const cppTemplate = getTemplateBySlug("cpp-program");
+    const cppContent = (cppTemplate?.entries.find((e) => e.path === "main.cpp")?.content || "")
+      .replace("{today}", getTodayString());
+    return [
+      { path: "main.cpp", kind: "file" as const, content: cppContent },
+      { path: "data/", kind: "folder" as const, content: "" },
+      { path: "output/", kind: "folder" as const, content: "" },
+    ];
+  }
   return [
     { path: "main.tex", kind: "file" as const, content: "" },
     { path: "sections/", kind: "folder" as const, content: "" },
@@ -349,12 +374,18 @@ function nextTemplateFor(path: string, mode?: EditorMode) {
     return "@article{newref,\n  title={Title},\n  author={Author},\n  year={2026}\n}\n";
   }
   if (lower.endsWith(".py")) {
+    const today = new Date().toLocaleDateString("en-US", { year: "numeric", month: "long", day: "numeric" });
     return `#!/usr/bin/env python3
-"""New module."""
+"""
+New Module
+
+Author: Your Name
+Date: ${today}
+"""
 
 
-def main() -> None:
-    print("Hello!")
+def main():
+    print("Hello, World!")
 
 
 if __name__ == "__main__":
@@ -362,10 +393,20 @@ if __name__ == "__main__":
 `;
   }
   if (lower.endsWith(".cpp") || lower.endsWith(".cc") || lower.endsWith(".cxx")) {
+    const today = new Date().toLocaleDateString("en-US", { year: "numeric", month: "long", day: "numeric" });
     return `#include <iostream>
+#include <string>
+#include <vector>
 
-int main(int argc, char* argv[]) {
-    std::cout << "Hello!" << std::endl;
+/**
+ * New Program
+ *
+ * Author: Your Name
+ * Date: ${today}
+ */
+
+int main() {
+    std::cout << "Hello, World!" << std::endl;
     return 0;
 }
 `;
@@ -1050,9 +1091,16 @@ export default function ResearchStudioPage() {
   const [editorScroll, setEditorScroll] = useState({ top: 0, left: 0 });
   const [autoSaveStatus, setAutoSaveStatus] = useState<"saved" | "unsaved" | "saving">("saved");
   const [editorMode, setEditorMode] = useState<EditorMode>("latex");
-  const [codeOutput, setCodeOutput] = useState("");
+  const [codeOutput, setCodeOutput] = useState<{ stdout: string; stderr: string; exitCode: number } | null>(null);
   const [codeRunBusy, setCodeRunBusy] = useState(false);
   const [autoSaveTimestamp, setAutoSaveTimestamp] = useState<string | null>(null);
+
+  // Undo/redo stacks
+  const undoStackRef = useRef<{ source: string; cursorPos: number }[]>([]);
+  const redoStackRef = useRef<{ source: string; cursorPos: number }[]>([]);
+  const isUndoRedoRef = useRef(false);
+  const menuHoverTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const menuCloseTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [equationTooltip, setEquationTooltip] = useState<{ top: number; left: number; latex: string } | null>(null);
   const [wordCount, setWordCount] = useState<{ words: number; chars: number; abstractWords: number }>({ words: 0, chars: 0, abstractWords: 0 });
   const [loadingProject, setLoadingProject] = useState(false);
@@ -1665,6 +1713,7 @@ export default function ResearchStudioPage() {
         id: snapshot.id,
         name: snapshot.name,
         updatedAt: snapshot.updatedAt,
+        type: snapshot.editorMode || "latex",
       };
       return [meta, ...current.filter((item) => item.id !== snapshot.id)].slice(0, 20);
     });
@@ -1740,7 +1789,7 @@ export default function ResearchStudioPage() {
     closeIntellisense();
     setSavedProjectSnapshots(projects.slice(0, 20));
     setSavedProjects(
-      projects.map((project) => ({ id: project.id, name: project.name, updatedAt: project.updatedAt })).slice(0, 20)
+      projects.map((project) => ({ id: project.id, name: project.name, updatedAt: project.updatedAt, type: project.editorMode || "latex" })).slice(0, 20)
     );
     setActiveProjectId(nextActive.id);
     setProjectName(nextActive.name);
@@ -1759,6 +1808,8 @@ export default function ResearchStudioPage() {
     setAiFixSuggestions([]);
     setLastCompileAt(nextActive.lastCompileAt || "Not compiled yet");
     setEditorMode(nextActive.editorMode || "latex");
+    setCodeOutput(null);
+    setCodeRunBusy(false);
     setCompileNotice(notice);
   });
 
@@ -1855,7 +1906,7 @@ export default function ResearchStudioPage() {
     setAiFixSuggestions([]);
     setLastCompileAt(saved.lastCompileAt || "Not compiled yet");
     setEditorMode(saved.editorMode || "latex");
-    setCodeOutput("");
+    setCodeOutput(null);
     setCodeRunBusy(false);
     setCompileNotice(`Loaded project: ${saved.name}`);
     setWorkspaceScreen("editor");
@@ -1939,6 +1990,22 @@ export default function ResearchStudioPage() {
 
   function updateActiveFile(nextContent: string) {
     if (!activeEntry) return;
+
+    // Push previous state onto undo stack (unless we're undoing/redoing)
+    if (!isUndoRedoRef.current) {
+      const prevContent = activeEntry.content;
+      if (prevContent !== nextContent) {
+        // Estimate the old cursor position before the edit
+        const newCursor = editorRef.current?.selectionStart ?? 0;
+        const lengthDiff = nextContent.length - prevContent.length;
+        const oldCursor = Math.max(0, Math.min(newCursor - lengthDiff, prevContent.length));
+        undoStackRef.current.push({ source: prevContent, cursorPos: oldCursor });
+        if (undoStackRef.current.length > 100) undoStackRef.current.shift();
+        // Clear redo stack on new edit
+        redoStackRef.current = [];
+      }
+    }
+
     setProjectEntries((current) =>
       current.map((entry) =>
         entry.path === activeEntry.path && entry.kind === "file"
@@ -1947,6 +2014,50 @@ export default function ResearchStudioPage() {
       )
     );
     setAutoSaveStatus("unsaved");
+  }
+
+  function undo() {
+    if (!undoStackRef.current.length || !activeEntry) return;
+    isUndoRedoRef.current = true;
+
+    // Push current state to redo stack
+    const currentSource = activeEntry.content;
+    const currentCursor = editorRef.current?.selectionStart ?? 0;
+    redoStackRef.current.push({ source: currentSource, cursorPos: currentCursor });
+
+    // Restore previous state from undo stack
+    const prev = undoStackRef.current.pop()!;
+    updateActiveFile(prev.source);
+    window.requestAnimationFrame(() => {
+      const textarea = editorRef.current;
+      if (textarea) {
+        textarea.focus();
+        textarea.setSelectionRange(prev.cursorPos, prev.cursorPos);
+      }
+      isUndoRedoRef.current = false;
+    });
+  }
+
+  function redo() {
+    if (!redoStackRef.current.length || !activeEntry) return;
+    isUndoRedoRef.current = true;
+
+    // Push current state to undo stack
+    const currentSource = activeEntry.content;
+    const currentCursor = editorRef.current?.selectionStart ?? 0;
+    undoStackRef.current.push({ source: currentSource, cursorPos: currentCursor });
+
+    // Restore next state from redo stack
+    const next = redoStackRef.current.pop()!;
+    updateActiveFile(next.source);
+    window.requestAnimationFrame(() => {
+      const textarea = editorRef.current;
+      if (textarea) {
+        textarea.focus();
+        textarea.setSelectionRange(next.cursorPos, next.cursorPos);
+      }
+      isUndoRedoRef.current = false;
+    });
   }
 
   function createProjectFromTemplate(template: ResearchTemplate) {
@@ -1971,7 +2082,7 @@ export default function ResearchStudioPage() {
     persistProjectSnapshot(snapshot);
     queueServerProjectSync(snapshot);
     setSavedProjects((current) => [
-      { id: nextProjectId, name, updatedAt: createdAt },
+      { id: nextProjectId, name, updatedAt: createdAt, type: detectedMode },
       ...current.filter((item) => item.id !== nextProjectId),
     ]);
     if (compiledPdfUrl) URL.revokeObjectURL(compiledPdfUrl);
@@ -1991,7 +2102,7 @@ export default function ResearchStudioPage() {
     setAiFixSuggestions([]);
     setLastCompileAt("Not compiled yet");
     setEditorMode(detectedMode);
-    setCodeOutput("");
+    setCodeOutput(null);
     setCodeRunBusy(false);
     setCompileNotice(`Created project from "${template.name}" template.`);
     setWorkspaceScreen("editor");
@@ -2055,25 +2166,71 @@ export default function ResearchStudioPage() {
       return;
     }
 
-    const name = await promptModal("New project", "Project name", "", "Create");
-    if (!name) return;
+    // Show dialog with name + type selector
+    const result = await Swal.fire({
+      title: "New Project",
+      html: `
+        <div style="text-align:left;display:flex;flex-direction:column;gap:12px">
+          <div>
+            <label style="font-size:13px;font-weight:600;color:#e2e8f0;display:block;margin-bottom:4px">Project Name</label>
+            <input id="swal-project-name" class="swal2-input" placeholder="My Research Project" style="background:#0f172a;color:#e2e8f0;border-color:#334155;width:100%;box-sizing:border-box">
+          </div>
+          <div>
+            <label style="font-size:13px;font-weight:600;color:#e2e8f0;display:block;margin-bottom:4px">Project Type</label>
+            <div style="display:flex;gap:8px">
+              <label style="flex:1;padding:8px 4px;border:1px solid #818cf8;border-radius:6px;text-align:center;cursor:pointer;color:#e2e8f0;font-size:12px">
+                <input type="radio" name="project-type" value="latex" checked style="margin-right:4px"> LaTeX
+              </label>
+              <label style="flex:1;padding:8px 4px;border:1px solid #4ade80;border-radius:6px;text-align:center;cursor:pointer;color:#e2e8f0;font-size:12px">
+                <input type="radio" name="project-type" value="python" style="margin-right:4px"> Python
+              </label>
+              <label style="flex:1;padding:8px 4px;border:1px solid #f97316;border-radius:6px;text-align:center;cursor:pointer;color:#e2e8f0;font-size:12px">
+                <input type="radio" name="project-type" value="cpp" style="margin-right:4px"> C++
+              </label>
+            </div>
+          </div>
+        </div>
+      `,
+      showCancelButton: true,
+      confirmButtonText: "Create",
+      cancelButtonText: "Cancel",
+      confirmButtonColor: "#0f766e",
+      cancelButtonColor: "#334155",
+      background: "#1a1d2b",
+      color: "#e2e8f0",
+      preConfirm: () => {
+        const name = (document.getElementById("swal-project-name") as HTMLInputElement)?.value?.trim();
+        if (!name) {
+          Swal.showValidationMessage("Enter a project name");
+          return false;
+        }
+        const typeEl = document.querySelector('input[name="project-type"]:checked') as HTMLInputElement | null;
+        const type = (typeEl?.value || "latex") as EditorMode;
+        return { name, type };
+      },
+    });
+
+    if (!result.isConfirmed || !result.value) return;
+    const { name, type } = result.value as { name: string; type: EditorMode };
 
     const nextProjectId = makeProjectId();
-    const freshEntries = createFreshProjectEntries(name);
+    const freshEntries = createFreshProjectEntries(name, type);
+    const defaultPath = type === "python" ? "main.py" : type === "cpp" ? "main.cpp" : "main.tex";
     const createdAt = new Date().toISOString();
     const snapshot: SavedProjectData = {
       id: nextProjectId,
       name,
       entries: freshEntries,
-      selectedPath: "main.tex",
+      selectedPath: defaultPath,
       lastCompileAt: "Not compiled yet",
       updatedAt: createdAt,
+      editorMode: type,
     };
 
     persistProjectSnapshot(snapshot);
     queueServerProjectSync(snapshot);
     setSavedProjects((current) => [
-      { id: nextProjectId, name, updatedAt: createdAt },
+      { id: nextProjectId, name, updatedAt: createdAt, type },
       ...current.filter((item) => item.id !== nextProjectId),
     ]);
 
@@ -2082,7 +2239,7 @@ export default function ResearchStudioPage() {
     setActiveProjectId(nextProjectId);
     setProjectName(name);
     setProjectEntries(freshEntries);
-    setSelectedPath("main.tex");
+    setSelectedPath(defaultPath);
     setAddFileError("");
     setCompileBusy(false);
     setCompiledPdfBlob(null);
@@ -2093,8 +2250,8 @@ export default function ResearchStudioPage() {
     setAiFixSummary("");
     setAiFixSuggestions([]);
     setLastCompileAt("Not compiled yet");
-    setEditorMode("latex");
-    setCodeOutput("");
+    setEditorMode(type);
+    setCodeOutput(null);
     setCodeRunBusy(false);
     setCompileNotice("New project created and saved. Add files and compile when ready.");
     setWorkspaceScreen("editor");
@@ -2215,7 +2372,7 @@ export default function ResearchStudioPage() {
 
     try {
       setCodeRunBusy(true);
-      setCodeOutput("");
+      setCodeOutput(null);
       setCompileNotice(`Running ${editorMode} code on server...`);
 
       const response = await fetch("/api/run-code", {
@@ -2227,22 +2384,20 @@ export default function ResearchStudioPage() {
       const result = (await response.json()) as { output?: string; error?: string; exitCode?: number; message?: string };
 
       if (!response.ok) {
-        setCodeOutput(result.error || result.message || `Server error: ${response.status}`);
+        setCodeOutput({ stdout: "", stderr: result.error || result.message || `Server error: ${response.status}`, exitCode: result.exitCode ?? 1 });
         setCompileNotice("Code execution failed.");
         return;
       }
 
-      const display = [
-        result.output ? `-- STDOUT --\n${result.output}` : "",
-        result.error ? `-- STDERR --\n${result.error}` : "",
-        result.exitCode !== undefined ? `-- Exit code: ${result.exitCode} --` : "",
-      ].filter(Boolean).join("\n\n");
-
-      setCodeOutput(display || "No output.");
+      setCodeOutput({
+        stdout: result.output || "",
+        stderr: result.error || "",
+        exitCode: result.exitCode ?? 0,
+      });
       setCompileNotice(`Code executed (exit code: ${result.exitCode ?? 0}).`);
     } catch (runError) {
       const message = runError instanceof Error ? runError.message : "Code execution failed.";
-      setCodeOutput(`Error: ${message}`);
+      setCodeOutput({ stdout: "", stderr: `Error: ${message}`, exitCode: 1 });
       setCompileNotice("Code execution failed.");
     } finally {
       setCodeRunBusy(false);
@@ -2348,6 +2503,7 @@ export default function ResearchStudioPage() {
           id: snapshot.id,
           name: snapshot.name,
           updatedAt: snapshot.updatedAt,
+          type: snapshot.editorMode || "latex",
         };
         return [meta, ...current.filter((item) => item.id !== snapshot.id)].slice(0, 20);
       });
@@ -2594,6 +2750,7 @@ export default function ResearchStudioPage() {
         selectedPath: mainTexPath,
         lastCompileAt: "Not compiled yet",
         updatedAt: now,
+        editorMode: "latex",
       };
 
       persistProjectSnapshot(snapshot);
@@ -2602,6 +2759,7 @@ export default function ResearchStudioPage() {
       setProjectName(projectName);
       setProjectEntries(entries);
       setSelectedPath(mainTexPath);
+      setEditorMode("latex");
       setCompileNotice(`Imported ${entries.filter((e) => e.kind === "file").length} files from ${file.name}.`);
       setWorkspaceScreen("editor");
     } catch (e) {
@@ -2684,16 +2842,29 @@ export default function ResearchStudioPage() {
 
     if (isMod) {
       const key = event.key.toLowerCase();
+
+      // Ctrl+Z: undo
+      if (key === "z" && !event.shiftKey) {
+        event.preventDefault();
+        undo();
+        return;
+      }
+
+      // Ctrl+Y or Ctrl+Shift+Z: redo
+      if (key === "y" || (event.shiftKey && key === "z")) {
+        event.preventDefault();
+        redo();
+        return;
+      }
+
       const passThroughShortcuts = new Set([
         "a", // select all
         "c", // copy
         "v", // paste
         "x", // cut
-        "z", // undo
-        "y", // redo (Windows/Linux)
       ]);
 
-      if (passThroughShortcuts.has(key) || (event.shiftKey && key === "z")) {
+      if (passThroughShortcuts.has(key)) {
         return;
       }
     }
@@ -2966,6 +3137,7 @@ export default function ResearchStudioPage() {
                     selectedPath: sharedProject.selectedPath || "main.tex",
                     lastCompileAt: "Not compiled yet",
                     updatedAt: now,
+                    editorMode: sharedProject.editorMode || "latex",
                   };
                   persistProjectSnapshot(snapshot);
                   queueServerProjectSync(snapshot);
@@ -2973,6 +3145,7 @@ export default function ResearchStudioPage() {
                   setProjectName(snapshot.name);
                   setProjectEntries(snapshot.entries);
                   setSelectedPath(snapshot.selectedPath);
+                  setEditorMode(snapshot.editorMode || "latex");
                   setCompileNotice(`Copied "${sharedProject.name}" to your projects.`);
                   setWorkspaceScreen("editor");
                   setSharedProject(null);
@@ -3171,10 +3344,31 @@ export default function ResearchStudioPage() {
                         {RESEARCH_TEMPLATES.find((t) => t.slug === tagName)?.name || tagName}
                       </span>
                     ) : null}
-                    <span className="studio-tag">
-                      <span className="studio-tag-dot" style={{ background: "#4ade80" }} />
-                      LaTeX
-                    </span>
+                    {(() => {
+                      const mode = item.type || snapshot?.editorMode || "latex";
+                      if (mode === "python") {
+                        return (
+                          <span className="studio-tag">
+                            <span className="studio-tag-dot" style={{ background: "#4ade80" }} />
+                            Python
+                          </span>
+                        );
+                      }
+                      if (mode === "cpp") {
+                        return (
+                          <span className="studio-tag">
+                            <span className="studio-tag-dot" style={{ background: "#f97316" }} />
+                            C++
+                          </span>
+                        );
+                      }
+                      return (
+                        <span className="studio-tag">
+                          <span className="studio-tag-dot" style={{ background: "#818cf8" }} />
+                          LaTeX
+                        </span>
+                      );
+                    })()}
                   </div>
                   <div className="studio-project-card-actions">
                     <button
@@ -3413,7 +3607,18 @@ export default function ResearchStudioPage() {
       </header>
 
       {/* ── Menu Bar ──────────────────────────────── */}
-      <div className="studio-menubar">
+      <div
+        className="studio-menubar"
+        onMouseLeave={() => {
+          if (menuHoverTimerRef.current) {
+            clearTimeout(menuHoverTimerRef.current);
+            menuHoverTimerRef.current = null;
+          }
+          menuCloseTimerRef.current = setTimeout(() => {
+            setOpenMenu("");
+          }, 200);
+        }}
+      >
         {[
           {
             label: "File", key: "file", items: [
@@ -3428,6 +3633,9 @@ export default function ResearchStudioPage() {
           },
           {
             label: "Edit", key: "edit", items: [
+              { label: <>Undo <kbd className="studio-menu-kbd">Ctrl+Z</kbd></>, action: () => { setOpenMenu(""); undo(); } },
+              { label: <>Redo <kbd className="studio-menu-kbd">Ctrl+Y</kbd></>, action: () => { setOpenMenu(""); redo(); } },
+              "-",
               { label: <>Find <kbd className="studio-menu-kbd">Ctrl+F</kbd></>, action: () => { setOpenMenu(""); setFindPanelOpen(true); setReplacePanelOpen(false); } },
               { label: <>Replace <kbd className="studio-menu-kbd">Ctrl+H</kbd></>, action: () => { setOpenMenu(""); setFindPanelOpen(true); setReplacePanelOpen(true); } },
             ]
@@ -3472,7 +3680,20 @@ export default function ResearchStudioPage() {
           },
         ].filter(Boolean).map((menu: any) => (
           <div key={menu.key} className="studio-menu-group">
-            <button type="button" onClick={() => setOpenMenu(openMenu === menu.key ? "" : menu.key)} className={`studio-menu-trigger ${openMenu === menu.key ? "studio-menu-active" : ""}`}>{menu.label}</button>
+            <button
+              type="button"
+              onClick={() => setOpenMenu(openMenu === menu.key ? "" : menu.key)}
+              onMouseEnter={() => {
+                if (menuCloseTimerRef.current) {
+                  clearTimeout(menuCloseTimerRef.current);
+                  menuCloseTimerRef.current = null;
+                }
+                if (menuHoverTimerRef.current) clearTimeout(menuHoverTimerRef.current);
+                menuHoverTimerRef.current = setTimeout(() => {
+                  setOpenMenu(menu.key);
+                }, 150);
+              }}
+              className={`studio-menu-trigger ${openMenu === menu.key ? "studio-menu-active" : ""}`}>{menu.label}</button>
             {openMenu === menu.key ? (
               <div className="studio-menu-dropdown">
                 {menu.items.map((item: any, i: number) => (
@@ -3786,17 +4007,34 @@ export default function ResearchStudioPage() {
           {isCodeMode && codeOutput ? (
             <div className="studio-code-output">
               <div className="studio-code-output-header">
-                <span>Output</span>
+                <span>Output {codeOutput.exitCode !== undefined ? `(exit: ${codeOutput.exitCode})` : ""}</span>
                 <button
                   type="button"
-                  onClick={() => setCodeOutput("")}
+                  onClick={() => setCodeOutput(null)}
                   className="studio-btn studio-btn-ghost"
                   style={{ height: 20, fontSize: 10, padding: "0 6px" }}
                 >
                   Clear
                 </button>
               </div>
-              <pre className="studio-code-output-body">{codeOutput}</pre>
+              {codeOutput.stdout ? (
+                <pre className="studio-code-output-body" style={{ color: "#4ade80" }}>{codeOutput.stdout}</pre>
+              ) : null}
+              {codeOutput.stderr ? (
+                <pre className="studio-code-output-body" style={{ color: "#f87171" }}>{codeOutput.stderr}</pre>
+              ) : null}
+              {!codeOutput.stdout && !codeOutput.stderr ? (
+                <pre className="studio-code-output-body" style={{ color: "#94a3b8" }}>No output.</pre>
+              ) : null}
+            </div>
+          ) : null}
+          {/* Running indicator */}
+          {isCodeMode && codeRunBusy && !codeOutput ? (
+            <div className="studio-code-output">
+              <div className="studio-code-output-header">
+                <span>Output</span>
+              </div>
+              <pre className="studio-code-output-body" style={{ color: "#fbbf24" }}>Running...</pre>
             </div>
           ) : null}
 
@@ -3824,6 +4062,9 @@ export default function ResearchStudioPage() {
           {/* Keyboard shortcuts */}
           {showShortcuts ? (
             <div className="studio-shortcuts">
+              <div><kbd className="studio-kbd">Ctrl+Z</kbd> Undo</div>
+              <div><kbd className="studio-kbd">Ctrl+Y</kbd> Redo</div>
+              <div><kbd className="studio-kbd">Ctrl+Shift+Z</kbd> Redo</div>
               {isCodeMode ? (
                 <>
                   <div><kbd className="studio-kbd">Ctrl+S</kbd> Run</div>

@@ -387,19 +387,16 @@ Thanks to our funding sources.
         path: "main.py",
         kind: "file",
         content: `#!/usr/bin/env python3
-"""Research script — describe your analysis here."""
+"""
+Project Title
 
-import json
-import math
-import sys
-from collections import defaultdict
-from typing import Any
+Author: Your Name
+Date: {today}
+"""
 
 
-def main() -> None:
-    """Entry point for the script."""
-    print("Hello from Python!")
-    # Your research code goes here
+def main():
+    print("Hello, World!")
 
 
 if __name__ == "__main__":
@@ -419,18 +416,18 @@ if __name__ == "__main__":
         path: "main.cpp",
         kind: "file",
         content: `#include <iostream>
-#include <fstream>
 #include <string>
 #include <vector>
-#include <map>
-#include <algorithm>
-#include <cmath>
 
-int main(int argc, char* argv[]) {
-    std::cout << "Hello from C++!" << std::endl;
+/**
+ * Project Title
+ *
+ * Author: Your Name
+ * Date: {today}
+ */
 
-    // Your research code goes here
-
+int main() {
+    std::cout << "Hello, World!" << std::endl;
     return 0;
 }
 `,
