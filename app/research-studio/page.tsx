@@ -743,43 +743,63 @@ const BUILTIN_PYTHON_FUNCTIONS = new Set([
 
 function highlightPythonSource(source: string) {
   const escaped = escapeHtml(source);
-
-  // Order matters: handle multi-line strings first, then comments, then keywords
   let result = escaped;
+  let counter = 0;
+  const subs: { marker: string; html: string }[] = [];
 
-  // Triple-quoted strings (multi-line)
-  result = result.replace(/("""[\s\S]*?"""|'''[\s\S]*?''')/g, '<span class="studio-hl-str">$1</span>');
+  function mark(pattern: RegExp, cls: string, groupIdx = 0) {
+    result = result.replace(pattern, (...args: any[]) => {
+      const match = args[groupIdx];
+      const marker = `\x01m${counter++}\x01`;
+      subs.push({ marker, html: `<span class="${cls}">${match}</span>` });
+      return marker;
+    });
+  }
 
-  // Comments (lines starting with # or # after whitespace, but not inside strings)
-  result = result.replace(/(^|\n)(\s*)(#[^\n]*)/g, (_, nl, ws, comment) =>
-    `${nl}${ws}<span class="studio-hl-cmt">${comment}</span>`
-  );
+  // Wide multi-line patterns first
+  mark(/("""[\s\S]*?"""|'''[\s\S]*?''')/g, "studio-hl-str");
 
-  // Regular strings (single and double quoted, single-line)
-  result = result.replace(/('(?:[^'\\]|\\.)*'|"(?:[^"\\]|\\.)*")/g, '<span class="studio-hl-str">$1</span>');
+  // Line comments
+  result = result.replace(/(^|\n)(\s*)(#[^\n]*)/g, (_, nl, ws, comment) => {
+    const marker = `\x01m${counter++}\x01`;
+    subs.push({ marker, html: `${nl}${ws}<span class="studio-hl-cmt">${comment}</span>` });
+    return marker;
+  });
+
+  // Regular strings
+  mark(/('(?:[^'\\]|\\.)*'|"(?:[^"\\]|\\.)*")/g, "studio-hl-str");
 
   // @decorators
-  result = result.replace(/(@[a-zA-Z_]\w*)/g, '<span class="studio-hl-dec">$1</span>');
+  mark(/(@[a-zA-Z_]\w*)/g, "studio-hl-dec");
 
-  // Keywords (whole word, not inside HTML tags)
+  // Keywords
   for (const kw of PYTHON_KEYWORDS) {
     const escapedKw = escapeHtml(kw);
-    const regex = new RegExp(`\\b(${escapedKw})\\b(?![^<]*>)`, "g");
-    result = result.replace(regex, '<span class="studio-hl-kw">$1</span>');
+    mark(new RegExp(`\\b(${escapedKw})\\b`, "g"), "studio-hl-kw");
   }
 
-  // Built-in functions (whole word, not inside HTML tags)
+  // Built-in functions
   for (const fn of BUILTIN_PYTHON_FUNCTIONS) {
     const escapedFn = escapeHtml(fn);
-    const regex = new RegExp(`\\b(${escapedFn})\\b(?![^<]*>)`, "g");
-    result = result.replace(regex, '<span class="studio-hl-fn">$1</span>');
+    mark(new RegExp(`\\b(${escapedFn})\\b`, "g"), "studio-hl-fn");
   }
 
-  // Function definitions: def function_name
-  result = result.replace(/\b(def)\s+(\w+)/g, '<span class="studio-hl-kw">$1</span> <span class="studio-hl-fn">$2</span>');
+  // Function definitions
+  result = result.replace(/\b(def)\s+(\w+)/g, (_, kw: string, name: string) => {
+    const m1 = `\x01m${counter++}\x01`;
+    const m2 = `\x01m${counter++}\x01`;
+    subs.push({ marker: m1, html: `<span class="studio-hl-kw">${kw}</span>` });
+    subs.push({ marker: m2, html: `<span class="studio-hl-fn">${name}</span>` });
+    return `${m1} ${m2}`;
+  });
 
   // Numbers
-  result = result.replace(/\b(\d+\.?\d*|0[xb][\da-fA-F]+)\b/g, '<span class="studio-hl-num">$1</span>');
+  mark(/\b(\d+\.?\d*|0[xb][\da-fA-F]+)\b/g, "studio-hl-num");
+
+  // Replace all markers with actual HTML
+  for (const { marker, html } of subs) {
+    result = result.split(marker).join(html);
+  }
 
   return result;
 }
@@ -812,46 +832,61 @@ const CPP_TYPES = new Set([
 
 function highlightCppSource(source: string) {
   const escaped = escapeHtml(source);
-
   let result = escaped;
+  let counter = 0;
+  const subs: { marker: string; html: string }[] = [];
 
-  // Preprocessor directives (before escapeHtml converts < >)
-  result = escaped.replace(/^(#\s*\w+.*)$/gm, '<span class="studio-hl-pp">$1</span>');
-
-  // String literals (including raw strings)
-  result = result.replace(/(R?"(?:[^"\\]|\\.)*")/g, '<span class="studio-hl-str">$1</span>');
-  result = result.replace(/('(?:[^'\\]|\\.)*')/g, '<span class="studio-hl-str">$1</span>');
-
-  // Single-line comments
-  result = result.replace(/(\/\/[^\n]*)/g, '<span class="studio-hl-cmt">$1</span>');
-
-  // Multi-line comments
-  result = result.replace(/(\/\*[\s\S]*?\*\/)/g, '<span class="studio-hl-cmt">$1</span>');
-
-  // Keywords (whole word, not inside HTML tags)
-  for (const kw of CPP_KEYWORDS) {
-    const escapedKw = escapeHtml(kw);
-    const regex = new RegExp(`\\b(${escapedKw})\\b(?![^<]*>)`, "g");
-    result = result.replace(regex, '<span class="studio-hl-kw">$1</span>');
+  function mark(pattern: RegExp, cls: string, groupIdx = 0) {
+    result = result.replace(pattern, (...args: any[]) => {
+      const match = args[groupIdx];
+      const marker = `\x01m${counter++}\x01`;
+      subs.push({ marker, html: `<span class="${cls}">${match}</span>` });
+      return marker;
+    });
   }
 
-  // CPP types / STL (whole word, not inside HTML tags)
+  // Multi-line comments first (wide patterns)
+  mark(/(\/\*[\s\S]*?\*\/)/g, "studio-hl-cmt");
+
+  // Preprocessor directives
+  mark(/^(#\s*\w+.*)$/gm, "studio-hl-pp");
+
+  // String literals
+  mark(/(R?"(?:[^"\\]|\\.)*")/g, "studio-hl-str");
+  mark(/('(?:[^'\\]|\\.)*')/g, "studio-hl-str");
+
+  // Single-line comments
+  mark(/(\/\/[^\n]*)/g, "studio-hl-cmt");
+
+  // Keywords
+  for (const kw of CPP_KEYWORDS) {
+    const escapedKw = escapeHtml(kw);
+    mark(new RegExp(`\\b(${escapedKw})\\b`, "g"), "studio-hl-kw");
+  }
+
+  // Types / STL
   for (const t of CPP_TYPES) {
     const escapedT = escapeHtml(t);
-    const regex = new RegExp(`\\b(${escapedT})\\b(?![^<]*>)`, "g");
-    result = result.replace(regex, '<span class="studio-hl-fn">$1</span>');
+    mark(new RegExp(`\\b(${escapedT})\\b`, "g"), "studio-hl-fn");
   }
 
   // Numbers
-  result = result.replace(/\b(\d+\.?\d*[fFLlUu]*|0[xb][\da-fA-F]+[UuLl]*)\b/g, '<span class="studio-hl-num">$1</span>');
+  mark(/\b(\d+\.?\d*[fFLlUu]*|0[xb][\da-fA-F]+[UuLl]*)\b/g, "studio-hl-num");
 
-  // Function calls: identifier followed by (
-  result = result.replace(/\b([a-zA-Z_]\w*)\s*(?=\()/g, (match, name) => {
-    // Don't recolor already highlighted tokens
-    const keywordMatch = CPP_KEYWORDS.has(name);
-    if (keywordMatch) return match;
-    return `<span class="studio-hl-fn">${name}</span>`;
+  // Function calls: wrap just the name, not the paren
+  result = result.replace(/\b([a-zA-Z_]\w*)\s*(?=\()/g, (...args: any[]) => {
+    const match = args[0];
+    const name = args[1];
+    if (CPP_KEYWORDS.has(name)) return match;
+    const marker = `\x01m${counter++}\x01`;
+    subs.push({ marker, html: `<span class="studio-hl-fn">${name}</span>` });
+    return marker + match.slice(name.length);
   });
+
+  // Replace all markers with actual HTML
+  for (const { marker, html } of subs) {
+    result = result.split(marker).join(html);
+  }
 
   return result;
 }
