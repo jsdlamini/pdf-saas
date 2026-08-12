@@ -440,8 +440,8 @@ async function projectEntryActionSheet(entry: ProjectEntry) {
 }
 
 type EditorSnippet = {
-  before: string;
-  after: string;
+  before?: string;
+  after?: string;
   placeholder?: string;
   block?: string;
   cursorOffset?: number;
@@ -1059,6 +1059,17 @@ export default function ResearchStudioPage() {
   const [synctexRecords, setSynctexRecords] = useState<SynctexRecord[]>([]);
   const [synctexNotice, setSynctexNotice] = useState("");
   const [showShortcuts, setShowShortcuts] = useState(false);
+  const [openMenu, setOpenMenu] = useState("");
+
+  // Close menu dropdown on outside click
+  useEffect(() => {
+    if (!openMenu) return;
+    const handler = (e: MouseEvent) => {
+      if (!(e.target as HTMLElement).closest(".studio-menu-group")) setOpenMenu("");
+    };
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, [openMenu]);
   const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const equationHoverRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const wordCountTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -2619,7 +2630,7 @@ export default function ResearchStudioPage() {
     const innerText = selected || snippet.placeholder || "";
     const replacement = snippet.block ?? `${snippet.before}${innerText}${snippet.after}`;
     const nextText = `${activeSource.slice(0, start)}${replacement}${activeSource.slice(end)}`;
-    const selectionStart = start + (snippet.cursorOffset ?? snippet.before.length);
+    const selectionStart = start + (snippet.cursorOffset ?? (snippet.before?.length || 0));
     const selectionEnd = selectionStart + innerText.length;
 
     updateActiveFile(nextText);
@@ -3400,6 +3411,79 @@ export default function ResearchStudioPage() {
           </button>
         </div>
       </header>
+
+      {/* ── Menu Bar ──────────────────────────────── */}
+      <div className="studio-menubar">
+        {[
+          {
+            label: "File", key: "file", items: [
+              { label: <>New Project</>, action: () => { setOpenMenu(""); createNewProject(); } },
+              { label: <>Open Project</>, action: () => { setOpenMenu(""); openProjectsBoard(); } },
+              "-",
+              { label: <>Save <kbd className="studio-menu-kbd">Ctrl+S</kbd></>, action: () => { setOpenMenu(""); saveCurrentProject(); } },
+              { label: <>Download ZIP</>, action: () => { setOpenMenu(""); void downloadProjectBundle(); } },
+              "-",
+              { label: <>Import ZIP</>, action: () => { setOpenMenu(""); document.getElementById("zip-import-editor-menu")?.click(); } },
+            ]
+          },
+          {
+            label: "Edit", key: "edit", items: [
+              { label: <>Find <kbd className="studio-menu-kbd">Ctrl+F</kbd></>, action: () => { setOpenMenu(""); setFindPanelOpen(true); setReplacePanelOpen(false); } },
+              { label: <>Replace <kbd className="studio-menu-kbd">Ctrl+H</kbd></>, action: () => { setOpenMenu(""); setFindPanelOpen(true); setReplacePanelOpen(true); } },
+            ]
+          },
+          editorMode === "latex" ? {
+            label: "Insert", key: "insert", items: [
+              { label: "Section", action: () => { setOpenMenu(""); insertEditorSnippet({ block: "\\section{}\n", cursorOffset: 9 }); } },
+              { label: "Subsection", action: () => { setOpenMenu(""); insertEditorSnippet({ block: "\\subsection{}\n", cursorOffset: 12 }); } },
+              "-",
+              { label: "Inline Math", action: () => { setOpenMenu(""); insertEditorSnippet({ before: "$", after: "$", placeholder: "math" }); } },
+              { label: "Equation Block", action: () => { setOpenMenu(""); insertEditorSnippet({ block: "\\begin{equation}\n  \n\\end{equation}\n", cursorOffset: 18 }); } },
+              "-",
+              { label: "Figure", action: () => { setOpenMenu(""); insertEditorSnippet({ block: "\\begin{figure}[htbp]\n  \\centering\n  \\includegraphics[width=0.8\\linewidth]{}\n  \\caption{}\n  \\label{}\n\\end{figure}\n", cursorOffset: 62 }); } },
+              { label: "Table", action: () => { setOpenMenu(""); insertEditorSnippet({ block: "\\begin{table}[htbp]\n  \\centering\n  \\caption{}\n  \\begin{tabular}{lcc}\n    \\toprule\n     &  & \\\\\n    \\midrule\n     &  & \\\\\n    \\bottomrule\n  \\end{tabular}\n\\end{table}\n", cursorOffset: 41 }); } },
+              "-",
+              { label: "Citation", action: () => { setOpenMenu(""); insertEditorSnippet({ before: "\\cite{", after: "}" }); } },
+              { label: "Reference", action: () => { setOpenMenu(""); insertEditorSnippet({ before: "\\ref{", after: "}", placeholder: "key" }); } },
+              { label: "Bullet List", action: () => { setOpenMenu(""); insertEditorSnippet({ block: "\\begin{itemize}\n  \\item \n\\end{itemize}\n", cursorOffset: 17 }); } },
+              { label: "Numbered List", action: () => { setOpenMenu(""); insertEditorSnippet({ block: "\\begin{enumerate}\n  \\item \n\\end{enumerate}\n", cursorOffset: 18 }); } },
+            ]
+          } : null,
+          {
+            label: "Format", key: "format", items: [
+              { label: <>Bold <kbd className="studio-menu-kbd">Ctrl+B</kbd></>, action: () => { setOpenMenu(""); insertEditorSnippet({ before: "\\textbf{", after: "}", placeholder: "text" }); } },
+              { label: <>Italic <kbd className="studio-menu-kbd">Ctrl+I</kbd></>, action: () => { setOpenMenu(""); insertEditorSnippet({ before: "\\textit{", after: "}", placeholder: "text" }); } },
+              { label: "Underline", action: () => { setOpenMenu(""); insertEditorSnippet({ before: "\\underline{", after: "}", placeholder: "text" }); } },
+            ]
+          },
+          {
+            label: "View", key: "view", items: [
+              { label: rightPaneCollapsed ? "Show PDF Preview" : "Hide PDF Preview", action: () => { setOpenMenu(""); setRightPaneCollapsed(!rightPaneCollapsed); } },
+              { label: leftPaneCollapsed ? "Show File Tree" : "Hide File Tree", action: () => { setOpenMenu(""); setLeftPaneCollapsed(!leftPaneCollapsed); } },
+              "-",
+              { label: "Keyboard Shortcuts", action: () => { setOpenMenu(""); setShowShortcuts(!showShortcuts); } },
+            ]
+          },
+          {
+            label: "Help", key: "help", items: [
+              { label: "FAQ", action: () => { setOpenMenu(""); window.open("/faq", "_blank"); } },
+              { label: "Keyboard Shortcuts", action: () => { setOpenMenu(""); setShowShortcuts(true); } },
+            ]
+          },
+        ].filter(Boolean).map((menu: any) => (
+          <div key={menu.key} className="studio-menu-group">
+            <button type="button" onClick={() => setOpenMenu(openMenu === menu.key ? "" : menu.key)} className={`studio-menu-trigger ${openMenu === menu.key ? "studio-menu-active" : ""}`}>{menu.label}</button>
+            {openMenu === menu.key ? (
+              <div className="studio-menu-dropdown">
+                {menu.items.map((item: any, i: number) => (
+                  item === "-" ? <hr key={i} className="studio-menu-divider" /> :
+                  <button key={i} type="button" onClick={item.action} className="studio-menu-item">{item.label}</button>
+                ))}
+              </div>
+            ) : null}
+          </div>
+        ))}
+      </div>
 
       {/* Tab bar */}
       {activeOpenTabs.length > 0 ? (
