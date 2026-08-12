@@ -1019,16 +1019,7 @@ export default function ResearchStudioPage() {
     } catch { return initialState.workspaceScreen; }
   });
   const [savedProjects, setSavedProjects] = useState<SavedProjectMeta[]>(initialState.savedProjects);
-  const [savedProjectSnapshots, setSavedProjectSnapshots] = useState<SavedProjectData[]>(() => {
-    if (typeof window === "undefined") return [];
-    try {
-      const raw = localStorage.getItem("wiserfiles-project-snapshots");
-      if (!raw) return [];
-      const data = JSON.parse(raw) as SavedProjectData[];
-      // Filter out the old starter project
-      return data.filter((p) => p.id !== "starter-project" && p.name !== "WiserFiles Research Draft");
-    } catch { return []; }
-  });
+  const [savedProjectSnapshots, setSavedProjectSnapshots] = useState<SavedProjectData[]>([]);
   const [activeProjectId, setActiveProjectId] = useState(() => {
     if (typeof window === "undefined") return initialState.activeProjectId;
     try {
@@ -1043,20 +1034,6 @@ export default function ResearchStudioPage() {
   const [shareLoading, setShareLoading] = useState(!!shareId);
 
   // Load shared project on mount
-
-  // Clean up old starter project from localStorage on mount
-  useEffect(() => {
-    try {
-      const raw = localStorage.getItem("wiserfiles-project-snapshots");
-      if (raw) {
-        const data = JSON.parse(raw);
-        const cleaned = data.filter((p: any) => p.id !== "starter-project" && p.name !== "WiserFiles Research Draft");
-        if (cleaned.length !== data.length) localStorage.setItem("wiserfiles-project-snapshots", JSON.stringify(cleaned));
-      }
-      if (localStorage.getItem("wiserfiles-active-project") === "starter-project") localStorage.removeItem("wiserfiles-active-project");
-    } catch {}
-  }, []);
-
   useEffect(() => {
     if (!shareId) { setShareLoading(false); return; }
     fetch(`/api/share-project?id=${shareId}`)
@@ -1867,11 +1844,11 @@ export default function ResearchStudioPage() {
       const message = error instanceof Error ? error.message : "Could not sync this project.";
       if (isAccountSyncUnavailableMessage(message)) {
         setAccountSyncUnavailable(true);
-        setCompileNotice("Saved locally. Account sync is unavailable on this deployment.");
+        setCompileNotice("Account storage unavailable on this deployment.");
         return;
       }
       appendPreviewError(`Account sync failed: ${message}`);
-      setCompileNotice("Saved locally, but account sync failed.");
+      setCompileNotice("Save failed — could not reach account storage.");
     });
   }
 
@@ -1955,7 +1932,7 @@ export default function ResearchStudioPage() {
         const message = error instanceof Error ? error.message : "Could not sync your account projects.";
         if (isAccountSyncUnavailableMessage(message)) {
           setAccountSyncUnavailable(true);
-          setCompileNotice("Account sync is unavailable on this deployment. Projects stay local in this browser.");
+          setCompileNotice("Account storage unavailable on this deployment.");
           return;
         }
         appendPreviewError(`Account sync failed: ${message}`);
@@ -1990,8 +1967,8 @@ export default function ResearchStudioPage() {
 
       setCompileNotice(
         usesAccountStorage
-          ? "Project saved to your account-backed workspace."
-          : "Project saved. You can reopen it from Saved Projects."
+          ? "Project saved to your account."
+          : "Save queued — retrying against account storage."
       );
     } catch (saveError) {
       const message = saveError instanceof Error ? saveError.message : "Project save failed.";
@@ -3389,6 +3366,7 @@ export default function ResearchStudioPage() {
               <h1 className="studio-dashboard-title">Research Studio</h1>
               <p className="studio-dashboard-subtitle">Create, open, and manage your LaTeX research projects</p>
             </div>
+            {isSignedIn ? (
             <div className="flex items-center gap-2">
               <button
                 type="button"
@@ -3456,6 +3434,13 @@ export default function ResearchStudioPage() {
                 Import
               </button>
             </div>
+            ) : (
+            <div className="flex items-center gap-2">
+              <SignInButton mode="modal">
+                <button type="button" className="studio-btn studio-btn-primary">Sign in to create projects</button>
+              </SignInButton>
+            </div>
+            )}
           </div>
 
           {/* Search bar */}
@@ -3475,15 +3460,15 @@ export default function ResearchStudioPage() {
           {/* Auth info */}
           {usesAccountStorage ? (
             <p style={{ marginTop: 8, fontSize: 11, color: "var(--text-muted, #64748b)" }}>
-              Projects sync to your account
+              Projects stored securely in your account
             </p>
           ) : isSignedIn ? (
             <p style={{ marginTop: 8, fontSize: 11, color: "var(--text-muted, #64748b)" }}>
-              Account sync unavailable — projects stay local
+              Account storage unavailable — check your connection
             </p>
           ) : authLoaded ? (
             <div className="studio-auth-cta">
-              <span>Sign in to sync projects across devices.</span>
+              <span>Sign in to store projects in your account.</span>
               <SignUpButton mode="modal">
                 <button type="button">Create account</button>
               </SignUpButton>
@@ -3495,7 +3480,7 @@ export default function ResearchStudioPage() {
 
           {/* Storage indicator */}
           <p style={{ marginTop: 6, fontSize: 10, color: "var(--text-muted, #64748b)" }}>
-            {usesAccountStorage ? "Synced to account" : "Stored locally"}
+            {usesAccountStorage ? "Synced to account" : "Sign in required"}
             {searchQuery.trim() ? ` · ${filteredProjects.length} of ${savedProjects.length} projects` : ` · ${savedProjects.length} project${savedProjects.length !== 1 ? "s" : ""}`}
           </p>
         </div>
