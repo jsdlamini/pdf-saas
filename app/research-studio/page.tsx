@@ -2273,7 +2273,13 @@ export default function ResearchStudioPage() {
       return;
     }
 
-    // Show dialog with name + type selector
+    // Build LaTeX template options for the dialog
+    const latexTemplates = RESEARCH_TEMPLATES.filter((t) => t.slug !== "python-script" && t.slug !== "cpp-program");
+    const templateOptionsHtml = latexTemplates
+      .map((t) => `<option value="${t.slug}">${t.name}</option>`)
+      .join("");
+
+    // Show dialog with name + type + template selector
     const result = await Swal.fire({
       title: "New Project",
       html: `
@@ -2286,15 +2292,22 @@ export default function ResearchStudioPage() {
             <label style="font-size:13px;font-weight:600;color:#e2e8f0;display:block;margin-bottom:4px">Project Type</label>
             <div style="display:flex;gap:8px">
               <label style="flex:1;padding:8px 4px;border:1px solid #818cf8;border-radius:6px;text-align:center;cursor:pointer;color:#e2e8f0;font-size:12px">
-                <input type="radio" name="project-type" value="latex" checked style="margin-right:4px"> LaTeX
+                <input type="radio" name="project-type" value="latex" checked style="margin-right:4px" onchange="document.getElementById('swal-template-group').style.display = this.checked ? 'flex' : 'none'"> LaTeX
               </label>
               <label style="flex:1;padding:8px 4px;border:1px solid #4ade80;border-radius:6px;text-align:center;cursor:pointer;color:#e2e8f0;font-size:12px">
-                <input type="radio" name="project-type" value="python" style="margin-right:4px"> Python
+                <input type="radio" name="project-type" value="python" style="margin-right:4px" onchange="document.getElementById('swal-template-group').style.display = 'none'"> Python
               </label>
               <label style="flex:1;padding:8px 4px;border:1px solid #f97316;border-radius:6px;text-align:center;cursor:pointer;color:#e2e8f0;font-size:12px">
-                <input type="radio" name="project-type" value="cpp" style="margin-right:4px"> C++
+                <input type="radio" name="project-type" value="cpp" style="margin-right:4px" onchange="document.getElementById('swal-template-group').style.display = 'none'"> C++
               </label>
             </div>
+          </div>
+          <div id="swal-template-group" style="display:flex;flex-direction:column;gap:6px">
+            <label style="font-size:13px;font-weight:600;color:#e2e8f0;display:block">Start from a LaTeX template</label>
+            <select id="swal-template-select" class="swal2-input" style="background:#0f172a;color:#e2e8f0;border-color:#334155;width:100%">
+              <option value="">Blank project (no template)</option>
+              ${templateOptionsHtml}
+            </select>
           </div>
         </div>
       `,
@@ -2342,16 +2355,20 @@ export default function ResearchStudioPage() {
         }
         const typeEl = document.querySelector('input[name="project-type"]:checked') as HTMLInputElement | null;
         const type = (typeEl?.value || "latex") as EditorMode;
-        return { name, type };
+        const templateSlug = (document.getElementById("swal-template-select") as HTMLSelectElement)?.value || "";
+        return { name, type, templateSlug };
       },
     });
 
     if (!result.isConfirmed || !result.value) return;
-    const { name, type } = result.value as { name: string; type: EditorMode };
+    const { name, type, templateSlug } = result.value as { name: string; type: EditorMode; templateSlug: string };
 
     const nextProjectId = makeProjectId();
-    const freshEntries = createFreshProjectEntries(name, type);
-    const defaultPath = type === "python" ? "main.py" : type === "cpp" ? "main.cpp" : "main.tex";
+    const template = templateSlug ? getTemplateBySlug(templateSlug) : null;
+    const freshEntries = template
+      ? template.entries.map((e) => (e.kind === "file" ? { ...e, content: e.content.replace(/\{today\}/g, getTodayString()) } : e))
+      : createFreshProjectEntries(name, type);
+    const defaultPath = type === "python" ? "main.py" : type === "cpp" ? "main.cpp" : (template?.entries.find((e) => e.kind === "file")?.path || "main.tex");
     const createdAt = new Date().toISOString();
     const snapshot: SavedProjectData = {
       id: nextProjectId,
