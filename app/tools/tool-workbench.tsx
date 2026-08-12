@@ -1204,7 +1204,7 @@ export default function ToolWorkbench({ tool }: WorkbenchProps) {
   function shouldAutoRunAfterSelection(nextFiles: File[]) {
     if (!nextFiles.length) return false;
     if (usesThumbnailEditor || isEditTool || isSignTool) return false;
-    if (tool.slug === "protect-pdf" || tool.slug === "unlock-pdf") return false;
+    if (tool.slug === "protect-pdf") return false;
     if (tool.slug === "compare-pdf") return nextFiles.length >= 2;
     return true;
   }
@@ -3518,22 +3518,34 @@ export default function ToolWorkbench({ tool }: WorkbenchProps) {
 
       if (tool.slug === "protect-pdf" || tool.slug === "unlock-pdf") {
         if (!firstFile) throw new Error("Missing PDF file.");
-        if (!password) throw new Error("Enter a password.");
-        const images = await renderPdfToImages(new Uint8Array(await readAsArrayBuffer(firstFile)), tool.slug === "unlock-pdf" ? password : undefined);
+
+        if (tool.slug === "unlock-pdf") {
+          // Unlock: load with ignoreEncryption, save without encryption
+          const source = await PDFDocument.load(await readAsArrayBuffer(firstFile), { ignoreEncryption: true });
+          const bytes = await source.save({ useObjectStreams: true });
+          stageOutput(
+            asPdfBlob(bytes),
+            `${normalizeFileName(firstFile.name)}-unlocked.pdf`,
+            "Encryption removed. Original quality preserved. Preview before downloading."
+          );
+          complete("PDF unlocked — password protection removed.");
+          return;
+        }
+
+        // Protect: require password and encrypt
+        if (!password) throw new Error("Enter a password to protect the PDF.");
+        const images = await renderPdfToImages(new Uint8Array(await readAsArrayBuffer(firstFile)));
 
         const options: Record<string, unknown> = {
           unit: "pt",
           format: [images[0].width, images[0].height],
           compress: true,
-        };
-
-        if (tool.slug === "protect-pdf") {
-          options.encryption = {
+          encryption: {
             userPassword: password,
             ownerPassword: password,
             userPermissions: ["print", "copy", "modify-annotations"],
-          };
-        }
+          },
+        };
 
         const doc = new jsPDF(options as unknown as ConstructorParameters<typeof jsPDF>[0]);
         images.forEach((image, index) => {
@@ -3541,13 +3553,12 @@ export default function ToolWorkbench({ tool }: WorkbenchProps) {
           doc.addImage(image.dataUrl, "JPEG", 0, 0, image.width, image.height);
         });
 
-        const suffix = tool.slug === "protect-pdf" ? "protected" : "unlocked";
         stageOutput(
           asPdfBlob(new Uint8Array(doc.output("arraybuffer"))),
-          `${normalizeFileName(firstFile.name)}-${suffix}.pdf`,
+          `${normalizeFileName(firstFile.name)}-protected.pdf`,
           "Preview secured document before downloading."
         );
-        complete(`${tool.slug === "protect-pdf" ? "Protected" : "Unlocked"} PDF ready for preview.`);
+        complete("Protected PDF ready for preview.");
         return;
       }
 
@@ -4700,16 +4711,21 @@ export default function ToolWorkbench({ tool }: WorkbenchProps) {
       {tool.slug === "protect-pdf" || tool.slug === "unlock-pdf" ? (
         <div className="space-y-1">
           <label htmlFor="password" className="text-xs font-semibold uppercase tracking-wide text-slate-600">
-            Password
+            {tool.slug === "unlock-pdf" ? "Password (if required)" : "Password"}
           </label>
           <input
             id="password"
             type="password"
             value={password}
             onChange={(event) => setPassword(event.target.value)}
+            placeholder={tool.slug === "unlock-pdf" ? "Leave blank to try without password" : "Enter a password"}
             className="w-full rounded-xl border border-slate-300 bg-slate-50 px-3 py-2 text-sm text-slate-800"
           />
-          <p className="field-help">Use the same password to open the protected output later.</p>
+          <p className="field-help">
+            {tool.slug === "unlock-pdf"
+              ? "Leave blank to attempt unlocking without a password. If the PDF requires one, enter it here."
+              : "Use the same password to open the protected output later."}
+          </p>
         </div>
       ) : null}
 
