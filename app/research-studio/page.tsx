@@ -1068,6 +1068,14 @@ export default function ResearchStudioPage() {
       .catch(() => setShareLoading(false));
   }, [shareId]);
 
+  const [editorMode, setEditorMode] = useState<EditorMode>(() => {
+    if (typeof window === "undefined") return "latex";
+    try {
+      return (localStorage.getItem("wiserfiles-editor-mode") as EditorMode) || "latex";
+    } catch { return "latex"; }
+  });
+
+  const [codeOutput, setCodeOutput] = useState<{ stdout: string; stderr: string; exitCode: number } | null>(null);
   // Persist workspace + active project to localStorage
   useEffect(() => {
     try { localStorage.setItem("wiserfiles-workspace", JSON.stringify(workspaceScreen)); } catch {}
@@ -1078,8 +1086,8 @@ export default function ResearchStudioPage() {
   }, [activeProjectId]);
 
   useEffect(() => {
-    try { localStorage.setItem("wiserfiles-project-snapshots", JSON.stringify(savedProjectSnapshots.slice(0, 20))); } catch {}
-  }, [savedProjectSnapshots]);
+    try { localStorage.setItem("wiserfiles-editor-mode", editorMode); } catch {}
+  }, [editorMode]);
 
   // Restore project data when returning to editor on refresh
   useEffect(() => {
@@ -1090,7 +1098,11 @@ export default function ResearchStudioPage() {
         setProjectEntries(snapshot.entries);
         setSelectedPath(snapshot.selectedPath || "main.tex");
         setLastCompileAt(snapshot.lastCompileAt || "Not compiled yet");
-        setEditorMode(snapshot.editorMode || "latex");
+        setEditorMode(snapshot.editorMode || (
+          snapshot.entries?.some((e) => e.path.endsWith(".py")) ? "python"
+          : snapshot.entries?.some((e) => e.path.endsWith(".cpp")) ? "cpp"
+          : "latex"
+        ));
       }
     }
   }, [workspaceScreen, activeProjectId, projectName, savedProjectSnapshots]);
@@ -1152,8 +1164,6 @@ export default function ResearchStudioPage() {
   const [treeContextActiveIndex, setTreeContextActiveIndex] = useState(0);
   const [editorScroll, setEditorScroll] = useState({ top: 0, left: 0 });
   const [autoSaveStatus, setAutoSaveStatus] = useState<"saved" | "unsaved" | "saving">("saved");
-  const [editorMode, setEditorMode] = useState<EditorMode>("latex");
-  const [codeOutput, setCodeOutput] = useState<{ stdout: string; stderr: string; exitCode: number } | null>(null);
   const [codeRunBusy, setCodeRunBusy] = useState(false);
   const [autoSaveTimestamp, setAutoSaveTimestamp] = useState<string | null>(null);
 
@@ -1998,7 +2008,11 @@ export default function ResearchStudioPage() {
     setAiFixSummary("");
     setAiFixSuggestions([]);
     setLastCompileAt(saved.lastCompileAt || "Not compiled yet");
-    setEditorMode(saved.editorMode || "latex");
+    setEditorMode(saved.editorMode || (
+      saved.entries?.some((e) => e.path.endsWith(".py")) ? "python"
+      : saved.entries?.some((e) => e.path.endsWith(".cpp")) ? "cpp"
+      : "latex"
+    ));
     setCodeOutput(null);
     setCodeRunBusy(false);
     setCompileNotice(`Loaded project: ${saved.name}`);
@@ -3294,7 +3308,11 @@ export default function ResearchStudioPage() {
                   setProjectName(snapshot.name);
                   setProjectEntries(snapshot.entries);
                   setSelectedPath(snapshot.selectedPath);
-                  setEditorMode(snapshot.editorMode || "latex");
+                  setEditorMode(snapshot.editorMode || (
+                    snapshot.entries?.some((e) => e.path.endsWith(".py")) ? "python"
+                    : snapshot.entries?.some((e) => e.path.endsWith(".cpp")) ? "cpp"
+                    : "latex"
+                  ));
                   setCompileNotice(`Copied "${sharedProject.name}" to your projects.`);
                   setWorkspaceScreen("editor");
                   setSharedProject(null);
@@ -3494,7 +3512,11 @@ export default function ResearchStudioPage() {
                       </span>
                     ) : null}
                     {(() => {
-                      const mode = item.type || snapshot?.editorMode || "latex";
+                      const mode = item.type || snapshot?.editorMode || (
+                        snapshot?.entries?.some((e) => e.path.endsWith(".py")) ? "python"
+                        : snapshot?.entries?.some((e) => e.path.endsWith(".cpp")) ? "cpp"
+                        : "latex"
+                      );
                       if (mode === "python") {
                         return (
                           <span className="studio-tag">
