@@ -241,6 +241,116 @@ body {
   line-height: 1.5;
 }
 
+/* ── Terminal ───── */
+.studio-terminal-btn-active {
+  background: rgba(74, 222, 128, 0.12) !important;
+  color: #4ade80 !important;
+}
+
+.studio-terminal {
+  border-top: 1px solid var(--border-color, #334155);
+  background: #0d1117;
+  display: flex;
+  flex-direction: column;
+  font-family: "JetBrains Mono", "Fira Code", "Cascadia Code", monospace;
+  font-size: 12px;
+  min-height: 80px;
+  max-height: 50vh;
+  flex-shrink: 0;
+}
+
+.studio-terminal-resize-handle {
+  height: 4px;
+  cursor: ns-resize;
+  background: transparent;
+  flex-shrink: 0;
+}
+
+.studio-terminal-resize-handle:hover {
+  background: rgba(74, 222, 128, 0.3);
+}
+
+.studio-terminal-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 2px 8px;
+  background: #161b22;
+  border-bottom: 1px solid #21262d;
+  font-size: 11px;
+  color: #8b949e;
+  flex-shrink: 0;
+}
+
+.studio-terminal-close-btn {
+  background: none;
+  border: none;
+  color: #8b949e;
+  cursor: pointer;
+  padding: 2px;
+  border-radius: 3px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: color 0.15s, background 0.15s;
+}
+
+.studio-terminal-close-btn:hover {
+  color: #f87171;
+  background: rgba(248, 113, 113, 0.1);
+}
+
+.studio-terminal-output {
+  flex: 1;
+  overflow-y: auto;
+  padding: 4px 8px;
+  white-space: pre-wrap;
+  word-break: break-all;
+  line-height: 1.5;
+}
+
+.studio-terminal-output::-webkit-scrollbar {
+  width: 4px;
+}
+
+.studio-terminal-output::-webkit-scrollbar-thumb {
+  background: #21262d;
+  border-radius: 2px;
+}
+
+.studio-terminal-input-line {
+  display: flex;
+  align-items: center;
+  padding: 2px 8px;
+  border-top: 1px solid #21262d;
+  flex-shrink: 0;
+}
+
+.studio-terminal-prompt {
+  color: #7ee787;
+  margin-right: 4px;
+  user-select: none;
+}
+
+.studio-terminal-input {
+  flex: 1;
+  background: transparent;
+  border: none;
+  outline: none;
+  color: #c9d1d9;
+  font-family: inherit;
+  font-size: 12px;
+}
+
+.studio-terminal-input::placeholder {
+  color: #484f58;
+}
+
+.studio-terminal-command { color: #8b949e; }
+.studio-terminal-stdout { color: #c9d1d9; }
+.studio-terminal-stderr { color: #f85149; }
+.studio-terminal-error { color: #f0883e; }
+
 /* ── Buttons ───── */
 .studio-btn {
   display: inline-flex;
