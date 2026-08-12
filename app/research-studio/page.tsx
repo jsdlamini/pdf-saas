@@ -815,8 +815,8 @@ function highlightCppSource(source: string) {
 
   let result = escaped;
 
-  // Preprocessor directives
-  result = result.replace(/^(#\s*\w+.*)$/gm, '<span class="studio-token-preprocessor">$1</span>');
+  // Preprocessor directives (before escapeHtml converts < >)
+  result = escaped.replace(/^(#\s*\w+.*)$/gm, '<span class="studio-token-preprocessor">$1</span>');
 
   // String literals (including raw strings)
   result = result.replace(/(R?"(?:[^"\\]|\\.)*")/g, '<span class="studio-token-string">$1</span>');
@@ -2073,7 +2073,9 @@ export default function ResearchStudioPage() {
     const snapshot: SavedProjectData = {
       id: nextProjectId,
       name,
-      entries: template.entries,
+      entries: template.entries.map((e) =>
+        e.kind === "file" ? { ...e, content: e.content.replace(/\{today\}/g, getTodayString()) } : e
+      ),
       selectedPath: defaultPath,
       lastCompileAt: "Not compiled yet",
       updatedAt: createdAt,
@@ -2089,7 +2091,7 @@ export default function ResearchStudioPage() {
     closeIntellisense();
     setActiveProjectId(nextProjectId);
     setProjectName(name);
-    setProjectEntries(template.entries);
+    setProjectEntries(snapshot.entries);
     setSelectedPath(defaultPath);
     setAddFileError("");
     setCompileBusy(false);
