@@ -28,7 +28,10 @@ type SavedProjectData = {
   selectedPath: string;
   lastCompileAt: string;
   updatedAt: string;
+  editorMode?: EditorMode;
 };
+
+type EditorMode = "latex" | "python" | "cpp";
 
 type InitialResearchStudioState = {
   savedProjects: SavedProjectMeta[];
@@ -337,13 +340,35 @@ function getFileNameFromDisposition(header: string | null) {
   return plainMatch?.[1]?.trim() ?? null;
 }
 
-function nextTemplateFor(path: string) {
+function nextTemplateFor(path: string, mode?: EditorMode) {
   const lower = path.toLowerCase();
   if (lower.endsWith(".tex")) {
     return "\\section{New Section}\nWrite your content here.\n";
   }
   if (lower.endsWith(".bib")) {
     return "@article{newref,\n  title={Title},\n  author={Author},\n  year={2026}\n}\n";
+  }
+  if (lower.endsWith(".py")) {
+    return `#!/usr/bin/env python3
+"""New module."""
+
+
+def main() -> None:
+    print("Hello!")
+
+
+if __name__ == "__main__":
+    main()
+`;
+  }
+  if (lower.endsWith(".cpp") || lower.endsWith(".cc") || lower.endsWith(".cxx")) {
+    return `#include <iostream>
+
+int main(int argc, char* argv[]) {
+    std::cout << "Hello!" << std::endl;
+    return 0;
+}
+`;
   }
   return "";
 }
@@ -653,11 +678,147 @@ function highlightLatexSource(source: string) {
   const escaped = escapeHtml(source);
 
   return escaped
-    .replace(/(%[^\n]*)/g, '<span class="latex-token-comment">$1</span>')
-    .replace(/(\\(?:begin|end|section|subsection|subsubsection|paragraph|textbf|textit|underline|footnote|cite|ref|label|includegraphics|caption|author|title|date|maketitle|input|bibliography|bibliographystyle|documentclass|usepackage|item|frac|sqrt|alpha|beta|gamma|today|[a-zA-Z@]+))/g, '<span class="latex-token-command">$1</span>')
-    .replace(/(\$\$[^$\n]*\$\$|\$[^$\n]*\$)/g, '<span class="latex-token-math">$1</span>')
-    .replace(/([{}])/g, '<span class="latex-token-brace">$1</span>')
-    .replace(/(\[[^\]\n]*\])/g, '<span class="latex-token-option">$1</span>');
+    .replace(/(%[^\n]*)/g, '<span class="studio-token-comment">$1</span>')
+    .replace(/(\\(?:begin|end|section|subsection|subsubsection|paragraph|textbf|textit|underline|footnote|cite|ref|label|includegraphics|caption|author|title|date|maketitle|input|bibliography|bibliographystyle|documentclass|usepackage|item|frac|sqrt|alpha|beta|gamma|today|[a-zA-Z@]+))/g, '<span class="studio-token-command">$1</span>')
+    .replace(/(\$\$[^$\n]*\$\$|\$[^$\n]*\$)/g, '<span class="studio-token-math">$1</span>')
+    .replace(/([{}])/g, '<span class="studio-token-brace">$1</span>')
+    .replace(/(\[[^\]\n]*\])/g, '<span class="studio-token-option">$1</span>');
+}
+
+const PYTHON_KEYWORDS = new Set([
+  "False", "None", "True", "and", "as", "assert", "async", "await", "break",
+  "class", "continue", "def", "del", "elif", "else", "except", "finally", "for",
+  "from", "global", "if", "import", "in", "is", "lambda", "nonlocal", "not",
+  "or", "pass", "raise", "return", "try", "while", "with", "yield",
+]);
+
+const BUILTIN_PYTHON_FUNCTIONS = new Set([
+  "print", "len", "range", "int", "float", "str", "list", "dict", "set", "tuple",
+  "bool", "enumerate", "zip", "map", "filter", "sorted", "reversed", "abs", "sum",
+  "min", "max", "round", "type", "isinstance", "hasattr", "getattr", "setattr",
+  "open", "input", "super", "any", "all", "next", "iter", "chr", "ord", "hex",
+  "bin", "oct", "id", "dir", "vars", "help", "format", "repr",
+]);
+
+function highlightPythonSource(source: string) {
+  const escaped = escapeHtml(source);
+
+  // Order matters: handle multi-line strings first, then comments, then keywords
+  let result = escaped;
+
+  // Triple-quoted strings (multi-line)
+  result = result.replace(/("""[\s\S]*?"""|'''[\s\S]*?''')/g, '<span class="studio-token-string">$1</span>');
+
+  // Comments (lines starting with # or # after whitespace, but not inside strings)
+  result = result.replace(/(^|\n)(\s*)(#[^\n]*)/g, (_, nl, ws, comment) =>
+    `${nl}${ws}<span class="studio-token-comment">${comment}</span>`
+  );
+
+  // Regular strings (single and double quoted, single-line)
+  result = result.replace(/('(?:[^'\\]|\\.)*'|"(?:[^"\\]|\\.)*")/g, '<span class="studio-token-string">$1</span>');
+
+  // @decorators
+  result = result.replace(/(@[a-zA-Z_]\w*)/g, '<span class="studio-token-decorator">$1</span>');
+
+  // Keywords (whole word match)
+  for (const kw of PYTHON_KEYWORDS) {
+    const escapedKw = escapeHtml(kw);
+    const regex = new RegExp(`\\b(${escapedKw})\\b(?![^<]*>|[^<>]*<\\)`, "g");
+    result = result.replace(regex, '<span class="studio-token-keyword">$1</span>');
+  }
+
+  // Built-in functions (whole word, not already wrapped)
+  for (const fn of BUILTIN_PYTHON_FUNCTIONS) {
+    const escapedFn = escapeHtml(fn);
+    const regex = new RegExp(`\\b(${escapedFn})\\b(?![^<]*>|[^<>]*<\\)`, "g");
+    result = result.replace(regex, '<span class="studio-token-function">$1</span>');
+  }
+
+  // Function definitions: def function_name
+  result = result.replace(/\b(def)\s+(\w+)/g, '<span class="studio-token-keyword">$1</span> <span class="studio-token-function">$2</span>');
+
+  // Numbers
+  result = result.replace(/\b(\d+\.?\d*|0[xb][\da-fA-F]+)\b/g, '<span class="studio-token-number">$1</span>');
+
+  return result;
+}
+
+const CPP_KEYWORDS = new Set([
+  "alignas", "alignof", "and", "and_eq", "asm", "auto", "bitand", "bitor",
+  "bool", "break", "case", "catch", "char", "char8_t", "char16_t", "char32_t",
+  "class", "compl", "concept", "const", "consteval", "constexpr", "constinit",
+  "const_cast", "continue", "co_await", "co_return", "co_yield", "decltype",
+  "default", "delete", "do", "double", "dynamic_cast", "else", "enum", "explicit",
+  "export", "extern", "false", "float", "for", "friend", "goto", "if", "inline",
+  "int", "long", "mutable", "namespace", "new", "noexcept", "not", "not_eq",
+  "nullptr", "operator", "or", "or_eq", "private", "protected", "public",
+  "register", "reinterpret_cast", "requires", "return", "short", "signed",
+  "sizeof", "static", "static_assert", "static_cast", "struct", "switch",
+  "template", "this", "thread_local", "throw", "true", "try", "typedef",
+  "typeid", "typename", "union", "unsigned", "using", "virtual", "void",
+  "volatile", "wchar_t", "while", "xor", "xor_eq",
+]);
+
+const CPP_TYPES = new Set([
+  "std", "string", "vector", "map", "set", "queue", "stack", "deque",
+  "list", "array", "pair", "tuple", "optional", "variant", "function",
+  "shared_ptr", "unique_ptr", "weak_ptr", "size_t", "ptrdiff_t",
+  "int8_t", "int16_t", "int32_t", "int64_t", "uint8_t", "uint16_t",
+  "uint32_t", "uint64_t", "istream", "ostream", "iostream", "fstream",
+  "stringstream", "ifstream", "ofstream", "cin", "cout", "cerr", "endl",
+  "algorithm", "cmath", "numeric", "iterator", "ios",
+]);
+
+function highlightCppSource(source: string) {
+  const escaped = escapeHtml(source);
+
+  let result = escaped;
+
+  // Preprocessor directives
+  result = result.replace(/^(#\s*\w+.*)$/gm, '<span class="studio-token-preprocessor">$1</span>');
+
+  // String literals (including raw strings)
+  result = result.replace(/(R?"(?:[^"\\]|\\.)*")/g, '<span class="studio-token-string">$1</span>');
+  result = result.replace(/('(?:[^'\\]|\\.)*')/g, '<span class="studio-token-string">$1</span>');
+
+  // Single-line comments
+  result = result.replace(/(\/\/[^\n]*)/g, '<span class="studio-token-comment">$1</span>');
+
+  // Multi-line comments
+  result = result.replace(/(\/\*[\s\S]*?\*\/)/g, '<span class="studio-token-comment">$1</span>');
+
+  // Keywords
+  for (const kw of CPP_KEYWORDS) {
+    const escapedKw = escapeHtml(kw);
+    const regex = new RegExp(`\\b(${escapedKw})\\b(?![^<]*>|[^<>]*<\\)`, "g");
+    result = result.replace(regex, '<span class="studio-token-keyword">$1</span>');
+  }
+
+  // CPP types / STL
+  for (const t of CPP_TYPES) {
+    const escapedT = escapeHtml(t);
+    const regex = new RegExp(`\\b(${escapedT})\\b(?![^<]*>|[^<>]*<\\)`, "g");
+    result = result.replace(regex, '<span class="studio-token-function">$1</span>');
+  }
+
+  // Numbers
+  result = result.replace(/\b(\d+\.?\d*[fFLlUu]*|0[xb][\da-fA-F]+[UuLl]*)\b/g, '<span class="studio-token-number">$1</span>');
+
+  // Function calls: identifier followed by (
+  result = result.replace(/\b([a-zA-Z_]\w*)\s*(?=\()/g, (match, name) => {
+    // Don't recolor already highlighted tokens
+    const keywordMatch = CPP_KEYWORDS.has(name);
+    if (keywordMatch) return match;
+    return `<span class="studio-token-function">${name}</span>`;
+  });
+
+  return result;
+}
+
+function highlightCodeSource(source: string, mode: EditorMode): string {
+  if (mode === "python") return highlightPythonSource(source);
+  if (mode === "cpp") return highlightCppSource(source);
+  return highlightLatexSource(source);
 }
 
 function getTreeContextMenuItems(menu: TreeContextMenuState): TreeContextActionItem[] {
@@ -826,6 +987,7 @@ export default function ResearchStudioPage() {
         setProjectEntries(snapshot.entries);
         setSelectedPath(snapshot.selectedPath || "main.tex");
         setLastCompileAt(snapshot.lastCompileAt || "Not compiled yet");
+        setEditorMode(snapshot.editorMode || "latex");
       }
     }
   }, [workspaceScreen, activeProjectId, projectName, savedProjectSnapshots]);
@@ -887,6 +1049,9 @@ export default function ResearchStudioPage() {
   const [treeContextActiveIndex, setTreeContextActiveIndex] = useState(0);
   const [editorScroll, setEditorScroll] = useState({ top: 0, left: 0 });
   const [autoSaveStatus, setAutoSaveStatus] = useState<"saved" | "unsaved" | "saving">("saved");
+  const [editorMode, setEditorMode] = useState<EditorMode>("latex");
+  const [codeOutput, setCodeOutput] = useState("");
+  const [codeRunBusy, setCodeRunBusy] = useState(false);
   const [autoSaveTimestamp, setAutoSaveTimestamp] = useState<string | null>(null);
   const [equationTooltip, setEquationTooltip] = useState<{ top: number; left: number; latex: string } | null>(null);
   const [wordCount, setWordCount] = useState<{ words: number; chars: number; abstractWords: number }>({ words: 0, chars: 0, abstractWords: 0 });
@@ -916,11 +1081,12 @@ export default function ResearchStudioPage() {
     [editableFiles, selectedPath]
   );
 
+  const isCodeMode = editorMode === "python" || editorMode === "cpp";
   const activeSource = activeEntry?.content ?? "";
 
   const preview = useMemo(() => buildPreview(activeSource), [activeSource]);
   const projectTree = useMemo(() => buildProjectTree(projectEntries), [projectEntries]);
-  const highlightedSource = useMemo(() => highlightLatexSource(activeSource), [activeSource]);
+  const highlightedSource = useMemo(() => highlightCodeSource(activeSource, editorMode), [activeSource, editorMode]);
   const citationKeys = useMemo(() => scanCitationKeys(projectEntries), [projectEntries]);
   const labelItems = useMemo(() => scanLabels(projectEntries), [projectEntries]);
   const autoExpandedFolders = useMemo(
@@ -1429,7 +1595,7 @@ export default function ResearchStudioPage() {
     nextEntries.push({
       path: normalized,
       kind,
-      content: kind === "file" ? nextTemplateFor(normalized) : "",
+      content: kind === "file" ? nextTemplateFor(normalized, editorMode) : "",
     });
 
     setProjectEntries((current) => [...current, ...nextEntries]);
@@ -1581,6 +1747,7 @@ export default function ResearchStudioPage() {
     setAiFixSummary("");
     setAiFixSuggestions([]);
     setLastCompileAt(nextActive.lastCompileAt || "Not compiled yet");
+    setEditorMode(nextActive.editorMode || "latex");
     setCompileNotice(notice);
   });
 
@@ -1629,6 +1796,7 @@ export default function ResearchStudioPage() {
       selectedPath: overrides?.selectedPath ?? selectedPath,
       lastCompileAt: overrides?.lastCompileAt ?? lastCompileAt,
       updatedAt: overrides?.updatedAt ?? now,
+      editorMode: overrides?.editorMode ?? editorMode,
     };
   }
 
@@ -1675,6 +1843,9 @@ export default function ResearchStudioPage() {
     setAiFixSummary("");
     setAiFixSuggestions([]);
     setLastCompileAt(saved.lastCompileAt || "Not compiled yet");
+    setEditorMode(saved.editorMode || "latex");
+    setCodeOutput("");
+    setCodeRunBusy(false);
     setCompileNotice(`Loaded project: ${saved.name}`);
     setWorkspaceScreen("editor");
   }
@@ -1706,6 +1877,7 @@ export default function ResearchStudioPage() {
           setProjectEntries(fallback.entries);
           setSelectedPath(fallback.selectedPath || "main.tex");
           setLastCompileAt(fallback.lastCompileAt || "Not compiled yet");
+          setEditorMode(fallback.editorMode || "latex");
         } else {
           setActiveProjectId("");
           setProjectName("");
@@ -1774,13 +1946,16 @@ export default function ResearchStudioPage() {
     const nextProjectId = makeProjectId();
     const name = template.name;
     const createdAt = new Date().toISOString();
+    const defaultPath = template.entries.find((e) => e.kind === "file")?.path || "main.tex";
+    const detectedMode: EditorMode = template.slug === "python-script" ? "python" : template.slug === "cpp-program" ? "cpp" : "latex";
     const snapshot: SavedProjectData = {
       id: nextProjectId,
       name,
       entries: template.entries,
-      selectedPath: "main.tex",
+      selectedPath: defaultPath,
       lastCompileAt: "Not compiled yet",
       updatedAt: createdAt,
+      editorMode: detectedMode,
     };
     persistProjectSnapshot(snapshot);
     queueServerProjectSync(snapshot);
@@ -1793,7 +1968,7 @@ export default function ResearchStudioPage() {
     setActiveProjectId(nextProjectId);
     setProjectName(name);
     setProjectEntries(template.entries);
-    setSelectedPath("main.tex");
+    setSelectedPath(defaultPath);
     setAddFileError("");
     setCompileBusy(false);
     setCompiledPdfBlob(null);
@@ -1804,6 +1979,9 @@ export default function ResearchStudioPage() {
     setAiFixSummary("");
     setAiFixSuggestions([]);
     setLastCompileAt("Not compiled yet");
+    setEditorMode(detectedMode);
+    setCodeOutput("");
+    setCodeRunBusy(false);
     setCompileNotice(`Created project from "${template.name}" template.`);
     setWorkspaceScreen("editor");
   }
@@ -1843,7 +2021,7 @@ export default function ResearchStudioPage() {
     nextEntries.push({
       path: normalized,
       kind: isFolder ? "folder" : "file",
-      content: isFolder ? "" : nextTemplateFor(normalized),
+      content: isFolder ? "" : nextTemplateFor(normalized, editorMode),
     });
 
     setProjectEntries((current) => [...current, ...nextEntries]);
@@ -1904,6 +2082,9 @@ export default function ResearchStudioPage() {
     setAiFixSummary("");
     setAiFixSuggestions([]);
     setLastCompileAt("Not compiled yet");
+    setEditorMode("latex");
+    setCodeOutput("");
+    setCodeRunBusy(false);
     setCompileNotice("New project created and saved. Add files and compile when ready.");
     setWorkspaceScreen("editor");
   }
@@ -2009,7 +2190,59 @@ export default function ResearchStudioPage() {
     setAddFileError("");
   }
 
+  async function runCode() {
+    if (!activeEntry) {
+      setCompileNotice("No file selected to run.");
+      return;
+    }
+
+    const code = activeEntry.content;
+    if (!code.trim()) {
+      setCompileNotice("Code file is empty.");
+      return;
+    }
+
+    try {
+      setCodeRunBusy(true);
+      setCodeOutput("");
+      setCompileNotice(`Running ${editorMode} code on server...`);
+
+      const response = await fetch("/api/run-code", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ code, language: editorMode }),
+      });
+
+      const result = (await response.json()) as { output?: string; error?: string; exitCode?: number; message?: string };
+
+      if (!response.ok) {
+        setCodeOutput(result.error || result.message || `Server error: ${response.status}`);
+        setCompileNotice("Code execution failed.");
+        return;
+      }
+
+      const display = [
+        result.output ? `-- STDOUT --\n${result.output}` : "",
+        result.error ? `-- STDERR --\n${result.error}` : "",
+        result.exitCode !== undefined ? `-- Exit code: ${result.exitCode} --` : "",
+      ].filter(Boolean).join("\n\n");
+
+      setCodeOutput(display || "No output.");
+      setCompileNotice(`Code executed (exit code: ${result.exitCode ?? 0}).`);
+    } catch (runError) {
+      const message = runError instanceof Error ? runError.message : "Code execution failed.";
+      setCodeOutput(`Error: ${message}`);
+      setCompileNotice("Code execution failed.");
+    } finally {
+      setCodeRunBusy(false);
+    }
+  }
+
   async function compileProject() {
+    if (isCodeMode) {
+      await runCode();
+      return;
+    }
     const rootPath = editableFiles.some((entry) => entry.path === "main.tex") ? "main.tex" : activeEntry?.path;
     if (!rootPath) {
       setCompileNotice("No file available to compile.");
@@ -2520,12 +2753,14 @@ export default function ResearchStudioPage() {
     }
 
     if (isMod && event.key.toLowerCase() === "b") {
+      if (isCodeMode) return;
       event.preventDefault();
       insertEditorSnippet({ before: "\\textbf{", after: "}", placeholder: "bold text" });
       return;
     }
 
     if (isMod && event.key.toLowerCase() === "i") {
+      if (isCodeMode) return;
       event.preventDefault();
       insertEditorSnippet({ before: "\\textit{", after: "}", placeholder: "italic text" });
       return;
@@ -3025,6 +3260,30 @@ export default function ResearchStudioPage() {
           </button>
           <span style={{ color: "var(--border-color, #334155)" }} className="hidden sm:inline">|</span>
           <span className="studio-topbar-title">{projectName}</span>
+          {/* Mode selector tabs */}
+          <div className="studio-mode-selector">
+            <button
+              type="button"
+              onClick={() => setEditorMode("latex")}
+              className={`studio-mode-tab ${editorMode === "latex" ? "studio-mode-tab-active" : ""}`}
+            >
+              LaTeX
+            </button>
+            <button
+              type="button"
+              onClick={() => setEditorMode("python")}
+              className={`studio-mode-tab ${editorMode === "python" ? "studio-mode-tab-active" : ""}`}
+            >
+              Python
+            </button>
+            <button
+              type="button"
+              onClick={() => setEditorMode("cpp")}
+              className={`studio-mode-tab ${editorMode === "cpp" ? "studio-mode-tab-active" : ""}`}
+            >
+              C++
+            </button>
+          </div>
           <span className={`studio-topbar-meta ${autoSaveStatus === "saved" ? "studio-status-saved" : autoSaveStatus === "unsaved" ? "studio-status-unsaved" : ""}`}>
             {autoSaveStatus === "saved" ? `Saved ${autoSaveTimestamp || ""}` : autoSaveStatus === "saving" ? "Saving..." : "Unsaved"}
           </span>
@@ -3048,29 +3307,74 @@ export default function ResearchStudioPage() {
               </button>
             </>
           ) : null}
-          <button
-            type="button"
-            onClick={() => void compileProject()}
-            disabled={compileBusy}
-            className="studio-btn studio-btn-primary"
-            aria-label={compileBusy ? "Compiling project" : "Compile project"}
-          >
-            <svg viewBox="0 0 20 20" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="2">
-              <path d="M7 6l7 4-7 4V6z" strokeLinecap="round" strokeLinejoin="round" />
-            </svg>
-            <span className="hidden sm:inline">{compileBusy ? "Compiling..." : "Compile"}</span>
-          </button>
-          <button
-            type="button"
-            onClick={() => void downloadProjectBundle()}
-            className="studio-btn studio-btn-secondary"
-            aria-label="Download project bundle"
-          >
-            <svg viewBox="0 0 20 20" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="1.8">
-              <path d="M10 3v9m0 0l-3-3m3 3l3-3M4 14v2h12v-2" strokeLinecap="round" strokeLinejoin="round" />
-            </svg>
-            <span className="hidden sm:inline">Download</span>
-          </button>
+          {isCodeMode ? (
+            <>
+              {/* Language selector in code mode */}
+              <select
+                value={editorMode}
+                onChange={(e) => setEditorMode(e.target.value as EditorMode)}
+                className="studio-code-lang-select"
+              >
+                <option value="python">Python</option>
+                <option value="cpp">C++</option>
+              </select>
+              <button
+                type="button"
+                onClick={() => void compileProject()}
+                disabled={codeRunBusy}
+                className="studio-btn studio-btn-primary"
+                aria-label={codeRunBusy ? "Running code" : "Run code"}
+                style={{ background: "#4ade80", color: "#000" }}
+              >
+                <svg viewBox="0 0 20 20" className="h-4 w-4" fill="currentColor" stroke="none">
+                  <path d="M7 4l9 6-9 6V4z" />
+                </svg>
+                <span className="hidden sm:inline">{codeRunBusy ? "Running..." : "Run"}</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  const ext = editorMode === "python" ? ".py" : ".cpp";
+                  const filename = activeEntry?.path || `program${ext}`;
+                  const blob = new Blob([activeSource], { type: "text/plain;charset=utf-8" });
+                  downloadBlob(blob, filename.split("/").pop() || filename);
+                }}
+                className="studio-btn studio-btn-secondary"
+                aria-label="Download source file"
+              >
+                <svg viewBox="0 0 20 20" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="1.8">
+                  <path d="M10 3v9m0 0l-3-3m3 3l3-3M4 14v2h12v-2" strokeLinecap="round" strokeLinejoin="round" />
+                </svg>
+                <span className="hidden sm:inline">Download</span>
+              </button>
+            </>
+          ) : (
+            <>
+              <button
+                type="button"
+                onClick={() => void compileProject()}
+                disabled={compileBusy}
+                className="studio-btn studio-btn-primary"
+                aria-label={compileBusy ? "Compiling project" : "Compile project"}
+              >
+                <svg viewBox="0 0 20 20" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="2">
+                  <path d="M7 6l7 4-7 4V6z" strokeLinecap="round" strokeLinejoin="round" />
+                </svg>
+                <span className="hidden sm:inline">{compileBusy ? "Compiling..." : "Compile"}</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => void downloadProjectBundle()}
+                className="studio-btn studio-btn-secondary"
+                aria-label="Download project bundle"
+              >
+                <svg viewBox="0 0 20 20" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="1.8">
+                  <path d="M10 3v9m0 0l-3-3m3 3l3-3M4 14v2h12v-2" strokeLinecap="round" strokeLinejoin="round" />
+                </svg>
+                <span className="hidden sm:inline">Download</span>
+              </button>
+            </>
+          )}
           <button
             type="button"
             onClick={openCollaborateDialog}
@@ -3236,41 +3540,56 @@ export default function ResearchStudioPage() {
         {/* Editor area */}
         <div className="studio-editor-wrapper">
           {/* Editor toolbar */}
-          <div className="studio-editor-toolbar">
-            <button type="button" onClick={() => insertEditorSnippet({ before: "\\textbf{", after: "}", placeholder: "bold text" })} className="studio-btn studio-btn-ghost" style={{ height: 26, fontSize: 11, fontWeight: 700, padding: "0 8px" }} title="Bold (Ctrl+B)">B</button>
-            <button type="button" onClick={() => insertEditorSnippet({ before: "\\textit{", after: "}", placeholder: "italic text" })} className="studio-btn studio-btn-ghost" style={{ height: 26, fontSize: 11, fontStyle: "italic", padding: "0 8px" }} title="Italic (Ctrl+I)">I</button>
-            <button type="button" onClick={() => insertEditorSnippet({ before: "\\underline{", after: "}", placeholder: "underlined text" })} className="studio-btn studio-btn-ghost" style={{ height: 26, fontSize: 11, textDecoration: "underline", padding: "0 8px" }} title="Underline">U</button>
-            <span style={{ width: 1, height: 18, background: "var(--border-color, #334155)", margin: "0 4px" }} />
-            <button type="button" onClick={() => insertEditorSnippet({ block: "\\section{Section Title}\n", before: "", after: "", cursorOffset: 9 })} className="studio-btn studio-btn-ghost" style={{ height: 26, fontSize: 10, fontWeight: 600, padding: "0 8px" }} title="Section">S1</button>
-            <button type="button" onClick={() => insertEditorSnippet({ block: "\\subsection{Subsection Title}\n", before: "", after: "", cursorOffset: 12 })} className="studio-btn studio-btn-ghost" style={{ height: 26, fontSize: 10, fontWeight: 600, padding: "0 8px" }} title="Subsection">S2</button>
-            <button type="button" onClick={() => insertEditorSnippet({ block: "\\subsubsection{Title}\n", before: "", after: "", cursorOffset: 15 })} className="studio-btn studio-btn-ghost" style={{ height: 26, fontSize: 10, fontWeight: 600, padding: "0 8px" }} title="Subsubsection">S3</button>
-            <span style={{ width: 1, height: 18, background: "var(--border-color, #334155)", margin: "0 4px" }} />
-            <button type="button" onClick={() => insertEditorSnippet({ before: "$", after: "$", placeholder: "math" })} className="studio-btn studio-btn-ghost" style={{ height: 26, fontSize: 11, padding: "0 8px" }} title="Inline math">$</button>
-            <button type="button" onClick={() => insertEditorSnippet({ block: "\\begin{equation}\n  E = mc^2\n  \\label{eq:key}\n\\end{equation}\n", before: "", after: "", cursorOffset: 18 })} className="studio-btn studio-btn-ghost" style={{ height: 26, fontSize: 10, padding: "0 8px" }} title="Equation block">eq</button>
-            <span style={{ width: 1, height: 18, background: "var(--border-color, #334155)", margin: "0 4px" }} />
-            <button type="button" onClick={() => insertEditorSnippet({ block: "\\begin{itemize}\n  \\item First item\n  \\item Second item\n\\end{itemize}\n", before: "", after: "", cursorOffset: 17 })} className="studio-btn studio-btn-ghost" style={{ height: 26, fontSize: 10, padding: "0 8px" }} title="Bullet list">•list</button>
-            <button type="button" onClick={() => insertEditorSnippet({ block: "\\begin{enumerate}\n  \\item First item\n  \\item Second item\n\\end{enumerate}\n", before: "", after: "", cursorOffset: 18 })} className="studio-btn studio-btn-ghost" style={{ height: 26, fontSize: 10, padding: "0 8px" }} title="Numbered list">1.list</button>
-            <span style={{ width: 1, height: 18, background: "var(--border-color, #334155)", margin: "0 4px" }} />
-            <button type="button" onClick={() => insertEditorSnippet({ block: "\\begin{figure}[htbp]\n  \\centering\n  \\includegraphics[width=0.8\\linewidth]{figures/plot.png}\n  \\caption{Figure caption}\n  \\label{fig:plot}\n\\end{figure}\n", before: "", after: "", cursorOffset: 62 })} className="studio-btn studio-btn-ghost" style={{ height: 26, padding: "0 8px" }} title="Figure">
-              <svg viewBox="0 0 20 20" style={{ width: 14, height: 14 }} fill="none" stroke="currentColor" strokeWidth="2">
-                <rect x="3" y="4" width="14" height="12" rx="1.5" /><circle cx="8" cy="8" r="1.2" /><path d="M4.5 14l4.5-4 2.6 2 1.9-1.7L15.5 14" strokeLinecap="round" strokeLinejoin="round" />
-              </svg>
-            </button>
-            <button type="button" onClick={() => insertEditorSnippet({ block: "\\begin{table}[htbp]\n  \\centering\n  \\caption{Table caption}\n  \\label{tab:key}\n  \\begin{tabular}{lcc}\n    \\toprule\n    Item & A & B \\\\\n    \\midrule\n    X & 1 & 2 \\\\\n    Y & 3 & 4 \\\\\n    \\bottomrule\n  \\end{tabular}\n\\end{table}\n", before: "", after: "", cursorOffset: 41 })} className="studio-btn studio-btn-ghost" style={{ height: 26, padding: "0 8px" }} title="Table">
-              <svg viewBox="0 0 20 20" style={{ width: 14, height: 14 }} fill="none" stroke="currentColor" strokeWidth="2">
-                <rect x="3" y="4" width="14" height="12" rx="1" /><path d="M3 9h14M10 4v12" strokeLinecap="round" />
-              </svg>
-            </button>
-            <button type="button" onClick={() => insertEditorSnippet({ before: "\\cite{", after: "}", placeholder: "key" })} className="studio-btn studio-btn-ghost" style={{ height: 26, fontSize: 10, padding: "0 8px" }} title="Citation">cite</button>
-            <button type="button" onClick={() => insertEditorSnippet({ before: "\\ref{", after: "}", placeholder: "key" })} className="studio-btn studio-btn-ghost" style={{ height: 26, fontSize: 10, padding: "0 8px" }} title="Reference">ref</button>
-            <span style={{ width: 1, height: 18, background: "var(--border-color, #334155)", margin: "0 4px" }} />
-            <button type="button" onClick={() => setFindPanelOpen((c) => !c)} className="studio-btn studio-btn-ghost" style={{ height: 26, fontSize: 11, padding: "0 8px" }} title="Find & Replace">
-              <svg viewBox="0 0 20 20" style={{ width: 14, height: 14 }} fill="none" stroke="currentColor" strokeWidth="2">
-                <circle cx="9" cy="9" r="4" /><path d="M12.5 12.5L16 16" strokeLinecap="round" />
-              </svg>
-            </button>
-            <span style={{ fontSize: 11, color: "var(--text-muted, #64748b)", marginLeft: 8 }}>{activeEntry?.path || "No file selected"}</span>
-          </div>
+          {isCodeMode ? (
+            <div className="studio-editor-toolbar">
+              <span style={{ fontSize: 11, fontWeight: 600, color: "var(--text-primary, #e2e8f0)", marginRight: 8 }}>
+                {editorMode === "python" ? "Python" : "C++"}
+              </span>
+              <button type="button" onClick={() => setFindPanelOpen((c) => !c)} className="studio-btn studio-btn-ghost" style={{ height: 26, fontSize: 11, padding: "0 8px" }} title="Find & Replace">
+                <svg viewBox="0 0 20 20" style={{ width: 14, height: 14 }} fill="none" stroke="currentColor" strokeWidth="2">
+                  <circle cx="9" cy="9" r="4" /><path d="M12.5 12.5L16 16" strokeLinecap="round" />
+                </svg>
+              </button>
+              <span style={{ width: 1, height: 18, background: "var(--border-color, #334155)", margin: "0 4px" }} />
+              <span style={{ fontSize: 11, color: "var(--text-muted, #64748b)", marginLeft: 8 }}>{activeEntry?.path || "No file selected"}</span>
+            </div>
+          ) : (
+            <div className="studio-editor-toolbar">
+              <button type="button" onClick={() => insertEditorSnippet({ before: "\\textbf{", after: "}", placeholder: "bold text" })} className="studio-btn studio-btn-ghost" style={{ height: 26, fontSize: 11, fontWeight: 700, padding: "0 8px" }} title="Bold (Ctrl+B)">B</button>
+              <button type="button" onClick={() => insertEditorSnippet({ before: "\\textit{", after: "}", placeholder: "italic text" })} className="studio-btn studio-btn-ghost" style={{ height: 26, fontSize: 11, fontStyle: "italic", padding: "0 8px" }} title="Italic (Ctrl+I)">I</button>
+              <button type="button" onClick={() => insertEditorSnippet({ before: "\\underline{", after: "}", placeholder: "underlined text" })} className="studio-btn studio-btn-ghost" style={{ height: 26, fontSize: 11, textDecoration: "underline", padding: "0 8px" }} title="Underline">U</button>
+              <span style={{ width: 1, height: 18, background: "var(--border-color, #334155)", margin: "0 4px" }} />
+              <button type="button" onClick={() => insertEditorSnippet({ block: "\\section{Section Title}\n", before: "", after: "", cursorOffset: 9 })} className="studio-btn studio-btn-ghost" style={{ height: 26, fontSize: 10, fontWeight: 600, padding: "0 8px" }} title="Section">S1</button>
+              <button type="button" onClick={() => insertEditorSnippet({ block: "\\subsection{Subsection Title}\n", before: "", after: "", cursorOffset: 12 })} className="studio-btn studio-btn-ghost" style={{ height: 26, fontSize: 10, fontWeight: 600, padding: "0 8px" }} title="Subsection">S2</button>
+              <button type="button" onClick={() => insertEditorSnippet({ block: "\\subsubsection{Title}\n", before: "", after: "", cursorOffset: 15 })} className="studio-btn studio-btn-ghost" style={{ height: 26, fontSize: 10, fontWeight: 600, padding: "0 8px" }} title="Subsubsection">S3</button>
+              <span style={{ width: 1, height: 18, background: "var(--border-color, #334155)", margin: "0 4px" }} />
+              <button type="button" onClick={() => insertEditorSnippet({ before: "$", after: "$", placeholder: "math" })} className="studio-btn studio-btn-ghost" style={{ height: 26, fontSize: 11, padding: "0 8px" }} title="Inline math">$</button>
+              <button type="button" onClick={() => insertEditorSnippet({ block: "\\begin{equation}\n  E = mc^2\n  \\label{eq:key}\n\\end{equation}\n", before: "", after: "", cursorOffset: 18 })} className="studio-btn studio-btn-ghost" style={{ height: 26, fontSize: 10, padding: "0 8px" }} title="Equation block">eq</button>
+              <span style={{ width: 1, height: 18, background: "var(--border-color, #334155)", margin: "0 4px" }} />
+              <button type="button" onClick={() => insertEditorSnippet({ block: "\\begin{itemize}\n  \\item First item\n  \\item Second item\n\\end{itemize}\n", before: "", after: "", cursorOffset: 17 })} className="studio-btn studio-btn-ghost" style={{ height: 26, fontSize: 10, padding: "0 8px" }} title="Bullet list">•list</button>
+              <button type="button" onClick={() => insertEditorSnippet({ block: "\\begin{enumerate}\n  \\item First item\n  \\item Second item\n\\end{enumerate}\n", before: "", after: "", cursorOffset: 18 })} className="studio-btn studio-btn-ghost" style={{ height: 26, fontSize: 10, padding: "0 8px" }} title="Numbered list">1.list</button>
+              <span style={{ width: 1, height: 18, background: "var(--border-color, #334155)", margin: "0 4px" }} />
+              <button type="button" onClick={() => insertEditorSnippet({ block: "\\begin{figure}[htbp]\n  \\centering\n  \\includegraphics[width=0.8\\linewidth]{figures/plot.png}\n  \\caption{Figure caption}\n  \\label{fig:plot}\n\\end{figure}\n", before: "", after: "", cursorOffset: 62 })} className="studio-btn studio-btn-ghost" style={{ height: 26, padding: "0 8px" }} title="Figure">
+                <svg viewBox="0 0 20 20" style={{ width: 14, height: 14 }} fill="none" stroke="currentColor" strokeWidth="2">
+                  <rect x="3" y="4" width="14" height="12" rx="1.5" /><circle cx="8" cy="8" r="1.2" /><path d="M4.5 14l4.5-4 2.6 2 1.9-1.7L15.5 14" strokeLinecap="round" strokeLinejoin="round" />
+                </svg>
+              </button>
+              <button type="button" onClick={() => insertEditorSnippet({ block: "\\begin{table}[htbp]\n  \\centering\n  \\caption{Table caption}\n  \\label{tab:key}\n  \\begin{tabular}{lcc}\n    \\toprule\n    Item & A & B \\\\\n    \\midrule\n    X & 1 & 2 \\\\\n    Y & 3 & 4 \\\\\n    \\bottomrule\n  \\end{tabular}\n\\end{table}\n", before: "", after: "", cursorOffset: 41 })} className="studio-btn studio-btn-ghost" style={{ height: 26, padding: "0 8px" }} title="Table">
+                <svg viewBox="0 0 20 20" style={{ width: 14, height: 14 }} fill="none" stroke="currentColor" strokeWidth="2">
+                  <rect x="3" y="4" width="14" height="12" rx="1" /><path d="M3 9h14M10 4v12" strokeLinecap="round" />
+                </svg>
+              </button>
+              <button type="button" onClick={() => insertEditorSnippet({ before: "\\cite{", after: "}", placeholder: "key" })} className="studio-btn studio-btn-ghost" style={{ height: 26, fontSize: 10, padding: "0 8px" }} title="Citation">cite</button>
+              <button type="button" onClick={() => insertEditorSnippet({ before: "\\ref{", after: "}", placeholder: "key" })} className="studio-btn studio-btn-ghost" style={{ height: 26, fontSize: 10, padding: "0 8px" }} title="Reference">ref</button>
+              <span style={{ width: 1, height: 18, background: "var(--border-color, #334155)", margin: "0 4px" }} />
+              <button type="button" onClick={() => setFindPanelOpen((c) => !c)} className="studio-btn studio-btn-ghost" style={{ height: 26, fontSize: 11, padding: "0 8px" }} title="Find & Replace">
+                <svg viewBox="0 0 20 20" style={{ width: 14, height: 14 }} fill="none" stroke="currentColor" strokeWidth="2">
+                  <circle cx="9" cy="9" r="4" /><path d="M12.5 12.5L16 16" strokeLinecap="round" />
+                </svg>
+              </button>
+              <span style={{ fontSize: 11, color: "var(--text-muted, #64748b)", marginLeft: 8 }}>{activeEntry?.path || "No file selected"}</span>
+            </div>
+          )}
 
           {/* Find/replace panel */}
           {findPanelOpen ? (
@@ -3379,6 +3698,24 @@ export default function ResearchStudioPage() {
             </div>
           </div>
 
+          {/* Code output panel */}
+          {isCodeMode && codeOutput ? (
+            <div className="studio-code-output">
+              <div className="studio-code-output-header">
+                <span>Output</span>
+                <button
+                  type="button"
+                  onClick={() => setCodeOutput("")}
+                  className="studio-btn studio-btn-ghost"
+                  style={{ height: 20, fontSize: 10, padding: "0 6px" }}
+                >
+                  Clear
+                </button>
+              </div>
+              <pre className="studio-code-output-body">{codeOutput}</pre>
+            </div>
+          ) : null}
+
           {/* Status bar */}
           <div className="studio-statusbar">
             <div className="studio-statusbar-left">
@@ -3387,7 +3724,7 @@ export default function ResearchStudioPage() {
               {wordCount.abstractWords > 0 ? (
                 <span style={wordCount.abstractWords > 250 ? { color: "#ef4444" } : {}}>Abstract: {wordCount.abstractWords}/250</span>
               ) : null}
-              <span>UTF-8 · LaTeX</span>
+              <span>UTF-8 · {isCodeMode ? (editorMode === "python" ? "Python" : "C++") : "LaTeX"}</span>
             </div>
             <div className="studio-statusbar-right">
               <span>Compiled: {lastCompileAt}</span>
@@ -3403,18 +3740,34 @@ export default function ResearchStudioPage() {
           {/* Keyboard shortcuts */}
           {showShortcuts ? (
             <div className="studio-shortcuts">
-              <div><kbd className="studio-kbd">Ctrl+B</kbd> Bold</div>
-              <div><kbd className="studio-kbd">Ctrl+I</kbd> Italic</div>
-              <div><kbd className="studio-kbd">Ctrl+S</kbd> Compile</div>
-              <div><kbd className="studio-kbd">Ctrl+Enter</kbd> Compile</div>
-              <div><kbd className="studio-kbd">Ctrl+F</kbd> Find</div>
-              <div><kbd className="studio-kbd">Ctrl+H</kbd> Replace</div>
-              <div><kbd className="studio-kbd">Ctrl+G</kbd> Next match</div>
-              <div><kbd className="studio-kbd">Ctrl+D</kbd> Duplicate</div>
-              <div><kbd className="studio-kbd">Ctrl+/</kbd> Comment</div>
-              <div><kbd className="studio-kbd">Tab</kbd> Indent</div>
-              <div><kbd className="studio-kbd">Esc</kbd> Close panels</div>
-              <div><kbd className="studio-kbd">Ctrl+Click</kbd> Sync PDF</div>
+              {isCodeMode ? (
+                <>
+                  <div><kbd className="studio-kbd">Ctrl+S</kbd> Run</div>
+                  <div><kbd className="studio-kbd">Ctrl+Enter</kbd> Run</div>
+                  <div><kbd className="studio-kbd">Ctrl+F</kbd> Find</div>
+                  <div><kbd className="studio-kbd">Ctrl+H</kbd> Replace</div>
+                  <div><kbd className="studio-kbd">Ctrl+G</kbd> Next match</div>
+                  <div><kbd className="studio-kbd">Ctrl+D</kbd> Duplicate</div>
+                  <div><kbd className="studio-kbd">Ctrl+/</kbd> Comment</div>
+                  <div><kbd className="studio-kbd">Tab</kbd> Indent</div>
+                  <div><kbd className="studio-kbd">Esc</kbd> Close panels</div>
+                </>
+              ) : (
+                <>
+                  <div><kbd className="studio-kbd">Ctrl+B</kbd> Bold</div>
+                  <div><kbd className="studio-kbd">Ctrl+I</kbd> Italic</div>
+                  <div><kbd className="studio-kbd">Ctrl+S</kbd> Compile</div>
+                  <div><kbd className="studio-kbd">Ctrl+Enter</kbd> Compile</div>
+                  <div><kbd className="studio-kbd">Ctrl+F</kbd> Find</div>
+                  <div><kbd className="studio-kbd">Ctrl+H</kbd> Replace</div>
+                  <div><kbd className="studio-kbd">Ctrl+G</kbd> Next match</div>
+                  <div><kbd className="studio-kbd">Ctrl+D</kbd> Duplicate</div>
+                  <div><kbd className="studio-kbd">Ctrl+/</kbd> Comment</div>
+                  <div><kbd className="studio-kbd">Tab</kbd> Indent</div>
+                  <div><kbd className="studio-kbd">Esc</kbd> Close panels</div>
+                  <div><kbd className="studio-kbd">Ctrl+Click</kbd> Sync PDF</div>
+                </>
+              )}
             </div>
           ) : null}
         </div>

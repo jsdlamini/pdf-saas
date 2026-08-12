@@ -378,6 +378,67 @@ Thanks to our funding sources.
 }` },
     ],
   },
+  {
+    slug: "python-script",
+    name: "Python Script",
+    description: "Start a Python script with imports, main function, and basic structure.",
+    entries: [
+      {
+        path: "main.py",
+        kind: "file",
+        content: `#!/usr/bin/env python3
+"""Research script — describe your analysis here."""
+
+import json
+import math
+import sys
+from collections import defaultdict
+from typing import Any
+
+
+def main() -> None:
+    """Entry point for the script."""
+    print("Hello from Python!")
+    # Your research code goes here
+
+
+if __name__ == "__main__":
+    main()
+`,
+      },
+      { path: "data/", kind: "folder", content: "" },
+      { path: "output/", kind: "folder", content: "" },
+    ],
+  },
+  {
+    slug: "cpp-program",
+    name: "C++ Program",
+    description: "Start a C++ program with standard includes, main function, and basic structure.",
+    entries: [
+      {
+        path: "main.cpp",
+        kind: "file",
+        content: `#include <iostream>
+#include <fstream>
+#include <string>
+#include <vector>
+#include <map>
+#include <algorithm>
+#include <cmath>
+
+int main(int argc, char* argv[]) {
+    std::cout << "Hello from C++!" << std::endl;
+
+    // Your research code goes here
+
+    return 0;
+}
+`,
+      },
+      { path: "data/", kind: "folder", content: "" },
+      { path: "output/", kind: "folder", content: "" },
+    ],
+  },
 ];
 
 export function getTemplateBySlug(slug: string) {
