@@ -993,6 +993,7 @@ body {
   display: flex;
   gap: 6px;
   flex-wrap: wrap;
+  overflow-x: hidden;
 }
 
 /* Card buttons: icon-only at narrow card widths */

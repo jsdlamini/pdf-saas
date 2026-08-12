@@ -2328,6 +2328,35 @@ export default function ResearchStudioPage() {
       cancelButtonColor: "#334155",
       background: "#1a1d2b",
       color: "#e2e8f0",
+      customClass: {
+        popup: "swal-draggable",
+        title: "swal-drag-handle",
+      },
+      position: "top",
+      didOpen: () => {
+        const popup = document.querySelector(".swal-draggable") as HTMLElement | null;
+        const titleEl = document.querySelector(".swal-drag-handle") as HTMLElement | null;
+        if (!popup || !titleEl) return;
+        let offsetX = 0, offsetY = 0, dragging = false;
+        titleEl.style.cursor = "grab";
+        titleEl.addEventListener("mousedown", (e) => {
+          dragging = true;
+          offsetX = (e as MouseEvent).clientX - popup.getBoundingClientRect().left;
+          offsetY = (e as MouseEvent).clientY - popup.getBoundingClientRect().top;
+          titleEl.style.cursor = "grabbing";
+        });
+        document.addEventListener("mousemove", (e) => {
+          if (!dragging) return;
+          popup.style.position = "fixed";
+          popup.style.left = `${e.clientX - offsetX}px`;
+          popup.style.top = `${e.clientY - offsetY}px`;
+          popup.style.margin = "0";
+        });
+        document.addEventListener("mouseup", () => {
+          dragging = false;
+          titleEl.style.cursor = "grab";
+        });
+      },
       preConfirm: () => {
         const name = (document.getElementById("swal-project-name") as HTMLInputElement)?.value?.trim();
         if (!name) {
