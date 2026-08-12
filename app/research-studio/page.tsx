@@ -790,7 +790,10 @@ export default function ResearchStudioPage() {
     if (typeof window === "undefined") return [];
     try {
       const raw = localStorage.getItem("wiserfiles-project-snapshots");
-      return raw ? JSON.parse(raw) : [];
+      if (!raw) return [];
+      const data = JSON.parse(raw) as SavedProjectData[];
+      // Filter out the old starter project
+      return data.filter((p) => p.id !== "starter-project" && p.name !== "WiserFiles Research Draft");
     } catch { return []; }
   });
   const [activeProjectId, setActiveProjectId] = useState(() => {
@@ -807,6 +810,20 @@ export default function ResearchStudioPage() {
   const [shareLoading, setShareLoading] = useState(!!shareId);
 
   // Load shared project on mount
+
+  // Clean up old starter project from localStorage on mount
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem("wiserfiles-project-snapshots");
+      if (raw) {
+        const data = JSON.parse(raw);
+        const cleaned = data.filter((p: any) => p.id !== "starter-project" && p.name !== "WiserFiles Research Draft");
+        if (cleaned.length !== data.length) localStorage.setItem("wiserfiles-project-snapshots", JSON.stringify(cleaned));
+      }
+      if (localStorage.getItem("wiserfiles-active-project") === "starter-project") localStorage.removeItem("wiserfiles-active-project");
+    } catch {}
+  }, []);
+
   useEffect(() => {
     if (!shareId) { setShareLoading(false); return; }
     fetch(`/api/share-project?id=${shareId}`)

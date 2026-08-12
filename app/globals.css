@@ -1416,6 +1416,9 @@ textarea:focus-visible,
 /* Position all SweetAlert2 modals at top of page */
 .swal2-container {
   align-items: flex-start !important;
-  padding-top: 5vh !important;
+  padding-top: 8vh !important;
+}
+.swal2-popup {
+  margin-top: 0 !important;
 }
 
