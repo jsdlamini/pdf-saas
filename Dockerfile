@@ -32,14 +32,18 @@ RUN apt-get update \
  && echo "app ALL=(root) NOPASSWD: /usr/bin/apt-get, /usr/bin/tlmgr" > /etc/sudoers.d/app \
  && chmod 0440 /etc/sudoers.d/app
 
-USER app
-
 COPY package.json package-lock.json ./
 RUN npm install --omit=dev
 
 COPY --from=builder /app/.next ./.next
 COPY --from=builder /app/public ./public
 COPY --from=builder /app/next.config.ts ./next.config.ts
+
+# Give the runtime user ownership of the app directory (Next.js writes .next/cache),
+# then drop privileges. apt/tlmgr auto-install still works via scoped sudo.
+RUN chown -R app:app /app
+
+USER app
 
 EXPOSE 3000
 CMD ["npm", "run", "start"]
