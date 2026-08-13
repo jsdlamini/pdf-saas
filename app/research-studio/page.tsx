@@ -1,6 +1,6 @@
 "use client";
 
-import { SignInButton, SignUpButton, useAuth } from "@clerk/nextjs";
+import { SignInButton, SignUpButton, useAuth, useUser } from "@clerk/nextjs";
 import JSZip from "jszip";
 import katex from "katex";
 import "katex/dist/katex.min.css";
@@ -199,6 +199,14 @@ Start writing your document here.
 
 function clamp(value: number, min: number, max: number) {
   return Math.min(Math.max(value, min), max);
+}
+
+function hashString(value: string): number {
+  let hash = 0;
+  for (let i = 0; i < value.length; i += 1) {
+    hash = (hash * 31 + value.charCodeAt(i)) >>> 0;
+  }
+  return hash / 4294967295;
 }
 
 function scanCitationKeys(entries: ProjectEntry[]): CitationItem[] {
@@ -823,6 +831,7 @@ function makeProjectId() {
 export default function ResearchStudioPage() {
   const initialState = useMemo(() => loadInitialResearchStudioState(), []);
   const { isLoaded: authLoaded, userId } = useAuth();
+  const { user: clerkUser } = useUser();
   const hasHydratedServerProjectsRef = useRef(false);
 
   // Restore workspace state from localStorage on mount
@@ -995,6 +1004,11 @@ export default function ResearchStudioPage() {
     suggestions: string[];
     score: number;
   } | null>(null);
+
+  // ── Collaboration presence ─────
+  const [collabCursors, setCollabCursors] = useState<
+    { userId: string; name: string; color: string; cursorPos: number }[]
+  >([]);
 
   // ── Terminal state ─────
   const [terminalOpen, setTerminalOpen] = useState(false);
@@ -1212,6 +1226,42 @@ export default function ResearchStudioPage() {
       avgSentenceWords: sentences.length ? Math.round(wordCountTotal / sentences.length) : 0,
     };
   }, [activeSource]);
+
+  // Collaboration presence: broadcast my cursor and fetch collaborators' cursors.
+  useEffect(() => {
+    if (!userId || !activeProjectId) return;
+
+    const color = `hsl(${(hashString(userId) * 137) % 360}, 70%, 60%)`;
+    const name = clerkUser?.fullName || clerkUser?.firstName || "Collaborator";
+    let cancelled = false;
+
+    async function pulse() {
+      if (cancelled) return;
+      const pos = editorRef.current?.selectionStart ?? 0;
+      try {
+        const res = await fetch("/api/collab-presence", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ projectId: activeProjectId, name, color, cursorPos: pos }),
+        });
+        if (!res.ok) return;
+        const getRes = await fetch(`/api/collab-presence?projectId=${encodeURIComponent(activeProjectId)}`);
+        if (getRes.ok) {
+          const data = (await getRes.json()) as { cursors?: { userId: string; name: string; color: string; cursorPos: number }[] };
+          setCollabCursors(data.cursors || []);
+        }
+      } catch {
+        // presence is best-effort
+      }
+    }
+
+    void pulse();
+    const interval = setInterval(pulse, 1500);
+    return () => {
+      cancelled = true;
+      clearInterval(interval);
+    };
+  }, [userId, activeProjectId, clerkUser?.fullName, clerkUser?.firstName]);
 
   // Auto-save debounce
   const triggerAutoSave = useCallback(() => {
@@ -3064,8 +3114,15 @@ export default function ResearchStudioPage() {
           const access = (document.getElementById("swal-invite-access") as HTMLSelectElement)?.value;
           if (!email) { Swal.showValidationMessage("Enter an email address"); return; }
           try {
-            await fetch("/api/project-invites", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ projectId: activeProjectId, projectName, email, accessLevel: access }) });
-            setCompileNotice(`Invitation sent to ${email} (${access} access).`);
+            const res = await fetch("/api/project-invites", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ projectId: activeProjectId, projectName, email, accessLevel: access }) });
+            const data = await res.json().catch(() => ({}));
+            if (!res.ok) {
+              setCompileNotice(data.error || "Could not send invitation.");
+            } else if (data.emailSent === false) {
+              setCompileNotice(`Invite saved, but email failed: ${data.emailError || "unknown error"}`);
+            } else {
+              setCompileNotice(`Invitation email sent to ${email} (${access} access).`);
+            }
           } catch { setCompileNotice("Could not send invitation."); }
           Swal.close();
         });
@@ -4340,6 +4397,27 @@ export default function ResearchStudioPage() {
                     .replace(/latex-token-/g, "studio-hl-")}\n`,
                 }}
               />
+              {collabCursors.length > 0 ? (
+                <div
+                  className="studio-collab-cursors"
+                  style={{ transform: `translate(${-editorScroll.left}px, ${-editorScroll.top}px)` }}
+                >
+                  {collabCursors.map((c) => {
+                    const before = activeSource.slice(0, Math.max(0, c.cursorPos));
+                    const line = before.split("\n").length - 1;
+                    const lineStart = before.lastIndexOf("\n") + 1;
+                    const col = c.cursorPos - lineStart;
+                    const top = 12 + line * 13 * 1.625;
+                    const left = 16 + col * 7.8;
+                    return (
+                      <div key={c.userId} className="studio-collab-cursor" style={{ top, left, color: c.color }}>
+                        <div className="studio-collab-cursor-label" style={{ background: c.color }}>{c.name}</div>
+                        <div className="studio-collab-cursor-caret" style={{ background: c.color }} />
+                      </div>
+                    );
+                  })}
+                </div>
+              ) : null}
               <textarea
                 ref={editorRef}
                 value={activeSource}

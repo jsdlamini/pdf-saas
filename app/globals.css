@@ -1969,3 +1969,36 @@ html[data-theme="light"] .studio-menu-kbd {
   box-sizing: border-box !important;
   margin: 0 !important;
 }
+
+/* ── Collaboration cursors ───── */
+.studio-collab-cursors {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 3;
+  overflow: hidden;
+}
+.studio-collab-cursor {
+  position: absolute;
+  display: flex;
+  align-items: flex-start;
+  pointer-events: none;
+  transform: translateX(-1px);
+}
+.studio-collab-cursor-label {
+  position: absolute;
+  top: -18px;
+  left: 0;
+  white-space: nowrap;
+  font-size: 10px;
+  font-weight: 600;
+  color: #0f172a;
+  padding: 1px 6px;
+  border-radius: 4px 4px 4px 0;
+  line-height: 1.4;
+}
+.studio-collab-cursor-caret {
+  width: 2px;
+  height: 20px;
+  display: block;
+}
