@@ -38,7 +38,11 @@ export function useAnalytics() {
     track("pageview", {
       path: pathname,
       referrer: document.referrer || "direct",
-      tool: pathname.startsWith("/tools/") ? pathname.split("/")[2] : "home",
+      tool: pathname.startsWith("/tools/")
+        ? pathname.split("/")[2]
+        : pathname.startsWith("/research-studio")
+        ? "research-studio"
+        : "home",
     });
   }, [pathname, searchParams]);
 }
