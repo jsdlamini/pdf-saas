@@ -2219,3 +2219,122 @@ html[data-theme="light"] .studio-menu-kbd {
   padding: 14px;
   overflow: auto;
 }
+
+/* ═══ Professional visual polish ═══ */
+
+/* Crisp font rendering + consistent type stack across the studio */
+.studio-dark,
+.studio-dark * {
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
+}
+.studio-dark {
+  font-family: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
+    Helvetica, Arial, sans-serif;
+}
+
+/* Refined thin scrollbars */
+.studio-dark ::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+.studio-dark ::-webkit-scrollbar-thumb {
+  background: rgba(100, 116, 139, 0.35);
+  border-radius: 6px;
+  border: 2px solid transparent;
+  background-clip: content-box;
+}
+.studio-dark ::-webkit-scrollbar-thumb:hover {
+  background: rgba(100, 116, 139, 0.55);
+  background-clip: content-box;
+}
+.studio-dark ::-webkit-scrollbar-track {
+  background: transparent;
+}
+.studio-dark ::-webkit-scrollbar-corner {
+  background: transparent;
+}
+
+/* Topbar: subtle elevation + backdrop blur */
+.studio-topbar {
+  position: relative;
+  z-index: 20;
+  box-shadow: 0 1px 0 rgba(0, 0, 0, 0.2), 0 4px 16px -8px rgba(0, 0, 0, 0.35);
+}
+@supports (backdrop-filter: blur(8px)) {
+  .studio-topbar {
+    background: color-mix(in srgb, var(--bg-sidebar, #1a1d2b) 85%, transparent);
+    backdrop-filter: blur(8px);
+  }
+}
+
+/* Buttons: gentle lift + smoother easing */
+.studio-btn {
+  transition: transform 0.12s ease, background 0.15s ease, color 0.15s ease,
+    border-color 0.15s ease, box-shadow 0.15s ease;
+}
+.studio-btn:active:not(:disabled) {
+  transform: translateY(0.5px) scale(0.99);
+}
+.studio-btn-primary {
+  box-shadow: 0 1px 2px rgba(74, 222, 128, 0.15);
+}
+.studio-btn-primary:hover:not(:disabled) {
+  box-shadow: 0 2px 8px rgba(74, 222, 128, 0.25);
+}
+
+/* Status bar: subtle top hairline + smoother color */
+.studio-statusbar {
+  letter-spacing: 0.01em;
+  background: color-mix(in srgb, var(--bg-sidebar, #1a1d2b) 95%, black);
+}
+
+/* Editor toolbar: cleaner hairline */
+.studio-editor-toolbar {
+  min-height: 34px;
+}
+
+/* Project cards: crisp elevation on hover */
+.studio-project-card {
+  transition: transform 0.15s ease, box-shadow 0.15s ease, border-color 0.15s ease,
+    background 0.15s ease;
+}
+.studio-project-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 10px 28px -12px rgba(0, 0, 0, 0.5);
+  border-color: rgba(74, 222, 128, 0.3);
+}
+
+/* Menubar: cleaner divider */
+.studio-menubar {
+  box-shadow: inset 0 -1px 0 rgba(0, 0, 0, 0.15);
+}
+
+/* Selection color (matches accent) */
+.studio-dark ::selection {
+  background: rgba(74, 222, 128, 0.28);
+  color: inherit;
+}
+
+/* Consistent focus rings */
+.studio-dark button:focus-visible,
+.studio-dark input:focus-visible,
+.studio-dark select:focus-visible,
+.studio-dark textarea:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent-color, #4ade80) 55%, transparent);
+  border-radius: 4px;
+}
+
+/* Light-mode polish */
+html[data-theme="light"] .studio-topbar {
+  box-shadow: 0 1px 0 rgba(0, 0, 0, 0.05), 0 4px 16px -8px rgba(0, 0, 0, 0.08);
+}
+html[data-theme="light"] .studio-project-card:hover {
+  box-shadow: 0 10px 28px -12px rgba(15, 23, 42, 0.18);
+}
+html[data-theme="light"] .studio-dark ::-webkit-scrollbar-thumb {
+  background: rgba(148, 163, 184, 0.5);
+  background-clip: content-box;
+}
