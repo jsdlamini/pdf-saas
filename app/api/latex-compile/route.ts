@@ -12,12 +12,14 @@ export const dynamic = "force-dynamic";
 
 const RATE_WINDOW_MS = 60_000;
 const RATE_MAX_REQUESTS = 15;
+const GUEST_RATE_WINDOW_MS = 60 * 60 * 1000;
+const GUEST_RATE_MAX_REQUESTS = 10;
 const rateLimitMap = new Map<string, number[]>();
 
-function checkRateLimit(key: string): boolean {
+function checkRateLimit(key: string, windowMs = RATE_WINDOW_MS, maxRequests = RATE_MAX_REQUESTS): boolean {
   const now = Date.now();
-  const times = (rateLimitMap.get(key) || []).filter((t) => now - t < RATE_WINDOW_MS);
-  if (times.length >= RATE_MAX_REQUESTS) return false;
+  const times = (rateLimitMap.get(key) || []).filter((t) => now - t < windowMs);
+  if (times.length >= maxRequests) return false;
   times.push(now);
   rateLimitMap.set(key, times);
   return true;
@@ -419,7 +421,10 @@ export async function POST(request: Request) {
   const forwarded = request.headers.get("x-forwarded-for");
   const ip = forwarded?.split(",")[0]?.trim() || "anonymous";
   const rateKey = userId ? `latex-compile:${userId}` : `latex-compile:guest:${ip}`;
-  if (!checkRateLimit(rateKey)) {
+  const limited = userId
+    ? !checkRateLimit(rateKey)
+    : !checkRateLimit(rateKey, GUEST_RATE_WINDOW_MS, GUEST_RATE_MAX_REQUESTS);
+  if (limited) {
     return jsonError("Compile limit reached. Sign in for unlimited compiling.", 429);
   }
 

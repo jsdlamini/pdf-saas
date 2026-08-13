@@ -2741,17 +2741,21 @@ export default function ResearchStudioPage() {
   }
 
   async function compileProject() {
-    // Guest compile quota: allow 2 free compiles, then prompt sign-in.
+    // Guest compile quota: allow 10 free compiles per hour, then prompt sign-in.
     if (!userId) {
-      const GUEST_COMPILE_LIMIT = 2;
-      let count = 0;
+      const GUEST_COMPILE_LIMIT = 10;
+      const GUEST_COMPILE_WINDOW_MS = 60 * 60 * 1000;
+      let timestamps: number[] = [];
       try {
-        count = parseInt(localStorage.getItem("wiserfiles-guest-compiles") || "0", 10) || 0;
-      } catch {}
-      if (count >= GUEST_COMPILE_LIMIT) {
+        timestamps = JSON.parse(localStorage.getItem("wiserfiles-guest-compiles") || "[]");
+        if (!Array.isArray(timestamps)) timestamps = [];
+      } catch { timestamps = []; }
+      const now = Date.now();
+      timestamps = timestamps.filter((t) => typeof t === "number" && now - t < GUEST_COMPILE_WINDOW_MS);
+      if (timestamps.length >= GUEST_COMPILE_LIMIT) {
         await Swal.fire({
           title: "Compile limit reached",
-          html: `You've used your ${GUEST_COMPILE_LIMIT} free compiles.
+          html: `You've used your ${GUEST_COMPILE_LIMIT} free compiles this hour.
             <a href="#" onclick="window.Clerk && window.Clerk.openSignIn && window.Clerk.openSignIn(); return false;" style="color:#0f766e;font-weight:600">Sign in</a>
             for unlimited compiling.`,
           icon: "info",
@@ -2838,11 +2842,18 @@ export default function ResearchStudioPage() {
       const engine = response.headers.get("X-Latex-Engine") || "server engine";
       setCompileNotice(`Compiled ${rootPath} using ${engine}.`);
 
-      // Increment guest compile counter
+      // Increment guest compile counter (10 per hour window)
       if (!userId) {
         try {
-          const count = parseInt(localStorage.getItem("wiserfiles-guest-compiles") || "0", 10) || 0;
-          localStorage.setItem("wiserfiles-guest-compiles", String(count + 1));
+          let timestamps: number[] = [];
+          try {
+            timestamps = JSON.parse(localStorage.getItem("wiserfiles-guest-compiles") || "[]");
+            if (!Array.isArray(timestamps)) timestamps = [];
+          } catch { timestamps = []; }
+          const now = Date.now();
+          timestamps.push(now);
+          timestamps = timestamps.filter((t) => typeof t === "number" && now - t < 60 * 60 * 1000);
+          localStorage.setItem("wiserfiles-guest-compiles", JSON.stringify(timestamps));
         } catch {}
       }
 
