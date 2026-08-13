@@ -1925,3 +1925,36 @@ html[data-theme="light"] .studio-menu-kbd {
   border-color: rgba(74, 222, 128, 0.35);
   background: var(--bg-sidebar, #1a1d2b);
 }
+
+/* ── Prompt modal ───── */
+.swal-prompt-popup {
+  width: min(92vw, 28rem) !important;
+  padding: 1.25rem 1.5rem 1rem !important;
+}
+.swal-prompt-title {
+  font-size: 15px !important;
+  white-space: normal !important;
+  word-break: break-word !important;
+  line-height: 1.35 !important;
+  padding: 0 !important;
+}
+.swal-prompt-label {
+  font-size: 12px !important;
+  color: #94a3b8 !important;
+  font-weight: 600 !important;
+  margin: 0 0 4px !important;
+}
+.swal-prompt-input {
+  background: #0f172a !important;
+  color: #e2e8f0 !important;
+  border: 1px solid #334155 !important;
+  border-radius: 6px !important;
+  font-size: 13px !important;
+  height: auto !important;
+  padding: 8px 10px !important;
+  width: 100% !important;
+  max-width: 100% !important;
+  min-width: 0 !important;
+  box-sizing: border-box !important;
+  margin: 0 !important;
+}

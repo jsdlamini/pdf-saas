@@ -468,10 +468,17 @@ async function promptModal(title: string, inputLabel: string, inputValue: string
     cancelButtonText: "Cancel",
     reverseButtons: true,
     focusCancel: true,
-    confirmButtonColor: "#0f766e",
-    cancelButtonColor: "#e2e8f0",
-    background: "#ffffff",
+    confirmButtonColor: "#4ade80",
+    cancelButtonColor: "#334155",
+    background: "#1a1d2b",
+    color: "#e2e8f0",
     position: "top",
+    customClass: {
+      popup: "swal-prompt-popup",
+      title: "swal-prompt-title",
+      input: "swal-prompt-input",
+      inputLabel: "swal-prompt-label",
+    },
     inputValidator: (value) => {
       if (!value || !value.trim()) {
         return "Enter a value.";
@@ -1199,6 +1206,14 @@ export default function ResearchStudioPage() {
   const [aiWritingBusy, setAiWritingBusy] = useState(false);
   const [citationBusy, setCitationBusy] = useState(false);
   const [historyOpen, setHistoryOpen] = useState(false);
+  const [aiReviewBusy, setAiReviewBusy] = useState(false);
+  const [aiReviewResult, setAiReviewResult] = useState<{
+    summary: string;
+    strengths: string[];
+    weaknesses: string[];
+    suggestions: string[];
+    score: number;
+  } | null>(null);
 
   // ── Terminal state ─────
   const [terminalOpen, setTerminalOpen] = useState(false);
@@ -1385,6 +1400,35 @@ export default function ResearchStudioPage() {
     }, 300);
     return () => {
       if (wordCountTimerRef.current) clearTimeout(wordCountTimerRef.current);
+    };
+  }, [activeSource]);
+
+  // Readability metrics (Flesch reading ease, grade level, passive voice)
+  const readability = useMemo(() => {
+    const text = activeSource;
+    if (!text.trim()) return { readingEase: 0, gradeLevel: "—", passiveCount: 0, sentenceCount: 0, avgSentenceWords: 0 };
+    const sentences = text.split(/[.!?]+\s+/).map((s) => s.trim()).filter((s) => s.length > 0);
+    const wordCountTotal = countWords(text);
+    const syllableCount = text.split(/\s+/).reduce((sum, word) => {
+      const w = word.replace(/[^a-zA-Z]/g, "").toLowerCase();
+      if (!w) return sum;
+      const groups = w.match(/[aeiouy]+/g);
+      let count = groups ? groups.length : 0;
+      if (w.endsWith("e")) count -= 1;
+      if (count < 1) count = 1;
+      return sum + count;
+    }, 0);
+    const readingEase = wordCountTotal && sentences.length
+      ? 206.835 - 1.015 * (wordCountTotal / sentences.length) - 84.6 * (syllableCount / wordCountTotal)
+      : 0;
+    const gradeLevel = readingEase > 90 ? "5th" : readingEase > 80 ? "6th" : readingEase > 70 ? "7th" : readingEase > 60 ? "8-9th" : readingEase > 50 ? "10-12th" : readingEase > 30 ? "College" : "Graduate";
+    const passiveCount = (text.match(/\b(?:is|are|was|were|be|been|being)\s+(\w+ed)\b/g) || []).length;
+    return {
+      readingEase: Math.max(0, Math.round(readingEase)),
+      gradeLevel,
+      passiveCount,
+      sentenceCount: sentences.length,
+      avgSentenceWords: sentences.length ? Math.round(wordCountTotal / sentences.length) : 0,
     };
   }, [activeSource]);
 
@@ -2105,7 +2149,7 @@ export default function ResearchStudioPage() {
 
   async function importCitationFromDoi() {
     if (citationBusy) return;
-    const doi = await promptModal("Import citation from DOI", "DOI (e.g. 10.1007/978-3-642-12345-6_1)", "", "Import");
+    const doi = await promptModal("Import Citation", "Paste a DOI", "", "Import");
     if (!doi) return;
 
     setCitationBusy(true);
@@ -2144,6 +2188,122 @@ export default function ResearchStudioPage() {
     setSelectedPath(revision.selectedPath || "main.tex");
     setCompileNotice("Revision restored. Save to keep this version.");
     setHistoryOpen(false);
+  }
+
+  async function runAiReview() {
+    if (aiReviewBusy) return;
+    const text = activeSource.trim();
+    if (!text) {
+      setCompileNotice("Nothing to review in the active file.");
+      return;
+    }
+
+    setAiReviewBusy(true);
+    setAiReviewResult(null);
+    setCompileNotice("AI reviewing your paper...");
+    try {
+      const response = await fetch("/api/ai-review", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ text, title: projectName }),
+      });
+      const payload = (await response.json()) as {
+        error?: string;
+        summary?: string;
+        strengths?: string[];
+        weaknesses?: string[];
+        suggestions?: string[];
+        score?: number;
+      };
+      if (!response.ok) {
+        throw new Error(payload?.error || "AI review failed.");
+      }
+      setAiReviewResult({
+        summary: payload.summary || "",
+        strengths: payload.strengths || [],
+        weaknesses: payload.weaknesses || [],
+        suggestions: payload.suggestions || [],
+        score: payload.score ?? 0,
+      });
+      setCompileNotice("AI review complete.");
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "AI review failed.";
+      setCompileNotice(message);
+      appendPreviewError(message);
+    } finally {
+      setAiReviewBusy(false);
+    }
+  }
+
+  async function generateLatexTableFromCsv() {
+    const csvPath = await promptModal(
+      "CSV to LaTeX table",
+      "CSV file path in project (e.g. data/results.csv)",
+      "",
+      "Generate"
+    );
+    if (!csvPath) return;
+
+    const entry = projectEntries.find((e) => e.path === csvPath);
+    if (!entry || entry.kind !== "file") {
+      setCompileNotice(`CSV file not found: ${csvPath}`);
+      appendPreviewError(`CSV file not found: ${csvPath}`);
+      return;
+    }
+
+    try {
+      const lines = entry.content.split(/\r?\n/).filter((l) => l.trim());
+      if (lines.length < 2) {
+        throw new Error("CSV needs a header row and at least one data row.");
+      }
+      const rows = lines.map((line) => {
+        const cells: string[] = [];
+        let cur = "";
+        let inQuotes = false;
+        for (let i = 0; i < line.length; i += 1) {
+          const ch = line[i];
+          if (ch === '"') {
+            if (inQuotes && line[i + 1] === '"') { cur += '"'; i += 1; }
+            else inQuotes = !inQuotes;
+          } else if (ch === "," && !inQuotes) {
+            cells.push(cur);
+            cur = "";
+          } else {
+            cur += ch;
+          }
+        }
+        cells.push(cur);
+        return cells;
+      });
+
+      const colCount = Math.max(...rows.map((r) => r.length));
+      const align = Array.from({ length: colCount }, () => "l").join("");
+      const esc = (s: string) => s.replace(/&/g, "\\&").replace(/%/g, "\\%").replace(/#/g, "\\#").replace(/_/g, "\\_");
+
+      const tableLines = [
+        "\\begin{table}[htbp]",
+        "  \\centering",
+        "  \\caption{Table caption}",
+        `  \\begin{tabular}{${align}}`,
+        "    \\toprule",
+        "    " + rows[0].map(esc).join(" & ") + " \\\\",
+        "    \\midrule",
+        ...rows.slice(1).map((r) => "    " + r.map(esc).join(" & ") + " \\\\"),
+        "    \\bottomrule",
+        "  \\end{tabular}",
+        "\\end{table}",
+      ].join("\n");
+
+      const textarea = editorRef.current;
+      const pos = textarea?.selectionStart ?? activeSource.length;
+      const nextText = activeSource.slice(0, pos) + "\n" + tableLines + "\n" + activeSource.slice(pos);
+      updateActiveFile(nextText);
+      setCompileNotice(`LaTeX table generated from ${csvPath}.`);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "CSV parsing failed.";
+      setCompileNotice(message);
+      appendPreviewError(message);
+    }
   }
 
   function loadSavedProject(projectId: string) {
@@ -4042,6 +4202,7 @@ export default function ResearchStudioPage() {
               "-",
               { label: "Citation", action: () => { setOpenMenu(""); insertEditorSnippet({ before: "\\cite{", after: "}" }); } },
               { label: "Citation from DOI", action: () => { setOpenMenu(""); void importCitationFromDoi(); } },
+              { label: "CSV to LaTeX table", action: () => { setOpenMenu(""); void generateLatexTableFromCsv(); } },
               { label: "Reference", action: () => { setOpenMenu(""); insertEditorSnippet({ before: "\\ref{", after: "}", placeholder: "key" }); } },
               { label: "Bullet List", action: () => { setOpenMenu(""); insertEditorSnippet({ block: "\\begin{itemize}\n  \\item \n\\end{itemize}\n", cursorOffset: 17 }); } },
               { label: "Numbered List", action: () => { setOpenMenu(""); insertEditorSnippet({ block: "\\begin{enumerate}\n  \\item \n\\end{enumerate}\n", cursorOffset: 18 }); } },
@@ -4060,6 +4221,8 @@ export default function ResearchStudioPage() {
               { label: "Rewrite selection", action: () => { setOpenMenu(""); void runAiWriting("rewrite"); } },
               { label: "Expand selection", action: () => { setOpenMenu(""); void runAiWriting("expand"); } },
               { label: "Improve grammar & flow", action: () => { setOpenMenu(""); void runAiWriting("improve"); } },
+              "-",
+              { label: "Review paper (peer review)", action: () => { setOpenMenu(""); void runAiReview(); } },
             ]
           },
           {
@@ -4584,6 +4747,15 @@ export default function ResearchStudioPage() {
               {wordCount.abstractWords > 0 ? (
                 <span style={wordCount.abstractWords > 250 ? { color: "#ef4444" } : {}}>Abstract: {wordCount.abstractWords}/250</span>
               ) : null}
+              {!isCodeMode ? (
+                <>
+                  <span title="Flesch reading ease (higher = easier)">Reading: {readability.readingEase}/100</span>
+                  <span>Grade: {readability.gradeLevel}</span>
+                  {readability.passiveCount > 0 ? (
+                    <span style={{ color: "#f59e0b" }} title="Passive voice instances detected">Passive: {readability.passiveCount}</span>
+                  ) : null}
+                </>
+              ) : null}
               <span>UTF-8 · {isCodeMode ? (editorMode === "python" ? "Python" : "C++") : "LaTeX"}</span>
             </div>
             <div className="studio-statusbar-right">
@@ -4631,6 +4803,39 @@ export default function ResearchStudioPage() {
                   <div><kbd className="studio-kbd">Ctrl+Click</kbd> Sync PDF</div>
                 </>
               )}
+            </div>
+          ) : null}
+
+          {/* AI review result dialog */}
+          {aiReviewResult ? (
+            <div className="studio-history-overlay" onClick={() => setAiReviewResult(null)}>
+              <div className="studio-history-panel" onClick={(e) => e.stopPropagation()}>
+                <div className="studio-history-header">
+                  <span>AI Peer Review {aiReviewResult.score ? `· ${aiReviewResult.score}/10` : ""}</span>
+                  <button type="button" onClick={() => setAiReviewResult(null)} className="studio-terminal-close-btn">×</button>
+                </div>
+                <div className="studio-history-body">
+                  <p style={{ fontSize: 12, color: "var(--text-secondary, #94a3b8)", marginBottom: 8 }}>{aiReviewResult.summary}</p>
+                  {aiReviewResult.strengths.length ? (
+                    <>
+                      <p style={{ fontSize: 11, fontWeight: 700, color: "#4ade80", margin: "8px 0 4px" }}>Strengths</p>
+                      {aiReviewResult.strengths.map((s, i) => <p key={i} style={{ fontSize: 12, color: "var(--text-primary, #e2e8f0)", margin: "2px 0" }}>• {s}</p>)}
+                    </>
+                  ) : null}
+                  {aiReviewResult.weaknesses.length ? (
+                    <>
+                      <p style={{ fontSize: 11, fontWeight: 700, color: "#f87171", margin: "8px 0 4px" }}>Weaknesses</p>
+                      {aiReviewResult.weaknesses.map((s, i) => <p key={i} style={{ fontSize: 12, color: "var(--text-primary, #e2e8f0)", margin: "2px 0" }}>• {s}</p>)}
+                    </>
+                  ) : null}
+                  {aiReviewResult.suggestions.length ? (
+                    <>
+                      <p style={{ fontSize: 11, fontWeight: 700, color: "#818cf8", margin: "8px 0 4px" }}>Suggestions</p>
+                      {aiReviewResult.suggestions.map((s, i) => <p key={i} style={{ fontSize: 12, color: "var(--text-primary, #e2e8f0)", margin: "2px 0" }}>• {s}</p>)}
+                    </>
+                  ) : null}
+                </div>
+              </div>
             </div>
           ) : null}
 
