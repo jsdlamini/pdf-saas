@@ -3,11 +3,25 @@ import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { dirname, join, normalize } from "node:path";
 import { promisify } from "node:util";
+import { auth } from "@clerk/nextjs/server";
 
 const execFileAsync = promisify(execFile);
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
+
+const RATE_WINDOW_MS = 60_000;
+const RATE_MAX_REQUESTS = 15;
+const rateLimitMap = new Map<string, number[]>();
+
+function checkRateLimit(key: string): boolean {
+  const now = Date.now();
+  const times = (rateLimitMap.get(key) || []).filter((t) => now - t < RATE_WINDOW_MS);
+  if (times.length >= RATE_MAX_REQUESTS) return false;
+  times.push(now);
+  rateLimitMap.set(key, times);
+  return true;
+}
 
 type CompileInputFile = {
   path: string;
@@ -398,6 +412,14 @@ async function compileWithEngine(tempDir: string, rootFile: string, engine: Late
 }
 
 export async function POST(request: Request) {
+  const { userId } = await auth();
+  if (!userId) {
+    return jsonError("Sign in required.", 401);
+  }
+  if (!checkRateLimit(`latex-compile:${userId}`)) {
+    return jsonError("Rate limit exceeded. Try again shortly.", 429);
+  }
+
   let payload: CompileRequestPayload;
 
   try {

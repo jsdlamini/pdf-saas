@@ -1471,18 +1471,6 @@ export default function ResearchStudioPage() {
     return () => window.removeEventListener("keydown", onWindowKeyDown);
   }, [findPanelOpen, replacePanelOpen]);
 
-  // Global Ctrl+` to toggle terminal
-  useEffect(() => {
-    const onWindowKeyDown = (event: KeyboardEvent) => {
-      if (event.ctrlKey && event.key === "`") {
-        event.preventDefault();
-        setTerminalOpen((prev) => !prev);
-      }
-    };
-    window.addEventListener("keydown", onWindowKeyDown);
-    return () => window.removeEventListener("keydown", onWindowKeyDown);
-  }, []);
-
   const boundedActiveMatchIndex = findMatches.length
     ? Math.min(activeMatchIndex, findMatches.length - 1)
     : 0;
@@ -4418,18 +4406,6 @@ export default function ResearchStudioPage() {
                 </svg>
               </button>
               <span style={{ width: 1, height: 18, background: "var(--border-color, #334155)", margin: "0 4px" }} />
-              <button
-                type="button"
-                onClick={() => setTerminalOpen((prev) => !prev)}
-                className={`studio-btn studio-btn-ghost ${terminalOpen ? "studio-terminal-btn-active" : ""}`}
-                style={{ height: 26, fontSize: 11, padding: "0 8px" }}
-                title={terminalOpen ? "Hide Terminal" : "Show Terminal"}
-              >
-                <svg viewBox="0 0 20 20" style={{ width: 14, height: 14 }} fill="none" stroke="currentColor" strokeWidth="1.8">
-                  <path d="M4 6l3 3-3 3M9 12h6" strokeLinecap="round" strokeLinejoin="round" />
-                  <rect x="2" y="3" width="16" height="14" rx="2" />
-                </svg>
-              </button>
               <span style={{ fontSize: 11, color: "var(--text-muted, #64748b)", marginLeft: 8 }}>{activeEntry?.path || "No file selected"}</span>
             </div>
           ) : (
@@ -4467,18 +4443,6 @@ export default function ResearchStudioPage() {
                 </svg>
               </button>
               <span style={{ width: 1, height: 18, background: "var(--border-color, #334155)", margin: "0 4px" }} />
-              <button
-                type="button"
-                onClick={() => setTerminalOpen((prev) => !prev)}
-                className={`studio-btn studio-btn-ghost ${terminalOpen ? "studio-terminal-btn-active" : ""}`}
-                style={{ height: 26, fontSize: 11, padding: "0 8px" }}
-                title={terminalOpen ? "Hide Terminal" : "Show Terminal"}
-              >
-                <svg viewBox="0 0 20 20" style={{ width: 14, height: 14 }} fill="none" stroke="currentColor" strokeWidth="1.8">
-                  <path d="M4 6l3 3-3 3M9 12h6" strokeLinecap="round" strokeLinejoin="round" />
-                  <rect x="2" y="3" width="16" height="14" rx="2" />
-                </svg>
-              </button>
               <span style={{ fontSize: 11, color: "var(--text-muted, #64748b)", marginLeft: 8 }}>{activeEntry?.path || "No file selected"}</span>
             </div>
           )}
@@ -4624,118 +4588,6 @@ export default function ResearchStudioPage() {
                 <span>Output</span>
               </div>
               <pre className="studio-code-output-body" style={{ color: "#fbbf24" }}>Running...</pre>
-            </div>
-          ) : null}
-
-          {/* Terminal pane */}
-          {terminalOpen ? (
-            <div
-              className="studio-terminal"
-              style={{ height: `${terminalHeight}px` }}
-              onKeyDown={(e) => {
-                if (e.ctrlKey && e.key === "`") {
-                  e.preventDefault();
-                  setTerminalOpen(false);
-                }
-              }}
-            >
-              {/* Drag handle */}
-              <div
-                className="studio-terminal-resize-handle"
-                onMouseDown={(e) => {
-                  e.preventDefault();
-                  const startY = e.clientY;
-                  const startHeight = terminalHeight;
-                  const onMouseMove = (ev: MouseEvent) => {
-                    const delta = startY - ev.clientY;
-                    setTerminalHeight(clamp(startHeight + delta, 80, window.innerHeight * 0.5));
-                  };
-                  const onMouseUp = () => {
-                    document.removeEventListener("mousemove", onMouseMove);
-                    document.removeEventListener("mouseup", onMouseUp);
-                  };
-                  document.addEventListener("mousemove", onMouseMove);
-                  document.addEventListener("mouseup", onMouseUp);
-                }}
-              />
-              {/* Header */}
-              <div className="studio-terminal-header">
-                <span>Terminal</span>
-                <button
-                  type="button"
-                  onClick={() => setTerminalOpen(false)}
-                  className="studio-terminal-close-btn"
-                  aria-label="Close terminal"
-                >
-                  <svg viewBox="0 0 20 20" style={{ width: 14, height: 14 }} fill="none" stroke="currentColor" strokeWidth="2">
-                    <path d="M5 5l10 10M15 5L5 15" strokeLinecap="round" strokeLinejoin="round" />
-                  </svg>
-                </button>
-              </div>
-              {/* Output */}
-              <div
-                className="studio-terminal-output"
-                ref={(el) => {
-                  if (el) el.scrollTop = el.scrollHeight;
-                }}
-              >
-                {terminalOutput.map((line, i) => (
-                  <div key={i} className={`studio-terminal-${line.type}`}>
-                    {line.type === "command" ? `$ ${line.text}` : line.text}
-                  </div>
-                ))}
-                {terminalBusy ? (
-                  <div className="studio-terminal-command">Running...</div>
-                ) : null}
-              </div>
-              {/* Input line */}
-              <div className="studio-terminal-input-line">
-                <span className="studio-terminal-prompt">$</span>
-                <input
-                  ref={terminalInputRef}
-                  type="text"
-                  value={terminalInput}
-                  onChange={(e) => setTerminalInput(e.target.value)}
-                  onKeyDown={(e) => {
-                    if (e.key === "Enter") {
-                      e.preventDefault();
-                      void runTerminalCommand();
-                    } else if (e.key === "ArrowUp") {
-                      e.preventDefault();
-                      if (terminalHistory.length > 0) {
-                        const nextIdx =
-                          terminalHistoryIdx === -1
-                            ? terminalHistory.length - 1
-                            : Math.max(0, terminalHistoryIdx - 1);
-                        setTerminalHistoryIdx(nextIdx);
-                        setTerminalInput(terminalHistory[nextIdx]);
-                      }
-                    } else if (e.key === "ArrowDown") {
-                      e.preventDefault();
-                      if (terminalHistoryIdx >= 0) {
-                        const nextIdx = terminalHistoryIdx + 1;
-                        if (nextIdx >= terminalHistory.length) {
-                          setTerminalHistoryIdx(-1);
-                          setTerminalInput("");
-                        } else {
-                          setTerminalHistoryIdx(nextIdx);
-                          setTerminalInput(terminalHistory[nextIdx]);
-                        }
-                      }
-                    } else if (e.key === "Escape") {
-                      e.preventDefault();
-                      setTerminalOpen(false);
-                    } else if (e.ctrlKey && e.key === "`") {
-                      e.preventDefault();
-                      setTerminalOpen(false);
-                    }
-                  }}
-                  disabled={terminalBusy}
-                  className="studio-terminal-input"
-                  placeholder={terminalBusy ? "Running..." : "Enter command..."}
-                  autoFocus
-                />
-              </div>
             </div>
           ) : null}
 

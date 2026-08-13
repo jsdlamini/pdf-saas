@@ -3,6 +3,7 @@ import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { promisify } from "node:util";
+import { auth } from "@clerk/nextjs/server";
 import { MAX_OCR_UPLOAD_BYTES, SUPPORTED_OCR_LANGUAGES } from "@/lib/ocr";
 
 const execFileAsync = promisify(execFile);
@@ -152,5 +153,9 @@ export async function handleOcrPost(
 }
 
 export async function POST(request: Request) {
+  const { userId } = await auth();
+  if (!userId) {
+    return Response.json({ error: "Sign in required." }, { status: 401 });
+  }
   return handleOcrPost(request);
 }

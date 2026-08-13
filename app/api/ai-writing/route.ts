@@ -1,6 +1,8 @@
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
+import { auth } from "@clerk/nextjs/server";
+
 type AiWritingAction = "summarize" | "rewrite" | "expand" | "improve";
 
 type AiWritingPayload = {
@@ -25,6 +27,11 @@ function sanitizeText(raw: string, maxChars: number) {
 }
 
 export async function POST(request: Request) {
+  const { userId } = await auth();
+  if (!userId) {
+    return jsonError("Sign in required.", 401);
+  }
+
   const apiKey = process.env.DEEPSEEK_API_KEY;
   if (!apiKey) {
     return jsonError("DeepSeek API key is not configured on the server.", 503);

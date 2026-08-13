@@ -3,11 +3,25 @@ import { mkdtemp, rm, writeFile, chmod } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { promisify } from "node:util";
+import { auth } from "@clerk/nextjs/server";
 
 const execFileAsync = promisify(execFile);
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
+
+const RATE_WINDOW_MS = 60_000;
+const RATE_MAX_REQUESTS = 30;
+const rateLimitMap = new Map<string, number[]>();
+
+function checkRateLimit(key: string): boolean {
+  const now = Date.now();
+  const times = (rateLimitMap.get(key) || []).filter((t) => now - t < RATE_WINDOW_MS);
+  if (times.length >= RATE_MAX_REQUESTS) return false;
+  times.push(now);
+  rateLimitMap.set(key, times);
+  return true;
+}
 
 type RunCodePayload = {
   code: string;
@@ -141,6 +155,14 @@ function jsonError(message: string, status: number) {
 }
 
 export async function POST(request: Request) {
+  const { userId } = await auth();
+  if (!userId) {
+    return jsonError("Sign in required.", 401);
+  }
+  if (!checkRateLimit(`run-code:${userId}`)) {
+    return jsonError("Rate limit exceeded. Try again shortly.", 429);
+  }
+
   let payload: RunCodePayload;
 
   try {

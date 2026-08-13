@@ -1,6 +1,8 @@
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
+import { auth } from "@clerk/nextjs/server";
+
 function jsonError(message: string, status: number) {
   return Response.json({ error: message }, { status });
 }
@@ -11,6 +13,11 @@ function sanitizeBibtex(text: string): string {
 }
 
 export async function GET(request: Request) {
+  const { userId } = await auth();
+  if (!userId) {
+    return jsonError("Sign in required.", 401);
+  }
+
   const url = new URL(request.url);
   const doi = (url.searchParams.get("doi") || "").trim();
 

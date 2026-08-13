@@ -3,6 +3,7 @@ import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { promisify } from "node:util";
+import { auth } from "@clerk/nextjs/server";
 
 const execFileAsync = promisify(execFile);
 
@@ -12,6 +13,20 @@ export const dynamic = "force-dynamic";
 const TIMEOUT_MS = 15_000;
 const MAX_OUTPUT_BYTES = 200_000;
 const MAX_COMMAND_LENGTH = 2_000;
+
+// Simple in-memory rate limiter (per-user, per-window)
+const RATE_WINDOW_MS = 60_000;
+const RATE_MAX_REQUESTS = 20;
+const rateLimitMap = new Map<string, number[]>();
+
+function checkRateLimit(key: string): boolean {
+  const now = Date.now();
+  const times = (rateLimitMap.get(key) || []).filter((t) => now - t < RATE_WINDOW_MS);
+  if (times.length >= RATE_MAX_REQUESTS) return false;
+  times.push(now);
+  rateLimitMap.set(key, times);
+  return true;
+}
 
 function truncateOutput(raw: string): string {
   if (Buffer.byteLength(raw, "utf8") <= MAX_OUTPUT_BYTES) return raw;
@@ -51,6 +66,14 @@ function checkDangerousCommand(command: string): string | null {
 }
 
 export async function POST(request: Request) {
+  const { userId } = await auth();
+  if (!userId) {
+    return Response.json({ error: "Sign in required." }, { status: 401 });
+  }
+  if (!checkRateLimit(`terminal:${userId}`)) {
+    return Response.json({ error: "Rate limit exceeded. Try again shortly." }, { status: 429 });
+  }
+
   let payload: { command?: string; cwd?: string };
 
   try {
