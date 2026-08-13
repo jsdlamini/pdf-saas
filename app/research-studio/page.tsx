@@ -4286,7 +4286,7 @@ export default function ResearchStudioPage() {
                 onDrop={onEditorDrop}
                 disabled={!activeEntry}
                 className="studio-editor-textarea"
-                spellCheck={true}
+                spellCheck={false}
                 lang="en"
               />
 
