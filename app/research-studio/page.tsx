@@ -1100,18 +1100,7 @@ export default function ResearchStudioPage() {
   const [paletteIndex, setPaletteIndex] = useState(0);
   const [targetJournal, setTargetJournal] = useState("");
 
-  // ── Terminal state ─────
-  const [terminalOpen, setTerminalOpen] = useState(false);
-  const [terminalHistory, setTerminalHistory] = useState<string[]>([]);
-  const [terminalHistoryIdx, setTerminalHistoryIdx] = useState(-1);
-  const [terminalOutput, setTerminalOutput] = useState<
-    { type: "command" | "stdout" | "stderr" | "error"; text: string }[]
-  >([]);
-  const [terminalBusy, setTerminalBusy] = useState(false);
-  const [terminalInput, setTerminalInput] = useState("");
-  const [terminalCwd, setTerminalCwd] = useState("");
-  const [terminalHeight, setTerminalHeight] = useState(180);
-  const terminalInputRef = useRef<HTMLInputElement | null>(null);
+  // (terminal removed)
 
   // Undo/redo stacks
   const undoStackRef = useRef<{ source: string; cursorPos: number }[]>([]);
@@ -3058,56 +3047,6 @@ export default function ResearchStudioPage() {
     setAddFileError("");
   }
 
-  async function runTerminalCommand(overrideCommand?: string) {
-    const command = (overrideCommand ?? terminalInput).trim();
-    if (!command) return;
-
-    // Add to history
-    setTerminalHistory((prev) => {
-      const next = [...prev, command];
-      if (next.length > 100) next.shift();
-      return next;
-    });
-    setTerminalHistoryIdx(-1);
-
-    setTerminalOutput((prev) => [...prev, { type: "command", text: command }]);
-    setTerminalInput("");
-    setTerminalBusy(true);
-
-    try {
-      const response = await fetch("/api/terminal", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ command, cwd: terminalCwd || undefined }),
-      });
-
-      const result = (await response.json()) as {
-        stdout?: string;
-        stderr?: string;
-        error?: string;
-        exitCode?: number;
-        cwd?: string;
-      };
-
-      setTerminalOutput((prev) => {
-        const next = [...prev];
-        if (result.stdout) next.push({ type: "stdout", text: result.stdout });
-        if (result.stderr) next.push({ type: "stderr", text: result.stderr });
-        if (result.error) next.push({ type: "error", text: result.error });
-        return next;
-      });
-
-      if (result.cwd) setTerminalCwd(result.cwd);
-    } catch (err) {
-      setTerminalOutput((prev) => [
-        ...prev,
-        { type: "error", text: `Failed to execute command: ${err instanceof Error ? err.message : "Unknown error"}` },
-      ]);
-    } finally {
-      setTerminalBusy(false);
-    }
-  }
-
   async function runCode() {
     if (!activeEntry) {
       setCompileNotice("No file selected to run.");
@@ -3426,6 +3365,12 @@ export default function ResearchStudioPage() {
             </select>
             <button type="button" id="swal-invite-btn" class="swal2-confirm swal2-styled" style="width:100%;background:#818cf8;font-size:12px;padding:8px">Send Invite</button>
           </div>
+          <div style="background:#1e293b;border-radius:8px;padding:12px">
+            <p style="font-size:13px;font-weight:600;color:#e2e8f0;margin:0 0 8px">👥 Collaborators</p>
+            <div id="swal-invites-list" style="display:flex;flex-direction:column;gap:6px">
+              <p style="font-size:11px;color:#94a3b8;margin:0">Loading…</p>
+            </div>
+          </div>
         </div>
       `,
       showConfirmButton: false,
@@ -3462,6 +3407,39 @@ export default function ResearchStudioPage() {
             if (modal) modal.style.cursor = "";
           });
         }
+        // Load and render existing invites
+        const loadInvites = async () => {
+          const list = document.getElementById("swal-invites-list");
+          if (!list) return;
+          try {
+            const res = await fetch(`/api/project-invites?projectId=${encodeURIComponent(activeProjectId)}`);
+            const data = await res.json();
+            const invites = Array.isArray(data.invites) ? data.invites : [];
+            if (!invites.length) {
+              list.innerHTML = '<p style="font-size:11px;color:#94a3b8;margin:0">No collaborators invited yet.</p>';
+              return;
+            }
+            list.innerHTML = invites.map((inv: any) => `
+              <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;padding:6px 8px;background:#0f172a;border-radius:6px">
+                <div style="min-width:0">
+                  <div style="font-size:12px;color:#e2e8f0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${inv.shared_with_email}</div>
+                  <div style="font-size:10px;color:#94a3b8">${inv.access_level}</div>
+                </div>
+                <button type="button" data-invite-id="${inv.id}" style="background:none;border:1px solid #334155;color:#f87171;border-radius:5px;padding:3px 8px;font-size:11px;cursor:pointer">Revoke</button>
+              </div>
+            `).join("");
+            list.querySelectorAll("[data-invite-id]").forEach((btn) => {
+              btn.addEventListener("click", async () => {
+                const id = (btn as HTMLElement).getAttribute("data-invite-id");
+                await fetch(`/api/project-invites?id=${encodeURIComponent(id || "")}`, { method: "DELETE" });
+                void loadInvites();
+              });
+            });
+          } catch {
+            list.innerHTML = '<p style="font-size:11px;color:#94a3b8;margin:0">Could not load collaborators.</p>';
+          }
+        };
+        void loadInvites();
         // Share + Invite buttons
         document.getElementById("swal-share-btn")?.addEventListener("click", async () => {
           try {
@@ -4424,6 +4402,19 @@ export default function ResearchStudioPage() {
             </svg>
             <span className="hidden sm:inline">Save</span>
           </button>
+          <button
+            type="button"
+            onClick={() => setShowShortcuts((c) => !c)}
+            className="studio-btn studio-btn-ghost"
+            aria-label="Keyboard shortcuts"
+            title="Keyboard shortcuts"
+            style={{ width: 32, padding: 0 }}
+          >
+            <svg viewBox="0 0 20 20" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="1.8">
+              <circle cx="10" cy="10" r="7" />
+              <path d="M10 9v4M10 6.5v.5" strokeLinecap="round" />
+            </svg>
+          </button>
         </div>
       </header>
 
@@ -4524,6 +4515,9 @@ export default function ResearchStudioPage() {
             label: "Help", key: "help", items: [
               { label: "FAQ", action: () => { setOpenMenu(""); window.open("/faq", "_blank"); } },
               { label: "Keyboard Shortcuts", action: () => { setOpenMenu(""); setShowShortcuts(true); } },
+              "-",
+              { label: "Terms of Service", action: () => { setOpenMenu(""); window.open("/terms", "_blank"); } },
+              { label: "Privacy Policy", action: () => { setOpenMenu(""); window.open("/privacy", "_blank"); } },
             ]
           },
         ].filter(Boolean).map((menu: any) => (
