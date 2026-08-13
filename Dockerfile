@@ -26,7 +26,7 @@ ENV HOSTNAME=0.0.0.0
 USER root
 
 RUN apt-get update \
- && apt-get install -y --no-install-recommends ocrmypdf tesseract-ocr ghostscript qpdf latexmk texlive-extra-utils texlive-latex-base texlive-latex-recommended texlive-latex-extra texlive-fonts-recommended texlive-science texlive-publishers tesseract-ocr-deu tesseract-ocr-eng tesseract-ocr-fra tesseract-ocr-spa tesseract-ocr-ita tesseract-ocr-por tesseract-ocr-nld tesseract-ocr-pol libreoffice-writer python3 g++ \
+ && apt-get install -y --no-install-recommends ocrmypdf tesseract-ocr ghostscript qpdf latexmk texlive-extra-utils texlive-latex-base texlive-latex-recommended texlive-latex-extra texlive-fonts-recommended texlive-fonts-extra texlive-science texlive-publishers texlive-pictures texlive-bibtex-extra biber tesseract-ocr-deu tesseract-ocr-eng tesseract-ocr-fra tesseract-ocr-spa tesseract-ocr-ita tesseract-ocr-por tesseract-ocr-nld tesseract-ocr-pol libreoffice-writer python3 g++ \
  && rm -rf /var/lib/apt/lists/*
 
 COPY package.json package-lock.json ./

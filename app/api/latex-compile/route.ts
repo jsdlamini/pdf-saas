@@ -322,13 +322,32 @@ async function tryInstallWithApt(sty: string): Promise<AutoInstallResult> {
   }
 
   const aptPackages = STY_TO_APT_HINTS[sty] ?? [];
-  if (!aptPackages.length) {
-    return { ok: false, detail: `No apt package hint is defined for '${sty}.sty'.` };
-  }
+
+  // No specific hint: install the broad TeX Live collections that cover the
+  // vast majority of packages used in academic papers.
+  const targets = aptPackages.length
+    ? aptPackages
+    : [
+        "texlive-latex-extra",
+        "texlive-science",
+        "texlive-pictures",
+        "texlive-bibtex-extra",
+        "texlive-fonts-extra",
+        "texlive-publishers",
+      ];
 
   try {
-    await execFileAsync("apt-get", ["install", "-y", "--no-install-recommends", ...aptPackages], {
-      timeout: 300_000,
+    // Refresh package lists first (image clears them to stay small)
+    await execFileAsync("apt-get", ["update"], {
+      timeout: 120_000,
+      maxBuffer: 16 * 1024 * 1024,
+      env: { ...process.env, DEBIAN_FRONTEND: "noninteractive" },
+    }).catch(() => {
+      // non-fatal; proceed with existing lists
+    });
+
+    await execFileAsync("apt-get", ["install", "-y", "--no-install-recommends", ...targets], {
+      timeout: 420_000,
       maxBuffer: 32 * 1024 * 1024,
       env: { ...process.env, DEBIAN_FRONTEND: "noninteractive" },
     });
@@ -336,30 +355,33 @@ async function tryInstallWithApt(sty: string): Promise<AutoInstallResult> {
     return {
       ok: true,
       manager: "apt",
-      packageName: aptPackages.join(" "),
+      packageName: targets.join(" "),
     };
   } catch (error) {
     return {
       ok: false,
-      detail: `apt-get install ${aptPackages.join(" ")}: ${extractErrorDetail(error)}`,
+      detail: `apt-get install ${targets.join(" ")}: ${extractErrorDetail(error)}`,
     };
   }
 }
 
 async function tryAutoInstallMissingSty(sty: string): Promise<AutoInstallResult> {
-  const tlmgrResult = await tryInstallWithTlmgr(sty);
-  if (tlmgrResult.ok) {
-    return tlmgrResult;
-  }
-
+  // apt-get first: Debian repos are reachable and reliable, while tlmgr's CTAN
+  // mirror is often unreachable from this container. This matches how a managed
+  // TeX Live (Overleaf-style) resolves packages on the fly.
   const aptResult = await tryInstallWithApt(sty);
   if (aptResult.ok) {
     return aptResult;
   }
 
+  const tlmgrResult = await tryInstallWithTlmgr(sty);
+  if (tlmgrResult.ok) {
+    return tlmgrResult;
+  }
+
   return {
     ok: false,
-    detail: `${tlmgrResult.detail}\n${aptResult.detail}`,
+    detail: `${aptResult.detail}\n${tlmgrResult.detail}`,
   };
 }
 
