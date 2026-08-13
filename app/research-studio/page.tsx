@@ -1037,8 +1037,32 @@ export default function ResearchStudioPage() {
       return saved ? (JSON.parse(saved) as "projects" | "editor") : initialState.workspaceScreen;
     } catch { return initialState.workspaceScreen; }
   });
-  const [savedProjects, setSavedProjects] = useState<SavedProjectMeta[]>(initialState.savedProjects);
-  const [savedProjectSnapshots, setSavedProjectSnapshots] = useState<SavedProjectData[]>([]);
+  const [savedProjects, setSavedProjects] = useState<SavedProjectMeta[]>(() => {
+    if (typeof window === "undefined") return initialState.savedProjects;
+    try {
+      const raw = localStorage.getItem("wiserfiles-guest-projects");
+      if (!raw) return initialState.savedProjects;
+      const data = JSON.parse(raw) as SavedProjectData[];
+      return data
+        .filter((p) => p.id && p.name.trim() && p.entries.length)
+        .slice(0, GUEST_PROJECT_LIMIT)
+        .map((p) => ({
+          id: p.id,
+          name: p.name,
+          updatedAt: p.updatedAt,
+          type: p.editorMode || (p.entries.some((e) => e.path.endsWith(".py")) ? "python" : p.entries.some((e) => e.path.endsWith(".cpp")) ? "cpp" : "latex"),
+        }));
+    } catch { return initialState.savedProjects; }
+  });
+  const [savedProjectSnapshots, setSavedProjectSnapshots] = useState<SavedProjectData[]>(() => {
+    if (typeof window === "undefined") return [];
+    try {
+      const raw = localStorage.getItem("wiserfiles-guest-projects");
+      if (!raw) return [];
+      const data = JSON.parse(raw) as SavedProjectData[];
+      return data.filter((p) => p.id && p.name.trim() && p.entries.length).slice(0, GUEST_PROJECT_LIMIT);
+    } catch { return []; }
+  });
   const [activeProjectId, setActiveProjectId] = useState(() => {
     if (typeof window === "undefined") return initialState.activeProjectId;
     try {
@@ -1809,7 +1833,16 @@ export default function ResearchStudioPage() {
 
   function persistProjectSnapshot(snapshot: SavedProjectData) {
     if (!snapshot.id || !snapshot.name.trim() || !snapshot.entries.length) return;
-    setSavedProjectSnapshots((current) => [snapshot, ...current.filter((item) => item.id !== snapshot.id)].slice(0, 20));
+    setSavedProjectSnapshots((current) => {
+      const next = [snapshot, ...current.filter((item) => item.id !== snapshot.id)].slice(0, 20);
+      // Guests persist projects locally in the browser (up to the guest limit)
+      if (!userId) {
+        try {
+          localStorage.setItem("wiserfiles-guest-projects", JSON.stringify(next.slice(0, GUEST_PROJECT_LIMIT)));
+        } catch {}
+      }
+      return next;
+    });
     setSavedProjects((current) => {
       const meta: SavedProjectMeta = {
         id: snapshot.id,
@@ -2050,6 +2083,11 @@ export default function ResearchStudioPage() {
 
     const nextSnapshots = savedProjectSnapshots.filter((project) => project.id !== projectId);
     setSavedProjectSnapshots(nextSnapshots);
+    if (!userId) {
+      try {
+        localStorage.setItem("wiserfiles-guest-projects", JSON.stringify(nextSnapshots.slice(0, GUEST_PROJECT_LIMIT)));
+      } catch {}
+    }
 
     setSavedProjects((current) => {
       const nextProjects = current.filter((item) => item.id !== projectId);
@@ -3417,7 +3455,6 @@ export default function ResearchStudioPage() {
               <h1 className="studio-dashboard-title">Research Studio</h1>
               <p className="studio-dashboard-subtitle">Create, open, and manage your LaTeX research projects</p>
             </div>
-            {isSignedIn ? (
             <div className="flex items-center gap-2">
               <button
                 type="button"
@@ -3451,13 +3488,6 @@ export default function ResearchStudioPage() {
                 Import
               </button>
             </div>
-            ) : (
-            <div className="flex items-center gap-2">
-              <SignInButton mode="modal">
-                <button type="button" className="studio-btn studio-btn-primary">Sign in to create projects</button>
-              </SignInButton>
-            </div>
-            )}
           </div>
 
           {/* Search bar */}
@@ -3485,7 +3515,7 @@ export default function ResearchStudioPage() {
             </p>
           ) : authLoaded ? (
             <div className="studio-auth-cta">
-              <span>Sign in to store projects in your account.</span>
+              <span>Working offline — up to {GUEST_PROJECT_LIMIT} projects saved in this browser. Sign in to sync unlimited projects.</span>
               <SignUpButton mode="modal">
                 <button type="button">Create account</button>
               </SignUpButton>
@@ -3497,7 +3527,7 @@ export default function ResearchStudioPage() {
 
           {/* Storage indicator */}
           <p style={{ marginTop: 6, fontSize: 10, color: "var(--text-muted, #64748b)" }}>
-            {usesAccountStorage ? "Synced to account" : "Sign in required"}
+            {usesAccountStorage ? "Synced to account" : `Offline (${savedProjects.length}/${GUEST_PROJECT_LIMIT} projects)`}
             {searchQuery.trim() ? ` · ${filteredProjects.length} of ${savedProjects.length} projects` : ` · ${savedProjects.length} project${savedProjects.length !== 1 ? "s" : ""}`}
           </p>
         </div>
