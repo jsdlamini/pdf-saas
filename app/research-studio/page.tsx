@@ -1087,6 +1087,7 @@ export default function ResearchStudioPage() {
   const [figureBusy, setFigureBusy] = useState(false);
   const [figureUrl, setFigureUrl] = useState("");
   const [figureName, setFigureName] = useState("");
+  const [figureBase64, setFigureBase64] = useState("");
 
   // ── Collaboration presence ─────
   const [collabCursors, setCollabCursors] = useState<
@@ -2338,10 +2339,20 @@ export default function ResearchStudioPage() {
       const blob = await res.blob();
       if (figureUrl) URL.revokeObjectURL(figureUrl);
       const url = URL.createObjectURL(blob);
-      setFigureUrl(url);
       const name = `figure-${Date.now().toString(36)}.png`;
+      // Convert blob to base64 for storing in the project (binary files are base64-encoded)
+      const arrayBuffer = await blob.arrayBuffer();
+      const bytes = new Uint8Array(arrayBuffer);
+      let binary = "";
+      const chunk = 0x8000;
+      for (let i = 0; i < bytes.length; i += chunk) {
+        binary += String.fromCharCode(...Array.from(bytes.subarray(i, i + chunk)));
+      }
+      const base64 = btoa(binary);
+      setFigureUrl(url);
       setFigureName(name);
-      setCompileNotice("Figure generated. Download it and drag into the editor.");
+      setFigureBase64(base64);
+      setCompileNotice("Figure generated. Insert it into your paper or download it.");
     } catch (error) {
       const message = error instanceof Error ? error.message : "Figure generation failed.";
       setCompileNotice(message);
@@ -2349,6 +2360,39 @@ export default function ResearchStudioPage() {
     } finally {
       setFigureBusy(false);
     }
+  }
+
+  function insertFigureIntoPaper() {
+    if (!figureBase64 || !figureName) return;
+    const figPath = `figures/${figureName}`;
+
+    // Add the figure file to the project (base64 content)
+    setProjectEntries((current) => {
+      const without = current.filter((e) => e.path !== figPath);
+      return [...without, { path: figPath, kind: "file" as const, content: figureBase64 }];
+    });
+
+    // Insert \includegraphics into the main LaTeX file at the cursor (or append)
+    const texEntry = projectEntries.find((e) => e.path.endsWith(".tex"));
+    if (texEntry) {
+      const snippet = `\n\\begin{figure}[htbp]\n  \\centering\n  \\includegraphics[width=0.8\\linewidth]{${figPath}}\n  \\caption{Figure caption}\n  \\label{fig:${figureName.replace(/\.[^.]+$/, "")}}\n\\end{figure}\n`;
+      const texarea = editorRef.current;
+      const pos = (selectedPath.endsWith(".tex") && texarea) ? texarea.selectionStart : texEntry.content.length;
+      const nextTex = texEntry.content.slice(0, pos) + snippet + texEntry.content.slice(pos);
+      setProjectEntries((current) =>
+        current.map((e) => (e.path === texEntry.path ? { ...e, content: nextTex } : e))
+      );
+      if (!selectedPath.endsWith(".tex")) {
+        setSelectedPath(texEntry.path);
+      }
+    }
+
+    showToast(`Figure inserted into ${figPath}`, "success");
+    setCompileNotice(`Figure ${figPath} embedded and \\includegraphics added.`);
+    URL.revokeObjectURL(figureUrl);
+    setFigureUrl("");
+    setFigureBase64("");
+    setFigureName("");
   }
 
   async function exportDocument(format: "docx" | "md") {
@@ -5045,25 +5089,32 @@ export default function ResearchStudioPage() {
                 </div>
                 <div className="studio-figure-body">
                   <img src={figureUrl} alt="Generated figure" style={{ maxWidth: "100%", borderRadius: 6 }} />
-                  <div style={{ display: "flex", gap: 8, marginTop: 12, justifyContent: "flex-end" }}>
+                  <div style={{ display: "flex", gap: 8, marginTop: 12, justifyContent: "flex-end", flexWrap: "wrap" }}>
+                    <button
+                      type="button"
+                      className="studio-btn studio-btn-primary"
+                      onClick={insertFigureIntoPaper}
+                    >
+                      Insert into paper
+                    </button>
                     <a
                       href={figureUrl}
                       download={figureName}
-                      className="studio-btn studio-btn-primary"
+                      className="studio-btn studio-btn-secondary"
                       style={{ textDecoration: "none" }}
                     >
                       Download PNG
                     </a>
                     <button
                       type="button"
-                      className="studio-btn studio-btn-secondary"
+                      className="studio-btn studio-btn-ghost"
                       onClick={() => { URL.revokeObjectURL(figureUrl); setFigureUrl(""); }}
                     >
                       Close
                     </button>
                   </div>
                   <p style={{ fontSize: 11, color: "var(--text-muted, #64748b)", marginTop: 8 }}>
-                    Download the PNG, then drag it into the editor (figures/ folder) to embed it in your paper.
+                    "Insert into paper" saves the PNG to figures/ and adds \\includegraphics to your LaTeX file.
                   </p>
                 </div>
               </div>

@@ -470,7 +470,13 @@ export async function POST(request: Request) {
     for (const [path, content] of fileMap.entries()) {
       const targetPath = join(tempDir, path);
       await mkdir(dirname(targetPath), { recursive: true });
-      await writeFile(targetPath, content, "utf8");
+      // Binary assets (figures, images, PDFs) are stored as base64 strings;
+      // decode them so LaTeX can actually use them.
+      if (/\.(png|jpg|jpeg|gif|pdf|eps|svg)$/i.test(path)) {
+        await writeFile(targetPath, Buffer.from(content, "base64"));
+      } else {
+        await writeFile(targetPath, content, "utf8");
+      }
     }
 
     // Create empty .bib files for any \bibliography{} references that have no matching file
