@@ -8,7 +8,7 @@ function jsonError(msg: string, status: number) {
   return Response.json({ error: msg }, { status });
 }
 
-async function sendInviteEmail(to: string, projectName: string, accessLevel: string, inviterName: string) {
+async function sendInviteEmail(to: string, projectName: string, accessLevel: string, inviterName: string, shareId: string) {
   const apiKey = process.env.RESEND_API_KEY;
   if (!apiKey) {
     return { ok: false, detail: "RESEND_API_KEY is not configured." };
@@ -17,6 +17,9 @@ async function sendInviteEmail(to: string, projectName: string, accessLevel: str
   const fromEmail = process.env.RESEND_FROM_EMAIL || "WiserFiles <invites@idealsoftwaresolutions.com>";
   const appUrl = process.env.NEXT_PUBLIC_SITE_URL || process.env.NEXT_PUBLIC_APP_URL || "https://pdf.idealsoftwaresolutions.com";
   const accessLabel = accessLevel === "admin" ? "Admin (full access)" : accessLevel === "write" ? "Write (can edit)" : "Read-only";
+  const projectUrl = shareId
+    ? `${appUrl}/research-studio?share=${encodeURIComponent(shareId)}`
+    : `${appUrl}/research-studio`;
 
   try {
     const response = await fetch("https://api.resend.com/emails", {
@@ -33,11 +36,11 @@ async function sendInviteEmail(to: string, projectName: string, accessLevel: str
           <div style="font-family: Inter, -apple-system, sans-serif; color: #0f172a; line-height: 1.6">
             <h2 style="margin: 0 0 12px">You've been invited to collaborate</h2>
             <p><strong>${inviterName}</strong> invited you to <strong>${projectName}</strong> with <strong>${accessLabel}</strong> access.</p>
-            <p>Sign in to WiserFiles Research Studio to start working together:</p>
+            <p>Click below to open the project:</p>
             <p style="margin: 20px 0">
-              <a href="${appUrl}/research-studio" style="background:#4ade80;color:#0f172a;padding:10px 20px;border-radius:6px;text-decoration:none;font-weight:600">Open Research Studio</a>
+              <a href="${projectUrl}" style="background:#4ade80;color:#0f172a;padding:10px 20px;border-radius:6px;text-decoration:none;font-weight:600">Open ${projectName}</a>
             </p>
-            <p style="color:#64748b;font-size:13px">You'll need to sign in with <strong>${to}</strong> to access the shared project.</p>
+            <p style="color:#64748b;font-size:13px">Sign in with <strong>${to}</strong> to access the shared project.</p>
           </div>
         `,
       }),
@@ -88,8 +91,8 @@ export async function POST(request: Request) {
   if (!userId) return jsonError("Sign in required.", 401);
 
   const body = await request.json();
-  const { projectId, projectName, email, accessLevel } = body as {
-    projectId?: string; projectName?: string; email?: string; accessLevel?: string;
+  const { projectId, projectName, email, accessLevel, shareId } = body as {
+    projectId?: string; projectName?: string; email?: string; accessLevel?: string; shareId?: string;
   };
 
   if (!projectId || !email || !accessLevel) return jsonError("Missing fields", 400);
@@ -118,7 +121,7 @@ export async function POST(request: Request) {
 
   // Send the invitation email via Resend (best-effort; invite is still stored on failure)
   const inviterName = "A collaborator";
-  const emailResult = await sendInviteEmail(email.trim(), projectName || "Untitled project", accessLevel, inviterName);
+  const emailResult = await sendInviteEmail(email.trim(), projectName || "Untitled project", accessLevel, inviterName, shareId || "");
 
   return Response.json({
     invite: result.rows[0],

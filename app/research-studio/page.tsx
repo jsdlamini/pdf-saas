@@ -3167,7 +3167,13 @@ export default function ResearchStudioPage() {
           const access = (document.getElementById("swal-invite-access") as HTMLSelectElement)?.value;
           if (!email) { Swal.showValidationMessage("Enter an email address"); return; }
           try {
-            const res = await fetch("/api/project-invites", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ projectId: activeProjectId, projectName, email, accessLevel: access }) });
+            // Create a share link first so the email points at THIS project
+            const snapshot = buildCurrentProjectSnapshot();
+            const shareRes = await fetch("/api/share-project", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ projectData: snapshot }) });
+            const shareData = await shareRes.json();
+            const shareId = shareData?.shareId || "";
+
+            const res = await fetch("/api/project-invites", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ projectId: activeProjectId, projectName, email, accessLevel: access, shareId }) });
             const data = await res.json().catch(() => ({}));
             if (!res.ok) {
               setCompileNotice(data.error || "Could not send invitation.");
