@@ -30,6 +30,13 @@ type SavedProjectData = {
   lastCompileAt: string;
   updatedAt: string;
   editorMode?: EditorMode;
+  revisions?: StoredRevision[];
+};
+
+type StoredRevision = {
+  entries: ProjectEntry[];
+  selectedPath: string;
+  updatedAt: string;
 };
 
 type EditorMode = "latex" | "python" | "cpp";
@@ -1188,6 +1195,11 @@ export default function ResearchStudioPage() {
   const [codeRunBusy, setCodeRunBusy] = useState(false);
   const [autoSaveTimestamp, setAutoSaveTimestamp] = useState<string | null>(null);
 
+  // ── AI writing / citation / history state ─────
+  const [aiWritingBusy, setAiWritingBusy] = useState(false);
+  const [citationBusy, setCitationBusy] = useState(false);
+  const [historyOpen, setHistoryOpen] = useState(false);
+
   // ── Terminal state ─────
   const [terminalOpen, setTerminalOpen] = useState(false);
   const [terminalHistory, setTerminalHistory] = useState<string[]>([]);
@@ -2053,6 +2065,85 @@ export default function ResearchStudioPage() {
       setCompileNotice(message);
       appendPreviewError(`Save failed: ${message}`);
     }
+  }
+
+  async function runAiWriting(action: "summarize" | "rewrite" | "expand" | "improve") {
+    if (!activeEntry || aiWritingBusy) return;
+    const textarea = editorRef.current;
+    const start = textarea?.selectionStart ?? 0;
+    const end = textarea?.selectionEnd ?? activeSource.length;
+    const selected = activeSource.slice(start, end);
+    if (!selected.trim()) {
+      setCompileNotice("Select some text first, then run the AI writing action.");
+      return;
+    }
+
+    setAiWritingBusy(true);
+    setCompileNotice(`AI ${action} in progress...`);
+    try {
+      const response = await fetch("/api/ai-writing", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ text: selected, action }),
+      });
+      const payload = (await response.json()) as { result?: string; error?: string };
+      if (!response.ok) {
+        throw new Error(payload.error || `AI ${action} failed.`);
+      }
+      const result = payload.result || "";
+      const nextText = activeSource.slice(0, start) + result + activeSource.slice(end);
+      updateActiveFile(nextText);
+      setCompileNotice(`AI ${action} applied.`);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : `AI ${action} failed.`;
+      setCompileNotice(message);
+      appendPreviewError(message);
+    } finally {
+      setAiWritingBusy(false);
+    }
+  }
+
+  async function importCitationFromDoi() {
+    if (citationBusy) return;
+    const doi = await promptModal("Import citation from DOI", "DOI (e.g. 10.1007/978-3-642-12345-6_1)", "", "Import");
+    if (!doi) return;
+
+    setCitationBusy(true);
+    setCompileNotice("Looking up DOI...");
+    try {
+      const response = await fetch(`/api/citation-lookup?doi=${encodeURIComponent(doi)}`);
+      const payload = (await response.json()) as { bibtex?: string; error?: string };
+      if (!response.ok || !payload.bibtex) {
+        throw new Error(payload.error || "Citation lookup failed.");
+      }
+
+      // Insert into refs.bib (create if missing)
+      const bibPath = "refs.bib";
+      const bibEntry = projectEntries.find((e) => e.path === bibPath);
+      const bibContent = (bibEntry?.content || "").trim();
+      const nextBib = bibContent ? `${bibContent}\n\n${payload.bibtex.trim()}\n` : `${payload.bibtex.trim()}\n`;
+
+      const nextEntries = bibEntry
+        ? projectEntries.map((e) => (e.path === bibPath ? { ...e, content: nextBib } : e))
+        : [...projectEntries, { path: bibPath, kind: "file" as const, content: nextBib }];
+
+      setProjectEntries(nextEntries);
+      setCompileNotice(`Citation added to ${bibPath}.`);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Citation lookup failed.";
+      setCompileNotice(message);
+      appendPreviewError(message);
+    } finally {
+      setCitationBusy(false);
+    }
+  }
+
+  function restoreRevision(revision: StoredRevision) {
+    if (!revision.entries.length) return;
+    setProjectEntries(revision.entries);
+    setSelectedPath(revision.selectedPath || "main.tex");
+    setCompileNotice("Revision restored. Save to keep this version.");
+    setHistoryOpen(false);
   }
 
   function loadSavedProject(projectId: string) {
@@ -3950,6 +4041,7 @@ export default function ResearchStudioPage() {
               { label: "Table", action: () => { setOpenMenu(""); insertEditorSnippet({ block: "\\begin{table}[htbp]\n  \\centering\n  \\caption{}\n  \\begin{tabular}{lcc}\n    \\toprule\n     &  & \\\\\n    \\midrule\n     &  & \\\\\n    \\bottomrule\n  \\end{tabular}\n\\end{table}\n", cursorOffset: 41 }); } },
               "-",
               { label: "Citation", action: () => { setOpenMenu(""); insertEditorSnippet({ before: "\\cite{", after: "}" }); } },
+              { label: "Citation from DOI", action: () => { setOpenMenu(""); void importCitationFromDoi(); } },
               { label: "Reference", action: () => { setOpenMenu(""); insertEditorSnippet({ before: "\\ref{", after: "}", placeholder: "key" }); } },
               { label: "Bullet List", action: () => { setOpenMenu(""); insertEditorSnippet({ block: "\\begin{itemize}\n  \\item \n\\end{itemize}\n", cursorOffset: 17 }); } },
               { label: "Numbered List", action: () => { setOpenMenu(""); insertEditorSnippet({ block: "\\begin{enumerate}\n  \\item \n\\end{enumerate}\n", cursorOffset: 18 }); } },
@@ -3963,10 +4055,19 @@ export default function ResearchStudioPage() {
             ]
           },
           {
+            label: "AI Write", key: "ai", items: [
+              { label: "Summarize selection", action: () => { setOpenMenu(""); void runAiWriting("summarize"); } },
+              { label: "Rewrite selection", action: () => { setOpenMenu(""); void runAiWriting("rewrite"); } },
+              { label: "Expand selection", action: () => { setOpenMenu(""); void runAiWriting("expand"); } },
+              { label: "Improve grammar & flow", action: () => { setOpenMenu(""); void runAiWriting("improve"); } },
+            ]
+          },
+          {
             label: "View", key: "view", items: [
               { label: rightPaneCollapsed ? (isCodeMode ? "Show Output" : "Show PDF Preview") : (isCodeMode ? "Hide Output" : "Hide PDF Preview"), action: () => { setOpenMenu(""); setRightPaneCollapsed(!rightPaneCollapsed); } },
               { label: leftPaneCollapsed ? "Show File Tree" : "Hide File Tree", action: () => { setOpenMenu(""); setLeftPaneCollapsed(!leftPaneCollapsed); } },
               "-",
+              { label: "Version History", action: () => { setOpenMenu(""); setHistoryOpen(true); } },
               { label: "Keyboard Shortcuts", action: () => { setOpenMenu(""); setShowShortcuts(!showShortcuts); } },
             ]
           },
@@ -4530,6 +4631,37 @@ export default function ResearchStudioPage() {
                   <div><kbd className="studio-kbd">Ctrl+Click</kbd> Sync PDF</div>
                 </>
               )}
+            </div>
+          ) : null}
+
+          {/* Version history dialog */}
+          {historyOpen ? (
+            <div className="studio-history-overlay" onClick={() => setHistoryOpen(false)}>
+              <div className="studio-history-panel" onClick={(e) => e.stopPropagation()}>
+                <div className="studio-history-header">
+                  <span>Version History</span>
+                  <button type="button" onClick={() => setHistoryOpen(false)} className="studio-terminal-close-btn">×</button>
+                </div>
+                <div className="studio-history-body">
+                  {(savedProjectSnapshots.find((p) => p.id === activeProjectId)?.revisions ?? []).length === 0 ? (
+                    <p style={{ fontSize: 12, color: "var(--text-muted, #64748b)", padding: 16 }}>
+                      No saved revisions yet. Revisions are captured each time you save the project.
+                    </p>
+                  ) : (
+                    (savedProjectSnapshots.find((p) => p.id === activeProjectId)?.revisions ?? []).map((rev, i) => (
+                      <button
+                        key={i}
+                        type="button"
+                        className="studio-history-item"
+                        onClick={() => restoreRevision(rev)}
+                      >
+                        <span>{new Date(rev.updatedAt).toLocaleString()}</span>
+                        <span style={{ color: "var(--text-muted, #64748b)" }}>{rev.entries.filter((e) => e.kind === "file").length} files</span>
+                      </button>
+                    ))
+                  )}
+                </div>
+              </div>
             </div>
           ) : null}
         </div>

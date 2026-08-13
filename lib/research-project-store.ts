@@ -6,6 +6,12 @@ type ProjectEntry = {
   content: string;
 };
 
+export type StoredRevision = {
+  entries: ProjectEntry[];
+  selectedPath: string;
+  updatedAt: string;
+};
+
 export type StoredResearchProject = {
   id: string;
   name: string;
@@ -13,7 +19,10 @@ export type StoredResearchProject = {
   selectedPath: string;
   lastCompileAt: string;
   updatedAt: string;
+  revisions?: StoredRevision[];
 };
+
+const MAX_REVISIONS = 20;
 
 declare global {
   var __wiserfilesPgPool: Pool | undefined;
@@ -45,6 +54,7 @@ async function ensureSchema() {
           entries JSONB NOT NULL,
           selected_path TEXT NOT NULL,
           last_compile_at TEXT NOT NULL DEFAULT 'Not compiled yet',
+          revisions JSONB NOT NULL DEFAULT '[]'::jsonb,
           created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
           updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
           PRIMARY KEY (user_id, id)
@@ -52,6 +62,9 @@ async function ensureSchema() {
 
         CREATE INDEX IF NOT EXISTS wiserfiles_research_projects_user_updated_idx
         ON wiserfiles_research_projects (user_id, updated_at DESC);
+
+        ALTER TABLE wiserfiles_research_projects
+        ADD COLUMN IF NOT EXISTS revisions JSONB NOT NULL DEFAULT '[]'::jsonb;
       `)
       .then(() => undefined);
   }
@@ -66,6 +79,16 @@ function isProjectEntry(value: unknown): value is ProjectEntry {
     typeof candidate.path === "string" &&
     (candidate.kind === "file" || candidate.kind === "folder") &&
     typeof candidate.content === "string"
+  );
+}
+
+function isRevision(value: unknown): value is StoredRevision {
+  if (!value || typeof value !== "object") return false;
+  const candidate = value as Partial<StoredRevision>;
+  return (
+    Array.isArray(candidate.entries) &&
+    typeof candidate.selectedPath === "string" &&
+    typeof candidate.updatedAt === "string"
   );
 }
 
@@ -86,6 +109,10 @@ export function parseStoredResearchProject(value: unknown): StoredResearchProjec
   const entries = candidate.entries.filter(isProjectEntry);
   if (!entries.length) return null;
 
+  const revisions = Array.isArray(candidate.revisions)
+    ? candidate.revisions.filter(isRevision).slice(0, MAX_REVISIONS)
+    : [];
+
   return {
     id: candidate.id,
     name: candidate.name.trim() || "Untitled Project",
@@ -96,6 +123,7 @@ export function parseStoredResearchProject(value: unknown): StoredResearchProjec
       typeof candidate.updatedAt === "string" && candidate.updatedAt.trim()
         ? candidate.updatedAt
         : new Date().toISOString(),
+    revisions,
   };
 }
 
@@ -106,6 +134,7 @@ function mapRow(row: {
   selected_path: string;
   last_compile_at: string;
   updated_at: Date | string;
+  revisions?: unknown;
 }): StoredResearchProject {
   return {
     id: row.id,
@@ -115,6 +144,9 @@ function mapRow(row: {
     lastCompileAt: row.last_compile_at,
     updatedAt:
       row.updated_at instanceof Date ? row.updated_at.toISOString() : new Date(row.updated_at).toISOString(),
+    revisions: Array.isArray(row.revisions)
+      ? row.revisions.filter(isRevision).slice(0, MAX_REVISIONS)
+      : [],
   };
 }
 
@@ -123,7 +155,7 @@ export async function listResearchProjectsForUser(userId: string) {
   const pool = getPool();
   const result = await pool.query(
     `
-      SELECT id, name, entries, selected_path, last_compile_at, updated_at
+      SELECT id, name, entries, selected_path, last_compile_at, updated_at, revisions
       FROM wiserfiles_research_projects
       WHERE user_id = $1
       ORDER BY updated_at DESC
@@ -143,6 +175,39 @@ export async function upsertResearchProjectForUser(userId: string, project: Stor
     throw new Error("Invalid project payload.");
   }
 
+  // Fetch the existing row so we can record its current state as a revision.
+  const existing = await pool.query(
+    `
+      SELECT entries, selected_path, updated_at, revisions
+      FROM wiserfiles_research_projects
+      WHERE user_id = $1 AND id = $2
+    `,
+    [userId, normalized.id]
+  );
+
+  let revisions = normalized.revisions ?? [];
+
+  if (existing.rows.length > 0) {
+    const prev = existing.rows[0] as {
+      entries: unknown;
+      selected_path: string;
+      updated_at: Date | string;
+      revisions: unknown;
+    };
+    const prevRevision: StoredRevision = {
+      entries: Array.isArray(prev.entries) ? prev.entries.filter(isProjectEntry) : [],
+      selectedPath: prev.selected_path || "main.tex",
+      updatedAt:
+        prev.updated_at instanceof Date ? prev.updated_at.toISOString() : new Date(prev.updated_at).toISOString(),
+    };
+    // Only record a revision if content actually differs
+    const prevJson = JSON.stringify(prevRevision.entries);
+    const nextJson = JSON.stringify(normalized.entries);
+    if (prevJson !== nextJson && prevRevision.entries.length) {
+      revisions = [prevRevision, ...revisions].slice(0, MAX_REVISIONS);
+    }
+  }
+
   const result = await pool.query(
     `
       INSERT INTO wiserfiles_research_projects (
@@ -152,17 +217,19 @@ export async function upsertResearchProjectForUser(userId: string, project: Stor
         entries,
         selected_path,
         last_compile_at,
+        revisions,
         updated_at
       )
-      VALUES ($1, $2, $3, $4::jsonb, $5, $6, $7::timestamptz)
+      VALUES ($1, $2, $3, $4::jsonb, $5, $6, $7::jsonb, $8::timestamptz)
       ON CONFLICT (user_id, id)
       DO UPDATE SET
         name = EXCLUDED.name,
         entries = EXCLUDED.entries,
         selected_path = EXCLUDED.selected_path,
         last_compile_at = EXCLUDED.last_compile_at,
+        revisions = EXCLUDED.revisions,
         updated_at = EXCLUDED.updated_at
-      RETURNING id, name, entries, selected_path, last_compile_at, updated_at
+      RETURNING id, name, entries, selected_path, last_compile_at, updated_at, revisions
     `,
     [
       userId,
@@ -171,6 +238,7 @@ export async function upsertResearchProjectForUser(userId: string, project: Stor
       JSON.stringify(normalized.entries),
       normalized.selectedPath,
       normalized.lastCompileAt,
+      JSON.stringify(revisions),
       normalized.updatedAt,
     ]
   );
