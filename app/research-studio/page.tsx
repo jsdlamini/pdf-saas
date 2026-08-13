@@ -170,19 +170,19 @@ function createFreshProjectEntries(projectName: string, type: EditorMode = "late
     {
       path: "main.tex",
       kind: "file" as const,
-      content: String.raw`\\documentclass[11pt]{article}
-\\usepackage[margin=1in]{geometry}
-\\title{${projectName || "Untitled Document"}}
-\\author{Author}
-\\date{\\today}
+      content: String.raw`\documentclass[11pt]{article}
+\usepackage[margin=1in]{geometry}
+\title{${projectName || "Untitled Document"}}
+\author{Author}
+\date{\today}
 
-\\begin{document}
-\\maketitle
+\begin{document}
+\maketitle
 
-\\section{Introduction}
+\section{Introduction}
 Start writing your document here.
 
-\\end{document}
+\end{document}
 `,
     },
     { path: "sections/", kind: "folder" as const, content: "" },
