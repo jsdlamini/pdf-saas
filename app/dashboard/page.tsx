@@ -304,6 +304,9 @@ export default function DashboardPage() {
         {/* User Management */}
         <UserManagement />
 
+        {/* AI Quota Settings */}
+        <AiQuotaSettings />
+
         {/* Marketing Snippets */}
         <MarketingSection />
       </div>
@@ -403,6 +406,105 @@ function UserManagement() {
           </table>
         </div>
       )}
+    </div>
+  );
+}
+
+function AiQuotaSettings() {
+  const [limits, setLimits] = useState<{ guestDailyLimit: number; registeredDailyLimit: number } | null>(null);
+  const [guestInput, setGuestInput] = useState("");
+  const [registeredInput, setRegisteredInput] = useState("");
+  const [saving, setSaving] = useState(false);
+  const [message, setMessage] = useState("");
+
+  useEffect(() => {
+    fetch("/api/admin-quota")
+      .then((r) => r.json())
+      .then((d) => {
+        if (d.limits) {
+          setLimits(d.limits);
+          setGuestInput(String(d.limits.guestDailyLimit));
+          setRegisteredInput(String(d.limits.registeredDailyLimit));
+        }
+      })
+      .catch(() => {});
+  }, []);
+
+  async function save() {
+    setSaving(true);
+    setMessage("");
+    try {
+      const r = await fetch("/api/admin-quota", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          guestDailyLimit: parseInt(guestInput, 10) || 0,
+          registeredDailyLimit: parseInt(registeredInput, 10) || 0,
+        }),
+      });
+      const d = await r.json();
+      if (r.ok && d.limits) {
+        setLimits(d.limits);
+        setMessage("Saved.");
+      } else {
+        setMessage(d.error || "Could not save.");
+      }
+    } catch {
+      setMessage("Could not save.");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <div className="rounded-2xl border border-slate-200/60 bg-white p-6 shadow-sm mt-6">
+      <div className="flex items-center justify-between mb-4">
+        <div>
+          <h2 className="text-base font-semibold text-slate-900">AI Usage Quotas</h2>
+          <p className="text-xs text-slate-500 mt-0.5">Daily AI feature limits (writing, review, code assistant).</p>
+        </div>
+        <span className="rounded-full bg-emerald-100 px-2.5 py-0.5 text-[10px] font-bold text-emerald-800">
+          {limits ? "Configured" : "Loading…"}
+        </span>
+      </div>
+
+      <div className="grid gap-4 sm:grid-cols-2">
+        <label className="block">
+          <span className="text-xs font-semibold text-slate-700">Unregistered users (per day)</span>
+          <input
+            type="number"
+            min="0"
+            value={guestInput}
+            onChange={(e) => setGuestInput(e.target.value)}
+            className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm focus:border-cyan-500 focus:outline-none focus:ring-1 focus:ring-cyan-500"
+          />
+        </label>
+        <label className="block">
+          <span className="text-xs font-semibold text-slate-700">Registered users (per day)</span>
+          <input
+            type="number"
+            min="0"
+            value={registeredInput}
+            onChange={(e) => setRegisteredInput(e.target.value)}
+            className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm focus:border-cyan-500 focus:outline-none focus:ring-1 focus:ring-cyan-500"
+          />
+        </label>
+      </div>
+
+      <div className="mt-4 flex items-center gap-3">
+        <button
+          type="button"
+          onClick={save}
+          disabled={saving}
+          className="rounded-lg bg-slate-900 px-4 py-2 text-sm font-semibold text-white transition hover:bg-slate-700 disabled:opacity-50"
+        >
+          {saving ? "Saving…" : "Save quotas"}
+        </button>
+        {message ? <span className="text-xs text-slate-500">{message}</span> : null}
+      </div>
+      <p className="mt-3 text-[11px] text-slate-400">
+        Subscriptions are not enabled yet. When they are, subscriber tiers will get their own quota overrides here.
+      </p>
     </div>
   );
 }

@@ -2,19 +2,7 @@ export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 import { auth } from "@clerk/nextjs/server";
-
-const RATE_WINDOW_MS = 60_000;
-const RATE_MAX_REQUESTS = 20;
-const rateLimitMap = new Map<string, number[]>();
-
-function checkRateLimit(key: string): boolean {
-  const now = Date.now();
-  const times = (rateLimitMap.get(key) || []).filter((t) => now - t < RATE_WINDOW_MS);
-  if (times.length >= RATE_MAX_REQUESTS) return false;
-  times.push(now);
-  rateLimitMap.set(key, times);
-  return true;
-}
+import { checkAndIncrementAiQuota } from "@/lib/ai-quota";
 
 type AiWritingAction = "summarize" | "rewrite" | "expand" | "improve" | "explain" | "fix" | "comment";
 
@@ -44,11 +32,14 @@ function sanitizeText(raw: string, maxChars: number) {
 
 export async function POST(request: Request) {
   const { userId } = await auth();
-  if (!userId) {
-    return jsonError("Sign in required.", 401);
-  }
-  if (!checkRateLimit(`ai-writing:${userId}`)) {
-    return jsonError("Rate limit exceeded. Try again shortly.", 429);
+  const forwarded = request.headers.get("x-forwarded-for");
+  const ip = forwarded?.split(",")[0]?.trim() || "anonymous";
+  const quota = await checkAndIncrementAiQuota(userId, ip);
+  if (!quota.allowed) {
+    return jsonError(
+      `Daily AI limit reached (${quota.used}/${quota.limit}). Sign in for a higher limit, or try again tomorrow.`,
+      429
+    );
   }
 
   const apiKey = process.env.DEEPSEEK_API_KEY;
