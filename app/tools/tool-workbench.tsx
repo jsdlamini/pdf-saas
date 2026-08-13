@@ -124,7 +124,7 @@ async function sanitizeLegacyWatermarks(blob: Blob) {
 
 function isFileCompatibleForTool(toolSlug: string, file: File) {
   const lower = file.name.toLowerCase();
-  if (toolSlug === "jpg-to-pdf" || toolSlug === "images-to-pdf" || toolSlug === "scan-to-pdf") {
+  if (toolSlug === "images-to-pdf" || toolSlug === "images-to-pdf" || toolSlug === "scan-to-pdf") {
     return file.type.startsWith("image/") || /\.(png|jpe?g|webp)$/.test(lower);
   }
   if (toolSlug === "word-to-pdf") {
@@ -1130,7 +1130,7 @@ export default function ToolWorkbench({ tool }: WorkbenchProps) {
   const isMergeTool = tool.slug === "merge-pdf";
   const isScanTool = tool.slug === "scan-to-pdf";
   const isImageToPdfTool =
-    tool.slug === "jpg-to-pdf" || tool.slug === "images-to-pdf" || tool.slug === "scan-to-pdf";
+    tool.slug === "images-to-pdf" || tool.slug === "images-to-pdf" || tool.slug === "scan-to-pdf";
   const isEditTool = tool.slug === "edit-pdf";
   const isOcrTool = tool.slug === "ocr-pdf";
   const supportsOrderDrag =
@@ -1933,7 +1933,7 @@ export default function ToolWorkbench({ tool }: WorkbenchProps) {
     if (tool.slug === "organize-pdf") return "Upload one PDF and drag thumbnails to set output order.";
     if (tool.slug === "remove-pages") return "Upload one PDF and click page thumbnails to remove pages.";
     if (tool.slug === "rotate-pdf") return "Upload a PDF, choose a rotation angle for all pages, or set per-page rotation below.";
-    if (tool.slug === "jpg-to-pdf" || tool.slug === "images-to-pdf" || tool.slug === "scan-to-pdf") {
+    if (tool.slug === "images-to-pdf" || tool.slug === "images-to-pdf" || tool.slug === "scan-to-pdf") {
       return "Upload one or more images to generate a PDF.";
     }
     if (tool.slug === "pdf-to-latex") {
@@ -2267,13 +2267,13 @@ export default function ToolWorkbench({ tool }: WorkbenchProps) {
 
   const acceptsMultiple =
     tool.slug === "merge-pdf" ||
-    tool.slug === "jpg-to-pdf" ||
+    tool.slug === "images-to-pdf" ||
     tool.slug === "images-to-pdf" ||
     tool.slug === "scan-to-pdf" ||
     tool.slug === "compare-pdf";
 
   const inputAccept = useMemo(() => {
-    if (tool.slug === "jpg-to-pdf" || tool.slug === "images-to-pdf" || tool.slug === "scan-to-pdf") {
+    if (tool.slug === "images-to-pdf" || tool.slug === "images-to-pdf" || tool.slug === "scan-to-pdf") {
       return "image/jpeg,image/png,image/webp";
     }
     if (tool.slug === "word-to-pdf") {
@@ -2544,7 +2544,7 @@ export default function ToolWorkbench({ tool }: WorkbenchProps) {
       return { label: "a PowerPoint presentation", suggestedTool: "powerpoint-to-pdf" };
     }
     if (file.type.startsWith("image/") || /\.(png|jpe?g|webp|gif)$/i.test(lower)) {
-      return { label: "an image file", suggestedTool: "jpg-to-pdf" };
+      return { label: "an image file", suggestedTool: "images-to-pdf" };
     }
     if (lower.endsWith(".html") || lower.endsWith(".htm")) {
       return { label: "an HTML file", suggestedTool: "html-to-pdf" };
@@ -2934,7 +2934,7 @@ export default function ToolWorkbench({ tool }: WorkbenchProps) {
         return;
       }
 
-      if (tool.slug === "jpg-to-pdf" || tool.slug === "images-to-pdf" || tool.slug === "scan-to-pdf") {
+      if (tool.slug === "images-to-pdf" || tool.slug === "images-to-pdf" || tool.slug === "scan-to-pdf") {
         const output = await PDFDocument.create();
         const preparedImages: Array<{ image: PDFImage; width: number; height: number }> = [];
 
@@ -4521,7 +4521,7 @@ export default function ToolWorkbench({ tool }: WorkbenchProps) {
             <div className="space-y-2">
               <div className="flex items-center justify-between">
                 <p className="text-xs font-semibold uppercase tracking-wide text-slate-600">Image order</p>
-                <p className="text-[10px] text-slate-500">Drag or use arrows to reorder</p>
+                <p className="text-[10px] text-slate-500">Drag to reorder</p>
               </div>
               <div className="flex flex-col gap-1.5">
                 {files.map((file, index) => {
@@ -4551,26 +4551,6 @@ export default function ToolWorkbench({ tool }: WorkbenchProps) {
                       <img src={imageThumbUrls[index]} alt={file.name} className="h-10 w-10 rounded-md object-cover" />
                       <span className="min-w-0 flex-1 truncate text-xs font-medium text-slate-700">{file.name}</span>
                       <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-bold text-slate-600">#{index + 1}</span>
-                      <div className="flex flex-col">
-                        <button
-                          type="button"
-                          disabled={index === 0}
-                          onClick={() => moveFile(index, index - 1)}
-                          className="px-1 text-xs text-slate-500 hover:text-cyan-700 disabled:opacity-30"
-                          aria-label="Move up"
-                        >
-                          ▲
-                        </button>
-                        <button
-                          type="button"
-                          disabled={index === files.length - 1}
-                          onClick={() => moveFile(index, index + 1)}
-                          className="px-1 text-xs text-slate-500 hover:text-cyan-700 disabled:opacity-30"
-                          aria-label="Move down"
-                        >
-                          ▼
-                        </button>
-                      </div>
                     </div>
                   );
                 })}

@@ -131,7 +131,7 @@ export function analyzeDocumentSelection(
     addIfAvailable(
       recommendations,
       availableTools,
-      "jpg-to-pdf",
+      "images-to-pdf",
       "Convert images to a PDF before further processing.",
       "high"
     );

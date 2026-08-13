@@ -68,7 +68,7 @@ function getDropSuggestions(file: File): string[] {
     return ["merge-pdf", "compress-pdf", "ocr-pdf"];
   }
   if (isImage(file)) {
-    return ["jpg-to-pdf", "images-to-pdf", "ocr-pdf"];
+    return ["images-to-pdf", "images-to-pdf", "ocr-pdf"];
   }
   if (isWord(file)) {
     return ["word-to-pdf"];
@@ -168,7 +168,7 @@ export default function Home() {
       if (slugs.has(t.slug)) return false;
       if (t.slug === "ocr-pdf") return true; // OCR works with both
       if (isPdfFile) return t.slug.includes("pdf") || t.slug === "merge-pdf" || t.slug === "split-pdf" || t.slug === "compress-pdf" || t.slug === "sign-pdf" || t.slug === "protect-pdf" || t.slug === "unlock-pdf" || t.slug === "redact-pdf" || t.slug === "edit-pdf" || t.slug === "crop-pdf" || t.slug === "rotate-pdf" || t.slug === "organize-pdf" || t.slug === "remove-pages" || t.slug === "extract-pages" || t.slug === "repair-pdf" || t.slug === "page-numbers" || t.slug === "compare-pdf" || t.slug === "pdf-to-pdfa" || t.slug === "pdf-to-latex";
-      return t.slug === "jpg-to-pdf" || t.slug === "images-to-pdf" || t.slug === "ocr-pdf" || t.slug === "scan-to-pdf";
+      return t.slug === "images-to-pdf" || t.slug === "images-to-pdf" || t.slug === "ocr-pdf" || t.slug === "scan-to-pdf";
     }).slice(0, 10);
   }, [dropFile, dropSuggestions]);
 
@@ -572,7 +572,7 @@ export default function Home() {
             {(() => {
               const TOP_TOOLS = new Set([
                 "merge-pdf", "split-pdf", "compress-pdf", "ocr-pdf",
-                "sign-pdf", "pdf-to-word", "jpg-to-pdf", "protect-pdf",
+                "sign-pdf", "pdf-to-word", "images-to-pdf", "protect-pdf",
               ]);
               const topDuplicates = TOOL_ITEMS.filter((t) => TOP_TOOLS.has(t.slug));
               const weighted = [...TOOL_ITEMS, ...topDuplicates];

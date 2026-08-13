@@ -21,7 +21,7 @@ const FAQ_ITEMS: FaqItem[] = [
   {
     question: "Which tools work offline in my browser?",
     answer:
-      "The vast majority of our tools run entirely in your browser using WebAssembly and JavaScript: Merge, Split, Compress, Rotate, Organize, Remove Pages, Extract Pages, Sign, Edit, Crop, Protect, Unlock, Redact, Page Numbers, Repair, Word to PDF, PowerPoint to PDF, Excel to PDF, JPG to PDF, Images to PDF, PDF to JPG, HTML to PDF, Compare PDF, and Scan to PDF. Once the page is loaded, these tools work without an internet connection.",
+      "The vast majority of our tools run entirely in your browser using WebAssembly and JavaScript: Merge, Split, Compress, Rotate, Organize, Remove Pages, Extract Pages, Sign, Edit, Crop, Protect, Unlock, Redact, Page Numbers, Repair, Word to PDF, PowerPoint to PDF, Excel to PDF, Images to PDF, Images to PDF, PDF to JPG, HTML to PDF, Compare PDF, and Scan to PDF. Once the page is loaded, these tools work without an internet connection.",
   },
   {
     question: "Which tools require the server?",

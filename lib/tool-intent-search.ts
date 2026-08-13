@@ -16,7 +16,7 @@ const TOOL_INTENT_KEYWORDS: Record<string, string[]> = {
   "powerpoint-to-pdf": ["ppt to pdf", "slides to pdf"],
   "excel-to-pdf": ["sheet to pdf", "xlsx to pdf"],
   "pdf-to-jpg": ["images", "jpg", "export pages as image"],
-  "jpg-to-pdf": ["images to pdf", "photo to pdf", "camera to pdf"],
+  "images-to-pdf": ["images to pdf", "photo to pdf", "camera to pdf"],
   "protect-pdf": ["password", "secure", "encrypt", "lock"],
   "unlock-pdf": ["remove password", "unlock", "decrypt"],
   "redact-pdf": ["hide", "remove sensitive", "pii", "redact"],

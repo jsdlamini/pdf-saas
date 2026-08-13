@@ -129,13 +129,6 @@ export const TOOL_ITEMS: ToolItem[] = [
     runtime: "client",
   },
   {
-    slug: "jpg-to-pdf",
-    name: "JPG to PDF",
-    description: "Merge one or more images into a PDF document.",
-    category: "Convert",
-    runtime: "client",
-  },
-  {
     slug: "images-to-pdf",
     name: "Images to PDF",
     description: "Convert one or multiple images (JPG, PNG, WEBP) into a single PDF.",
