@@ -27,7 +27,8 @@ services:
         # Compose substitutes this from the project .env file.
         NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY: ${NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY:-}
     container_name: pdf-saas
-    user: "0:0"
+    # Non-root runtime; the Dockerfile sets USER app with scoped sudo for apt/tlmgr.
+    user: "app"
     depends_on:
       db:
         condition: service_healthy
