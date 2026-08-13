@@ -65,11 +65,18 @@ const STY_TO_TLMGR_HINTS: Record<string, string[]> = {
 
 const ENGINES: LatexEngine[] = [
   {
+    name: "latexmk",
+    binary: "latexmk",
+    buildArgs: (rootFile) => ["-pdf", "-interaction=nonstopmode", "-file-line-error", rootFile],
+  },
+  {
     name: "texliveonfly",
     binary: "texliveonfly",
     buildArgs: (rootFile) => [
       "--compiler",
-      "latexmk -pdf -interaction=nonstopmode -file-line-error",
+      "latexmk",
+      "--arguments",
+      "-pdf -interaction=nonstopmode -file-line-error",
       rootFile,
     ],
   },
@@ -77,11 +84,6 @@ const ENGINES: LatexEngine[] = [
     name: "tectonic",
     binary: "tectonic",
     buildArgs: (rootFile) => ["--keep-logs", "--outdir", ".", rootFile],
-  },
-  {
-    name: "latexmk",
-    binary: "latexmk",
-    buildArgs: (rootFile) => ["-pdf", "-interaction=nonstopmode", "-file-line-error", rootFile],
   },
 ];
 
