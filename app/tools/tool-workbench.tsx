@@ -4521,39 +4521,46 @@ export default function ToolWorkbench({ tool }: WorkbenchProps) {
             <div className="space-y-2">
               <div className="flex items-center justify-between">
                 <p className="text-xs font-semibold uppercase tracking-wide text-slate-600">Image order</p>
-                <p className="text-[10px] text-slate-500">Drag to reorder</p>
+                <p className="text-[10px] text-slate-500">Drag thumbnails to reorder</p>
               </div>
-              <div className="flex flex-col gap-1.5">
-                {files.map((file, index) => {
-                  const isDragOver = dragOverFileIndex === index && draggedFileIndex !== index;
-                  return (
-                    <div
-                      key={`${file.name}-${file.size}-${index}`}
-                      draggable
-                      onDragStart={() => { setDraggedFileIndex(index); setDragOverFileIndex(null); }}
-                      onDragOver={(event) => {
-                        event.preventDefault();
-                        if (draggedFileIndex !== null && draggedFileIndex !== index) setDragOverFileIndex(index);
-                      }}
-                      onDragLeave={() => { if (dragOverFileIndex === index) setDragOverFileIndex(null); }}
-                      onDrop={(event) => {
-                        event.preventDefault();
-                        if (draggedFileIndex !== null && draggedFileIndex !== index) {
-                          moveFile(draggedFileIndex, index);
-                        }
-                        setDraggedFileIndex(null);
-                        setDragOverFileIndex(null);
-                      }}
-                      onDragEnd={() => { setDraggedFileIndex(null); setDragOverFileIndex(null); }}
-                      className={`flex items-center gap-2 rounded-lg border bg-white p-1.5 transition ${isDragOver ? "border-cyan-500 ring-2 ring-cyan-200" : "border-slate-200"}`}
-                    >
-                      {/* eslint-disable-next-line @next/next/no-img-element */}
-                      <img src={imageThumbUrls[index]} alt={file.name} className="h-10 w-10 rounded-md object-cover" />
-                      <span className="min-w-0 flex-1 truncate text-xs font-medium text-slate-700">{file.name}</span>
-                      <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-bold text-slate-600">#{index + 1}</span>
-                    </div>
-                  );
-                })}
+              <div className="max-h-[58vh] overflow-auto pr-1">
+                <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
+                  {files.map((file, index) => {
+                    const isDragOver = dragOverFileIndex === index && draggedFileIndex !== index;
+                    return (
+                      <div
+                        key={`${file.name}-${file.size}-${index}`}
+                        draggable
+                        onDragStart={() => { setDraggedFileIndex(index); setDragOverFileIndex(null); }}
+                        onDragOver={(event) => {
+                          event.preventDefault();
+                          if (draggedFileIndex !== null && draggedFileIndex !== index) setDragOverFileIndex(index);
+                        }}
+                        onDragLeave={() => { if (dragOverFileIndex === index) setDragOverFileIndex(null); }}
+                        onDrop={(event) => {
+                          event.preventDefault();
+                          if (draggedFileIndex !== null && draggedFileIndex !== index) {
+                            moveFile(draggedFileIndex, index);
+                          }
+                          setDraggedFileIndex(null);
+                          setDragOverFileIndex(null);
+                        }}
+                        onDragEnd={() => { setDraggedFileIndex(null); setDragOverFileIndex(null); }}
+                        className={`cursor-grab rounded-xl border p-2 transition active:cursor-grabbing ${isDragOver ? "border-cyan-500 ring-2 ring-cyan-200" : "border-slate-200 bg-white"}`}
+                      >
+                        {/* eslint-disable-next-line @next/next/no-img-element */}
+                        <img src={imageThumbUrls[index]} alt={file.name} className="h-28 w-full rounded-md object-cover" />
+                        <div className="mt-2 space-y-1 text-[11px]">
+                          <p className="truncate font-semibold text-slate-700">{file.name}</p>
+                          <div className="flex items-center justify-between text-slate-600">
+                            <span>Image</span>
+                            <span>#{index + 1}</span>
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
               </div>
             </div>
           ) : null}
