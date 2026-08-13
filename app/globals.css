@@ -1367,6 +1367,30 @@ body {
   background: var(--bg-primary, #0d0f17) !important;
   border: 1px solid var(--border-color, #334155) !important;
   color: var(--text-primary, #e2e8f0) !important;
+  max-width: 100% !important;
+  min-width: 0 !important;
+  box-sizing: border-box !important;
+}
+
+/* Prevent horizontal overflow inside dialogs */
+.studio-dark .swal2-html-container {
+  overflow-x: hidden !important;
+  max-width: 100% !important;
+  box-sizing: border-box !important;
+}
+.studio-dark .swal2-popup {
+  max-width: min(90vw, 32rem) !important;
+  box-sizing: border-box !important;
+}
+
+/* Responsive project-type labels inside New Project dialog */
+.swal2-html-container label[style*="flex:1"] {
+  min-width: 80px;
+}
+@media (max-width: 480px) {
+  .swal2-html-container label[style*="flex:1"] {
+    flex: 1 1 100% !important;
+  }
 }
 
 .studio-dark .swal2-confirm {

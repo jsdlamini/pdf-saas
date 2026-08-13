@@ -167,7 +167,24 @@ function createFreshProjectEntries(projectName: string, type: EditorMode = "late
     ];
   }
   return [
-    { path: "main.tex", kind: "file" as const, content: "" },
+    {
+      path: "main.tex",
+      kind: "file" as const,
+      content: String.raw`\\documentclass[11pt]{article}
+\\usepackage[margin=1in]{geometry}
+\\title{${projectName || "Untitled Document"}}
+\\author{Author}
+\\date{\\today}
+
+\\begin{document}
+\\maketitle
+
+\\section{Introduction}
+Start writing your document here.
+
+\\end{document}
+`,
+    },
     { path: "sections/", kind: "folder" as const, content: "" },
     { path: "figures/", kind: "folder" as const, content: "" },
     { path: "refs.bib", kind: "file" as const, content: "" },
@@ -2289,11 +2306,11 @@ export default function ResearchStudioPage() {
         <div style="text-align:left;display:flex;flex-direction:column;gap:12px">
           <div>
             <label style="font-size:13px;font-weight:600;color:#e2e8f0;display:block;margin-bottom:4px">Project Name</label>
-            <input id="swal-project-name" class="swal2-input" placeholder="My Research Project" style="background:#0f172a;color:#e2e8f0;border-color:#334155;width:100%;box-sizing:border-box">
+            <input id="swal-project-name" class="swal2-input" placeholder="My Research Project" style="background:#0f172a;color:#e2e8f0;border-color:#334155;width:100%;max-width:100%;min-width:0;box-sizing:border-box">
           </div>
           <div>
             <label style="font-size:13px;font-weight:600;color:#e2e8f0;display:block;margin-bottom:4px">Project Type</label>
-            <div style="display:flex;gap:8px">
+            <div style="display:flex;gap:8px;flex-wrap:wrap">
               <label style="flex:1;padding:8px 4px;border:1px solid #818cf8;border-radius:6px;text-align:center;cursor:pointer;color:#e2e8f0;font-size:12px">
                 <input type="radio" name="project-type" value="latex" checked style="margin-right:4px" onchange="document.getElementById('swal-template-group').style.display = this.checked ? 'flex' : 'none'"> LaTeX
               </label>
