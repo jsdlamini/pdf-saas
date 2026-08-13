@@ -3798,24 +3798,7 @@ export default function ResearchStudioPage() {
 
     if (isMod && event.key === "/") {
       event.preventDefault();
-      const start = textarea.selectionStart;
-      const end = textarea.selectionEnd;
-      const blockStart = text.lastIndexOf("\n", Math.max(0, start - 1)) + 1;
-      const blockEnd = (() => {
-        const index = text.indexOf("\n", end);
-        return index === -1 ? text.length : index;
-      })();
-
-      const block = text.slice(blockStart, blockEnd);
-      const lines = block.split("\n");
-      const allCommented = lines.every((line) => !line.trim() || line.trimStart().startsWith("%"));
-      const nextLines = allCommented
-        ? lines.map((line) => line.replace(/^(\s*)%\s?/, "$1"))
-        : lines.map((line) => (line.trim() ? line.replace(/^(\s*)(.*)$/, "$1% $2") : line));
-
-      const nextBlock = nextLines.join("\n");
-      const nextText = `${text.slice(0, blockStart)}${nextBlock}${text.slice(blockEnd)}`;
-      applyEditorUpdate(nextText, blockStart, blockStart + nextBlock.length);
+      toggleLineComment();
       return;
     }
 
