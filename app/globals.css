@@ -664,8 +664,10 @@ body {
 .studio-editor-with-gutter {
   display: grid;
   grid-template-columns: 48px minmax(0, 1fr);
+  grid-template-rows: minmax(0, 1fr);
   flex: 1;
   min-height: 0;
+  overflow: hidden;
 }
 
 .studio-editor-gutter {

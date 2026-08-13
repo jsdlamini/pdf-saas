@@ -4257,9 +4257,11 @@ export default function ResearchStudioPage() {
 
             {/* Line numbers gutter */}
             <div className="studio-editor-gutter">
-              {activeSource.split("\n").map((_, i) => (
-                <div key={i} style={{ lineHeight: 1.625 }}>{i + 1}</div>
-              ))}
+              <div style={{ transform: `translateY(${-editorScroll.top}px)` }}>
+                {activeSource.split("\n").map((_, i) => (
+                  <div key={i} style={{ lineHeight: 1.625 }}>{i + 1}</div>
+                ))}
+              </div>
             </div>
 
             <div className="studio-editor-area">
