@@ -1,6 +1,7 @@
 "use client";
 
 import { SignInButton, SignUpButton, useAuth, useUser } from "@clerk/nextjs";
+import { showToast } from "../components/toast";
 import JSZip from "jszip";
 import katex from "katex";
 import "katex/dist/katex.min.css";
@@ -1262,6 +1263,58 @@ export default function ResearchStudioPage() {
       clearInterval(interval);
     };
   }, [userId, activeProjectId, clerkUser?.fullName, clerkUser?.firstName]);
+
+  // Collaborative document sync (polling-based optimistic concurrency).
+  const collabRevisionRef = useRef(0);
+  const applyingRemoteRef = useRef(false);
+  const collabPostTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    if (!userId || !activeProjectId || applyingRemoteRef.current) return;
+    if (collabPostTimerRef.current) clearTimeout(collabPostTimerRef.current);
+    collabPostTimerRef.current = setTimeout(async () => {
+      collabPostTimerRef.current = null;
+      try {
+        const res = await fetch("/api/collab-sync", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ projectId: activeProjectId, content: activeSource, baseRevision: collabRevisionRef.current }),
+        });
+        const data = (await res.json()) as { content?: string; revision?: number; conflict?: boolean };
+        if (data.revision) collabRevisionRef.current = data.revision;
+        if (data.conflict && typeof data.content === "string") {
+          applyingRemoteRef.current = true;
+          updateActiveFile(data.content);
+          applyingRemoteRef.current = false;
+        }
+      } catch {
+        // sync is best-effort
+      }
+    }, 1500);
+    return () => {
+      if (collabPostTimerRef.current) clearTimeout(collabPostTimerRef.current);
+    };
+  }, [activeSource, userId, activeProjectId]);
+
+  useEffect(() => {
+    if (!userId || !activeProjectId) return;
+    const interval = setInterval(async () => {
+      if (collabPostTimerRef.current) return; // skip while a local POST is pending
+      try {
+        const res = await fetch(`/api/collab-sync?projectId=${encodeURIComponent(activeProjectId)}`);
+        const data = (await res.json()) as { content?: string | null; revision?: number };
+        if (data.revision && data.revision > collabRevisionRef.current && typeof data.content === "string") {
+          applyingRemoteRef.current = true;
+          updateActiveFile(data.content);
+          collabRevisionRef.current = data.revision;
+          applyingRemoteRef.current = false;
+        }
+      } catch {
+        // sync is best-effort
+      }
+    }, 2000);
+    return () => clearInterval(interval);
+  }, [userId, activeProjectId]);
 
   // Auto-save debounce
   const triggerAutoSave = useCallback(() => {
@@ -3118,10 +3171,13 @@ export default function ResearchStudioPage() {
             const data = await res.json().catch(() => ({}));
             if (!res.ok) {
               setCompileNotice(data.error || "Could not send invitation.");
+              showToast(data.error || "Could not send invitation.", "error");
             } else if (data.emailSent === false) {
               setCompileNotice(`Invite saved, but email failed: ${data.emailError || "unknown error"}`);
+              showToast("Invite saved, but email failed to send.", "error");
             } else {
               setCompileNotice(`Invitation email sent to ${email} (${access} access).`);
+              showToast(`Email sent to ${email}`, "success");
             }
           } catch { setCompileNotice("Could not send invitation."); }
           Swal.close();
