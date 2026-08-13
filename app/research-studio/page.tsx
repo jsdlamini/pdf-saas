@@ -222,6 +222,41 @@ function hashString(value: string): number {
   return hash / 4294967295;
 }
 
+type DiffLine = { type: "same" | "add" | "remove"; text: string };
+
+function diffLines(oldText: string, newText: string): DiffLine[] {
+  const oldLines = oldText.split("\n");
+  const newLines = newText.split("\n");
+  const m = oldLines.length;
+  const n = newLines.length;
+  const dp: number[][] = Array.from({ length: m + 1 }, () => new Array(n + 1).fill(0));
+  for (let i = m - 1; i >= 0; i -= 1) {
+    for (let j = n - 1; j >= 0; j -= 1) {
+      dp[i][j] = oldLines[i] === newLines[j]
+        ? dp[i + 1][j + 1] + 1
+        : Math.max(dp[i + 1][j], dp[i][j + 1]);
+    }
+  }
+  const result: DiffLine[] = [];
+  let i = 0;
+  let j = 0;
+  while (i < m && j < n) {
+    if (oldLines[i] === newLines[j]) {
+      result.push({ type: "same", text: oldLines[i] });
+      i += 1; j += 1;
+    } else if (dp[i + 1][j] >= dp[i][j + 1]) {
+      result.push({ type: "remove", text: oldLines[i] });
+      i += 1;
+    } else {
+      result.push({ type: "add", text: newLines[j] });
+      j += 1;
+    }
+  }
+  while (i < m) { result.push({ type: "remove", text: oldLines[i] }); i += 1; }
+  while (j < n) { result.push({ type: "add", text: newLines[j] }); j += 1; }
+  return result;
+}
+
 function scanCitationKeys(entries: ProjectEntry[]): CitationItem[] {
   const bibFiles = entries.filter((e) => e.kind === "file" && e.path.endsWith(".bib"));
   const keys = new Map<string, CitationItem>();
@@ -1040,6 +1075,7 @@ export default function ResearchStudioPage() {
   const [aiWritingBusy, setAiWritingBusy] = useState(false);
   const [citationBusy, setCitationBusy] = useState(false);
   const [historyOpen, setHistoryOpen] = useState(false);
+  const [diffRevision, setDiffRevision] = useState<StoredRevision | null>(null);
   const [aiReviewBusy, setAiReviewBusy] = useState(false);
   const [aiReviewResult, setAiReviewResult] = useState<{
     summary: string;
@@ -1048,6 +1084,9 @@ export default function ResearchStudioPage() {
     suggestions: string[];
     score: number;
   } | null>(null);
+  const [figureBusy, setFigureBusy] = useState(false);
+  const [figureUrl, setFigureUrl] = useState("");
+  const [figureName, setFigureName] = useState("");
 
   // ── Collaboration presence ─────
   const [collabCursors, setCollabCursors] = useState<
@@ -2272,6 +2311,69 @@ export default function ResearchStudioPage() {
       setCompileNotice(`LaTeX table generated from ${csvPath}.`);
     } catch (error) {
       const message = error instanceof Error ? error.message : "CSV parsing failed.";
+      setCompileNotice(message);
+      appendPreviewError(message);
+    }
+  }
+
+  async function runFigure() {
+    if (figureBusy) return;
+    const code = activeSource.trim();
+    if (!code) {
+      setCompileNotice("Open a Python file to generate a figure.");
+      return;
+    }
+    setFigureBusy(true);
+    setCompileNotice("Generating figure from Python...");
+    try {
+      const res = await fetch("/api/run-figure", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ code }),
+      });
+      if (!res.ok) {
+        const data = (await res.json().catch(() => null)) as { error?: string } | null;
+        throw new Error(data?.error || "Figure generation failed.");
+      }
+      const blob = await res.blob();
+      if (figureUrl) URL.revokeObjectURL(figureUrl);
+      const url = URL.createObjectURL(blob);
+      setFigureUrl(url);
+      const name = `figure-${Date.now().toString(36)}.png`;
+      setFigureName(name);
+      setCompileNotice("Figure generated. Download it and drag into the editor.");
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Figure generation failed.";
+      setCompileNotice(message);
+      appendPreviewError(message);
+    } finally {
+      setFigureBusy(false);
+    }
+  }
+
+  async function exportDocument(format: "docx" | "md") {
+    const rootPath = editableFiles.some((e) => e.path === "main.tex") ? "main.tex" : activeEntry?.path;
+    if (!rootPath || !rootPath.endsWith(".tex")) {
+      setCompileNotice("Open a LaTeX file before exporting.");
+      return;
+    }
+    setCompileNotice(`Exporting to ${format === "docx" ? "Word" : "Markdown"}...`);
+    try {
+      const res = await fetch("/api/export-document", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ rootFile: rootPath, files: editableFiles.map((e) => ({ path: e.path, content: e.content })), format }),
+      });
+      if (!res.ok) {
+        const data = (await res.json().catch(() => null)) as { error?: string } | null;
+        throw new Error(data?.error || "Export failed.");
+      }
+      const blob = await res.blob();
+      const name = format === "docx" ? `${projectName || "document"}.docx` : `${projectName || "document"}.md`;
+      downloadBlob(blob, name);
+      setCompileNotice(`Exported to ${name}.`);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Export failed.";
       setCompileNotice(message);
       appendPreviewError(message);
     }
@@ -4115,6 +4217,22 @@ export default function ResearchStudioPage() {
                 </svg>
                 <span className="hidden sm:inline">{codeRunBusy ? "Running..." : "Run"}</span>
               </button>
+              {editorMode === "python" ? (
+                <button
+                  type="button"
+                  onClick={() => void runFigure()}
+                  disabled={figureBusy}
+                  className="studio-btn studio-btn-secondary"
+                  aria-label="Generate figure"
+                  title="Generate a matplotlib figure from this Python code"
+                >
+                  <svg viewBox="0 0 20 20" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="1.8">
+                    <path d="M3 3v12a2 2 0 0 0 2 2h12" strokeLinecap="round" />
+                    <path d="M7 11l3-3 3 3 4-4" strokeLinecap="round" strokeLinejoin="round" />
+                  </svg>
+                  <span className="hidden sm:inline">{figureBusy ? "Generating..." : "Figure"}</span>
+                </button>
+              ) : null}
               <button
                 type="button"
                 onClick={() => {
@@ -4220,6 +4338,9 @@ export default function ResearchStudioPage() {
               "-",
               { label: <>Save <kbd className="studio-menu-kbd">Ctrl+S</kbd></>, action: () => { setOpenMenu(""); saveCurrentProject(); } },
               { label: <>Download ZIP</>, action: () => { setOpenMenu(""); void downloadProjectBundle(); } },
+              "-",
+              { label: <>Export to Word (.docx)</>, action: () => { setOpenMenu(""); void exportDocument("docx"); } },
+              { label: <>Export to Markdown</>, action: () => { setOpenMenu(""); void exportDocument("md"); } },
               "-",
               { label: <>Import ZIP</>, action: () => { setOpenMenu(""); document.getElementById("zip-import-editor-menu")?.click(); } },
             ]
@@ -4855,17 +4976,95 @@ export default function ResearchStudioPage() {
                     </p>
                   ) : (
                     (savedProjectSnapshots.find((p) => p.id === activeProjectId)?.revisions ?? []).map((rev, i) => (
-                      <button
-                        key={i}
-                        type="button"
-                        className="studio-history-item"
-                        onClick={() => restoreRevision(rev)}
-                      >
-                        <span>{new Date(rev.updatedAt).toLocaleString()}</span>
-                        <span style={{ color: "var(--text-muted, #64748b)" }}>{rev.entries.filter((e) => e.kind === "file").length} files</span>
-                      </button>
+                      <div key={i} className="studio-history-item">
+                        <div style={{ flex: 1, minWidth: 0 }}>
+                          <div style={{ fontSize: 12, color: "var(--text-primary, #e2e8f0)" }}>{new Date(rev.updatedAt).toLocaleString()}</div>
+                          <div style={{ fontSize: 10, color: "var(--text-muted, #64748b)" }}>{rev.entries.filter((e) => e.kind === "file").length} files</div>
+                        </div>
+                        <div style={{ display: "flex", gap: 6 }}>
+                          <button
+                            type="button"
+                            className="studio-btn studio-btn-secondary"
+                            style={{ height: 24, fontSize: 10, padding: "0 8px" }}
+                            onClick={() => setDiffRevision(rev)}
+                          >
+                            Compare
+                          </button>
+                          <button
+                            type="button"
+                            className="studio-btn studio-btn-primary"
+                            style={{ height: 24, fontSize: 10, padding: "0 8px" }}
+                            onClick={() => restoreRevision(rev)}
+                          >
+                            Restore
+                          </button>
+                        </div>
+                      </div>
                     ))
                   )}
+                </div>
+              </div>
+            </div>
+          ) : null}
+
+          {/* Diff viewer dialog */}
+          {diffRevision ? (
+            <div className="studio-history-overlay" onClick={() => setDiffRevision(null)}>
+              <div className="studio-history-panel studio-diff-panel" onClick={(e) => e.stopPropagation()}>
+                <div className="studio-history-header">
+                  <span>Changes vs. current</span>
+                  <button type="button" onClick={() => setDiffRevision(null)} className="studio-terminal-close-btn">×</button>
+                </div>
+                <div className="studio-diff-body">
+                  {(() => {
+                    const currentContent = activeEntry?.content ?? "";
+                    const revContent = diffRevision.entries.find((e) => e.kind === "file" && e.path === (activeEntry?.path || "main.tex"))?.content ?? "";
+                    const diff = diffLines(revContent, currentContent);
+                    return diff.map((line, i) => (
+                      <div
+                        key={i}
+                        className={`studio-diff-line studio-diff-${line.type}`}
+                      >
+                        <span className="studio-diff-sign">{line.type === "add" ? "+" : line.type === "remove" ? "−" : " "}</span>
+                        <pre style={{ margin: 0, whiteSpace: "pre-wrap", wordBreak: "break-word" }}>{line.text || " "}</pre>
+                      </div>
+                    ));
+                  })()}
+                </div>
+              </div>
+            </div>
+          ) : null}
+
+          {/* Generated figure dialog */}
+          {figureUrl ? (
+            <div className="studio-history-overlay" onClick={() => { URL.revokeObjectURL(figureUrl); setFigureUrl(""); }}>
+              <div className="studio-history-panel studio-figure-panel" onClick={(e) => e.stopPropagation()}>
+                <div className="studio-history-header">
+                  <span>Generated Figure</span>
+                  <button type="button" onClick={() => { URL.revokeObjectURL(figureUrl); setFigureUrl(""); }} className="studio-terminal-close-btn">×</button>
+                </div>
+                <div className="studio-figure-body">
+                  <img src={figureUrl} alt="Generated figure" style={{ maxWidth: "100%", borderRadius: 6 }} />
+                  <div style={{ display: "flex", gap: 8, marginTop: 12, justifyContent: "flex-end" }}>
+                    <a
+                      href={figureUrl}
+                      download={figureName}
+                      className="studio-btn studio-btn-primary"
+                      style={{ textDecoration: "none" }}
+                    >
+                      Download PNG
+                    </a>
+                    <button
+                      type="button"
+                      className="studio-btn studio-btn-secondary"
+                      onClick={() => { URL.revokeObjectURL(figureUrl); setFigureUrl(""); }}
+                    >
+                      Close
+                    </button>
+                  </div>
+                  <p style={{ fontSize: 11, color: "var(--text-muted, #64748b)", marginTop: 8 }}>
+                    Download the PNG, then drag it into the editor (figures/ folder) to embed it in your paper.
+                  </p>
                 </div>
               </div>
             </div>

@@ -2153,3 +2153,69 @@ html[data-theme="light"] .studio-menu-kbd {
 .studio-journal-bar-fill.over {
   background: #f87171;
 }
+
+/* ── Diff viewer ───── */
+.studio-history-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  width: 100%;
+  padding: 10px 12px;
+  background: var(--bg-secondary, #131620);
+  border: 1px solid transparent;
+  border-radius: 6px;
+  color: var(--text-primary, #e2e8f0);
+  font-size: 12px;
+  margin-bottom: 4px;
+}
+.studio-history-item:hover {
+  border-color: rgba(74, 222, 128, 0.35);
+  background: var(--bg-sidebar, #1a1d2b);
+}
+.studio-diff-panel {
+  width: min(94vw, 720px);
+}
+.studio-diff-body {
+  overflow: auto;
+  max-height: 65vh;
+  font-family: "SF Mono", "Fira Code", "Cascadia Code", monospace;
+  font-size: 12px;
+  line-height: 1.5;
+}
+.studio-diff-line {
+  display: flex;
+  gap: 8px;
+  padding: 1px 10px;
+  min-height: 20px;
+}
+.studio-diff-line pre {
+  font-family: inherit;
+}
+.studio-diff-sign {
+  width: 16px;
+  text-align: center;
+  flex-shrink: 0;
+  user-select: none;
+  font-weight: 700;
+}
+.studio-diff-add {
+  background: rgba(74, 222, 128, 0.12);
+}
+.studio-diff-add .studio-diff-sign { color: #4ade80; }
+.studio-diff-remove {
+  background: rgba(248, 113, 113, 0.12);
+}
+.studio-diff-remove .studio-diff-sign { color: #f87171; }
+.studio-diff-same {
+  color: var(--text-secondary, #94a3b8);
+}
+
+/* ── Figure dialog ───── */
+.studio-figure-panel {
+  width: min(94vw, 640px);
+}
+.studio-figure-body {
+  padding: 14px;
+  overflow: auto;
+}
