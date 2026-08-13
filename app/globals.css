@@ -444,6 +444,11 @@ body {
   --right-width: 40px;
 }
 
+/* Code mode: hide right pane entirely */
+.studio-panes-code {
+  grid-template-columns: var(--left-width, 240px) 1px minmax(0, 1fr) !important;
+}
+
 /* ── File tree ───── */
 .studio-filetree {
   background: var(--bg-sidebar, #1a1d2b);

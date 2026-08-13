@@ -4038,7 +4038,7 @@ export default function ResearchStudioPage() {
       {/* Main panes */}
       <section
         ref={panesRef}
-        className="studio-panes"
+        className={isCodeMode ? "studio-panes studio-panes-code" : "studio-panes"}
         style={{
           "--left-width": leftPaneCollapsed ? "40px" : `${leftPaneWidth}px`,
           "--right-width": rightPaneCollapsed ? "40px" : `${rightPaneWidth}px`,
@@ -4532,7 +4532,9 @@ export default function ResearchStudioPage() {
           ) : null}
         </div>
 
-        {/* Right resize */}
+        {/* Right resize + preview pane (hidden in code mode) */}
+        {!isCodeMode && (
+        <>
         <div
           className="studio-resize-handle"
           onMouseDown={() => { if (!rightPaneCollapsed) setActiveResizer("right"); }}
@@ -4717,6 +4719,8 @@ export default function ResearchStudioPage() {
             </>
           )}
         </aside>
+        </>
+        )}
       </section>
 
       {treeContextMenu ? (
