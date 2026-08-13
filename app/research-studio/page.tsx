@@ -10,7 +10,7 @@ import { useCallback, useEffect, useEffectEvent, useMemo, useRef, useState } fro
 import { useSearchParams } from "next/navigation";
 import Swal from "sweetalert2";
 import { getTemplateBySlug, RESEARCH_TEMPLATES, type ResearchTemplate } from "@/lib/research-templates";
-import { highlightCodeSource, type EditorMode } from "@/lib/highlighters";
+import { highlightCodeSource, escapeHtml, type EditorMode } from "@/lib/highlighters";
 
 type ProjectEntry = {
   path: string;
@@ -2142,9 +2142,18 @@ export default function ResearchStudioPage() {
   async function runAiWriting(action: "summarize" | "rewrite" | "expand" | "improve" | "explain" | "fix" | "comment") {
     if (!activeEntry || aiWritingBusy) return;
     const textarea = editorRef.current;
-    const start = textarea?.selectionStart ?? 0;
-    const end = textarea?.selectionEnd ?? activeSource.length;
-    const selected = activeSource.slice(start, end);
+    let start = textarea?.selectionStart ?? 0;
+    let end = textarea?.selectionEnd ?? start;
+    let selected = activeSource.slice(start, end);
+
+    const isCodeAction = action === "explain" || action === "fix" || action === "comment";
+    // Code actions default to the whole file when nothing is selected.
+    if (!selected.trim() && isCodeAction) {
+      start = 0;
+      end = activeSource.length;
+      selected = activeSource;
+    }
+
     if (!selected.trim()) {
       setCompileNotice("Select some text first, then run the AI writing action.");
       return;
@@ -2163,9 +2172,25 @@ export default function ResearchStudioPage() {
         throw new Error(payload.error || `AI ${action} failed.`);
       }
       const result = payload.result || "";
-      const nextText = activeSource.slice(0, start) + result + activeSource.slice(end);
-      updateActiveFile(nextText);
-      setCompileNotice(`AI ${action} applied.`);
+
+      if (action === "explain") {
+        // Explanation is displayed, not applied to the code.
+        await Swal.fire({
+          title: "Code Explanation",
+          html: `<pre style="white-space:pre-wrap;text-align:left;font-size:12px;line-height:1.5;color:var(--text-primary, #e2e8f0);margin:0">${escapeHtml(result)}</pre>`,
+          confirmButtonText: "Close",
+          confirmButtonColor: "#4ade80",
+          background: "#1a1d2b",
+          color: "#e2e8f0",
+          position: "top",
+          width: "min(90vw, 640px)",
+        });
+        setCompileNotice("Code explained.");
+      } else {
+        const nextText = activeSource.slice(0, start) + result + activeSource.slice(end);
+        updateActiveFile(nextText);
+        setCompileNotice(`AI ${action} applied.`);
+      }
     } catch (error) {
       const message = error instanceof Error ? error.message : `AI ${action} failed.`;
       setCompileNotice(message);
