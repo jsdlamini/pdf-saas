@@ -24,14 +24,22 @@ async function ensureSchema(pool: Pool) {
   `);
 }
 
+function getRequesterId(request: Request, userId: string | null): string {
+  if (userId) return userId;
+  const forwarded = request.headers.get("x-forwarded-for");
+  const ip = forwarded?.split(",")[0]?.trim() || "anonymous";
+  return `guest:${ip}`;
+}
+
 // GET active collaborators' cursors for a project (updated within TTL)
 export async function GET(request: Request) {
   const { userId } = await auth();
-  if (!userId) return jsonError("Sign in required.", 401);
 
   const url = new URL(request.url);
   const projectId = url.searchParams.get("projectId");
   if (!projectId) return jsonError("Missing projectId", 400);
+
+  const requesterId = getRequesterId(request, userId);
 
   const pool = new Pool({ connectionString: process.env.DATABASE_URL, max: 1 });
   await ensureSchema(pool);
@@ -43,7 +51,7 @@ export async function GET(request: Request) {
        AND updated_at > NOW() - INTERVAL '15 seconds'
        AND user_id <> $2
      ORDER BY updated_at DESC`,
-    [projectId, userId]
+    [projectId, requesterId]
   );
   await pool.end();
 
@@ -61,7 +69,6 @@ export async function GET(request: Request) {
 // POST my cursor position (heartbeat)
 export async function POST(request: Request) {
   const { userId } = await auth();
-  if (!userId) return jsonError("Sign in required.", 401);
 
   const body = await request.json().catch(() => null) as {
     projectId?: string;
@@ -73,11 +80,13 @@ export async function POST(request: Request) {
   const projectId = body?.projectId;
   if (!projectId) return jsonError("Missing projectId", 400);
 
+  const requesterId = getRequesterId(request, userId);
+
   const pool = new Pool({ connectionString: process.env.DATABASE_URL, max: 1 });
   await ensureSchema(pool);
 
   const cursorPos = typeof body?.cursorPos === "number" && body.cursorPos >= 0 ? body.cursorPos : 0;
-  const name = (body?.name || "").slice(0, 60);
+  const name = userId ? (body?.name || "Collaborator").slice(0, 60) : "anonymous";
   const color = (body?.color || "#4ade80").slice(0, 20);
 
   await pool.query(
@@ -85,7 +94,7 @@ export async function POST(request: Request) {
      VALUES ($1, $2, $3, $4, $5, NOW())
      ON CONFLICT (user_id, project_id)
      DO UPDATE SET name = EXCLUDED.name, color = EXCLUDED.color, cursor_pos = EXCLUDED.cursor_pos, updated_at = NOW()`,
-    [userId, projectId, name, color, cursorPos]
+    [requesterId, projectId, name, color, cursorPos]
   );
   await pool.end();
 

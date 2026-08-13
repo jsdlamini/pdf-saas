@@ -894,6 +894,37 @@ export default function ResearchStudioPage() {
       .catch(() => setShareLoading(false));
   }, [shareId]);
 
+  // Auto-import a shared/invited project so the recipient lands directly in the editor.
+  const autoImportedShareRef = useRef(false);
+  useEffect(() => {
+    if (!sharedProject || autoImportedShareRef.current) return;
+    autoImportedShareRef.current = true;
+
+    // Keep the original project id so live collaboration syncs to the same document.
+    const projectId = (sharedProject.id as string) || makeProjectId();
+    const now = new Date().toISOString();
+    const snapshot: SavedProjectData = {
+      id: projectId,
+      name: sharedProject.name || "Shared Project",
+      entries: sharedProject.entries || [],
+      selectedPath: sharedProject.selectedPath || "main.tex",
+      lastCompileAt: sharedProject.lastCompileAt || "Not compiled yet",
+      updatedAt: now,
+      editorMode: sharedProject.editorMode || "latex",
+    };
+
+    persistProjectSnapshot(snapshot);
+    queueServerProjectSync(snapshot);
+    setActiveProjectId(projectId);
+    setProjectName(snapshot.name);
+    setProjectEntries(snapshot.entries);
+    setSelectedPath(snapshot.selectedPath || "main.tex");
+    setEditorMode(snapshot.editorMode || "latex");
+    setCompileNotice(`Opened shared project: ${snapshot.name}`);
+    setWorkspaceScreen("editor");
+    setSharedProject(null);
+  }, [sharedProject, userId]);
+
   const [editorMode, setEditorMode] = useState<EditorMode>(() => {
     if (typeof window === "undefined") return "latex";
     try {
@@ -1230,10 +1261,14 @@ export default function ResearchStudioPage() {
 
   // Collaboration presence: broadcast my cursor and fetch collaborators' cursors.
   useEffect(() => {
-    if (!userId || !activeProjectId) return;
+    if (!activeProjectId) return;
 
-    const color = `hsl(${(hashString(userId) * 137) % 360}, 70%, 60%)`;
-    const name = clerkUser?.fullName || clerkUser?.firstName || "Collaborator";
+    const color = userId
+      ? `hsl(${(hashString(userId) * 137) % 360}, 70%, 60%)`
+      : "hsl(0, 0%, 70%)";
+    const name = userId
+      ? clerkUser?.fullName || clerkUser?.firstName || "Collaborator"
+      : "anonymous";
     let cancelled = false;
 
     async function pulse() {
