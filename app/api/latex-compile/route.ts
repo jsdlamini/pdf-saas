@@ -214,8 +214,9 @@ function isCrossReleaseTlmgrError(detail: string) {
 }
 
 function canUseAptGet() {
-  if (typeof process.getuid !== "function") return false;
-  return process.getuid() === 0;
+  // Runtime now runs as a non-root user with passwordless sudo scoped to
+  // apt-get/tlmgr via /etc/sudoers.d/app.
+  return true;
 }
 
 async function detectLocalTeXLiveYear() {
@@ -352,7 +353,7 @@ async function tryInstallWithApt(sty: string): Promise<AutoInstallResult> {
 
   try {
     // Refresh package lists first (image clears them to stay small)
-    await execFileAsync("apt-get", ["update"], {
+    await execFileAsync("sudo", ["apt-get", "update"], {
       timeout: 120_000,
       maxBuffer: 16 * 1024 * 1024,
       env: { ...process.env, DEBIAN_FRONTEND: "noninteractive" },
@@ -360,7 +361,7 @@ async function tryInstallWithApt(sty: string): Promise<AutoInstallResult> {
       // non-fatal; proceed with existing lists
     });
 
-    await execFileAsync("apt-get", ["install", "-y", "--no-install-recommends", ...targets], {
+    await execFileAsync("sudo", ["apt-get", "install", "-y", "--no-install-recommends", ...targets], {
       timeout: 420_000,
       maxBuffer: 32 * 1024 * 1024,
       env: { ...process.env, DEBIAN_FRONTEND: "noninteractive" },

@@ -22,12 +22,17 @@ ENV NODE_ENV=production
 ENV PORT=3000
 ENV HOSTNAME=0.0.0.0
 
-# Keep runtime as root so apt-based auto-install fallback can run when needed.
-USER root
-
+# Run as a non-root user; apt/tlmgr auto-install uses passwordless sudo for the
+# scoped package managers only, so the web process cannot touch the rest of the
+# filesystem. See /etc/sudoers.d/app below.
 RUN apt-get update \
- && apt-get install -y --no-install-recommends ocrmypdf tesseract-ocr ghostscript qpdf latexmk texlive-extra-utils texlive-latex-base texlive-latex-recommended texlive-latex-extra texlive-fonts-recommended texlive-fonts-extra texlive-science texlive-publishers texlive-pictures texlive-bibtex-extra biber tesseract-ocr-deu tesseract-ocr-eng tesseract-ocr-fra tesseract-ocr-spa tesseract-ocr-ita tesseract-ocr-por tesseract-ocr-nld tesseract-ocr-pol libreoffice-writer python3 g++ \
- && rm -rf /var/lib/apt/lists/*
+ && apt-get install -y --no-install-recommends ocrmypdf tesseract-ocr ghostscript qpdf latexmk texlive-extra-utils texlive-latex-base texlive-latex-recommended texlive-latex-extra texlive-fonts-recommended texlive-fonts-extra texlive-science texlive-publishers texlive-pictures texlive-bibtex-extra biber tesseract-ocr-deu tesseract-ocr-eng tesseract-ocr-fra tesseract-ocr-spa tesseract-ocr-ita tesseract-ocr-por tesseract-ocr-nld tesseract-ocr-pol libreoffice-writer python3 g++ sudo \
+ && rm -rf /var/lib/apt/lists/* \
+ && useradd --create-home --shell /bin/bash app \
+ && echo "app ALL=(root) NOPASSWD: /usr/bin/apt-get, /usr/bin/tlmgr" > /etc/sudoers.d/app \
+ && chmod 0440 /etc/sudoers.d/app
+
+USER app
 
 COPY package.json package-lock.json ./
 RUN npm install --omit=dev
