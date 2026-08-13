@@ -2338,3 +2338,24 @@ html[data-theme="light"] .studio-dark ::-webkit-scrollbar-thumb {
   background: rgba(148, 163, 184, 0.5);
   background-clip: content-box;
 }
+
+/* ── Read-only banner ───── */
+.studio-readonly-banner {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 6px 16px;
+  background: color-mix(in srgb, var(--warning-color, #f59e0b) 12%, transparent);
+  border-bottom: 1px solid color-mix(in srgb, var(--warning-color, #f59e0b) 25%, transparent);
+  color: var(--warning-color, #f59e0b);
+  font-size: 12px;
+  font-weight: 500;
+}
+
+/* ── Onboarding modal ───── */
+.studio-onboarding-panel {
+  width: min(92vw, 440px);
+}
+.studio-onboarding-body {
+  padding: 16px;
+}

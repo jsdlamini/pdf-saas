@@ -6,11 +6,13 @@ export const dynamic = "force-dynamic";
 export async function POST(request: Request) {
   try {
     const body = await request.json();
-    const { projectData } = body as { projectData?: any };
+    const { projectData, accessLevel } = body as { projectData?: any; accessLevel?: string };
 
     if (!projectData || !projectData.name || !projectData.entries) {
       return Response.json({ error: "Invalid project data" }, { status: 400 });
     }
+
+    const access = accessLevel === "write" || accessLevel === "admin" ? accessLevel : "read";
 
     const pool = new Pool({
       connectionString: process.env.DATABASE_URL,
@@ -29,7 +31,7 @@ export async function POST(request: Request) {
     const shareId = crypto.randomUUID().slice(0, 8);
     await pool.query(
       `INSERT INTO wiserfiles_shared_projects (id, data) VALUES ($1, $2)`,
-      [shareId, JSON.stringify(projectData)]
+      [shareId, JSON.stringify({ ...projectData, accessLevel: access })]
     );
     await pool.end();
 
