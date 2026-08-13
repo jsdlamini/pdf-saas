@@ -3,6 +3,7 @@
 import { SignInButton, SignUpButton, useAuth, useUser } from "@clerk/nextjs";
 import { showToast } from "../components/toast";
 import CommandPalette from "../components/command-palette";
+import { trackEvent } from "../components/analytics";
 import JSZip from "jszip";
 import katex from "katex";
 import "katex/dist/katex.min.css";
@@ -881,6 +882,12 @@ export default function ResearchStudioPage() {
   const { isLoaded: authLoaded, userId } = useAuth();
   const { user: clerkUser } = useUser();
   const hasHydratedServerProjectsRef = useRef(false);
+
+  function trackStudioEvent(event: string, detail?: string) {
+    try {
+      trackEvent(event, { userId: userId || "guest", detail: detail || "" });
+    } catch {}
+  }
 
   // Restore workspace state from localStorage on mount
   const [workspaceScreen, setWorkspaceScreen] = useState<"projects" | "editor">(() => {
@@ -2188,6 +2195,7 @@ export default function ResearchStudioPage() {
         updateActiveFile(nextText);
         setCompileNotice(`AI ${action} applied.`);
       }
+      trackStudioEvent("ai-write", action);
     } catch (error) {
       const message = error instanceof Error ? error.message : `AI ${action} failed.`;
       setCompileNotice(message);
@@ -2223,6 +2231,7 @@ export default function ResearchStudioPage() {
 
       setProjectEntries(nextEntries);
       setCompileNotice(`Citation added to ${bibPath}.`);
+      trackStudioEvent("citation-import", doi);
     } catch (error) {
       const message = error instanceof Error ? error.message : "Citation lookup failed.";
       setCompileNotice(message);
@@ -2275,6 +2284,7 @@ export default function ResearchStudioPage() {
         suggestions: payload.suggestions || [],
         score: payload.score ?? 0,
       });
+      trackStudioEvent("ai-review");
       setCompileNotice("AI review complete.");
     } catch (error) {
       const message = error instanceof Error ? error.message : "AI review failed.";
@@ -2349,6 +2359,7 @@ export default function ResearchStudioPage() {
       const nextText = activeSource.slice(0, pos) + "\n" + tableLines + "\n" + activeSource.slice(pos);
       updateActiveFile(nextText);
       setCompileNotice(`LaTeX table generated from ${csvPath}.`);
+      trackStudioEvent("csv-to-table", csvPath);
     } catch (error) {
       const message = error instanceof Error ? error.message : "CSV parsing failed.";
       setCompileNotice(message);
@@ -2392,6 +2403,7 @@ export default function ResearchStudioPage() {
       setFigureName(name);
       setFigureBase64(base64);
       setCompileNotice("Figure generated. Insert it into your paper or download it.");
+      trackStudioEvent("figure-generate");
     } catch (error) {
       const message = error instanceof Error ? error.message : "Figure generation failed.";
       setCompileNotice(message);
@@ -2455,6 +2467,7 @@ export default function ResearchStudioPage() {
       const name = format === "docx" ? `${projectName || "document"}.docx` : `${projectName || "document"}.md`;
       downloadBlob(blob, name);
       setCompileNotice(`Exported to ${name}.`);
+      trackStudioEvent("export", format);
     } catch (error) {
       const message = error instanceof Error ? error.message : "Export failed.";
       setCompileNotice(message);
@@ -2993,6 +3006,7 @@ export default function ResearchStudioPage() {
     setCodeOutput(null);
     setCodeRunBusy(false);
     setCompileNotice("New project created and saved. Add files and compile when ready.");
+    trackStudioEvent("project-create", type);
     setWorkspaceScreen("editor");
   }
 
@@ -3134,6 +3148,7 @@ export default function ResearchStudioPage() {
         exitCode: result.exitCode ?? 0,
       });
       setCompileNotice(`Code executed (exit code: ${result.exitCode ?? 0}).`);
+      trackStudioEvent("run-code", editorMode);
     } catch (runError) {
       const message = runError instanceof Error ? runError.message : "Code execution failed.";
       setCodeOutput({ stdout: "", stderr: `Error: ${message}`, exitCode: 1 });
@@ -3244,6 +3259,7 @@ export default function ResearchStudioPage() {
 
       const engine = response.headers.get("X-Latex-Engine") || "server engine";
       setCompileNotice(`Compiled ${rootPath} using ${engine}.`);
+      trackStudioEvent("compile", "latex");
 
       // Increment guest compile counter (10 per hour window)
       if (!userId) {
@@ -3523,6 +3539,7 @@ export default function ResearchStudioPage() {
             } else {
               setCompileNotice(`Invitation email sent to ${email} (${access} access).`);
               showToast(`Email sent to ${email}`, "success");
+              trackStudioEvent("invite-send", access);
             }
           } catch { setCompileNotice("Could not send invitation."); }
           Swal.close();

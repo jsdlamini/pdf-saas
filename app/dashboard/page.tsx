@@ -11,6 +11,8 @@ type AnalyticsData = {
   referrers: Array<{ referrer: string; count: string }>;
   countries: Array<{ country: string; count: string }>;
   cities: Array<{ city: string; country: string; count: string }>;
+  events?: Array<{ event: string; count: string }>;
+  recentEvents?: Array<{ event: string; detail: string | null; user_id: string | null; ip_hash: string | null; created_at: string }>;
 };
 
 export default function DashboardPage() {
@@ -307,6 +309,9 @@ export default function DashboardPage() {
         {/* AI Quota Settings */}
         <AiQuotaSettings />
 
+        {/* User Activity */}
+        <UserActivity data={data} />
+
         {/* Marketing Snippets */}
         <MarketingSection />
       </div>
@@ -505,6 +510,62 @@ function AiQuotaSettings() {
       <p className="mt-3 text-[11px] text-slate-400">
         Subscriptions are not enabled yet. When they are, subscriber tiers will get their own quota overrides here.
       </p>
+    </div>
+  );
+}
+
+function UserActivity({ data }: { data: AnalyticsData | null }) {
+  const events = data?.events || [];
+  const recent = data?.recentEvents || [];
+
+  return (
+    <div className="rounded-2xl border border-slate-200/60 bg-white p-6 shadow-sm mt-6">
+      <div className="flex items-center justify-between mb-4">
+        <div>
+          <h2 className="text-base font-semibold text-slate-900">User Activity</h2>
+          <p className="text-xs text-slate-500 mt-0.5">Fine-grained actions users performed (compile, AI, exports, invites…).</p>
+        </div>
+        <span className="rounded-full bg-cyan-100 px-2.5 py-0.5 text-[10px] font-bold text-cyan-800">
+          {recent.length} recent
+        </span>
+      </div>
+
+      {events.length > 0 ? (
+        <div className="mb-4 flex flex-wrap gap-2">
+          {events.map((e) => (
+            <span key={e.event} className="rounded-full bg-slate-100 px-3 py-1 text-xs font-medium text-slate-700">
+              {e.event} <span className="font-bold">{e.count}</span>
+            </span>
+          ))}
+        </div>
+      ) : (
+        <p className="text-xs text-slate-400 mb-4">No activity events recorded yet.</p>
+      )}
+
+      {recent.length > 0 ? (
+        <div className="overflow-x-auto">
+          <table className="w-full text-left text-sm">
+            <thead>
+              <tr className="border-b border-slate-200 text-xs text-slate-500">
+                <th className="py-2 pr-3 font-semibold">Event</th>
+                <th className="py-2 pr-3 font-semibold">Detail</th>
+                <th className="py-2 pr-3 font-semibold">User</th>
+                <th className="py-2 font-semibold">Time</th>
+              </tr>
+            </thead>
+            <tbody>
+              {recent.map((e, i) => (
+                <tr key={i} className="border-b border-slate-100">
+                  <td className="py-2 pr-3 font-medium text-slate-800">{e.event}</td>
+                  <td className="py-2 pr-3 text-slate-500">{e.detail || "—"}</td>
+                  <td className="py-2 pr-3 text-slate-500">{e.user_id ? e.user_id.slice(0, 12) : (e.ip_hash || "anonymous")}</td>
+                  <td className="py-2 text-slate-400">{new Date(e.created_at).toLocaleString()}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      ) : null}
     </div>
   );
 }

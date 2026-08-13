@@ -3,11 +3,13 @@ import { NextRequest, NextResponse } from "next/server";
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    const { event, path, referrer, tool } = body as {
+    const { event, path, referrer, tool, userId, detail } = body as {
       event: string;
       path?: string;
       referrer?: string;
       tool?: string;
+      userId?: string;
+      detail?: string;
     };
 
     // Simple Postgres-backed analytics via research-project-store pattern
@@ -36,6 +38,8 @@ export async function POST(request: NextRequest) {
     // Add country/city columns if they don't exist (migration for existing tables)
     await pool.query(`ALTER TABLE wiserfiles_analytics ADD COLUMN IF NOT EXISTS country TEXT`);
     await pool.query(`ALTER TABLE wiserfiles_analytics ADD COLUMN IF NOT EXISTS city TEXT`);
+    await pool.query(`ALTER TABLE wiserfiles_analytics ADD COLUMN IF NOT EXISTS user_id TEXT`);
+    await pool.query(`ALTER TABLE wiserfiles_analytics ADD COLUMN IF NOT EXISTS detail TEXT`);
 
     const forwarded = request.headers.get("x-forwarded-for");
     const ip = forwarded?.split(",")[0]?.trim() || "unknown";
@@ -71,8 +75,8 @@ export async function POST(request: NextRequest) {
     }
 
     await pool.query(
-      `INSERT INTO wiserfiles_analytics (event, path, referrer, tool, user_agent, ip_hash, country, city)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
+      `INSERT INTO wiserfiles_analytics (event, path, referrer, tool, user_agent, ip_hash, country, city, user_id, detail)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)`,
       [
         event,
         path || null,
@@ -82,6 +86,8 @@ export async function POST(request: NextRequest) {
         ipHash,
         country,
         city,
+        userId || null,
+        detail || null,
       ]
     );
 
