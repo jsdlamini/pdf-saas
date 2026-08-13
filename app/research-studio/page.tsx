@@ -1973,6 +1973,28 @@ export default function ResearchStudioPage() {
 
     async function hydrateFromServer() {
       try {
+        // Auto-migrate guest projects from localStorage to the server on sign-in
+        if (typeof window !== "undefined") {
+          try {
+            const raw = localStorage.getItem("wiserfiles-guest-projects");
+            if (raw) {
+              const guestProjects = (JSON.parse(raw) as SavedProjectData[]).filter(
+                (p) => p.id && p.name.trim() && p.entries.length
+              );
+              for (const project of guestProjects) {
+                try {
+                  await upsertProjectSnapshotToServer(project);
+                } catch {
+                  // skip individual failures, continue migrating the rest
+                }
+              }
+              localStorage.removeItem("wiserfiles-guest-projects");
+            }
+          } catch {
+            // ignore malformed guest storage
+          }
+        }
+
         const projects = await fetchProjectsFromServer();
 
         if (cancelled) return;
@@ -3765,7 +3787,7 @@ export default function ResearchStudioPage() {
                 onClick={() => setRightPaneCollapsed(!rightPaneCollapsed)}
                 className="studio-btn studio-btn-secondary"
               >
-                {rightPaneCollapsed ? "Preview" : "Hide"}
+                {rightPaneCollapsed ? (isCodeMode ? "Output" : "Preview") : "Hide"}
               </button>
             </>
           ) : null}
@@ -3923,7 +3945,7 @@ export default function ResearchStudioPage() {
           },
           {
             label: "View", key: "view", items: [
-              { label: rightPaneCollapsed ? "Show PDF Preview" : "Hide PDF Preview", action: () => { setOpenMenu(""); setRightPaneCollapsed(!rightPaneCollapsed); } },
+              { label: rightPaneCollapsed ? (isCodeMode ? "Show Output" : "Show PDF Preview") : (isCodeMode ? "Hide Output" : "Hide PDF Preview"), action: () => { setOpenMenu(""); setRightPaneCollapsed(!rightPaneCollapsed); } },
               { label: leftPaneCollapsed ? "Show File Tree" : "Hide File Tree", action: () => { setOpenMenu(""); setLeftPaneCollapsed(!leftPaneCollapsed); } },
               "-",
               { label: "Keyboard Shortcuts", action: () => { setOpenMenu(""); setShowShortcuts(!showShortcuts); } },
@@ -4506,12 +4528,12 @@ export default function ResearchStudioPage() {
               <svg viewBox="0 0 20 20" style={{ width: 14, height: 14 }} fill="none" stroke="currentColor" strokeWidth="2">
                 <path d="M13 4l-6 6 6 6" strokeLinecap="round" strokeLinejoin="round" />
               </svg>
-              Preview
+              {isCodeMode ? "Output" : "Preview"}
             </button>
           ) : (
             <>
               <div className="studio-preview-header">
-                <span className="studio-preview-title">PDF Preview</span>
+                <span className="studio-preview-title">{isCodeMode ? "Output" : "PDF Preview"}</span>
                 <div style={{ display: "flex", gap: 4 }}>
                   {compiledPdfUrl ? (
                     <a href={compiledPdfUrl} download={compiledPdfFileName} className="studio-btn studio-btn-ghost" style={{ height: 24, fontSize: 10, padding: "0 6px", textDecoration: "none" }}>
