@@ -2306,7 +2306,7 @@ export default function ResearchStudioPage() {
         <div style="text-align:left;display:flex;flex-direction:column;gap:12px">
           <div>
             <label style="font-size:13px;font-weight:600;color:#e2e8f0;display:block;margin-bottom:4px">Project Name</label>
-            <input id="swal-project-name" class="swal2-input" placeholder="My Research Project" style="background:#0f172a;color:#e2e8f0;border-color:#334155;width:100%;max-width:100%;min-width:0;box-sizing:border-box">
+            <input id="swal-project-name" class="swal2-input" placeholder="My Research Project" style="background:#0f172a;color:#e2e8f0;border-color:#334155;width:calc(100% - 24px);max-width:100%;min-width:0;box-sizing:border-box;margin-left:0;margin-right:24px;text-align:left">
           </div>
           <div>
             <label style="font-size:13px;font-weight:600;color:#e2e8f0;display:block;margin-bottom:4px">Project Type</label>
@@ -2324,7 +2324,7 @@ export default function ResearchStudioPage() {
           </div>
           <div id="swal-template-group" style="display:flex;flex-direction:column;gap:6px">
             <label style="font-size:13px;font-weight:600;color:#e2e8f0;display:block">Start from a LaTeX template</label>
-            <select id="swal-template-select" class="swal2-input" style="background:#0f172a;color:#e2e8f0;border-color:#334155;width:100%">
+            <select id="swal-template-select" class="swal2-input" style="background:#0f172a;color:#e2e8f0;border-color:#334155;width:calc(100% - 24px);margin-left:0;margin-right:24px;text-align:left">
               <option value="">Blank project (no template)</option>
               ${templateOptionsHtml}
             </select>
