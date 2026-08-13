@@ -436,6 +436,235 @@ int main() {
       { path: "output/", kind: "folder", content: "" },
     ],
   },
+  {
+    slug: "python-package",
+    name: "Python Package",
+    description: "A proper Python package with src layout, tests, and requirements.",
+    entries: [
+      {
+        path: "src/mypackage/__init__.py",
+        kind: "file",
+        content: `"""mypackage - a Python package."""
+
+__version__ = "0.1.0"
+`,
+      },
+      {
+        path: "src/mypackage/main.py",
+        kind: "file",
+        content: `"""Main entry point."""
+
+
+def main():
+    print("Hello from mypackage!")
+
+
+if __name__ == "__main__":
+    main()
+`,
+      },
+      {
+        path: "tests/test_main.py",
+        kind: "file",
+        content: `"""Tests for mypackage."""
+
+
+def test_main():
+    assert True
+`,
+      },
+      { path: "requirements.txt", kind: "file", content: "" },
+      { path: "README.md", kind: "file", content: "# mypackage\n" },
+    ],
+  },
+  {
+    slug: "python-data-science",
+    name: "Python Data Science",
+    description: "Notebooks, data pipeline, and analysis structure for data work.",
+    entries: [
+      {
+        path: "notebooks/exploration.ipynb",
+        kind: "file",
+        content: `{
+ "cells": [],
+ "metadata": {},
+ "nbformat": 4,
+ "nbformat_minor": 5
+}
+`,
+      },
+      {
+        path: "src/data_processing.py",
+        kind: "file",
+        content: `"""Data processing utilities."""
+
+
+def clean(df):
+    return df
+`,
+      },
+      {
+        path: "src/analysis.py",
+        kind: "file",
+        content: `"""Analysis module."""
+
+
+def run():
+    pass
+`,
+      },
+      { path: "data/", kind: "folder", content: "" },
+      { path: "output/", kind: "folder", content: "" },
+      { path: "requirements.txt", kind: "file", content: "pandas\nnumpy\nmatplotlib\n" },
+    ],
+  },
+  {
+    slug: "python-flask",
+    name: "Python Flask App",
+    description: "Flask web application with templates and static folders.",
+    entries: [
+      {
+        path: "app.py",
+        kind: "file",
+        content: `from flask import Flask, render_template
+
+app = Flask(__name__)
+
+
+@app.route("/")
+def index():
+    return render_template("index.html")
+
+
+if __name__ == "__main__":
+    app.run(debug=True)
+`,
+      },
+      {
+        path: "templates/index.html",
+        kind: "file",
+        content: `<!doctype html>
+<html>
+  <head><title>Flask App</title></head>
+  <body><h1>Hello, Flask!</h1></body>
+</html>
+`,
+      },
+      { path: "static/css/style.css", kind: "file", content: "" },
+      { path: "requirements.txt", kind: "file", content: "flask\n" },
+    ],
+  },
+  {
+    slug: "cpp-cmake",
+    name: "C++ CMake Project",
+    description: "C++ project with CMake build system, src and include layout.",
+    entries: [
+      {
+        path: "src/main.cpp",
+        kind: "file",
+        content: `#include <iostream>
+
+int main() {
+    std::cout << "Hello, CMake!" << std::endl;
+    return 0;
+}
+`,
+      },
+      {
+        path: "include/app/app.hpp",
+        kind: "file",
+        content: `#pragma once
+
+namespace app {
+void run();
+}
+`,
+      },
+      {
+        path: "src/app.cpp",
+        kind: "file",
+        content: `#include "app/app.hpp"
+#include <iostream>
+
+namespace app {
+void run() {
+    std::cout << "Running..." << std::endl;
+}
+}
+`,
+      },
+      {
+        path: "CMakeLists.txt",
+        kind: "file",
+        content: `cmake_minimum_required(VERSION 3.16)
+project(myapp CXX)
+
+set(CMAKE_CXX_STANDARD 17)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
+
+add_executable(myapp src/main.cpp src/app.cpp)
+target_include_directories(myapp PRIVATE include)
+`,
+      },
+      { path: "build/", kind: "folder", content: "" },
+      { path: "README.md", kind: "file", content: "# myapp\n" },
+    ],
+  },
+  {
+    slug: "cpp-library",
+    name: "C++ Library",
+    description: "Header-only C++ library with tests and examples.",
+    entries: [
+      {
+        path: "include/mylib/mylib.hpp",
+        kind: "file",
+        content: `#pragma once
+
+namespace mylib {
+inline int add(int a, int b) {
+    return a + b;
+}
+}
+`,
+      },
+      {
+        path: "tests/test_mylib.cpp",
+        kind: "file",
+        content: `#include "mylib/mylib.hpp"
+#include <cassert>
+
+int main() {
+    assert(mylib::add(2, 3) == 5);
+    return 0;
+}
+`,
+      },
+      {
+        path: "examples/basic.cpp",
+        kind: "file",
+        content: `#include "mylib/mylib.hpp"
+#include <iostream>
+
+int main() {
+    std::cout << mylib::add(2, 3) << std::endl;
+    return 0;
+}
+`,
+      },
+      { path: "CMakeLists.txt", kind: "file", content: `cmake_minimum_required(VERSION 3.16)
+project(mylib CXX)
+
+add_library(mylib INTERFACE)
+target_include_directories(mylib INTERFACE include)
+
+enable_testing()
+add_executable(test_mylib tests/test_mylib.cpp)
+target_link_libraries(test_mylib PRIVATE mylib)
+add_test(NAME mylib COMMAND test_mylib)
+` },
+      { path: "README.md", kind: "file", content: "# mylib\n" },
+    ],
+  },
 ];
 
 export function getTemplateBySlug(slug: string) {

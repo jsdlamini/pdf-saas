@@ -2194,7 +2194,7 @@ export default function ResearchStudioPage() {
     const name = template.name;
     const createdAt = new Date().toISOString();
     const defaultPath = template.entries.find((e) => e.kind === "file")?.path || "main.tex";
-    const detectedMode: EditorMode = template.slug === "python-script" ? "python" : template.slug === "cpp-program" ? "cpp" : "latex";
+    const detectedMode: EditorMode = template.slug.startsWith("python-") ? "python" : template.slug.startsWith("cpp-") ? "cpp" : "latex";
     const snapshot: SavedProjectData = {
       id: nextProjectId,
       name,
@@ -2293,11 +2293,12 @@ export default function ResearchStudioPage() {
       return;
     }
 
-    // Build LaTeX template options for the dialog
-    const latexTemplates = RESEARCH_TEMPLATES.filter((t) => t.slug !== "python-script" && t.slug !== "cpp-program");
-    const templateOptionsHtml = latexTemplates
-      .map((t) => `<option value="${t.slug}">${t.name}</option>`)
-      .join("");
+    // Build template options for each type
+    const latexTemplates = RESEARCH_TEMPLATES.filter((t) => !t.slug.startsWith("python-") && !t.slug.startsWith("cpp-"));
+    const pythonTemplates = RESEARCH_TEMPLATES.filter((t) => t.slug.startsWith("python-"));
+    const cppTemplates = RESEARCH_TEMPLATES.filter((t) => t.slug.startsWith("cpp-"));
+    const opts = (list: ResearchTemplate[]) =>
+      list.map((t) => `<option value="${t.slug}">${t.name}</option>`).join("");
 
     // Show dialog with name + type + template selector
     const result = await Swal.fire({
@@ -2312,21 +2313,29 @@ export default function ResearchStudioPage() {
             <label style="font-size:13px;font-weight:600;color:#e2e8f0;display:block;margin-bottom:4px">Project Type</label>
             <div style="display:flex;gap:8px;flex-wrap:wrap">
               <label style="flex:1;padding:8px 4px;border:1px solid #818cf8;border-radius:6px;text-align:center;cursor:pointer;color:#e2e8f0;font-size:12px">
-                <input type="radio" name="project-type" value="latex" checked style="margin-right:4px" onchange="document.getElementById('swal-template-group').style.display = this.checked ? 'flex' : 'none'"> LaTeX
+                <input type="radio" name="project-type" value="latex" checked style="margin-right:4px" onchange="this.ownerDocument.getElementById('swal-tpl-latex').style.display='';this.ownerDocument.getElementById('swal-tpl-python').style.display='none';this.ownerDocument.getElementById('swal-tpl-cpp').style.display='none'"> LaTeX
               </label>
               <label style="flex:1;padding:8px 4px;border:1px solid #4ade80;border-radius:6px;text-align:center;cursor:pointer;color:#e2e8f0;font-size:12px">
-                <input type="radio" name="project-type" value="python" style="margin-right:4px" onchange="document.getElementById('swal-template-group').style.display = 'none'"> Python
+                <input type="radio" name="project-type" value="python" style="margin-right:4px" onchange="this.ownerDocument.getElementById('swal-tpl-latex').style.display='none';this.ownerDocument.getElementById('swal-tpl-python').style.display='';this.ownerDocument.getElementById('swal-tpl-cpp').style.display='none'"> Python
               </label>
               <label style="flex:1;padding:8px 4px;border:1px solid #f97316;border-radius:6px;text-align:center;cursor:pointer;color:#e2e8f0;font-size:12px">
-                <input type="radio" name="project-type" value="cpp" style="margin-right:4px" onchange="document.getElementById('swal-template-group').style.display = 'none'"> C++
+                <input type="radio" name="project-type" value="cpp" style="margin-right:4px" onchange="this.ownerDocument.getElementById('swal-tpl-latex').style.display='none';this.ownerDocument.getElementById('swal-tpl-python').style.display='none';this.ownerDocument.getElementById('swal-tpl-cpp').style.display=''"> C++
               </label>
             </div>
           </div>
-          <div id="swal-template-group" style="display:flex;flex-direction:column;gap:6px">
-            <label style="font-size:13px;font-weight:600;color:#e2e8f0;display:block">Start from a LaTeX template</label>
-            <select id="swal-template-select" class="swal2-input" style="background:#0f172a;color:#e2e8f0;border-color:#334155;width:calc(100% - 24px);margin-left:0;margin-right:24px;text-align:left">
+          <div style="display:flex;flex-direction:column;gap:6px">
+            <label style="font-size:13px;font-weight:600;color:#e2e8f0;display:block">Start from a template</label>
+            <select id="swal-tpl-latex" class="swal2-input" style="background:#0f172a;color:#e2e8f0;border-color:#334155;width:calc(100% - 24px);margin-left:0;margin-right:24px;text-align:left">
               <option value="">Blank project (no template)</option>
-              ${templateOptionsHtml}
+              ${opts(latexTemplates)}
+            </select>
+            <select id="swal-tpl-python" class="swal2-input" style="display:none;background:#0f172a;color:#e2e8f0;border-color:#334155;width:calc(100% - 24px);margin-left:0;margin-right:24px;text-align:left">
+              <option value="">Blank project (no template)</option>
+              ${opts(pythonTemplates)}
+            </select>
+            <select id="swal-tpl-cpp" class="swal2-input" style="display:none;background:#0f172a;color:#e2e8f0;border-color:#334155;width:calc(100% - 24px);margin-left:0;margin-right:24px;text-align:left">
+              <option value="">Blank project (no template)</option>
+              ${opts(cppTemplates)}
             </select>
           </div>
         </div>
@@ -2375,7 +2384,8 @@ export default function ResearchStudioPage() {
         }
         const typeEl = document.querySelector('input[name="project-type"]:checked') as HTMLInputElement | null;
         const type = (typeEl?.value || "latex") as EditorMode;
-        const templateSlug = (document.getElementById("swal-template-select") as HTMLSelectElement)?.value || "";
+        const selectId = type === "python" ? "swal-tpl-python" : type === "cpp" ? "swal-tpl-cpp" : "swal-tpl-latex";
+        const templateSlug = (document.getElementById(selectId) as HTMLSelectElement)?.value || "";
         return { name, type, templateSlug };
       },
     });
@@ -2388,7 +2398,9 @@ export default function ResearchStudioPage() {
     const freshEntries = template
       ? template.entries.map((e) => (e.kind === "file" ? { ...e, content: e.content.replace(/\{today\}/g, getTodayString()) } : e))
       : createFreshProjectEntries(name, type);
-    const defaultPath = type === "python" ? "main.py" : type === "cpp" ? "main.cpp" : (template?.entries.find((e) => e.kind === "file")?.path || "main.tex");
+    const templateMainFile = template?.entries.find((e) => e.kind === "file")?.path;
+    const defaultPath = templateMainFile
+      || (type === "python" ? "main.py" : type === "cpp" ? "main.cpp" : "main.tex");
     const createdAt = new Date().toISOString();
     const snapshot: SavedProjectData = {
       id: nextProjectId,
@@ -3418,7 +3430,7 @@ export default function ResearchStudioPage() {
               <button
                 type="button"
                 onClick={async () => {
-                  const templateOptions = RESEARCH_TEMPLATES.filter((t) => t.slug !== "python-script" && t.slug !== "cpp-program").reduce((acc, t) => {
+                  const templateOptions = RESEARCH_TEMPLATES.filter((t) => !t.slug.startsWith("python-") && !t.slug.startsWith("cpp-")).reduce((acc, t) => {
                     acc[t.slug] = t.name;
                     return acc;
                   }, {} as Record<string, string>);
@@ -3674,7 +3686,7 @@ export default function ResearchStudioPage() {
         <div style={{ marginTop: 32 }}>
           <h3 style={{ fontSize: 14, fontWeight: 600, color: "var(--text-primary, #e2e8f0)", marginBottom: 12 }}>Start from a LaTeX template</h3>
           <div className="studio-template-grid">
-            {RESEARCH_TEMPLATES.filter((t) => t.slug !== "python-script" && t.slug !== "cpp-program").map((template) => (
+            {RESEARCH_TEMPLATES.filter((t) => !t.slug.startsWith("python-") && !t.slug.startsWith("cpp-")).map((template) => (
               <div
                 key={template.slug}
                 className="studio-template-card"
