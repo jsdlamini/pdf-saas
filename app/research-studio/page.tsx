@@ -494,6 +494,7 @@ async function projectEntryActionSheet(entry: ProjectEntry) {
     denyButtonColor: "#2563eb",
     cancelButtonColor: "#dc2626",
     background: "#ffffff",
+    position: "top",
   });
 
   return result;
@@ -2250,6 +2251,19 @@ export default function ResearchStudioPage() {
   function createProjectFromTemplate(template: ResearchTemplate) {
     if (!userId && savedProjects.length >= GUEST_PROJECT_LIMIT) {
       setCompileNotice("Guest limit reached: sign in to create more than 5 projects.");
+      void Swal.fire({
+        title: "Project limit reached",
+        html: `Guest users can save up to ${GUEST_PROJECT_LIMIT} projects.
+          <a href="#" onclick="window.Clerk && window.Clerk.openSignIn && window.Clerk.openSignIn(); return false;" style="color:#0f766e;font-weight:600">Sign in</a>
+          or
+          <a href="#" onclick="window.Clerk && window.Clerk.openSignUp && window.Clerk.openSignUp(); return false;" style="color:#0f766e;font-weight:600">create an account</a>
+          to continue creating projects.`,
+        icon: "info",
+        confirmButtonText: "OK",
+        confirmButtonColor: "#0f766e",
+        background: "#ffffff",
+        position: "top",
+      });
       return;
     }
     const nextProjectId = makeProjectId();
@@ -2346,11 +2360,16 @@ export default function ResearchStudioPage() {
       setCompileNotice("Guest limit reached: sign in to create more than 5 projects.");
       await Swal.fire({
         title: "Project limit reached",
-        text: "Guest users can save up to 5 projects. Sign in or create an account to continue creating projects.",
+        html: `Guest users can save up to ${GUEST_PROJECT_LIMIT} projects.
+          <a href="#" onclick="window.Clerk && window.Clerk.openSignIn && window.Clerk.openSignIn(); return false;" style="color:#0f766e;font-weight:600">Sign in</a>
+          or
+          <a href="#" onclick="window.Clerk && window.Clerk.openSignUp && window.Clerk.openSignUp(); return false;" style="color:#0f766e;font-weight:600">create an account</a>
+          to continue creating projects.`,
         icon: "info",
         confirmButtonText: "OK",
         confirmButtonColor: "#0f766e",
         background: "#ffffff",
+        position: "top",
       });
       return;
     }
