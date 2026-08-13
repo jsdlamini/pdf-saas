@@ -2352,10 +2352,3 @@ html[data-theme="light"] .studio-dark ::-webkit-scrollbar-thumb {
   font-weight: 500;
 }
 
-/* ── Onboarding modal ───── */
-.studio-onboarding-panel {
-  width: min(92vw, 440px);
-}
-.studio-onboarding-body {
-  padding: 16px;
-}

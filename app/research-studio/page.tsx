@@ -1106,7 +1106,6 @@ export default function ResearchStudioPage() {
   const [paletteQuery, setPaletteQuery] = useState("");
   const [paletteIndex, setPaletteIndex] = useState(0);
   const [targetJournal, setTargetJournal] = useState("");
-  const [showOnboarding, setShowOnboarding] = useState(false);
 
   // (terminal removed)
 
@@ -1472,16 +1471,6 @@ export default function ResearchStudioPage() {
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
   }, []);
-
-  // First-run onboarding modal (shown once, when the projects board is empty)
-  useEffect(() => {
-    if (!authLoaded || workspaceScreen !== "projects") return;
-    try {
-      if (localStorage.getItem("wiserfiles-onboarded")) return;
-    } catch {}
-    if (savedProjects.length > 0) return;
-    setShowOnboarding(true);
-  }, [authLoaded, workspaceScreen, savedProjects.length]);
 
   // Auto-save debounce
   const triggerAutoSave = useCallback(() => {
@@ -3946,41 +3935,6 @@ export default function ResearchStudioPage() {
   if (workspaceScreen === "projects") {
     return (
       <main className="studio-dark studio-shell">
-        {showOnboarding ? (
-          <div className="studio-history-overlay" onClick={() => { setShowOnboarding(false); try { localStorage.setItem("wiserfiles-onboarded", "1"); } catch {}; }}>
-            <div className="studio-history-panel studio-onboarding-panel" onClick={(e) => e.stopPropagation()}>
-              <div className="studio-history-header">
-                <span>Welcome to Research Studio</span>
-                <button type="button" onClick={() => { setShowOnboarding(false); try { localStorage.setItem("wiserfiles-onboarded", "1"); } catch {}; }} className="studio-terminal-close-btn">×</button>
-              </div>
-              <div className="studio-onboarding-body">
-                <p style={{ fontSize: 13, color: "var(--text-secondary, #94a3b8)", margin: "0 0 12px" }}>Write papers, run code, and collaborate — all in one workspace.</p>
-                {[
-                  ["📝", "LaTeX + Python + C++", "One editor for papers and reproducible analysis."],
-                  ["🤖", "AI writing & review", "Summarize, rewrite, and get peer-review feedback."],
-                  ["👥", "Live collaboration", "Invite others and see cursors + edits in real time."],
-                  ["📊", "Computed figures", "Generate matplotlib plots and embed them in your paper."],
-                ].map(([icon, title, desc]) => (
-                  <div key={title} style={{ display: "flex", gap: 10, marginBottom: 10 }}>
-                    <span style={{ fontSize: 18 }}>{icon}</span>
-                    <div>
-                      <div style={{ fontSize: 13, fontWeight: 600, color: "var(--text-primary, #e2e8f0)" }}>{title}</div>
-                      <div style={{ fontSize: 12, color: "var(--text-muted, #64748b)" }}>{desc}</div>
-                    </div>
-                  </div>
-                ))}
-                <button
-                  type="button"
-                  className="studio-btn studio-btn-primary"
-                  style={{ width: "100%", marginTop: 4 }}
-                  onClick={() => { setShowOnboarding(false); try { localStorage.setItem("wiserfiles-onboarded", "1"); } catch {}; void createNewProject(); }}
-                >
-                  Create your first project
-                </button>
-              </div>
-            </div>
-          </div>
-        ) : null}
         <div className="studio-dashboard studio-scrollbar" style={{ overflowY: "auto" }}>
         {/* Shared project banner */}
         {shareLoading ? (
@@ -4276,23 +4230,19 @@ export default function ResearchStudioPage() {
         <div style={{ marginTop: 32 }}>
           <h3 style={{ fontSize: 14, fontWeight: 600, color: "var(--text-primary, #e2e8f0)", marginBottom: 12 }}>Start from a LaTeX template</h3>
           <div className="studio-template-grid">
-            {RESEARCH_TEMPLATES.filter((t) => !t.slug.startsWith("python-") && !t.slug.startsWith("cpp-")).map((template) => {
-              const accent = template.slug === "ieee" ? "#60a5fa" : template.slug === "acm" ? "#f472b6" : template.slug === "neurips" ? "#a78bfa" : template.slug === "lncs" ? "#fbbf24" : template.slug === "elsevier" ? "#f97316" : "#4ade80";
-              return (
-                <div
-                  key={template.slug}
-                  className="studio-template-card"
-                  onClick={() => createProjectFromTemplate(template)}
-                  role="button"
-                  tabIndex={0}
-                  onKeyDown={(e) => { if (e.key === "Enter") createProjectFromTemplate(template); }}
-                  style={{ borderTop: `3px solid ${accent}` }}
-                >
-                  <h4>{template.name}</h4>
-                  <p>{template.description}</p>
-                </div>
-              );
-            })}
+            {RESEARCH_TEMPLATES.filter((t) => !t.slug.startsWith("python-") && !t.slug.startsWith("cpp-")).map((template) => (
+              <div
+                key={template.slug}
+                className="studio-template-card"
+                onClick={() => createProjectFromTemplate(template)}
+                role="button"
+                tabIndex={0}
+                onKeyDown={(e) => { if (e.key === "Enter") createProjectFromTemplate(template); }}
+              >
+                <h4>{template.name}</h4>
+                <p>{template.description}</p>
+              </div>
+            ))}
           </div>
         </div>
         </div>
