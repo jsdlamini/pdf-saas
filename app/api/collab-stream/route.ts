@@ -19,6 +19,16 @@ export async function GET(request: Request) {
   await client.query(`LISTEN ${channel}`);
 
   const encoder = new TextEncoder();
+  let released = false;
+
+  const release = () => {
+    if (released) return;
+    released = true;
+    try {
+      client.release();
+    } catch { /* ignore */ }
+    void pool.end().catch(() => {});
+  };
 
   const stream = new ReadableStream({
     start(controller) {
@@ -28,30 +38,21 @@ export async function GET(request: Request) {
 
       const onNotification = (msg: { payload?: string }) => {
         try {
-          const payload = msg.payload || "{}";
-          controller.enqueue(encoder.encode(`data: ${payload}\n\n`));
+          controller.enqueue(encoder.encode(`data: ${msg.payload || "{}"}\n\n`));
         } catch { /* closed */ }
       };
 
       client.on("notification", onNotification);
 
-      const cleanup = () => {
+      request.signal.addEventListener("abort", () => {
         clearInterval(heartbeat);
         client.removeListener("notification", onNotification);
-        client.release();
-        void pool.end();
-      };
-
-      request.signal.addEventListener("abort", cleanup);
-      // Also clean up if the client disconnects (stream cancel)
-      controller.close = () => {
-        cleanup();
-        (controller as { close: () => void }).close();
-      };
+        release();
+        try { controller.close(); } catch { /* already closed */ }
+      });
     },
     cancel() {
-      client.release();
-      void pool.end();
+      release();
     },
   });
 
