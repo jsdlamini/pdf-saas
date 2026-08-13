@@ -1388,8 +1388,9 @@ export default function ResearchStudioPage() {
 
   useEffect(() => {
     if (!activeProjectId) return;
-    const interval = setInterval(async () => {
-      if (collabPostTimerRef.current) return; // skip while a local POST is pending
+
+    const pullRemote = async () => {
+      if (collabPostTimerRef.current) return;
       try {
         const res = await fetch(`/api/collab-sync?projectId=${encodeURIComponent(activeProjectId)}&filePath=${encodeURIComponent(selectedPath)}`);
         const data = (await res.json()) as { content?: string | null; revision?: number };
@@ -1402,9 +1403,29 @@ export default function ResearchStudioPage() {
       } catch {
         // sync is best-effort
       }
-    }, 2000);
-    return () => clearInterval(interval);
-  }, [userId, activeProjectId]);
+    };
+
+    // Real-time push via Server-Sent Events (instant updates)
+    let es: EventSource | null = null;
+    try {
+      es = new EventSource(`/api/collab-stream?projectId=${encodeURIComponent(activeProjectId)}`);
+      es.onmessage = () => {
+        void pullRemote();
+      };
+    } catch {
+      es = null;
+    }
+
+    // Polling fallback (resilience if SSE is blocked)
+    const interval = setInterval(() => {
+      void pullRemote();
+    }, 5000);
+
+    return () => {
+      clearInterval(interval);
+      es?.close();
+    };
+  }, [userId, activeProjectId, selectedPath]);
 
   // Document outline: extract LaTeX section headings for the structure sidebar.
   const documentOutline = useMemo(() => {

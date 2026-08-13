@@ -82,6 +82,16 @@ export async function POST(request: Request) {
      DO UPDATE SET content = EXCLUDED.content, revision = EXCLUDED.revision, updated_at = NOW()`,
     [projectId, filePath, content, nextRevision]
   );
+
+  // Notify connected collaborators (SSE) of the new revision
+  try {
+    await pool.query(
+      `SELECT pg_notify($1, $2)`,
+      [`collab_${projectId}`, JSON.stringify({ filePath, revision: nextRevision })]
+    );
+  } catch {
+    // notify is best-effort
+  }
   await pool.end();
 
   return Response.json({ content, revision: nextRevision });
