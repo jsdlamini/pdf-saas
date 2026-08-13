@@ -1,4 +1,3 @@
-import { auth } from "@clerk/nextjs/server";
 import { Pool } from "pg";
 
 export const runtime = "nodejs";
@@ -21,9 +20,6 @@ async function ensureSchema(pool: Pool) {
 
 // GET the shared document content + revision for a project
 export async function GET(request: Request) {
-  const { userId } = await auth();
-  if (!userId) return jsonError("Sign in required.", 401);
-
   const url = new URL(request.url);
   const projectId = url.searchParams.get("projectId");
   if (!projectId) return jsonError("Missing projectId", 400);
@@ -45,9 +41,6 @@ export async function GET(request: Request) {
 
 // POST my document content with optimistic concurrency (baseRevision)
 export async function POST(request: Request) {
-  const { userId } = await auth();
-  if (!userId) return jsonError("Sign in required.", 401);
-
   const body = await request.json().catch(() => null) as {
     projectId?: string;
     content?: string;

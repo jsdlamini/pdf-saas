@@ -1305,7 +1305,7 @@ export default function ResearchStudioPage() {
   const collabPostTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
-    if (!userId || !activeProjectId || applyingRemoteRef.current) return;
+    if (!activeProjectId || applyingRemoteRef.current) return;
     if (collabPostTimerRef.current) clearTimeout(collabPostTimerRef.current);
     collabPostTimerRef.current = setTimeout(async () => {
       collabPostTimerRef.current = null;
@@ -1332,7 +1332,7 @@ export default function ResearchStudioPage() {
   }, [activeSource, userId, activeProjectId]);
 
   useEffect(() => {
-    if (!userId || !activeProjectId) return;
+    if (!activeProjectId) return;
     const interval = setInterval(async () => {
       if (collabPostTimerRef.current) return; // skip while a local POST is pending
       try {
