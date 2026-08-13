@@ -1370,6 +1370,15 @@ body {
   max-width: 100% !important;
   min-width: 0 !important;
   box-sizing: border-box !important;
+  width: 100% !important;
+  margin-left: 0 !important;
+  margin-right: 0 !important;
+  text-align: left !important;
+}
+
+/* Left-align dialog content */
+.studio-dark .swal2-html-container {
+  text-align: left !important;
 }
 
 /* Prevent horizontal overflow inside dialogs */
