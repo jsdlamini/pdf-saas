@@ -1001,6 +1001,8 @@ export default function ToolWorkbench({ tool }: WorkbenchProps) {
   const [thumbnailLoading, setThumbnailLoading] = useState(false);
   const [draggedPage, setDraggedPage] = useState<number | null>(null);
   const [dragOverPage, setDragOverPage] = useState<number | null>(null);
+  const [draggedFileIndex, setDraggedFileIndex] = useState<number | null>(null);
+  const [dragOverFileIndex, setDragOverFileIndex] = useState<number | null>(null);
   const [outputPreview, setOutputPreview] = useState<OutputPreview | null>(null);
   const [previewText, setPreviewText] = useState<string>("");
   const [downloadingOutput, setDownloadingOutput] = useState(false);
@@ -1155,6 +1157,13 @@ export default function ToolWorkbench({ tool }: WorkbenchProps) {
   }, [compressionOptions, files, tool.slug]);
 
   const applicableRecipes = useMemo(() => getRecipesForTool(tool.slug), [tool.slug]);
+
+  // Thumbnail previews for image-to-pdf files (for reordering).
+  const imageThumbUrls = useMemo(() => {
+    const urls = files.map((file) => URL.createObjectURL(file));
+    return urls;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [files.map((f) => `${f.name}-${f.size}`).join("|")]);
   // Only activate workflow mode when the user explicitly started one via ?recipe= URL param.
   // Never auto-select a recipe — individual tools must always start fresh.
   const selectedRecipe = useMemo(
@@ -2507,6 +2516,18 @@ export default function ToolWorkbench({ tool }: WorkbenchProps) {
       const [moved] = next.splice(fromIndex, 1);
       next.splice(toIndex, 0, moved);
       setRanges(compactPageSequence(next));
+      return next;
+    });
+  }
+
+  function moveFile(fromIndex: number, toIndex: number) {
+    setFiles((current) => {
+      if (fromIndex < 0 || toIndex < 0 || fromIndex >= current.length || toIndex >= current.length || fromIndex === toIndex) {
+        return current;
+      }
+      const next = [...current];
+      const [moved] = next.splice(fromIndex, 1);
+      next.splice(toIndex, 0, moved);
       return next;
     });
   }
@@ -4495,6 +4516,67 @@ export default function ToolWorkbench({ tool }: WorkbenchProps) {
           <p className="field-help">
             Images always keep aspect ratio. Use A4 for print-ready pages, or original size to preserve exact image dimensions.
           </p>
+
+          {files.length > 1 ? (
+            <div className="space-y-2">
+              <div className="flex items-center justify-between">
+                <p className="text-xs font-semibold uppercase tracking-wide text-slate-600">Image order</p>
+                <p className="text-[10px] text-slate-500">Drag or use arrows to reorder</p>
+              </div>
+              <div className="flex flex-col gap-1.5">
+                {files.map((file, index) => {
+                  const isDragOver = dragOverFileIndex === index && draggedFileIndex !== index;
+                  return (
+                    <div
+                      key={`${file.name}-${file.size}-${index}`}
+                      draggable
+                      onDragStart={() => { setDraggedFileIndex(index); setDragOverFileIndex(null); }}
+                      onDragOver={(event) => {
+                        event.preventDefault();
+                        if (draggedFileIndex !== null && draggedFileIndex !== index) setDragOverFileIndex(index);
+                      }}
+                      onDragLeave={() => { if (dragOverFileIndex === index) setDragOverFileIndex(null); }}
+                      onDrop={(event) => {
+                        event.preventDefault();
+                        if (draggedFileIndex !== null && draggedFileIndex !== index) {
+                          moveFile(draggedFileIndex, index);
+                        }
+                        setDraggedFileIndex(null);
+                        setDragOverFileIndex(null);
+                      }}
+                      onDragEnd={() => { setDraggedFileIndex(null); setDragOverFileIndex(null); }}
+                      className={`flex items-center gap-2 rounded-lg border bg-white p-1.5 transition ${isDragOver ? "border-cyan-500 ring-2 ring-cyan-200" : "border-slate-200"}`}
+                    >
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img src={imageThumbUrls[index]} alt={file.name} className="h-10 w-10 rounded-md object-cover" />
+                      <span className="min-w-0 flex-1 truncate text-xs font-medium text-slate-700">{file.name}</span>
+                      <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-bold text-slate-600">#{index + 1}</span>
+                      <div className="flex flex-col">
+                        <button
+                          type="button"
+                          disabled={index === 0}
+                          onClick={() => moveFile(index, index - 1)}
+                          className="px-1 text-xs text-slate-500 hover:text-cyan-700 disabled:opacity-30"
+                          aria-label="Move up"
+                        >
+                          ▲
+                        </button>
+                        <button
+                          type="button"
+                          disabled={index === files.length - 1}
+                          onClick={() => moveFile(index, index + 1)}
+                          className="px-1 text-xs text-slate-500 hover:text-cyan-700 disabled:opacity-30"
+                          aria-label="Move down"
+                        >
+                          ▼
+                        </button>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          ) : null}
         </div>
       ) : null}
 
