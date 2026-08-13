@@ -3427,40 +3427,6 @@ export default function ResearchStudioPage() {
                 </svg>
                 New Project
               </button>
-              <button
-                type="button"
-                onClick={async () => {
-                  const templateOptions = RESEARCH_TEMPLATES.filter((t) => !t.slug.startsWith("python-") && !t.slug.startsWith("cpp-")).reduce((acc, t) => {
-                    acc[t.slug] = t.name;
-                    return acc;
-                  }, {} as Record<string, string>);
-                  const result = await Swal.fire({
-                    title: "New from Template",
-                    input: "select",
-                    inputOptions: templateOptions,
-                    inputPlaceholder: "Select a template",
-                    inputValue: Object.keys(templateOptions)[0] || "",
-                    showCancelButton: true,
-                    confirmButtonText: "Create",
-                    cancelButtonText: "Cancel",
-                    confirmButtonColor: "#4ade80",
-                    cancelButtonColor: "#334155",
-                    background: "#1e2130",
-                    customClass: { input: "swal-template-select" },
-                  });
-                  if (result.isConfirmed && result.value) {
-                    const template = getTemplateBySlug(result.value);
-                    if (template) createProjectFromTemplate(template);
-                  }
-                }}
-                className="studio-btn studio-btn-secondary"
-              >
-                <svg viewBox="0 0 20 20" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="2">
-                  <path d="M4 3h9l3 3v11H4V3z" strokeLinecap="round" strokeLinejoin="round" />
-                  <path d="M12 3v3h3" strokeLinecap="round" strokeLinejoin="round" />
-                </svg>
-                Template
-              </button>
               <input
                 ref={zipImportRef}
                 type="file"
