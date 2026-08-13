@@ -2741,6 +2741,30 @@ export default function ResearchStudioPage() {
   }
 
   async function compileProject() {
+    // Guest compile quota: allow 2 free compiles, then prompt sign-in.
+    if (!userId) {
+      const GUEST_COMPILE_LIMIT = 2;
+      let count = 0;
+      try {
+        count = parseInt(localStorage.getItem("wiserfiles-guest-compiles") || "0", 10) || 0;
+      } catch {}
+      if (count >= GUEST_COMPILE_LIMIT) {
+        await Swal.fire({
+          title: "Compile limit reached",
+          html: `You've used your ${GUEST_COMPILE_LIMIT} free compiles.
+            <a href="#" onclick="window.Clerk && window.Clerk.openSignIn && window.Clerk.openSignIn(); return false;" style="color:#0f766e;font-weight:600">Sign in</a>
+            for unlimited compiling.`,
+          icon: "info",
+          confirmButtonText: "OK",
+          confirmButtonColor: "#4ade80",
+          background: "#1a1d2b",
+          color: "#e2e8f0",
+          position: "top",
+        });
+        return;
+      }
+    }
+
     // Detect code mode from file extension (belt-and-suspenders — works even if editorMode state hasn't updated)
     const activeMode = activeEntry?.path?.endsWith(".py") ? "python"
       : activeEntry?.path?.endsWith(".cpp") ? "cpp"
@@ -2813,6 +2837,14 @@ export default function ResearchStudioPage() {
 
       const engine = response.headers.get("X-Latex-Engine") || "server engine";
       setCompileNotice(`Compiled ${rootPath} using ${engine}.`);
+
+      // Increment guest compile counter
+      if (!userId) {
+        try {
+          const count = parseInt(localStorage.getItem("wiserfiles-guest-compiles") || "0", 10) || 0;
+          localStorage.setItem("wiserfiles-guest-compiles", String(count + 1));
+        } catch {}
+      }
 
       // Try to fetch SyncTeX data
       try {

@@ -414,11 +414,13 @@ async function compileWithEngine(tempDir: string, rootFile: string, engine: Late
 
 export async function POST(request: Request) {
   const { userId } = await auth();
-  if (!userId) {
-    return jsonError("Sign in required.", 401);
-  }
-  if (!checkRateLimit(`latex-compile:${userId}`)) {
-    return jsonError("Rate limit exceeded. Try again shortly.", 429);
+  // Guests may compile a limited number of times (gated client-side too);
+  // rate-limit by user when signed in, otherwise by IP.
+  const forwarded = request.headers.get("x-forwarded-for");
+  const ip = forwarded?.split(",")[0]?.trim() || "anonymous";
+  const rateKey = userId ? `latex-compile:${userId}` : `latex-compile:guest:${ip}`;
+  if (!checkRateLimit(rateKey)) {
+    return jsonError("Compile limit reached. Sign in for unlimited compiling.", 429);
   }
 
   let payload: CompileRequestPayload;

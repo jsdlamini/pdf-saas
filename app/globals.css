@@ -1764,12 +1764,13 @@ body.swal2-shown {
 .studio-menubar {
   display: flex;
   align-items: center;
-  gap: 0;
+  gap: 2px;
   background: var(--bg-secondary, #131620);
   border-bottom: 1px solid var(--border-color, #334155);
-  padding: 0 8px;
-  height: 28px;
+  padding: 0 10px;
+  height: 34px;
   -webkit-app-region: no-drag;
+  font-family: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
 }
 .studio-menu-group {
   position: relative;
@@ -1778,12 +1779,15 @@ body.swal2-shown {
   background: none;
   border: none;
   color: var(--text-secondary, #94a3b8);
-  font-size: 11px;
-  font-weight: 500;
-  padding: 4px 10px;
+  font-family: inherit;
+  font-size: 12.5px;
+  font-weight: 450;
+  letter-spacing: 0.01em;
+  line-height: 1.4;
+  padding: 5px 12px;
   cursor: pointer;
-  border-radius: 4px;
-  transition: all 0.15s;
+  border-radius: 6px;
+  transition: color 0.12s ease, background 0.12s ease;
 }
 .studio-menu-trigger:hover,
 .studio-menu-active {
@@ -1792,33 +1796,38 @@ body.swal2-shown {
 }
 .studio-menu-dropdown {
   position: absolute;
-  top: 100%;
+  top: calc(100% + 4px);
   left: 0;
-  min-width: 200px;
-  background: var(--bg-secondary, #131620);
+  min-width: 220px;
+  background: var(--bg-surface, #1e2130);
   border: 1px solid var(--border-color, #334155);
-  border-radius: 6px;
-  padding: 4px;
+  border-radius: 8px;
+  padding: 5px;
   z-index: 100;
-  box-shadow: 0 8px 24px rgba(0,0,0,0.4);
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.45), 0 2px 8px rgba(0, 0, 0, 0.3);
+  font-family: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
 }
 .studio-menu-item {
   display: flex;
   align-items: center;
   justify-content: space-between;
+  gap: 16px;
   width: 100%;
   background: none;
   border: none;
   color: var(--text-primary, #e2e8f0);
-  font-size: 12px;
-  padding: 6px 10px;
+  font-family: inherit;
+  font-size: 12.5px;
+  font-weight: 400;
+  line-height: 1.5;
+  padding: 7px 11px;
   cursor: pointer;
-  border-radius: 4px;
+  border-radius: 6px;
   text-align: left;
-  transition: background 0.1s;
+  transition: background 0.1s ease;
 }
 .studio-menu-item:hover {
-  background: var(--accent-dim, rgba(74,222,128,0.15));
+  background: var(--accent-dim, rgba(74,222,128,0.12));
 }
 .studio-menu-item:disabled {
   opacity: 0.4;
@@ -1830,15 +1839,17 @@ body.swal2-shown {
 .studio-menu-divider {
   border: none;
   border-top: 1px solid var(--border-color, #334155);
-  margin: 4px 0;
+  margin: 5px 6px;
 }
 .studio-menu-kbd {
-  font-size: 10px;
+  font-size: 10.5px;
   color: var(--text-muted, #64748b);
   background: var(--bg-sidebar, #1a1d2b);
-  padding: 1px 5px;
-  border-radius: 3px;
+  padding: 1px 6px;
+  border-radius: 4px;
   border: 1px solid var(--border-color, #334155);
+  font-family: "SF Mono", "Fira Code", "Cascadia Code", monospace;
+  letter-spacing: 0;
 }
 
 /* Light mode menu overrides */
