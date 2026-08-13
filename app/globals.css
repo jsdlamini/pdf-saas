@@ -1715,9 +1715,29 @@ textarea:focus-visible,
 .swal2-container {
   align-items: flex-start !important;
   padding-top: 8vh !important;
+  overflow-x: hidden !important;
 }
 .swal2-popup {
   margin-top: 0 !important;
+  width: auto !important;
+  max-width: min(92vw, 32rem) !important;
+  overflow: hidden !important;
+  box-sizing: border-box !important;
+}
+.swal2-html-container {
+  max-width: 100% !important;
+  overflow-x: hidden !important;
+  box-sizing: border-box !important;
+}
+.swal2-input,
+.swal2-select {
+  max-width: 100% !important;
+  width: 100% !important;
+  min-width: 0 !important;
+  box-sizing: border-box !important;
+}
+body.swal2-shown {
+  overflow-x: hidden !important;
 }
 
 
