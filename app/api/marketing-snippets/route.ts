@@ -17,14 +17,17 @@ const ROTATING_TWEETS = [
   "Need to OCR a scanned PDF? WiserFiles does it in your browser — no upload stored, no account required. Free, private, instant. https://pdf.idealsoftwaresolutions.com/tools/ocr-pdf",
   "Students: stop paying for PDF tools. WiserFiles has 30 tools — all free, all private. Files encrypted and auto-deleted. https://pdf.idealsoftwaresolutions.com",
   "TIL you can merge PDFs without uploading them to a sketchy website. WiserFiles processes everything in your browser. Nothing is stored. https://pdf.idealsoftwaresolutions.com/tools/merge-pdf",
-  "Research students: WiserFiles has a built-in LaTeX editor with AI compile-fix suggestions. Free. https://pdf.idealsoftwaresolutions.com/research-studio",
-  "PDF to Word with real formatting — not text dumps. WiserFiles converts server-side with LibreOffice. Free, private. https://pdf.idealsoftwaresolutions.com/tools/pdf-to-word",
+  "Research students: WiserFiles has a full LaTeX + Python + C++ editor with AI peer review, live collaboration, and computed figures. Free. https://pdf.idealsoftwaresolutions.com/research-studio",
+  "Write a paper with AI help: summarize, rewrite, expand, improve grammar, even get a simulated peer review before you submit. https://pdf.idealsoftwaresolutions.com/research-studio",
   "Your PDF tool should not watermark or limit you. WiserFiles doesn't. 30 tools, zero catches. https://pdf.idealsoftwaresolutions.com",
   "Compare PDFs side by side — visual diff with color-coded changes. Free, in your browser. https://pdf.idealsoftwaresolutions.com/tools/compare-pdf",
   "Sign PDFs electronically. Draw or type your signature. No account, no upload stored. Free. https://pdf.idealsoftwaresolutions.com/tools/sign-pdf",
   "Compress PDFs without destroying quality. Your file never leaves your computer. https://pdf.idealsoftwaresolutions.com/tools/compress-pdf",
   "🎤 Speak your tool: 'compress my PDF' — WiserFiles finds the right tool instantly. https://pdf.idealsoftwaresolutions.com",
   "Redact sensitive information permanently. Text cannot be recovered. Secure, private. https://pdf.idealsoftwaresolutions.com/tools/redact-pdf",
+  "Collaborate on papers in real time: live cursors, live edits, and version history with visual diffs — in a free LaTeX editor. https://pdf.idealsoftwaresolutions.com/research-studio",
+  "Generate publication-ready figures straight from Python code, then embed them in your LaTeX paper. Reproducible research, one workspace. https://pdf.idealsoftwaresolutions.com/research-studio",
+  "Import citations by DOI, export to Word or Markdown, and hit journal word limits with live tracking. https://pdf.idealsoftwaresolutions.com/research-studio",
 ];
 
 const MARKETING_DIR = path.join(process.cwd(), "public", "marketing");
@@ -68,6 +71,8 @@ export async function GET(request: Request) {
       "30 free PDF tools. No account. No upload limits. Files auto-deleted. 📎🔒 #pdf #studenttips #productivity #edtech #freetools",
       "Your PDFs contain sensitive data. Stop uploading them to sketchy websites. Process locally. 🔒 #privacy #cybersecurity #pdftools #freetools",
       "🎤 Speak your PDF tool into existence. Voice search finds the right one instantly. Free. #voicecontrol #productivityhack #pdftools",
+      "Write papers with AI: summarize, rewrite, get a peer review, generate figures from code — all free. 🧠📄 #latex #ai #research #phdlife",
+      "Live-collaborate on a paper with real-time cursors and edits. Free LaTeX editor. #collaboration #research #academia",
     ];
     return Response.json({
       platform: "tiktok",

@@ -1,60 +1,59 @@
-# TikTok / Instagram Reels Scripts
+# TikTok Scripts
 
-## Video 1: "5 Free Tools Every Student Needs" (30-45 seconds)
+## Script 1 — The privacy angle (PDF tools)
 
-**Visual:** Screen recording of WiserFiles home page, then quick cuts between tools
+**Hook:** "Stop uploading your private documents to sketchy websites."
 
-| Time | Visual | Text on Screen | Voiceover |
-|---|---|---|---|
-| 0-3s | Drop zone, drag a PDF in | "You need this" | Ever paid for a PDF tool? Stop. |
-| 3-8s | Click Merge — two PDFs combine instantly | "1. Merge PDFs" | Merge lecture slides in one click. Free. |
-| 8-13s | OCR a scanned page — text appears searchable | "2. OCR scanned docs" | Turn photos of textbook pages into searchable PDFs. |
-| 13-18s | Sign a document — draw signature on screen | "3. Sign electronically" | Sign forms without printing. Draw right on screen. |
-| 18-23s | Compress a PDF — size drops from 12MB to 2MB | "4. Compress (no quality loss)" | Shrink files for email. Quality stays. |
-| 23-28s | Research Studio — LaTeX compile | "5. LaTeX editor for thesis" | Research students: built-in LaTeX with AI fix suggestions. |
-| 28-35s | Show URL on screen, zoom in | "30 tools. All free. In your bio." | All 30 tools, free forever. Link in bio. |
+**Body:**
+- Show a watermark-covered PDF from a competitor
+- Cut to WiserFiles: clean, no watermark
+- "WiserFiles processes your PDFs *in your browser* — nothing is uploaded, nothing is stored."
+- "30 tools. Merge, split, OCR, sign, compress. All free. No account."
 
-**Caption:** 30 free PDF tools. No account. No upload limits. Files auto-deleted. 📎🔒 #pdf #studenttips #productivity #edtech #freetools
+**Caption:** Your documents should stay on your device. 🔒 #privacy #pdftools #freetools #productivity
 
----
+## Script 2 — AI peer review (Research Studio)
 
-## Video 2: "The Privacy Test" (20-30 seconds)
+**Hook:** "What if you could get your paper reviewed *before* you submit?"
 
-**Visual:** Screen recording with voiceover, dramatic zoom on privacy badge
+**Body:**
+- Show the Research Studio editor
+- Highlight text, click "AI Review"
+- Show the review: strengths, weaknesses, score
+- "A simulated peer reviewer, for free. It tells you what's weak before the actual reviewers do."
 
-| Time | Visual | Text on Screen | Voiceover |
-|---|---|---|---|
-| 0-3s | Show competitor tool with "Upload to process" | "Upload your private docs to a random server?" | You wouldn't hand your bank statement to a stranger in a café. |
-| 3-6s | Switch to WiserFiles, zoom on privacy badge | "Your browser. Not our server." | So why upload it to a random website? |
-| 6-10s | Show drop zone — file being dragged in | "Processed locally" | WiserFiles processes files in YOUR browser. |
-| 10-14s | Zoom on encryption badge | "Encrypted. Auto-deleted." | Encrypted in transit. Auto-deleted after. Nothing stored. |
-| 14-18s | Show output downloading | "Download. Close tab. It's gone." | Download, close the tab — your data is gone. |
-| 18-22s | Show URL | "Free. Private. 30 tools." | 30 tools. All free. All private. |
+**Caption:** Your secret weapon before submission. 🧠📄 #latex #research #phdlife #ai
 
-**Caption:** Your PDFs contain sensitive data. Stop uploading them to sketchy websites. Process locally. 🔒 #privacy #cybersecurity #pdftools #freetools
+## Script 3 — Live collaboration (Research Studio)
 
----
+**Hook:** "Two people, one paper, in real time."
 
-## Video 3: "Voice Search Demo" (15-20 seconds)
+**Body:**
+- Split screen: two cursors moving in the same document
+- Show one typing and the other seeing it instantly
+- "Invite a co-author, see their cursor, edit together — free."
 
-**Visual:** Mobile screen recording
+**Caption:** Real-time collaboration without the Overleaf paywall. 👥 #collaboration #academia
 
-| Time | Visual | Text | Voiceover |
-|---|---|---|---|
-| 0-3s | Home page, tap mic button | "Type? Too slow. 🎤" | Typing is slow. |
-| 3-6s | Mic pulses red, speak: "compress my PDF" | "compress my PDF" | Just say what you need. |
-| 6-10s | Search results appear — Compress PDF highlighted | "Instant. No typing." | It finds the right tool instantly. |
-| 10-15s | Tap result, tool opens | "One tap. Done." | One tap. Your tool is ready. |
-| 15-18s | Show URL | "Try it. Link in bio." | Try it yourself. |
+## Script 4 — Computed figures (Research Studio)
 
-**Caption:** 🎤 Speak your PDF tool into existence. Voice search finds the right one instantly. Free. #voicecontrol #productivityhack #pdftools
+**Hook:** "Generate a scientific figure from code, straight into your paper."
 
----
+**Body:**
+- Show Python matplotlib code
+- Click "Figure" → a plot appears
+- Click "Insert into paper" → the figure is in the LaTeX
+- "Write the analysis, generate the figure, embed it — one workspace."
 
-## Production Notes
-- Record at 1080×1920 (vertical)
-- Use phone screen recorder (built-in on iOS/Android)
-- Add captions (CapCut or TikTok's auto-captions)
-- Background music: lo-fi, upbeat, instrumental (TikTok library has free tracks)
-- Post time: 6-8 PM local time (peak student scrolling)
-- Hashtags: #pdf #studenttips #productivity #edtech #freetools #collegelife
+**Caption:** Reproducible research, actually made easy. 📊 #python #latex #datascience
+
+## Script 5 — Voice search (PDF tools)
+
+**Hook:** "Just *say* what you want to do with your PDF."
+
+**Body:**
+- "Compress my PDF" → the tool opens
+- "Merge these PDFs" → done
+- "WiserFiles understands what you mean, instantly."
+
+**Caption:** Speak it into existence. 🎤 #voicecontrol #productivityhack

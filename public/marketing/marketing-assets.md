@@ -1,69 +1,39 @@
-# WiserFiles Marketing Assets
+# Marketing Assets — WiserFiles
 
-## Brand
-- **Name:** WiserFiles
-- **Tagline:** Professional PDF tools, one focused workspace
-- **URL:** https://pdf.idealsoftwaresolutions.com
-- **Colors:** Cyan #0f766e, Blue #0e76a8, Slate #002147
+## Elevator pitch
 
-## Social Media Post Templates
+WiserFiles is a privacy-first PDF toolkit and AI research studio. Process 30 types of PDF operations in your browser without uploading files, or write papers in a LaTeX + Python + C++ workspace with AI writing, peer review, live collaboration, and computed figures — all free.
 
-### Twitter/X
-```
-🧵 30 free PDF tools in your browser. No upload limits. No ads. No account needed.
+## Key differentiators
 
-Merge • Split • OCR • Sign • Compress • Convert • Compare • Rotate • Redact • Edit
+1. **Privacy-first**: most PDF processing runs client-side; files auto-delete.
+2. **AI research studio**: writing assistant, peer review, code assistant.
+3. **Live collaboration**: real-time cursors + edits without a WebSocket server.
+4. **Reproducible research**: Python/C++ code + computed figures + LaTeX in one place.
+5. **Free**: no watermarks, no daily limits on PDF tools, no account needed.
 
-Try it: pdf.idealsoftwaresolutions.com
-```
+## Feature bullets (for landing pages)
 
-```
-Your files are encrypted and auto-deleted after processing.
+- 30 free PDF tools: merge, split, compress, OCR, sign, redact, convert, compare, rotate
+- Voice search to find any tool instantly
+- LaTeX + Python + C++ editor with live code execution
+- AI writing: summarize, rewrite, expand, improve grammar
+- AI peer review: strengths, weaknesses, and a score before you submit
+- Real-time collaboration: cursors and edits with co-authors
+- Computed figures: matplotlib plots auto-embedded in your paper
+- Version history with visual diffs
+- DOI citation import and CSV-to-LaTeX tables
+- Export to Word (.docx) or Markdown
+- Journal word-limit tracking
+- Guest quotas (free AI uses) with higher limits for registered users
 
-We don't store them. We don't read them. We don't share them.
+## Social proof angles
 
-Just fast, private PDF processing in your browser.
+- "Built it for my own thesis" — founder story
+- "Processes files in your browser, nothing stored" — privacy
+- "AI reviews your paper before reviewers do" — novelty
+- "Overleaf + CoCalc in one free workspace" — positioning
 
-pdf.idealsoftwaresolutions.com
-```
+## Hashtags
 
-### LinkedIn
-```
-Built a free, privacy-first PDF tool suite for students and professionals.
-
-What makes it different:
-→ 30 tools — merge, OCR, sign, compare, compress, and more
-→ Files are encrypted and auto-deleted — nothing is stored
-→ Works in your browser, installable as an app
-→ No account required, no daily limits
-→ Research Studio with LaTeX editor for academics
-
-Try it: https://pdf.idealsoftwaresolutions.com
-```
-
-### Reddit (r/InternetIsBeautiful, r/college, r/productivity)
-```
-Title: I built 30 free PDF tools that run in your browser — no uploads stored, no account needed
-
-Body: After getting frustrated with PDF tools that watermark your documents or limit you to 2 files a day, I built WiserFiles. 30 tools (merge, split, OCR, sign, compress, convert, compare, rotate, redact, edit — the works). Everything runs in your browser. Nothing is stored on a server. No account required. Install it as an app on your phone or desktop.
-
-pdf.idealsoftwaresolutions.com
-```
-
-### ProductHunt Launch
-```
-Tagline: 30 free, private PDF tools in your browser
-
-Description: Merge, split, OCR, sign, compress, convert, and 25+ more PDF tools. All free. All private. Files are encrypted in transit and auto-deleted after processing. No account needed. Install as a PWA for offline use. Built-in LaTeX editor for academics.
-
-Features:
-🔒 Encrypted & auto-deleted files
-📱 PWA — install on any device
-🎤 Voice search — speak your tool
-📄 Word, Excel, PPT to PDF conversion
-🔬 Research Studio with LaTeX compiler
-🤖 AI-powered LaTeX fix suggestions
-```
-
-## SEO Keywords
-pdf tools, merge pdf, split pdf, compress pdf, ocr pdf, sign pdf, pdf to word, word to pdf, pdf converter, online pdf editor, free pdf tools, pdf compressor, pdf merger, rotate pdf, protect pdf, unlock pdf, redact pdf, compare pdf, pdf to jpg, jpg to pdf, latex editor online, ai latex fix
+#pdftools #freetools #productivity #privacy #latex #research #phdlife #ai #collaboration #reproducibleresearch #studenttips #academia #datascience

@@ -1,6 +1,6 @@
-import { auth } from "@clerk/nextjs/server";
-import { getUserRole } from "@/lib/user-roles";
+import { auth, clerkClient } from "@clerk/nextjs/server";
 import { getAiQuotaLimits, setAiQuotaLimits } from "@/lib/ai-quota";
+import { DASHBOARD_ALLOWED } from "@/lib/dashboard-access";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -9,25 +9,31 @@ function jsonError(msg: string, status: number) {
   return Response.json({ error: msg }, { status });
 }
 
-async function requireAdmin() {
+async function requireDashboardAccess() {
   const { userId } = await auth();
   if (!userId) return { error: "Sign in required.", status: 401 } as const;
-  const role = await getUserRole(userId);
-  if (role !== "admin") return { error: "Admin access required.", status: 403 } as const;
-  return { userId, error: null, status: 200 } as const;
+  try {
+    const client = await clerkClient();
+    const user = await client.users.getUser(userId);
+    const email = user.emailAddresses[0]?.emailAddress || "";
+    if (DASHBOARD_ALLOWED.includes(email)) {
+      return { userId, email, error: null, status: 200 } as const;
+    }
+  } catch { /* fall through to denied */ }
+  return { error: "Dashboard access required.", status: 403 } as const;
 }
 
 export async function GET() {
-  const authResult = await requireAdmin();
-  if (authResult.error) return jsonError(authResult.error, authResult.status);
+  const access = await requireDashboardAccess();
+  if (access.error) return jsonError(access.error, access.status);
 
   const limits = await getAiQuotaLimits();
   return Response.json({ limits });
 }
 
 export async function POST(request: Request) {
-  const authResult = await requireAdmin();
-  if (authResult.error) return jsonError(authResult.error, authResult.status);
+  const access = await requireDashboardAccess();
+  if (access.error) return jsonError(access.error, access.status);
 
   const body = await request.json().catch(() => null) as {
     guestDailyLimit?: number;

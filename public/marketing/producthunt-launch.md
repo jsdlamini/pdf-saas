@@ -1,52 +1,34 @@
-# ProductHunt Launch Kit
+# Product Hunt Launch
 
-## Launch Checklist (do 3 days before)
+## Tagline
+30 free PDF tools + an AI research studio for writing papers, running code, and collaborating — all in your browser.
 
-- [ ] Create maker profile at producthunt.com
-- [ ] Prepare all assets below
-- [ ] Find a hunter (optional — self-launch works fine)
-- [ ] Schedule launch for Tuesday–Thursday
-- [ ] Prepare first comment with maker story
-- [ ] Notify supporters to upvote on launch day
+## Description
 
----
+WiserFiles is a privacy-first PDF toolkit and research studio.
 
-## Tagline (60 chars max)
-30 free, private PDF tools in your browser
+**PDF tools (30, all free):**
+Merge, split, compress, OCR, sign, redact, convert, compare, rotate — plus voice search to find any tool instantly. Files are encrypted in transit and auto-deleted after processing. No account, no watermarks, no daily limits.
 
-## Description (260 chars max)
-Merge, split, OCR, sign, compress, convert — 30 PDF tools. All free. Files encrypted and auto-deleted. No account needed. Works offline as a PWA. Built-in LaTeX editor for academics.
+**Research Studio (for students & researchers):**
+- LaTeX + Python + C++ editing with live code execution
+- AI writing assistant — summarize, rewrite, expand, improve
+- AI peer review — a simulated reviewer's critique before you submit
+- Live collaboration — real-time cursors and edits with co-authors
+- Computed figures — generate matplotlib plots and auto-embed them in your paper
+- Version history with visual diffs
+- DOI citation import, CSV-to-LaTeX tables, journal word-limit tracking
+- Export to Word or Markdown
 
-## Maker Comment (post immediately after launch)
-Hey ProductHunt! I built WiserFiles because every PDF tool I tried either watermarked my documents, limited me to 2 files a day, or made me create an account just to download. I wanted something that just works — drop a file, pick a tool, download the result. No friction, no privacy trade-offs.
+**Why it's different:**
+Most PDF tools upload your files to a server. WiserFiles processes most conversions entirely in your browser, so your documents never leave your device. And the Research Studio combines writing, code, and AI in one reproducible-research workspace — something Overleaf and CoCalc don't do together.
 
-Three things that make it different:
+## First comment
 
-1. **Privacy-first** — files are encrypted and auto-deleted. The server tools (OCR, PDF-to-Word) process in a container that wipes data after each job. Browser tools never leave your machine.
+Thanks for checking out WiserFiles! I built this after getting frustrated with PDF tools that watermark documents and cap daily usage. The Research Studio started as a LaTeX editor for my own thesis and grew from there.
 
-2. **Research Studio** — full LaTeX editor with AI compile-fix suggestions. I built this for my own thesis and it saved me hours of debugging compile errors. DeepSeek analyzes your log and suggests exact fixes.
+Free plan: everything above. AI features have a fair daily quota (higher for registered users). Happy to answer questions!
 
-3. **30 tools, zero catches** — no daily limit, no watermark, no forced account. I'll monetize eventually (probably a one-time lifetime purchase), but the free version stays fully functional.
+## Maker's note
 
-Built with Next.js, pdf-lib, jspdf, Clerk for auth, and Postgres. The server runs on a single VPS with Docker. Happy to share the stack details!
-
----
-
-## Images (required for launch)
-- **Thumbnail** (240×240): WF logo on cyan gradient
-- **Gallery images** (1270×760):
-  1. Home page with drop zone
-  2. Tool workbench showing output/download
-  3. Compare PDF with visual diff
-  4. Research Studio LaTeX editor
-  5. Mobile view on phone
-
----
-
-## Launch Day Timeline
-- 00:01 PST — Launch goes live
-- Reply to EVERY comment within first hour
-- Share launch link on Twitter, LinkedIn, Reddit
-- Ask 5 friends/colleagues to leave honest reviews
-- 12:00 PST — Post a "4-hour update" comment with stats
-- End of day — Thank everyone, share final numbers
+The AI features run on DeepSeek, collaboration uses PostgreSQL LISTEN/NOTIFY + Server-Sent Events (no WebSocket server needed), and PDF processing uses pdf-lib/jspdf client-side. Ask me anything about the stack.
