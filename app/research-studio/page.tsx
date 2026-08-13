@@ -2174,18 +2174,15 @@ export default function ResearchStudioPage() {
       const result = payload.result || "";
 
       if (action === "explain") {
-        // Explanation is displayed, not applied to the code.
-        await Swal.fire({
-          title: "Code Explanation",
-          html: `<pre style="white-space:pre-wrap;text-align:left;font-size:12px;line-height:1.5;color:var(--text-primary, #e2e8f0);margin:0">${escapeHtml(result)}</pre>`,
-          confirmButtonText: "Close",
-          confirmButtonColor: "#4ade80",
-          background: "#1a1d2b",
-          color: "#e2e8f0",
-          position: "top",
-          width: "min(90vw, 640px)",
-        });
-        setCompileNotice("Code explained.");
+        // Insert the explanation as a comment above the highlighted code.
+        const token = editorMode === "python" ? "#" : editorMode === "cpp" ? "//" : "%";
+        const commentLines = result
+          .split("\n")
+          .map((line) => `${token} ${line}`.trimEnd())
+          .join("\n");
+        const nextText = activeSource.slice(0, start) + commentLines + "\n" + activeSource.slice(start);
+        updateActiveFile(nextText);
+        setCompileNotice("Explanation added above the code.");
       } else {
         const nextText = activeSource.slice(0, start) + result + activeSource.slice(end);
         updateActiveFile(nextText);
