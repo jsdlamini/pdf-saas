@@ -444,6 +444,7 @@ async function confirmModal(title: string, text: string, confirmButtonText: stri
     confirmButtonColor: danger ? "#dc2626" : "#0f766e",
     cancelButtonColor: "#e2e8f0",
     background: "#ffffff",
+    position: "top",
   });
 
   return result.isConfirmed;
@@ -463,6 +464,7 @@ async function promptModal(title: string, inputLabel: string, inputValue: string
     confirmButtonColor: "#0f766e",
     cancelButtonColor: "#e2e8f0",
     background: "#ffffff",
+    position: "top",
     inputValidator: (value) => {
       if (!value || !value.trim()) {
         return "Enter a value.";
