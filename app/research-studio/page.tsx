@@ -2,6 +2,7 @@
 
 import { SignInButton, SignUpButton, useAuth, useUser } from "@clerk/nextjs";
 import { showToast } from "../components/toast";
+import CommandPalette from "../components/command-palette";
 import JSZip from "jszip";
 import katex from "katex";
 import "katex/dist/katex.min.css";
@@ -95,6 +96,17 @@ function isValidAiPatchSnippet(raw: string) {
 }
 
 const GUEST_PROJECT_LIMIT = 2;
+
+const JOURNAL_PRESETS: { slug: string; name: string; abstractWords: number; totalWords: number; refs: number }[] = [
+  { slug: "", name: "No target", abstractWords: 0, totalWords: 0, refs: 0 },
+  { slug: "nature", name: "Nature", abstractWords: 150, totalWords: 3000, refs: 50 },
+  { slug: "science", name: "Science", abstractWords: 125, totalWords: 4500, refs: 40 },
+  { slug: "ieee", name: "IEEE Trans.", abstractWords: 250, totalWords: 8000, refs: 40 },
+  { slug: "acm", name: "ACM", abstractWords: 250, totalWords: 12000, refs: 50 },
+  { slug: "neurips", name: "NeurIPS", abstractWords: 0, totalWords: 9000, refs: 0 },
+  { slug: "lncs", name: "Springer LNCS", abstractWords: 150, totalWords: 14000, refs: 0 },
+  { slug: "plos", name: "PLOS ONE", abstractWords: 300, totalWords: 0, refs: 0 },
+];
 
 const DEFAULT_LATEX = String.raw`\documentclass[11pt]{article}
 \usepackage[margin=1in]{geometry}
@@ -1042,6 +1054,12 @@ export default function ResearchStudioPage() {
     { userId: string; name: string; color: string; cursorPos: number }[]
   >([]);
 
+  // ── Command palette / outline / journal target ─────
+  const [paletteOpen, setPaletteOpen] = useState(false);
+  const [paletteQuery, setPaletteQuery] = useState("");
+  const [paletteIndex, setPaletteIndex] = useState(0);
+  const [targetJournal, setTargetJournal] = useState("");
+
   // ── Terminal state ─────
   const [terminalOpen, setTerminalOpen] = useState(false);
   const [terminalHistory, setTerminalHistory] = useState<string[]>([]);
@@ -1350,6 +1368,52 @@ export default function ResearchStudioPage() {
     }, 2000);
     return () => clearInterval(interval);
   }, [userId, activeProjectId]);
+
+  // Document outline: extract LaTeX section headings for the structure sidebar.
+  const documentOutline = useMemo(() => {
+    if (isCodeMode) return [];
+    const lines = activeSource.split("\n");
+    const outline: { level: number; title: string; line: number }[] = [];
+    const regex = /\\(section|subsection|subsubsection)\*?\{([^}]*)\}/;
+    for (let i = 0; i < lines.length; i += 1) {
+      const m = lines[i].match(regex);
+      if (m) {
+        outline.push({
+          level: m[1] === "section" ? 1 : m[1] === "subsection" ? 2 : 3,
+          title: m[2].trim() || "(untitled)",
+          line: i,
+        });
+      }
+    }
+    return outline;
+  }, [activeSource, isCodeMode]);
+
+  function jumpToLine(lineNumber: number) {
+    const textarea = editorRef.current;
+    if (!textarea) return;
+    const lines = activeSource.split("\n");
+    let pos = 0;
+    for (let i = 0; i < Math.min(lineNumber, lines.length); i += 1) {
+      pos += lines[i].length + 1;
+    }
+    textarea.focus();
+    textarea.setSelectionRange(pos, pos);
+    textarea.scrollTop = lineNumber * 13 * 1.625;
+  }
+
+  // Global Ctrl+K to open the command palette
+  useEffect(() => {
+    const onKeyDown = (event: KeyboardEvent) => {
+      if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "k") {
+        event.preventDefault();
+        setPaletteOpen((prev) => !prev);
+        setPaletteQuery("");
+        setPaletteIndex(0);
+      }
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, []);
 
   // Auto-save debounce
   const triggerAutoSave = useCallback(() => {
@@ -4372,6 +4436,47 @@ export default function ResearchStudioPage() {
               <div className="studio-filetree-body">
                 {renderProjectTree(projectTree)}
               </div>
+              {!isCodeMode && documentOutline.length > 0 ? (
+                <div className="studio-outline">
+                  <div className="studio-outline-header">Structure</div>
+                  {documentOutline.map((item, i) => (
+                    <button
+                      key={i}
+                      type="button"
+                      className={`studio-outline-item level-${item.level}`}
+                      onClick={() => jumpToLine(item.line)}
+                    >
+                      {item.level === 1 ? "§ " : item.level === 2 ? "· " : "– "}{item.title}
+                    </button>
+                  ))}
+                </div>
+              ) : null}
+              {!isCodeMode ? (
+                <div className="studio-journal-target">
+                  <label>Target journal</label>
+                  <select value={targetJournal} onChange={(e) => setTargetJournal(e.target.value)}>
+                    {JOURNAL_PRESETS.map((j) => (
+                      <option key={j.slug} value={j.slug}>{j.name}</option>
+                    ))}
+                  </select>
+                  {(() => {
+                    const preset = JOURNAL_PRESETS.find((j) => j.slug === targetJournal);
+                    if (!preset || preset.totalWords === 0) return null;
+                    const pct = Math.min(100, Math.round((wordCount.words / preset.totalWords) * 100));
+                    return (
+                      <div className="studio-journal-progress">
+                        <div className="studio-journal-progress-row">
+                          <span>Words</span>
+                          <span>{wordCount.words}/{preset.totalWords}</span>
+                        </div>
+                        <div className="studio-journal-bar">
+                          <div className={`studio-journal-bar-fill ${pct > 100 ? "over" : ""}`} style={{ width: `${Math.min(100, pct)}%` }} />
+                        </div>
+                      </div>
+                    );
+                  })()}
+                </div>
+              ) : null}
             </>
           )}
         </aside>
@@ -4669,6 +4774,37 @@ export default function ResearchStudioPage() {
                 </>
               )}
             </div>
+          ) : null}
+
+          {/* Command palette */}
+          {paletteOpen ? (
+            <CommandPalette
+              query={paletteQuery}
+              setQuery={setPaletteQuery}
+              activeIndex={paletteIndex}
+              setActiveIndex={setPaletteIndex}
+              onClose={() => setPaletteOpen(false)}
+              commands={[
+                { label: "Compile / Run", action: () => { setPaletteOpen(false); void compileProject(); } },
+                { label: "Save project", action: () => { setPaletteOpen(false); saveCurrentProject(); } },
+                { label: "Download ZIP", action: () => { setPaletteOpen(false); void downloadProjectBundle(); } },
+                { label: "Find / Replace", action: () => { setPaletteOpen(false); setFindPanelOpen(true); setReplacePanelOpen(true); } },
+                { label: "AI Review paper", action: () => { setPaletteOpen(false); void runAiReview(); } },
+                { label: "AI Rewrite selection", action: () => { setPaletteOpen(false); void runAiWriting("rewrite"); } },
+                { label: "AI Summarize selection", action: () => { setPaletteOpen(false); void runAiWriting("summarize"); } },
+                { label: "AI Improve grammar", action: () => { setPaletteOpen(false); void runAiWriting("improve"); } },
+                { label: "Import citation from DOI", action: () => { setPaletteOpen(false); void importCitationFromDoi(); } },
+                { label: "CSV to LaTeX table", action: () => { setPaletteOpen(false); void generateLatexTableFromCsv(); } },
+                { label: "Insert Section", action: () => { setPaletteOpen(false); insertEditorSnippet({ block: "\\section{Section}\n", cursorOffset: 9 }); } },
+                { label: "Insert Figure", action: () => { setPaletteOpen(false); insertEditorSnippet({ block: "\\begin{figure}[htbp]\n  \\centering\n  \\includegraphics[width=0.8\\linewidth]{}\n  \\caption{}\n  \\label{}\n\\end{figure}\n", cursorOffset: 62 }); } },
+                { label: "Insert Table", action: () => { setPaletteOpen(false); insertEditorSnippet({ block: "\\begin{table}[htbp]\n  \\centering\n  \\caption{}\n  \\begin{tabular}{lcc}\n    \\toprule\n     &  & \\\\\n    \\midrule\n     &  & \\\\\n    \\bottomrule\n  \\end{tabular}\n\\end{table}\n", cursorOffset: 41 }); } },
+                { label: "Version History", action: () => { setPaletteOpen(false); setHistoryOpen(true); } },
+                { label: "Toggle PDF Preview", action: () => { setPaletteOpen(false); setRightPaneCollapsed(!rightPaneCollapsed); } },
+                { label: "Toggle File Tree", action: () => { setPaletteOpen(false); setLeftPaneCollapsed(!leftPaneCollapsed); } },
+                { label: "Back to Projects", action: () => { setPaletteOpen(false); openProjectsBoard(); } },
+                { label: "Keyboard Shortcuts", action: () => { setPaletteOpen(false); setShowShortcuts(true); } },
+              ]}
+            />
           ) : null}
 
           {/* AI review result dialog */}
