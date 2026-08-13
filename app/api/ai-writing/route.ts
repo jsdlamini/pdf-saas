@@ -3,7 +3,7 @@ export const dynamic = "force-dynamic";
 
 import { auth } from "@clerk/nextjs/server";
 
-type AiWritingAction = "summarize" | "rewrite" | "expand" | "improve";
+type AiWritingAction = "summarize" | "rewrite" | "expand" | "improve" | "explain" | "fix" | "comment";
 
 type AiWritingPayload = {
   text: string;
@@ -15,6 +15,9 @@ const ACTION_PROMPTS: Record<AiWritingAction, string> = {
   rewrite: "Rewrite the text with improved clarity and flow while preserving the original meaning. Return only the rewritten text.",
   expand: "Expand the text into more detail with elaboration, while preserving the original intent and tone. Return only the expanded text.",
   improve: "Improve the grammar, academic tone, and readability of the text. Return only the improved text.",
+  explain: "Explain what this code does, line by line, in clear plain language. Return only the explanation.",
+  fix: "Identify and fix any bugs, errors, or issues in this code. Return only the corrected code.",
+  comment: "Add clear, concise inline comments to this code explaining each non-obvious step. Return only the commented code.",
 };
 
 function jsonError(message: string, status: number) {
@@ -46,7 +49,7 @@ export async function POST(request: Request) {
 
   const action = payload.action;
   if (!action || !(action in ACTION_PROMPTS)) {
-    return jsonError("Provide a valid 'action' (summarize|rewrite|expand|improve).", 400);
+    return jsonError("Provide a valid 'action'.", 400);
   }
 
   const text = sanitizeText(typeof payload.text === "string" ? payload.text : "", 15_000);

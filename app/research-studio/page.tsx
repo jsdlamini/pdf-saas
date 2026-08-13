@@ -2122,7 +2122,7 @@ export default function ResearchStudioPage() {
     }
   }
 
-  async function runAiWriting(action: "summarize" | "rewrite" | "expand" | "improve") {
+  async function runAiWriting(action: "summarize" | "rewrite" | "expand" | "improve" | "explain" | "fix" | "comment") {
     if (!activeEntry || aiWritingBusy) return;
     const textarea = editorRef.current;
     const start = textarea?.selectionStart ?? 0;
@@ -2614,6 +2614,72 @@ export default function ResearchStudioPage() {
       }
       isUndoRedoRef.current = false;
     });
+  }
+
+  function toggleLineComment() {
+    if (!activeEntry) return;
+    const textarea = editorRef.current;
+    const start = textarea?.selectionStart ?? 0;
+    const end = textarea?.selectionEnd ?? start;
+    const commentToken = editorMode === "python" ? "#" : "//";
+    const lines = activeSource.split("\n");
+
+    const lineStart = activeSource.lastIndexOf("\n", start - 1) + 1;
+    const lineEnd = activeSource.indexOf("\n", end);
+    const lastLine = lineEnd === -1 ? lines.length - 1 : activeSource.slice(0, lineEnd).split("\n").length - 1;
+    const firstLine = activeSource.slice(0, lineStart).split("\n").length - 1;
+
+    const allCommented = lines.slice(firstLine, lastLine + 1).every((l) => l.trimStart().startsWith(commentToken));
+
+    const nextLines = lines.map((line, idx) => {
+      if (idx < firstLine || idx > lastLine) return line;
+      if (allCommented) {
+        return line.replace(new RegExp(`^\\s*\\${commentToken} ?`), "");
+      }
+      return `${commentToken} ${line}`;
+    });
+
+    updateActiveFile(nextLines.join("\n"));
+    setCompileNotice(allCommented ? "Uncommented selection." : "Commented selection.");
+  }
+
+  function indentSelection() {
+    if (!activeEntry) return;
+    const textarea = editorRef.current;
+    const start = textarea?.selectionStart ?? 0;
+    const end = textarea?.selectionEnd ?? start;
+    const lineStart = activeSource.lastIndexOf("\n", start - 1) + 1;
+    const lineEnd = activeSource.indexOf("\n", end);
+    const prefix = activeSource.slice(0, lineStart);
+    const selection = activeSource.slice(lineStart, lineEnd === -1 ? activeSource.length : lineEnd);
+    const suffix = lineEnd === -1 ? "" : activeSource.slice(lineEnd);
+    const indented = selection.split("\n").map((l) => (l.trim() ? "    " + l : l)).join("\n");
+    updateActiveFile(prefix + indented + suffix);
+  }
+
+  function outdentSelection() {
+    if (!activeEntry) return;
+    const textarea = editorRef.current;
+    const start = textarea?.selectionStart ?? 0;
+    const end = textarea?.selectionEnd ?? start;
+    const lineStart = activeSource.lastIndexOf("\n", start - 1) + 1;
+    const lineEnd = activeSource.indexOf("\n", end);
+    const prefix = activeSource.slice(0, lineStart);
+    const selection = activeSource.slice(lineStart, lineEnd === -1 ? activeSource.length : lineEnd);
+    const suffix = lineEnd === -1 ? "" : activeSource.slice(lineEnd);
+    const outdented = selection.split("\n").map((l) => l.replace(/^ {1,4}/, "")).join("\n");
+    updateActiveFile(prefix + outdented + suffix);
+  }
+
+  function duplicateLine() {
+    if (!activeEntry) return;
+    const textarea = editorRef.current;
+    const pos = textarea?.selectionStart ?? 0;
+    const lineStart = activeSource.lastIndexOf("\n", pos - 1) + 1;
+    const lineEnd = activeSource.indexOf("\n", pos);
+    const line = activeSource.slice(lineStart, lineEnd === -1 ? activeSource.length : lineEnd);
+    const next = activeSource.slice(0, lineStart) + line + "\n" + line + activeSource.slice(lineStart + line.length);
+    updateActiveFile(next);
   }
 
   function createProjectFromTemplate(template: ResearchTemplate) {
@@ -4382,9 +4448,11 @@ export default function ResearchStudioPage() {
               "-",
               { label: <>Save <kbd className="studio-menu-kbd">Ctrl+S</kbd></>, action: () => { setOpenMenu(""); saveCurrentProject(); } },
               { label: <>Download ZIP</>, action: () => { setOpenMenu(""); void downloadProjectBundle(); } },
-              "-",
-              { label: <>Export to Word (.docx)</>, action: () => { setOpenMenu(""); void exportDocument("docx"); } },
-              { label: <>Export to Markdown</>, action: () => { setOpenMenu(""); void exportDocument("md"); } },
+              ...(!isCodeMode ? [
+                "-",
+                { label: <>Export to Word (.docx)</>, action: () => { setOpenMenu(""); void exportDocument("docx"); } },
+                { label: <>Export to Markdown</>, action: () => { setOpenMenu(""); void exportDocument("md"); } },
+              ] as any[] : []),
               "-",
               { label: <>Import ZIP</>, action: () => { setOpenMenu(""); document.getElementById("zip-import-editor-menu")?.click(); } },
             ]
@@ -4418,14 +4486,23 @@ export default function ResearchStudioPage() {
             ]
           } : null,
           {
-            label: "Format", key: "format", items: [
+            label: "Format", key: "format", items: isCodeMode ? [
+              { label: <>Comment <kbd className="studio-menu-kbd">Ctrl+/</kbd></>, action: () => { setOpenMenu(""); toggleLineComment(); } },
+              { label: "Indent", action: () => { setOpenMenu(""); indentSelection(); } },
+              { label: "Outdent", action: () => { setOpenMenu(""); outdentSelection(); } },
+              { label: <>Duplicate line <kbd className="studio-menu-kbd">Ctrl+D</kbd></>, action: () => { setOpenMenu(""); duplicateLine(); } },
+            ] : [
               { label: <>Bold <kbd className="studio-menu-kbd">Ctrl+B</kbd></>, action: () => { setOpenMenu(""); insertEditorSnippet({ before: "\\textbf{", after: "}", placeholder: "text" }); } },
               { label: <>Italic <kbd className="studio-menu-kbd">Ctrl+I</kbd></>, action: () => { setOpenMenu(""); insertEditorSnippet({ before: "\\textit{", after: "}", placeholder: "text" }); } },
               { label: "Underline", action: () => { setOpenMenu(""); insertEditorSnippet({ before: "\\underline{", after: "}", placeholder: "text" }); } },
             ]
           },
           {
-            label: "AI Write", key: "ai", items: [
+            label: "AI Write", key: "ai", items: isCodeMode ? [
+              { label: "Explain code", action: () => { setOpenMenu(""); void runAiWriting("explain"); } },
+              { label: "Fix code", action: () => { setOpenMenu(""); void runAiWriting("fix"); } },
+              { label: "Add comments", action: () => { setOpenMenu(""); void runAiWriting("comment"); } },
+            ] : [
               { label: "Summarize selection", action: () => { setOpenMenu(""); void runAiWriting("summarize"); } },
               { label: "Rewrite selection", action: () => { setOpenMenu(""); void runAiWriting("rewrite"); } },
               { label: "Expand selection", action: () => { setOpenMenu(""); void runAiWriting("expand"); } },
@@ -4954,10 +5031,16 @@ export default function ResearchStudioPage() {
                 { label: "Save project", action: () => { setPaletteOpen(false); saveCurrentProject(); } },
                 { label: "Download ZIP", action: () => { setPaletteOpen(false); void downloadProjectBundle(); } },
                 { label: "Find / Replace", action: () => { setPaletteOpen(false); setFindPanelOpen(true); setReplacePanelOpen(true); } },
-                { label: "AI Review paper", action: () => { setPaletteOpen(false); void runAiReview(); } },
-                { label: "AI Rewrite selection", action: () => { setPaletteOpen(false); void runAiWriting("rewrite"); } },
-                { label: "AI Summarize selection", action: () => { setPaletteOpen(false); void runAiWriting("summarize"); } },
-                { label: "AI Improve grammar", action: () => { setPaletteOpen(false); void runAiWriting("improve"); } },
+                ...(isCodeMode ? [
+                  { label: "AI Explain code", action: () => { setPaletteOpen(false); void runAiWriting("explain"); } },
+                  { label: "AI Fix code", action: () => { setPaletteOpen(false); void runAiWriting("fix"); } },
+                  { label: "AI Add comments", action: () => { setPaletteOpen(false); void runAiWriting("comment"); } },
+                ] as any[] : [
+                  { label: "AI Review paper", action: () => { setPaletteOpen(false); void runAiReview(); } },
+                  { label: "AI Rewrite selection", action: () => { setPaletteOpen(false); void runAiWriting("rewrite"); } },
+                  { label: "AI Summarize selection", action: () => { setPaletteOpen(false); void runAiWriting("summarize"); } },
+                  { label: "AI Improve grammar", action: () => { setPaletteOpen(false); void runAiWriting("improve"); } },
+                ]),
                 { label: "Import citation from DOI", action: () => { setPaletteOpen(false); void importCitationFromDoi(); } },
                 { label: "CSV to LaTeX table", action: () => { setPaletteOpen(false); void generateLatexTableFromCsv(); } },
                 { label: "Insert Section", action: () => { setPaletteOpen(false); insertEditorSnippet({ block: "\\section{Section}\n", cursorOffset: 9 }); } },
