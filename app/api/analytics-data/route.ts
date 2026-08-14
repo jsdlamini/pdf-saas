@@ -23,7 +23,7 @@ export async function GET() {
     const [pageviews, tools, daily, referrers, totalUsers, countries, cities, events, recent] = await Promise.all([
       pool.query(`SELECT COUNT(*) as total FROM wiserfiles_analytics WHERE event = 'pageview'`),
       pool.query(
-        `SELECT tool, COUNT(*) as count FROM wiserfiles_analytics WHERE event = 'pageview' AND tool IS NOT NULL GROUP BY tool ORDER BY count DESC LIMIT 15`
+        `SELECT tool, COUNT(*) as count FROM wiserfiles_analytics WHERE event = 'pageview' AND tool IS NOT NULL AND tool != 'home' GROUP BY tool ORDER BY count DESC LIMIT 15`
       ),
       pool.query(
         `SELECT DATE(created_at) as date, COUNT(*) as count FROM wiserfiles_analytics WHERE event = 'pageview' AND created_at > NOW() - INTERVAL '30 days' GROUP BY DATE(created_at) ORDER BY date DESC`
