@@ -529,7 +529,7 @@ function UserActivity({ data }: { data: AnalyticsData | null }) {
       <div className="flex items-center justify-between mb-4">
         <div>
           <h2 className="text-base font-semibold text-slate-900">User Activity</h2>
-          <p className="text-xs text-slate-500 mt-0.5">Fine-grained actions users performed (compile, AI, exports, invites…).</p>
+          <p className="text-xs text-slate-500 mt-0.5">Every action and visit — pageviews, compiles, AI use, exports, invites.</p>
         </div>
         <span className="rounded-full bg-cyan-100 px-2.5 py-0.5 text-[10px] font-bold text-cyan-800">
           {recent.length} recent
