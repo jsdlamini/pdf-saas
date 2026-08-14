@@ -993,6 +993,7 @@ export default function ResearchStudioPage() {
   });
 
   const [codeOutput, setCodeOutput] = useState<{ stdout: string; stderr: string; exitCode: number } | null>(null);
+  const [codeOutputCollapsed, setCodeOutputCollapsed] = useState(false);
   // Persist workspace + active project to localStorage
   useEffect(() => {
     try { localStorage.setItem("wiserfiles-workspace", JSON.stringify(workspaceScreen)); } catch {}
@@ -3147,6 +3148,7 @@ export default function ResearchStudioPage() {
         stderr: result.error || "",
         exitCode: result.exitCode ?? 0,
       });
+      setCodeOutputCollapsed(false);
       setCompileNotice(`Code executed (exit code: ${result.exitCode ?? 0}).`);
       trackStudioEvent("run-code", editorMode);
     } catch (runError) {
@@ -4974,26 +4976,41 @@ export default function ResearchStudioPage() {
 
           {/* Code output panel */}
           {isCodeMode && codeOutput ? (
-            <div className="studio-code-output">
+            <div className={`studio-code-output ${codeOutputCollapsed ? "studio-code-output-collapsed" : ""}`}>
               <div className="studio-code-output-header">
                 <span>Output {codeOutput.exitCode !== undefined ? `(exit: ${codeOutput.exitCode})` : ""}</span>
-                <button
-                  type="button"
-                  onClick={() => setCodeOutput(null)}
-                  className="studio-btn studio-btn-ghost"
-                  style={{ height: 20, fontSize: 10, padding: "0 6px" }}
-                >
-                  Clear
-                </button>
+                <div style={{ display: "flex", gap: 4 }}>
+                  <button
+                    type="button"
+                    onClick={() => setCodeOutputCollapsed((c) => !c)}
+                    className="studio-btn studio-btn-ghost"
+                    style={{ height: 20, fontSize: 10, padding: "0 6px" }}
+                    title={codeOutputCollapsed ? "Expand output" : "Collapse output"}
+                  >
+                    {codeOutputCollapsed ? "Expand" : "Collapse"}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setCodeOutput(null)}
+                    className="studio-btn studio-btn-ghost"
+                    style={{ height: 20, fontSize: 10, padding: "0 6px" }}
+                  >
+                    Clear
+                  </button>
+                </div>
               </div>
-              {codeOutput.stdout ? (
-                <pre className="studio-code-output-body" style={{ color: "#4ade80" }}>{codeOutput.stdout}</pre>
-              ) : null}
-              {codeOutput.stderr ? (
-                <pre className="studio-code-output-body" style={{ color: "#f87171" }}>{codeOutput.stderr}</pre>
-              ) : null}
-              {!codeOutput.stdout && !codeOutput.stderr ? (
-                <pre className="studio-code-output-body" style={{ color: "#94a3b8" }}>No output.</pre>
+              {!codeOutputCollapsed ? (
+                <>
+                  {codeOutput.stdout ? (
+                    <pre className="studio-code-output-body" style={{ color: "#4ade80" }}>{codeOutput.stdout}</pre>
+                  ) : null}
+                  {codeOutput.stderr ? (
+                    <pre className="studio-code-output-body" style={{ color: "#f87171" }}>{codeOutput.stderr}</pre>
+                  ) : null}
+                  {!codeOutput.stdout && !codeOutput.stderr ? (
+                    <pre className="studio-code-output-body" style={{ color: "#94a3b8" }}>No output.</pre>
+                  ) : null}
+                </>
               ) : null}
             </div>
           ) : null}

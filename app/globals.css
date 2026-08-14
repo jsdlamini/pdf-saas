@@ -212,8 +212,18 @@ body {
 .studio-code-output {
   border-top: 1px solid var(--border-color, #334155);
   background: #0a0c14;
-  max-height: 200px;
+  height: 25vh;
+  min-height: 25vh;
+  max-height: 50vh;
   overflow: auto;
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.studio-code-output-collapsed {
+  height: auto;
+  min-height: 0;
   flex-shrink: 0;
 }
 
@@ -239,6 +249,8 @@ body {
   white-space: pre-wrap;
   word-break: break-all;
   line-height: 1.5;
+  flex: 1;
+  overflow: auto;
 }
 
 /* ── Terminal ───── */
