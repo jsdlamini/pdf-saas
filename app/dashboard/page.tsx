@@ -183,7 +183,7 @@ export default function DashboardPage() {
               {data.daily.reduce((sum, d) => sum + parseInt(d.count), 0).toLocaleString()} total
             </span>
           </div>
-          <div className="flex items-end gap-1 h-40">
+          <div className="relative flex items-end gap-1 h-44 border-b border-slate-100">
             {data.daily.length === 0 ? (
               <div className="flex w-full items-center justify-center h-full text-sm text-slate-400">
                 No data yet — activity will appear here as visitors arrive
@@ -196,22 +196,27 @@ export default function DashboardPage() {
                 const barWidth = barCount > 0 ? Math.max(8, Math.floor(100 / barCount) - 1) : 8;
                 return sorted.slice(0, 30).map((d, i) => {
                   const count = Number(d.count) || 0;
-                  const heightPx = Math.max(4, Math.round((count / max) * 152));
+                  const dateLabel = (d.date || "").toString().slice(0, 10);
+                  const heightPx = Math.max(4, Math.round((count / max) * 156));
                   return (
-                    <div key={(d.date || "").toString() || i} className="group relative flex flex-col justify-end items-center"
+                    <div key={dateLabel || i} className="group relative flex flex-col justify-end items-center"
                       style={{ width: `${barWidth}%`, minWidth: 8 }}>
                       <div
-                        className="w-full rounded-t transition-all duration-300"
+                        className="w-full rounded-md transition-all duration-300 cursor-pointer group-hover:brightness-110"
                         style={{
                           height: `${heightPx}px`,
                           minWidth: 8,
-                          background: "linear-gradient(to top, #06b6d4, #0ea5e9)",
+                          background: "linear-gradient(to top, #06b6d4, #38bdf8)",
+                          boxShadow: "0 0 0 1px rgba(6, 182, 212, 0.08), 0 2px 6px rgba(6, 182, 212, 0.12)",
                         }}
                       />
-                      <div className="absolute -bottom-7 left-1/2 -translate-x-1/2 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none">
-                        <span className="whitespace-nowrap rounded-md bg-slate-800 px-2 py-1 text-[10px] font-semibold text-white shadow">
-                          {count}
-                        </span>
+                      {/* Hover tooltip */}
+                      <div className="absolute bottom-full left-1/2 z-10 mb-2 -translate-x-1/2 -translate-y-1 opacity-0 group-hover:opacity-100 group-hover:translate-y-0 transition-all duration-200 pointer-events-none">
+                        <div className="flex flex-col items-center whitespace-nowrap rounded-lg bg-slate-900/95 px-3 py-1.5 shadow-xl ring-1 ring-white/10">
+                          <span className="text-[11px] font-bold text-white tabular-nums">{count.toLocaleString()} views</span>
+                          <span className="text-[9px] font-medium uppercase tracking-wide text-cyan-300/90">{dateLabel}</span>
+                        </div>
+                        <div className="mx-auto h-1.5 w-1.5 rotate-45 bg-slate-900/95 -mt-0.5" />
                       </div>
                     </div>
                   );
@@ -235,16 +240,17 @@ export default function DashboardPage() {
                 <div key={t.tool} className="flex items-center gap-3 group">
                   <span className="w-5 text-right text-[11px] font-bold text-slate-400">#{i + 1}</span>
                   <span className="w-36 truncate text-sm font-medium text-slate-700 group-hover:text-cyan-700">{t.tool}</span>
-                  <div className="flex-1 h-6 rounded-full bg-slate-100 overflow-hidden">
+                  <div className="flex-1 h-6 rounded-full bg-slate-100/80 ring-1 ring-inset ring-slate-200/60 overflow-hidden">
                     <div
                       className="h-full rounded-full transition-all duration-700"
                       style={{
                         width: `${(parseInt(t.count) / maxTool) * 100}%`,
-                        background: `linear-gradient(to right, rgb(6 182 212 / 0.7), rgb(14 165 233 / 0.9))`,
+                        background: `linear-gradient(to right, #06b6d4, #38bdf8)`,
+                        boxShadow: "0 1px 3px rgba(6, 182, 212, 0.25)",
                       }}
                     />
                   </div>
-                  <span className="w-10 text-right text-xs font-semibold text-slate-600">{t.count}</span>
+                  <span className="w-10 text-right text-xs font-semibold text-slate-600 tabular-nums">{t.count}</span>
                 </div>
               ))}
             </div>
