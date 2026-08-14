@@ -13,6 +13,7 @@ type AnalyticsData = {
   cities: Array<{ city: string; country: string; count: string }>;
   events?: Array<{ event: string; count: string }>;
   recentEvents?: Array<{ event: string; detail: string | null; user_id: string | null; ip_hash: string | null; created_at: string }>;
+  homePageviews?: number;
 };
 
 export default function DashboardPage() {
@@ -228,6 +229,52 @@ export default function DashboardPage() {
             <span>{(data.daily[data.daily.length - 1]?.date || "").toString().slice(0, 10)}</span>
             <span>{(data.daily[0]?.date || "").toString().slice(0, 10)}</span>
           </div>
+        </div>
+
+        {/* Traffic distribution */}
+        <div className="rounded-2xl border border-slate-200/60 bg-white p-6 shadow-sm">
+          <div className="flex items-center justify-between mb-5">
+            <div>
+              <h2 className="text-base font-semibold text-slate-900">Traffic Distribution</h2>
+              <p className="text-xs text-slate-500 mt-0.5">Where visitors land — homepage vs. tools vs. research studio</p>
+            </div>
+          </div>
+          {(() => {
+            const home = data.homePageviews ?? 0;
+            const studio = parseInt(data.tools.find((t) => t.tool === "research-studio")?.count || "0", 10);
+            const toolsTotal = data.tools.filter((t) => t.tool !== "research-studio").reduce((sum, t) => sum + parseInt(t.count, 10), 0);
+            const total = Math.max(home + studio + toolsTotal, 1);
+            const segments = [
+              { label: "Homepage", value: home, color: "#f59e0b" },
+              { label: "Research Studio", value: studio, color: "#06b6d4" },
+              { label: "PDF Tools", value: toolsTotal, color: "#818cf8" },
+            ];
+            return (
+              <div className="space-y-4">
+                <div className="flex h-8 w-full overflow-hidden rounded-full ring-1 ring-inset ring-slate-200/70">
+                  {segments.map((s) => (
+                    <div
+                      key={s.label}
+                      style={{ width: `${(s.value / total) * 100}%`, background: s.color }}
+                      title={`${s.label}: ${s.value.toLocaleString()}`}
+                    />
+                  ))}
+                </div>
+                <div className="grid grid-cols-3 gap-3">
+                  {segments.map((s) => (
+                    <div key={s.label} className="rounded-xl border border-slate-100 bg-slate-50/60 p-3 text-center">
+                      <div className="flex items-center justify-center gap-1.5">
+                        <span className="h-2.5 w-2.5 rounded-full" style={{ background: s.color }} />
+                        <span className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">{s.label}</span>
+                      </div>
+                      <div className="mt-1 text-xl font-bold text-slate-900 tabular-nums">{s.value.toLocaleString()}</div>
+                      <div className="text-[11px] text-slate-400">{Math.round((s.value / total) * 100)}% of visits</div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            );
+          })()}
         </div>
 
         {/* Tools + Referrers grid */}
