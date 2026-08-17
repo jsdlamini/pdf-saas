@@ -1708,6 +1708,28 @@ export default function ResearchStudioPage() {
     const imageFile = files[0];
     if (!imageFile.type.startsWith("image/")) return;
 
+    // Compute the drop position from mouse coordinates (not the stale cursor).
+    const textarea = editorRef.current;
+    let cursor = textarea?.selectionStart ?? activeSource.length;
+    if (textarea) {
+      const rect = textarea.getBoundingClientRect();
+      const paddingLeft = 16;
+      const paddingTop = 12;
+      const lineHeight = 13 * 1.625;
+      const charWidth = 7.8;
+      const x = event.clientX - rect.left - paddingLeft;
+      const y = event.clientY - rect.top - paddingTop + textarea.scrollTop;
+      const line = Math.max(0, Math.floor(y / lineHeight));
+      const col = Math.max(0, Math.round(x / charWidth));
+      const lines = activeSource.split("\n");
+      let charIndex = 0;
+      const clampedLine = Math.min(line, lines.length - 1);
+      for (let i = 0; i < clampedLine; i += 1) {
+        charIndex += lines[i].length + 1;
+      }
+      cursor = charIndex + Math.min(col, (lines[clampedLine] || "").length);
+    }
+
     const reader = new FileReader();
     reader.onload = () => {
       const base64 = reader.result as string;
@@ -1723,20 +1745,17 @@ export default function ResearchStudioPage() {
         ];
       });
 
-      // Insert LaTeX code at cursor
-      const textarea = editorRef.current;
-      if (!textarea) return;
-      const cursor = textarea.selectionStart;
-      const snippet = `\begin{figure}[htbp]
-  \centering
-  \includegraphics[width=0.8\\linewidth]{${figurePath}}
-  \caption{Figure caption}
-  \label{fig:${safeName.replace(/\.[^.]+$/, "")}}
-\end{figure}
+      // Insert LaTeX code at the drop position
+      const snippet = `\\begin{figure}[htbp]
+  \\centering
+  \\includegraphics[width=0.8\\linewidth]{${figurePath}}
+  \\caption{Figure caption}
+  \\label{fig:${safeName.replace(/\.[^.]+$/, "")}}
+\\end{figure}
 `;
       const nextText = activeSource.slice(0, cursor) + snippet + activeSource.slice(cursor);
       updateActiveFile(nextText);
-      setCompileNotice(`Image "${safeName}" added to figures/ and inserted at cursor.`);
+      setCompileNotice(`Image "${safeName}" added to figures/ and inserted at drop point.`);
     };
     reader.readAsDataURL(imageFile);
   }
@@ -2667,6 +2686,54 @@ export default function ResearchStudioPage() {
       }
       isUndoRedoRef.current = false;
     });
+  }
+
+  function editSelectAll() {
+    const textarea = editorRef.current;
+    if (!textarea) return;
+    textarea.focus();
+    textarea.setSelectionRange(0, activeSource.length);
+  }
+
+  function getSelectedText(): string {
+    const textarea = editorRef.current;
+    const start = textarea?.selectionStart ?? 0;
+    const end = textarea?.selectionEnd ?? start;
+    return activeSource.slice(start, end);
+  }
+
+  async function editCopy() {
+    const selected = getSelectedText();
+    if (!selected) return;
+    try { await navigator.clipboard.writeText(selected); } catch {}
+    setCompileNotice("Copied selection.");
+  }
+
+  async function editCut() {
+    const selected = getSelectedText();
+    if (!selected) return;
+    try { await navigator.clipboard.writeText(selected); } catch {}
+    const textarea = editorRef.current;
+    const start = textarea?.selectionStart ?? 0;
+    const end = textarea?.selectionEnd ?? start;
+    const nextText = activeSource.slice(0, start) + activeSource.slice(end);
+    updateActiveFile(nextText);
+    setCompileNotice("Cut selection.");
+  }
+
+  async function editPaste() {
+    try {
+      const text = await navigator.clipboard.readText();
+      if (!text) return;
+      const textarea = editorRef.current;
+      const start = textarea?.selectionStart ?? activeSource.length;
+      const end = textarea?.selectionEnd ?? start;
+      const nextText = activeSource.slice(0, start) + text + activeSource.slice(end);
+      updateActiveFile(nextText);
+      setCompileNotice("Pasted.");
+    } catch {
+      setCompileNotice("Paste failed — use Ctrl+V in the editor.");
+    }
   }
 
   function toggleLineComment() {
@@ -4486,6 +4553,11 @@ export default function ResearchStudioPage() {
             label: "Edit", key: "edit", items: [
               { label: <>Undo <kbd className="studio-menu-kbd">Ctrl+Z</kbd></>, action: () => { setOpenMenu(""); undo(); } },
               { label: <>Redo <kbd className="studio-menu-kbd">Ctrl+Y</kbd></>, action: () => { setOpenMenu(""); redo(); } },
+              "-",
+              { label: <>Cut <kbd className="studio-menu-kbd">Ctrl+X</kbd></>, action: () => { setOpenMenu(""); void editCut(); } },
+              { label: <>Copy <kbd className="studio-menu-kbd">Ctrl+C</kbd></>, action: () => { setOpenMenu(""); void editCopy(); } },
+              { label: <>Paste <kbd className="studio-menu-kbd">Ctrl+V</kbd></>, action: () => { setOpenMenu(""); void editPaste(); } },
+              { label: <>Select All <kbd className="studio-menu-kbd">Ctrl+A</kbd></>, action: () => { setOpenMenu(""); editSelectAll(); } },
               "-",
               { label: <>Find <kbd className="studio-menu-kbd">Ctrl+F</kbd></>, action: () => { setOpenMenu(""); setFindPanelOpen(true); setReplacePanelOpen(false); } },
               { label: <>Replace <kbd className="studio-menu-kbd">Ctrl+H</kbd></>, action: () => { setOpenMenu(""); setFindPanelOpen(true); setReplacePanelOpen(true); } },
