@@ -5042,7 +5042,7 @@ export default function ResearchStudioPage() {
             <div className="studio-editor-gutter">
               <div style={{ transform: `translateY(${-editorScroll.top}px)` }}>
                 {activeSource.split("\n").map((_, i) => (
-                  <div key={i} style={{ lineHeight: 1.625 }}>{i + 1}</div>
+                  <div key={i} style={{ lineHeight: "21px" }}>{i + 1}</div>
                 ))}
               </div>
             </div>
@@ -5053,8 +5053,7 @@ export default function ResearchStudioPage() {
                 className="studio-editor-highlight"
                 style={{ transform: `translate(${-editorScroll.left}px, ${-editorScroll.top}px)` }}
                 dangerouslySetInnerHTML={{
-                  __html: `${highlightedSource
-                    .replace(/latex-token-/g, "studio-hl-")}\n`,
+                  __html: highlightedSource.replace(/latex-token-/g, "studio-hl-"),
                 }}
               />
               {collabCursors.length > 0 ? (
