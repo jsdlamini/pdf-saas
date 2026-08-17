@@ -601,7 +601,7 @@ type TreeContextMenuState = {
   implicitFolder: boolean;
 };
 
-type TreeContextAction = "open" | "new-file" | "new-folder" | "rename" | "delete";
+type TreeContextAction = "open" | "new-file" | "new-folder" | "rename" | "delete" | "insert-image" | "download-image";
 
 type TreeContextActionItem = {
   action: TreeContextAction;
@@ -797,12 +797,18 @@ function buildActiveAncestorExpansion(selectedFilePath: string, entries: Project
 }
 
 function getTreeContextMenuItems(menu: TreeContextMenuState): TreeContextActionItem[] {
+  const isImage = /\.(png|jpg|jpeg|gif|webp|svg)$/i.test(menu.nodePath);
   const items: TreeContextActionItem[] = [
     {
       action: "open",
-      label: menu.nodeKind === "file" ? "Open file" : "Toggle folder",
+      label: menu.nodeKind === "file" ? (isImage ? "Preview image" : "Open file") : "Toggle folder",
     },
   ];
+
+  if (menu.nodeKind === "file" && isImage) {
+    items.push({ action: "insert-image", label: "Insert into document" });
+    items.push({ action: "download-image", label: "Download" });
+  }
 
   if (menu.nodeKind === "folder") {
     items.push({ action: "new-file", label: "New file" });
@@ -846,6 +852,24 @@ function renderTreeContextIcon(action: TreeContextAction) {
     return (
       <svg viewBox="0 0 20 20" className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth="1.8">
         <path d="M4 14.5V16h1.5L15 6.5 13.5 5 4 14.5z" strokeLinecap="round" strokeLinejoin="round" />
+      </svg>
+    );
+  }
+
+  if (action === "insert-image") {
+    return (
+      <svg viewBox="0 0 20 20" className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth="1.8">
+        <rect x="3" y="4" width="14" height="12" rx="1.5" />
+        <circle cx="8" cy="8" r="1.2" />
+        <path d="M4.5 14l4.5-4 2.6 2 1.9-1.7L15.5 14" strokeLinecap="round" strokeLinejoin="round" />
+      </svg>
+    );
+  }
+
+  if (action === "download-image") {
+    return (
+      <svg viewBox="0 0 20 20" className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth="1.8">
+        <path d="M10 3v9m0 0l-3-3m3 3l3-3M4 14v2h12v-2" strokeLinecap="round" strokeLinejoin="round" />
       </svg>
     );
   }
@@ -1079,6 +1103,7 @@ export default function ResearchStudioPage() {
   const [intellisensePosition, setIntellisensePosition] = useState<{ top: number; left: number } | null>(null);
   const [expandedFolders, setExpandedFolders] = useState<Record<string, boolean>>({});
   const [treeContextMenu, setTreeContextMenu] = useState<TreeContextMenuState | null>(null);
+  const [imagePreview, setImagePreview] = useState<{ name: string; dataUrl: string } | null>(null);
   const [treeContextActiveIndex, setTreeContextActiveIndex] = useState(0);
   const [editorScroll, setEditorScroll] = useState({ top: 0, left: 0 });
   const [autoSaveStatus, setAutoSaveStatus] = useState<"saved" | "unsaved" | "saving">("saved");
@@ -1760,6 +1785,40 @@ export default function ResearchStudioPage() {
     reader.readAsDataURL(imageFile);
   }
 
+  function isImagePath(path: string) {
+    return /\.(png|jpg|jpeg|gif|webp|svg)$/i.test(path);
+  }
+
+  function previewImageEntry(path: string) {
+    const entry = projectEntries.find((e) => e.path === path && e.kind === "file");
+    if (!entry) return;
+    const content = entry.content;
+    // Content is base64 (or a data URL for legacy entries).
+    const dataUrl = content.startsWith("data:") ? content : `data:image/png;base64,${content}`;
+    setImagePreview({ name: path.split("/").pop() || path, dataUrl });
+  }
+
+  function downloadImageEntry(path: string) {
+    const entry = projectEntries.find((e) => e.path === path && e.kind === "file");
+    if (!entry) return;
+    const content = entry.content;
+    const dataUrl = content.startsWith("data:") ? content : `data:image/png;base64,${content}`;
+    const name = path.split("/").pop() || "image.png";
+    const a = document.createElement("a");
+    a.href = dataUrl;
+    a.download = name;
+    a.click();
+  }
+
+  function insertImageIntoDocument(path: string) {
+    const snippet = `\\includegraphics[width=0.8\\linewidth]{${path}}`;
+    const textarea = editorRef.current;
+    const cursor = textarea?.selectionStart ?? activeSource.length;
+    const nextText = activeSource.slice(0, cursor) + snippet + activeSource.slice(cursor);
+    updateActiveFile(nextText);
+    setCompileNotice(`Inserted \\includegraphics{${path}} at cursor.`);
+  }
+
   function openTreeContextMenu(
     event: React.MouseEvent,
     node: ProjectTreeNode,
@@ -1790,10 +1849,24 @@ export default function ResearchStudioPage() {
     if (action === "open") {
       if (nodeKind === "file") {
         closeIntellisense();
-        setSelectedPath(nodePath);
+        if (isImagePath(nodePath)) {
+          previewImageEntry(nodePath);
+        } else {
+          setSelectedPath(nodePath);
+        }
       } else {
         toggleFolder(nodePath);
       }
+      return;
+    }
+
+    if (action === "insert-image") {
+      insertImageIntoDocument(nodePath);
+      return;
+    }
+
+    if (action === "download-image") {
+      downloadImageEntry(nodePath);
       return;
     }
 
@@ -3965,9 +4038,13 @@ export default function ResearchStudioPage() {
             <span
               onClick={() => {
                 if (!isFolder) {
-                  closeIntellisense();
-                  setSelectedPath(node.path);
-                  setOpenTabs((prev) => prev.includes(node.path) ? prev : [...prev, node.path]);
+                  if (isImagePath(node.path)) {
+                    previewImageEntry(node.path);
+                  } else {
+                    closeIntellisense();
+                    setSelectedPath(node.path);
+                    setOpenTabs((prev) => prev.includes(node.path) ? prev : [...prev, node.path]);
+                  }
                 } else {
                   toggleFolder(node.path);
                 }
@@ -5272,6 +5349,33 @@ export default function ResearchStudioPage() {
                       </div>
                     ));
                   })()}
+                </div>
+              </div>
+            </div>
+          ) : null}
+
+          {/* Image preview dialog */}
+          {imagePreview ? (
+            <div className="studio-history-overlay" onClick={() => setImagePreview(null)}>
+              <div className="studio-history-panel studio-figure-panel" onClick={(e) => e.stopPropagation()}>
+                <div className="studio-history-header">
+                  <span>Image Preview</span>
+                  <button type="button" onClick={() => setImagePreview(null)} className="studio-terminal-close-btn">×</button>
+                </div>
+                <div className="studio-figure-body" style={{ textAlign: "center" }}>
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img src={imagePreview.dataUrl} alt={imagePreview.name} style={{ maxWidth: "100%", maxHeight: "60vh", borderRadius: 6 }} />
+                  <div style={{ display: "flex", gap: 8, marginTop: 12, justifyContent: "space-between", alignItems: "center" }}>
+                    <span style={{ fontSize: 12, color: "var(--text-muted, #64748b)" }}>{imagePreview.name}</span>
+                    <div style={{ display: "flex", gap: 8 }}>
+                      <button type="button" className="studio-btn studio-btn-secondary" onClick={() => { downloadImageEntry(`figures/${imagePreview.name}`); }}>
+                        Download
+                      </button>
+                      <button type="button" className="studio-btn studio-btn-ghost" onClick={() => setImagePreview(null)}>
+                        Close
+                      </button>
+                    </div>
+                  </div>
                 </div>
               </div>
             </div>
