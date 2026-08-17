@@ -1725,8 +1725,41 @@ export default function ResearchStudioPage() {
     event.dataTransfer.dropEffect = "copy";
   }
 
+  function computeDropCursor(event: React.DragEvent<HTMLTextAreaElement>): number {
+    const textarea = editorRef.current;
+    if (!textarea) return activeSource.length;
+    const rect = textarea.getBoundingClientRect();
+    const paddingLeft = 16;
+    const paddingTop = 12;
+    const lineHeight = 13 * 1.625;
+    const charWidth = 7.8;
+    const x = event.clientX - rect.left - paddingLeft;
+    const y = event.clientY - rect.top - paddingTop + textarea.scrollTop;
+    const line = Math.max(0, Math.floor(y / lineHeight));
+    const col = Math.max(0, Math.round(x / charWidth));
+    const lines = activeSource.split("\n");
+    let charIndex = 0;
+    const clampedLine = Math.min(line, lines.length - 1);
+    for (let i = 0; i < clampedLine; i += 1) {
+      charIndex += lines[i].length + 1;
+    }
+    return charIndex + Math.min(col, (lines[clampedLine] || "").length);
+  }
+
   function onEditorDrop(event: React.DragEvent<HTMLTextAreaElement>) {
     event.preventDefault();
+
+    // Internal drop: image dragged from the file tree
+    const internalPath = event.dataTransfer.getData("application/x-wiserfiles-image");
+    if (internalPath) {
+      const cursor = computeDropCursor(event);
+      const snippet = `\\includegraphics[width=0.8\\linewidth]{${internalPath}}`;
+      const nextText = activeSource.slice(0, cursor) + snippet + activeSource.slice(cursor);
+      updateActiveFile(nextText);
+      setCompileNotice(`Inserted ${internalPath} at drop point.`);
+      return;
+    }
+
     const files = event.dataTransfer.files;
     if (!files || !files.length) return;
 
@@ -1734,26 +1767,7 @@ export default function ResearchStudioPage() {
     if (!imageFile.type.startsWith("image/")) return;
 
     // Compute the drop position from mouse coordinates (not the stale cursor).
-    const textarea = editorRef.current;
-    let cursor = textarea?.selectionStart ?? activeSource.length;
-    if (textarea) {
-      const rect = textarea.getBoundingClientRect();
-      const paddingLeft = 16;
-      const paddingTop = 12;
-      const lineHeight = 13 * 1.625;
-      const charWidth = 7.8;
-      const x = event.clientX - rect.left - paddingLeft;
-      const y = event.clientY - rect.top - paddingTop + textarea.scrollTop;
-      const line = Math.max(0, Math.floor(y / lineHeight));
-      const col = Math.max(0, Math.round(x / charWidth));
-      const lines = activeSource.split("\n");
-      let charIndex = 0;
-      const clampedLine = Math.min(line, lines.length - 1);
-      for (let i = 0; i < clampedLine; i += 1) {
-        charIndex += lines[i].length + 1;
-      }
-      cursor = charIndex + Math.min(col, (lines[clampedLine] || "").length);
-    }
+    const cursor = computeDropCursor(event);
 
     const reader = new FileReader();
     reader.onload = () => {
@@ -4016,6 +4030,13 @@ export default function ResearchStudioPage() {
             className={`studio-tree-node ${isActive ? "studio-tree-node-active" : ""}`}
             style={{ "--depth": depth } as React.CSSProperties}
             onContextMenu={(event) => openTreeContextMenu(event, node, explicitFolder)}
+            draggable={!isFolder && isImagePath(node.path)}
+            onDragStart={(event) => {
+              if (isFolder || !isImagePath(node.path)) return;
+              event.dataTransfer.setData("application/x-wiserfiles-image", node.path);
+              event.dataTransfer.setData("text/plain", node.path);
+              event.dataTransfer.effectAllowed = "copy";
+            }}
           >
             {isFolder ? (
               <span
