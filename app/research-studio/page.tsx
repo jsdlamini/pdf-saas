@@ -1771,7 +1771,7 @@ export default function ResearchStudioPage() {
 
     const reader = new FileReader();
     reader.onload = () => {
-      const base64 = reader.result as string;
+      const base64 = stripDataUrlPrefix(reader.result as string);
       const safeName = imageFile.name.replace(/[^a-zA-Z0-9._-]/g, "_");
       const figurePath = `figures/${safeName}`;
 
@@ -1803,23 +1803,41 @@ export default function ResearchStudioPage() {
     return /\.(png|jpg|jpeg|gif|webp|svg)$/i.test(path);
   }
 
+  function imageMimeType(path: string): string {
+    const ext = path.split(".").pop()?.toLowerCase() || "png";
+    const mime: Record<string, string> = {
+      png: "image/png",
+      jpg: "image/jpeg",
+      jpeg: "image/jpeg",
+      gif: "image/gif",
+      webp: "image/webp",
+      svg: "image/svg+xml",
+    };
+    return mime[ext] || "image/png";
+  }
+
+  function toDataUrl(content: string, path: string): string {
+    if (content.startsWith("data:")) return content;
+    return `data:${imageMimeType(path)};base64,${content}`;
+  }
+
+  function stripDataUrlPrefix(content: string): string {
+    const commaIndex = content.indexOf(",");
+    return commaIndex !== -1 && content.startsWith("data:") ? content.slice(commaIndex + 1) : content;
+  }
+
   function previewImageEntry(path: string) {
     const entry = projectEntries.find((e) => e.path === path && e.kind === "file");
     if (!entry) return;
-    const content = entry.content;
-    // Content is base64 (or a data URL for legacy entries).
-    const dataUrl = content.startsWith("data:") ? content : `data:image/png;base64,${content}`;
-    setImagePreview({ name: path.split("/").pop() || path, dataUrl });
+    setImagePreview({ name: path.split("/").pop() || path, dataUrl: toDataUrl(entry.content, path) });
   }
 
   function downloadImageEntry(path: string) {
     const entry = projectEntries.find((e) => e.path === path && e.kind === "file");
     if (!entry) return;
-    const content = entry.content;
-    const dataUrl = content.startsWith("data:") ? content : `data:image/png;base64,${content}`;
     const name = path.split("/").pop() || "image.png";
     const a = document.createElement("a");
-    a.href = dataUrl;
+    a.href = toDataUrl(entry.content, path);
     a.download = name;
     a.click();
   }

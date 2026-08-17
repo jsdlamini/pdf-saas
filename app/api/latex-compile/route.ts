@@ -473,7 +473,10 @@ export async function POST(request: Request) {
       // Binary assets (figures, images, PDFs) are stored as base64 strings;
       // decode them so LaTeX can actually use them.
       if (/\.(png|jpg|jpeg|gif|pdf|eps|svg)$/i.test(path)) {
-        await writeFile(targetPath, Buffer.from(content, "base64"));
+        const raw = content.includes(",") && content.startsWith("data:")
+          ? content.slice(content.indexOf(",") + 1)
+          : content;
+        await writeFile(targetPath, Buffer.from(raw, "base64"));
       } else {
         await writeFile(targetPath, content, "utf8");
       }
