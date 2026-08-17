@@ -58,12 +58,7 @@ export async function POST(request: Request) {
     const outputName = format === "docx" ? "document.docx" : "document.md";
     const outputPath = join(tempDir, outputName);
 
-    const args = [rootFile, "-o", outputName];
-    if (format === "docx") {
-      args.push("-f", "docx");
-    } else {
-      args.push("-t", "markdown");
-    }
+    const args = [rootFile, "-o", outputName, "-f", "latex", "-t", format === "docx" ? "docx" : "markdown"];
 
     await execFileAsync("pandoc", args, {
       cwd: tempDir,

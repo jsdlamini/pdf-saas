@@ -4292,30 +4292,6 @@ export default function ResearchStudioPage() {
           </button>
           <span style={{ color: "var(--border-color, #334155)" }} className="hidden sm:inline">|</span>
           <span className="studio-topbar-title">{projectName}</span>
-          {/* Mode selector tabs */}
-          <div className="studio-mode-selector">
-            <button
-              type="button"
-              onClick={() => setEditorMode("latex")}
-              className={`studio-mode-tab ${editorMode === "latex" ? "studio-mode-tab-active" : ""}`}
-            >
-              LaTeX
-            </button>
-            <button
-              type="button"
-              onClick={() => setEditorMode("python")}
-              className={`studio-mode-tab ${editorMode === "python" ? "studio-mode-tab-active" : ""}`}
-            >
-              Python
-            </button>
-            <button
-              type="button"
-              onClick={() => setEditorMode("cpp")}
-              className={`studio-mode-tab ${editorMode === "cpp" ? "studio-mode-tab-active" : ""}`}
-            >
-              C++
-            </button>
-          </div>
           <span className={`studio-topbar-meta ${autoSaveStatus === "saved" ? "studio-status-saved" : autoSaveStatus === "unsaved" ? "studio-status-unsaved" : ""}`}>
             {autoSaveStatus === "saved" ? `Saved ${autoSaveTimestamp || ""}` : autoSaveStatus === "saving" ? "Saving..." : "Unsaved"}
           </span>
@@ -4341,15 +4317,9 @@ export default function ResearchStudioPage() {
           ) : null}
           {isCodeMode ? (
             <>
-              {/* Language selector in code mode */}
-              <select
-                value={editorMode}
-                onChange={(e) => setEditorMode(e.target.value as EditorMode)}
-                className="studio-code-lang-select"
-              >
-                <option value="python">Python</option>
-                <option value="cpp">C++</option>
-              </select>
+              <span style={{ fontSize: 11, fontWeight: 600, color: "var(--text-secondary, #94a3b8)" }}>
+                {editorMode === "python" ? "Python" : "C++"}
+              </span>
               <button
                 type="button"
                 onClick={() => void compileProject()}
