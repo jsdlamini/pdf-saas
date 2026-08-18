@@ -1668,7 +1668,7 @@ export default function ToolWorkbench({ tool }: WorkbenchProps) {
     const toolCards = targetTools
       .map(
         (t) => `
-          <button type="button" data-tool-slug="${t.slug}" data-tool-name="${t.name}" class="swal-tool-card" title="${t.description || t.name}">
+          <button type="button" data-tool-slug="${t.slug}" data-tool-name="${t.name}" data-category="${t.category || ""}" class="swal-tool-card" title="${t.description || t.name}">
             <span class="swal-tool-card-name">${t.name}</span>
           </button>`
       )
@@ -1680,8 +1680,8 @@ export default function ToolWorkbench({ tool }: WorkbenchProps) {
       title: "Send output to another tool",
       html: `
         <div style="text-align:left">
-          <p style="font-size:12px;color:#64748b;margin:0 0 8px">The processed output is piped directly into the selected tool — no download and re-upload needed.</p>
-          <input id="swal-tool-search" class="swal2-input" placeholder="Search tools…" style="background:#f1f5f9;color:#0f172a;border-color:#e2e8f0;margin-bottom:8px">
+          <p style="font-size:12.5px;color:#64748b;margin:0 0 10px">The processed output is piped directly into the selected tool — no download and re-upload needed.</p>
+          <input id="swal-tool-search" class="swal-tool-search" placeholder="Search tools…">
           <div id="swal-tool-grid" class="swal-tool-grid">${toolCards}</div>
         </div>
       `,
