@@ -15,6 +15,7 @@ import { analyzeDocumentSelection } from "@/lib/document-preflight";
 import { MAX_OCR_UPLOAD_BYTES, OCR_LANGUAGE_OPTIONS } from "@/lib/ocr";
 import { formatDurationMs, hashBlob, hashFile, summarizeRunConfidence, type RunReport } from "@/lib/run-report";
 import { TOOL_ITEMS, type ToolItem } from "@/lib/tools";
+import Swal from "sweetalert2";
 import { consumeWorkflowPipeline, stageWorkflowPipeline } from "@/lib/workflow-pipeline";
 import { getNextRecipeStep, getRecipesForTool } from "@/lib/workflow-recipes";
 import ShareButton from "@/app/components/share-button";
@@ -1660,6 +1661,37 @@ export default function ToolWorkbench({ tool }: WorkbenchProps) {
     downloadPreparedOutput();
   }
 
+  async function pipeOutputToTool() {
+    if (!outputPreview) return;
+    const targetTools = TOOL_ITEMS.filter((t) => t.slug !== tool.slug);
+    const options = targetTools.reduce((acc, t) => {
+      acc[t.slug] = t.name;
+      return acc;
+    }, {} as Record<string, string>);
+
+    const { value } = await Swal.fire({
+      title: "Send output to another tool",
+      text: "The processed output will be piped directly into the selected tool — no download and re-upload needed.",
+      input: "select",
+      inputOptions: options,
+      inputPlaceholder: "Select a tool",
+      showCancelButton: true,
+      confirmButtonText: "Continue",
+      cancelButtonText: "Cancel",
+      confirmButtonColor: "#0f766e",
+      cancelButtonColor: "#334155",
+      background: "#ffffff",
+      position: "top",
+    });
+
+    if (!value) return;
+    const targetSlug = value as string;
+    const file = new File([outputPreview.blob], outputPreview.fileName, {
+      type: outputPreview.mime || "application/octet-stream",
+    });
+    navigateWithFile(targetSlug, file);
+  }
+
   async function loadOutputPdfPreviewPage(targetPage: number, currentOutput = outputPreview) {
     if (!currentOutput || !currentOutput.mime.includes("pdf")) return;
 
@@ -1694,14 +1726,23 @@ export default function ToolWorkbench({ tool }: WorkbenchProps) {
           <p className="type-eyebrow text-slate-600">Output Preview</p>
           <p className="field-help mt-1">Auto-delete in browser buffer: {formatRetention(retentionSecondsLeft)}</p>
         </div>
-        <button
-          type="button"
-          onClick={handleDownloadOutput}
-          disabled={downloadingOutput}
-          className={`${downloadingOutput ? "" : "animate-pulse"} btn btn-primary rounded-full px-4 py-2 text-xs uppercase tracking-wide shadow-[0_0_0_0_rgba(8,145,178,0.45)] disabled:cursor-not-allowed disabled:bg-cyan-200`}
-        >
-          {downloadingOutput ? "Downloading..." : "Download output"}
-        </button>
+        <div className="flex flex-wrap items-center gap-2">
+          <button
+            type="button"
+            onClick={() => void pipeOutputToTool()}
+            className="btn btn-secondary rounded-full px-4 py-2 text-xs uppercase tracking-wide"
+          >
+            Send to another tool
+          </button>
+          <button
+            type="button"
+            onClick={handleDownloadOutput}
+            disabled={downloadingOutput}
+            className={`${downloadingOutput ? "" : "animate-pulse"} btn btn-primary rounded-full px-4 py-2 text-xs uppercase tracking-wide shadow-[0_0_0_0_rgba(8,145,178,0.45)] disabled:cursor-not-allowed disabled:bg-cyan-200`}
+          >
+            {downloadingOutput ? "Downloading..." : "Download output"}
+          </button>
+        </div>
       </div>
 
       {outputPreview.mime.includes("pdf") ? (
