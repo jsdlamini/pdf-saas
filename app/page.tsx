@@ -63,17 +63,24 @@ function isWord(file: File) {
     /\.(doc|docx)$/i.test(file.name);
 }
 
-function getDropSuggestions(file: File): string[] {
-  if (isPdf(file)) {
-    return ["merge-pdf", "compress-pdf", "ocr-pdf"];
-  }
-  if (isImage(file)) {
+function getDropSuggestions(files: File[]): string[] {
+  if (!files.length) return [];
+  const types = new Set(files.map((f) => (isPdf(f) ? "pdf" : isImage(f) ? "image" : isWord(f) ? "word" : "other")));
+  // Mixed file types → the unified Convert to PDF handles them all.
+  if (types.size > 1) {
     return ["convert-to-pdf", "ocr-pdf"];
   }
-  if (isWord(file)) {
+  const first = files[0];
+  if (isPdf(first)) {
+    return ["convert-to-pdf", "merge-pdf", "compress-pdf", "ocr-pdf"];
+  }
+  if (isImage(first)) {
+    return ["convert-to-pdf", "ocr-pdf"];
+  }
+  if (isWord(first)) {
     return ["convert-to-pdf"];
   }
-  return ["merge-pdf", "compress-pdf", "sign-pdf"];
+  return ["convert-to-pdf", "compress-pdf", "sign-pdf"];
 }
 
 /* ── component ──────────────────────────────────────────────────── */
@@ -151,8 +158,8 @@ export default function Home() {
     height?: number;
   } | null>(null);
   const dropSuggestions = useMemo(
-    () => (dropFile ? getDropSuggestions(dropFile) : []),
-    [dropFile],
+    () => (dropFiles.length ? getDropSuggestions(dropFiles) : []),
+    [dropFiles],
   );
   const suggestedTools = useMemo(
     () =>
