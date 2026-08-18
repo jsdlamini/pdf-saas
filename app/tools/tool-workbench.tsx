@@ -986,6 +986,8 @@ export default function ToolWorkbench({ tool }: WorkbenchProps) {
   });
   const [signatureMode, setSignatureMode] = useState<"text" | "draw">("text");
   const [signatureDrawn, setSignatureDrawn] = useState(false);
+  const [signatures, setSignatures] = useState<Array<{ id: string; kind: "text" | "draw"; text?: string; dataUrl?: string; xRatio: number; yRatio: number }>>([]);
+  const [activeSignatureId, setActiveSignatureId] = useState("");
   const [savedSignatures, setSavedSignatures] = useState<Array<{ id: string; kind: "text" | "draw"; label: string; text?: string; dataUrl?: string }>>(() => {
     if (typeof window === "undefined") return [];
     try {
@@ -2578,12 +2580,61 @@ export default function ToolWorkbench({ tool }: WorkbenchProps) {
     try { localStorage.setItem("wiserfiles-saved-signatures", JSON.stringify(next)); } catch {}
   }
 
+  function addSignatureToDocument() {
+    if (signatureMode === "text") {
+      const text = editText.trim();
+      if (!text) { setError("Type a signature before adding it."); return; }
+      const count = signatures.length;
+      const newSig = {
+        id: `docsig-${Date.now()}`,
+        kind: "text" as const,
+        text,
+        xRatio: 0.82 - (count % 3) * 0.06,
+        yRatio: 0.12 + Math.floor(count / 3) * 0.08,
+      };
+      setSignatures((prev) => [...prev, newSig]);
+      setActiveSignatureId(newSig.id);
+    } else {
+      const canvas = signatureCanvasRef.current;
+      if (!canvas || !signatureDrawn) { setError("Draw a signature before adding it."); return; }
+      const dataUrl = canvas.toDataURL("image/png");
+      const count = signatures.length;
+      const newSig = {
+        id: `docsig-${Date.now()}`,
+        kind: "draw" as const,
+        dataUrl,
+        xRatio: 0.82 - (count % 3) * 0.06,
+        yRatio: 0.12 + Math.floor(count / 3) * 0.08,
+      };
+      setSignatures((prev) => [...prev, newSig]);
+      setActiveSignatureId(newSig.id);
+    }
+    setStatus("Signature added. Click the preview to position it.");
+  }
+
+  function removeSignatureFromDocument(id: string) {
+    setSignatures((prev) => prev.filter((s) => s.id !== id));
+    if (activeSignatureId === id) setActiveSignatureId("");
+  }
+
+  function positionActiveSignature(xRatio: number, yRatio: number) {
+    if (!activeSignatureId) return;
+    setSignatures((prev) =>
+      prev.map((s) => (s.id === activeSignatureId ? { ...s, xRatio, yRatio } : s))
+    );
+  }
+
   function onSignaturePlacementPick(event: React.MouseEvent<HTMLImageElement>) {
     const rect = event.currentTarget.getBoundingClientRect();
     if (!rect.width || !rect.height) return;
     const xTopRatio = clamp((event.clientX - rect.left) / rect.width, 0.02, 0.98);
     const yTopRatio = clamp((event.clientY - rect.top) / rect.height, 0.02, 0.98);
-    setSignaturePlacement({ xRatio: xTopRatio, yRatio: 1 - yTopRatio });
+    const yPdfRatio = 1 - yTopRatio;
+    if (activeSignatureId) {
+      positionActiveSignature(xTopRatio, yPdfRatio);
+    } else {
+      setSignaturePlacement({ xRatio: xTopRatio, yRatio: yPdfRatio });
+    }
   }
 
   async function getSignatureImageBytes() {
@@ -3818,8 +3869,8 @@ export default function ToolWorkbench({ tool }: WorkbenchProps) {
 
       if (tool.slug === "edit-pdf" || tool.slug === "sign-pdf") {
         if (!firstFile) throw new Error("Missing PDF file.");
-        if (tool.slug === "sign-pdf" && signatureMode === "draw" && !signatureDrawn) {
-          throw new Error("Draw your signature on the signature pad before exporting.");
+        if (tool.slug === "sign-pdf" && signatureMode === "draw" && !signatureDrawn && signatures.length === 0) {
+          throw new Error("Draw a signature or add one to the document before exporting.");
         }
         const source = await PDFDocument.load(await readAsArrayBuffer(firstFile));
         const font = await source.embedFont(StandardFonts.Helvetica);
@@ -3833,38 +3884,61 @@ export default function ToolWorkbench({ tool }: WorkbenchProps) {
                 },
               }
             : {};
-        const signatureImageBytes =
-          tool.slug === "sign-pdf" && signatureMode === "draw" ? await getSignatureImageBytes() : null;
-        const signatureImage = signatureImageBytes ? await source.embedPng(signatureImageBytes) : null;
+        // Build the list of signatures to apply (multiple supported).
+        let allSignatures = signatures;
+        if (!allSignatures.length) {
+          if (signatureMode === "text") {
+            allSignatures = [{ id: "single", kind: "text", text: editText || "Signed electronically", xRatio: signaturePlacement.xRatio, yRatio: signaturePlacement.yRatio }];
+          } else if (signatureDrawn && signatureCanvasRef.current) {
+            allSignatures = [{ id: "single", kind: "draw", dataUrl: signatureCanvasRef.current.toDataURL("image/png"), xRatio: signaturePlacement.xRatio, yRatio: signaturePlacement.yRatio }];
+          } else {
+            allSignatures = [];
+          }
+        }
+
+        const embeddedSignatureImages: Record<string, PDFImage> = {};
+        for (const sig of allSignatures) {
+          if (sig.kind === "draw" && sig.dataUrl) {
+            try {
+              const res = await fetch(sig.dataUrl);
+              const bytes = await res.arrayBuffer();
+              embeddedSignatureImages[sig.id] = await source.embedPng(bytes);
+            } catch { /* skip failed image */ }
+          }
+        }
+
         source.getPages().forEach((page, index) => {
           if (tool.slug === "sign-pdf") {
             const { width, height } = page.getSize();
-            const anchorX = clamp(width * signaturePlacement.xRatio, 24, width - 24);
-            const anchorY = clamp(height * signaturePlacement.yRatio, 24, height - 24);
 
-            if (signatureImage) {
-              const rawWidth = signatureImage.width;
-              const rawHeight = signatureImage.height;
-              const signatureWidth = 170;
-              const signatureHeight = Math.max(30, (signatureWidth / rawWidth) * rawHeight);
-              page.drawImage(signatureImage, {
-                x: clamp(anchorX - signatureWidth / 2, 12, width - signatureWidth - 12),
-                y: clamp(anchorY - signatureHeight / 2, 12, height - signatureHeight - 12),
-                width: signatureWidth,
-                height: signatureHeight,
-                opacity: 0.95,
-              });
-            } else {
-              const signatureText = editText || "Signed electronically";
-              const textSize = 22;
-              const textWidth = font.widthOfTextAtSize(signatureText, textSize);
-              page.drawText(signatureText, {
-                x: clamp(anchorX - textWidth / 2, 12, width - textWidth - 12),
-                y: clamp(anchorY - textSize / 2, 12, height - textSize - 12),
-                size: textSize,
-                font,
-                color: rgb(0.06, 0.06, 0.35),
-              });
+            for (const sig of allSignatures) {
+              const anchorX = clamp(width * sig.xRatio, 24, width - 24);
+              const anchorY = clamp(height * sig.yRatio, 24, height - 24);
+
+              const embedded = sig.kind === "draw" ? embeddedSignatureImages[sig.id] : null;
+              if (embedded) {
+                const rawWidth = embedded.width;
+                const rawHeight = embedded.height;
+                const signatureWidth = 170;
+                const signatureHeight = Math.max(30, (signatureWidth / rawWidth) * rawHeight);
+                page.drawImage(embedded, {
+                  x: clamp(anchorX - signatureWidth / 2, 12, width - signatureWidth - 12),
+                  y: clamp(anchorY - signatureHeight / 2, 12, height - signatureHeight - 12),
+                  width: signatureWidth,
+                  height: signatureHeight,
+                  opacity: 0.95,
+                });
+              } else if (sig.kind === "text" && sig.text) {
+                const textSize = 22;
+                const textWidth = font.widthOfTextAtSize(sig.text, textSize);
+                page.drawText(sig.text, {
+                  x: clamp(anchorX - textWidth / 2, 12, width - textWidth - 12),
+                  y: clamp(anchorY - textSize / 2, 12, height - textSize - 12),
+                  size: textSize,
+                  font,
+                  color: rgb(0.06, 0.06, 0.35),
+                });
+              }
             }
           } else {
             const pageLayer = pageLayers[index + 1];
@@ -5044,6 +5118,47 @@ export default function ToolWorkbench({ tool }: WorkbenchProps) {
                   <p className="field-help">This text will be placed on the PDF as your signature.</p>
                 </div>
               )}
+
+              <div className="space-y-2 rounded-xl border border-slate-300 bg-white p-3">
+                <div className="flex items-center justify-between gap-2">
+                  <p className="field-help">Add this signature to the document (you can add multiple).</p>
+                  <button
+                    type="button"
+                    onClick={addSignatureToDocument}
+                    className="rounded-md px-3 py-1 text-xs font-bold text-white"
+                    style={{ background: "#6366f1" }}
+                  >
+                    Add signature
+                  </button>
+                </div>
+                {signatures.length > 0 ? (
+                  <div className="flex flex-wrap gap-2">
+                    {signatures.map((sig, i) => (
+                      <div
+                        key={sig.id}
+                        className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-xs ${activeSignatureId === sig.id ? "border-indigo-500 bg-indigo-50" : "border-slate-200 bg-slate-50"}`}
+                      >
+                        <button
+                          type="button"
+                          onClick={() => setActiveSignatureId(sig.id)}
+                          className="text-xs font-medium text-slate-700 hover:text-indigo-700"
+                        >
+                          {sig.kind === "draw" ? `Drawn signature ${i + 1}` : sig.text}
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => removeSignatureFromDocument(sig.id)}
+                          className="text-[10px] text-slate-400 hover:text-rose-600"
+                          aria-label="Remove signature"
+                        >
+                          ×
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                ) : null}
+                {activeSignatureId ? <p className="field-help">Select a signature above, then click the preview to position it.</p> : null}
+              </div>
 
               <div className="space-y-2 rounded-xl border border-slate-300 bg-white p-3">
                 <div className="flex items-center justify-between">
