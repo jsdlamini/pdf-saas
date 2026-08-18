@@ -2367,25 +2367,35 @@ html[data-theme="light"] .studio-dark ::-webkit-scrollbar-thumb {
 
 
 /* ── Tool selector grid (pipe output dialog) ───── */
+.swal-center-container {
+  align-items: center !important;
+  padding-top: 0 !important;
+}
 .swal-tool-grid {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  display: flex;
+  flex-wrap: wrap;
   gap: 6px;
-  max-height: 46vh;
+  max-height: 60vh;
   overflow-y: auto;
-  padding-right: 2px;
+  padding: 2px;
+}
+.swal-tool-grid::-webkit-scrollbar {
+  width: 6px;
+}
+.swal-tool-grid::-webkit-scrollbar-thumb {
+  background: #cbd5e1;
+  border-radius: 3px;
 }
 .swal-tool-card {
-  display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-  text-align: left;
-  background: #f8fafc;
+  display: inline-flex;
+  align-items: center;
+  background: #f1f5f9;
   border: 1px solid #e2e8f0;
-  border-radius: 8px;
-  padding: 8px 10px;
+  border-radius: 999px;
+  padding: 5px 12px;
   cursor: pointer;
   transition: border-color 0.12s ease, background 0.12s ease, transform 0.12s ease;
+  white-space: nowrap;
 }
 .swal-tool-card:hover {
   border-color: #6366f1;
@@ -2394,11 +2404,13 @@ html[data-theme="light"] .studio-dark ::-webkit-scrollbar-thumb {
 }
 .swal-tool-card-selected {
   border-color: #6366f1;
-  background: #e0e7ff;
-  box-shadow: 0 0 0 2px rgba(99, 102, 241, 0.3);
+  background: #6366f1;
+}
+.swal-tool-card-selected .swal-tool-card-name {
+  color: #ffffff;
 }
 .swal-tool-card-name {
-  font-size: 12.5px;
+  font-size: 12px;
   font-weight: 600;
   color: #0f172a;
 }
@@ -2407,9 +2419,4 @@ html[data-theme="light"] .studio-dark ::-webkit-scrollbar-thumb {
   color: #64748b;
   text-transform: uppercase;
   letter-spacing: 0.04em;
-}
-@media (max-width: 480px) {
-  .swal-tool-grid {
-    grid-template-columns: 1fr;
-  }
 }

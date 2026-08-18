@@ -1668,9 +1668,8 @@ export default function ToolWorkbench({ tool }: WorkbenchProps) {
     const toolCards = targetTools
       .map(
         (t) => `
-          <button type="button" data-tool-slug="${t.slug}" data-tool-name="${t.name}" class="swal-tool-card">
+          <button type="button" data-tool-slug="${t.slug}" data-tool-name="${t.name}" class="swal-tool-card" title="${t.description || t.name}">
             <span class="swal-tool-card-name">${t.name}</span>
-            <span class="swal-tool-card-cat">${t.category || ""}</span>
           </button>`
       )
       .join("");
@@ -1694,7 +1693,8 @@ export default function ToolWorkbench({ tool }: WorkbenchProps) {
       background: "#ffffff",
       color: "#0f172a",
       position: "center",
-      width: "min(92vw, 560px)",
+      width: "min(94vw, 760px)",
+      customClass: { container: "swal-center-container" },
       didOpen: () => {
         const grid = document.getElementById("swal-tool-grid");
         const search = document.getElementById("swal-tool-search") as HTMLInputElement | null;
