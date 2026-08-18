@@ -1,4 +1,5 @@
 import { auth } from "@clerk/nextjs/server";
+import { Pool } from "pg";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -15,6 +16,16 @@ type PushPayload = {
 
 function jsonError(msg: string, status: number) {
   return Response.json({ error: msg }, { status });
+}
+
+async function getStoredGithubToken(userId: string): Promise<string> {
+  const pool = new Pool({ connectionString: process.env.DATABASE_URL, max: 1 });
+  const res = await pool.query(
+    `SELECT github_token FROM wiserfiles_user_secrets WHERE user_id = $1`,
+    [userId]
+  );
+  await pool.end();
+  return res.rows.length ? res.rows[0].github_token : "";
 }
 
 async function githubRequest(token: string, path: string, options: RequestInit = {}) {
@@ -38,12 +49,12 @@ export async function POST(request: Request) {
   const body = (await request.json().catch(() => null)) as PushPayload | null;
   if (!body) return jsonError("Invalid payload.", 400);
 
-  const token = (body.token || "").trim();
+  const token = (body.token || "").trim() || (await getStoredGithubToken(userId));
   const repoName = (body.repoName || "").trim();
   const files = Array.isArray(body.files) ? body.files : [];
   const message = (body.message || "Update from WiserFiles Research Studio").trim();
 
-  if (!token) return jsonError("A GitHub personal access token is required.", 400);
+  if (!token) return jsonError("Set up a GitHub personal access token first (File → GitHub Settings).", 400);
   if (!repoName) return jsonError("A repository name is required.", 400);
   if (!/^[a-zA-Z0-9._-]+$/.test(repoName)) return jsonError("Repository name contains invalid characters.", 400);
   if (!files.length) return jsonError("No files to push.", 400);

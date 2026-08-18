@@ -2578,19 +2578,79 @@ export default function ResearchStudioPage() {
     setFigureName("");
   }
 
+  async function githubSettings() {
+    if (!userId) return;
+    let hasToken = false;
+    try {
+      const res = await fetch("/api/github-secret");
+      const data = (await res.json()) as { hasToken?: boolean };
+      hasToken = Boolean(data.hasToken);
+    } catch {}
+
+    const { value } = await Swal.fire({
+      title: "GitHub Settings",
+      html: `
+        <div style="text-align:left;display:flex;flex-direction:column;gap:10px">
+          <p style="font-size:12px;color:#94a3b8;margin:0">
+            ${hasToken ? "A token is currently saved. You can replace or clear it." : "No token saved yet. Paste your GitHub personal access token below."}
+          </p>
+          <input id="swal-gh-token" type="password" class="swal2-input" placeholder="ghp_..." style="background:#0f172a;color:#e2e8f0;border-color:#334155">
+          <p style="font-size:11px;color:#64748b;margin:0">Create a token at github.com → Settings → Developer settings → Personal access tokens → Tokens (classic), with <code>repo</code> scope.</p>
+        </div>
+      `,
+      showCancelButton: true,
+      confirmButtonText: "Save token",
+      cancelButtonText: "Close",
+      confirmButtonColor: "#4ade80",
+      cancelButtonColor: "#334155",
+      background: "#1a1d2b",
+      color: "#e2e8f0",
+      position: "top",
+      showDenyButton: hasToken,
+      denyButtonText: "Clear token",
+      denyButtonColor: "#dc2626",
+      preConfirm: () => {
+        const token = (document.getElementById("swal-gh-token") as HTMLInputElement)?.value?.trim();
+        if (!token) { Swal.showValidationMessage("Paste a token to save it"); return false; }
+        return { token };
+      },
+    });
+
+    if (value?.token) {
+      try {
+        const res = await fetch("/api/github-secret", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ token: value.token }),
+        });
+        if (res.ok) showToast("GitHub token saved", "success");
+        else setCompileNotice("Could not save GitHub token.");
+      } catch { setCompileNotice("Could not save GitHub token."); }
+    } else if (value?.dismiss === "deny") {
+      try {
+        const res = await fetch("/api/github-secret", { method: "DELETE" });
+        if (res.ok) showToast("GitHub token cleared", "success");
+      } catch {}
+    }
+  }
+
   async function pushToGithub() {
     if (!userId) {
       setCompileNotice("Sign in to push projects to GitHub.");
       return;
     }
+    const defaultRepo = (projectName || "my-project")
+      .toLowerCase()
+      .replace(/[^a-z0-9._-]+/g, "-")
+      .replace(/^-+|-+$/g, "")
+      .slice(0, 100) || "my-project";
+
     const { value } = await Swal.fire({
       title: "Push to GitHub",
       html: `
         <div style="text-align:left;display:flex;flex-direction:column;gap:10px">
           <label style="font-size:12px;font-weight:600;color:#e2e8f0">Repository name</label>
-          <input id="swal-gh-repo" class="swal2-input" placeholder="my-research-paper" style="background:#0f172a;color:#e2e8f0;border-color:#334155">
-          <label style="font-size:12px;font-weight:600;color:#e2e8f0">GitHub personal access token</label>
-          <input id="swal-gh-token" type="password" class="swal2-input" placeholder="ghp_..." style="background:#0f172a;color:#e2e8f0;border-color:#334155">
+          <input id="swal-gh-repo" class="swal2-input" value="${defaultRepo}" style="background:#0f172a;color:#e2e8f0;border-color:#334155">
           <label style="font-size:12px;color:#94a3b8"><input id="swal-gh-private" type="checkbox" style="margin-right:6px"> Private repository</label>
         </div>
       `,
@@ -2604,16 +2664,14 @@ export default function ResearchStudioPage() {
       position: "top",
       preConfirm: () => {
         const repo = (document.getElementById("swal-gh-repo") as HTMLInputElement)?.value?.trim();
-        const token = (document.getElementById("swal-gh-token") as HTMLInputElement)?.value?.trim();
         const isPrivate = (document.getElementById("swal-gh-private") as HTMLInputElement)?.checked;
         if (!repo) { Swal.showValidationMessage("Enter a repository name"); return false; }
-        if (!token) { Swal.showValidationMessage("Enter a personal access token"); return false; }
-        return { repo, token, isPrivate };
+        return { repo, isPrivate };
       },
     });
 
     if (!value) return;
-    const { repo, token, isPrivate } = value as { repo: string; token: string; isPrivate: boolean };
+    const { repo, isPrivate } = value as { repo: string; isPrivate: boolean };
 
     setCompileNotice(`Pushing ${projectEntries.filter((e) => e.kind === "file").length} files to GitHub...`);
     try {
@@ -2621,7 +2679,6 @@ export default function ResearchStudioPage() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          token,
           repoName: repo,
           isPrivate,
           message: `Update ${projectName || "project"} from WiserFiles`,
@@ -2630,6 +2687,10 @@ export default function ResearchStudioPage() {
       });
       const data = (await res.json()) as { ok?: boolean; url?: string; pushed?: string[]; failed?: string[]; error?: string };
       if (!res.ok || !data.ok) {
+        if (data.error?.includes("Set up a GitHub personal access token")) {
+          await githubSettings();
+          throw new Error("Set up your GitHub token, then push again.");
+        }
         throw new Error(data.error || "GitHub push failed.");
       }
       setCompileNotice(`Pushed to GitHub: ${data.url}`);
@@ -4770,6 +4831,7 @@ export default function ResearchStudioPage() {
               { label: <>Import ZIP</>, action: () => { setOpenMenu(""); document.getElementById("zip-import-editor-menu")?.click(); } },
               "-",
               { label: <>Push to GitHub</>, action: () => { setOpenMenu(""); void pushToGithub(); } },
+              { label: <>GitHub Settings</>, action: () => { setOpenMenu(""); void githubSettings(); } },
             ]
           },
           {
