@@ -4137,7 +4137,8 @@ export default function ToolWorkbench({ tool }: WorkbenchProps) {
               type="button"
               onClick={runTool}
               disabled={busy}
-              className="btn btn-primary rounded-full px-5 py-2.5 text-sm font-semibold shadow-lg disabled:cursor-not-allowed disabled:bg-slate-500"
+              className="rounded-full px-5 py-2.5 text-sm font-bold text-white shadow-lg transition hover:scale-[1.02] hover:shadow-xl disabled:cursor-not-allowed disabled:opacity-50"
+              style={{ background: "linear-gradient(to right, #8b5cf6, #6366f1)", boxShadow: "0 4px 16px rgba(99,102,241,0.4)" }}
             >
               {busy ? "Processing..." : outputPreview ? `Re-run ${tool.name}` : `Run ${tool.name}`}
             </button>
