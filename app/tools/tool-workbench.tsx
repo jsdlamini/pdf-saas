@@ -2013,12 +2013,13 @@ export default function ToolWorkbench({ tool }: WorkbenchProps) {
 
   useEffect(() => {
     if (!pipelineBootstrap?.accepted) return;
+    const inheritedFiles = pipelineBootstrap.allFiles?.length ? pipelineBootstrap.allFiles : [pipelineBootstrap.file];
     const timer = window.setTimeout(() => {
       if (shouldShowPreflight) {
-        void runPreflightAnalysis([pipelineBootstrap.file]);
+        void runPreflightAnalysis(inheritedFiles);
       }
-      void hydrateSelectionContext([pipelineBootstrap.file]);
-      if (shouldAutoRunAfterSelection([pipelineBootstrap.file])) {
+      void hydrateSelectionContext(inheritedFiles);
+      if (shouldAutoRunAfterSelection(inheritedFiles)) {
         requestAutoRun("Auto-run triggered from workflow pipeline handoff.");
       }
     }, 0);
@@ -2930,7 +2931,7 @@ export default function ToolWorkbench({ tool }: WorkbenchProps) {
     if (shouldShowPreflight) {
       void runPreflightAnalysis(selectedFilesForAnalysis);
     }
-    await hydrateSelectionContext(nextFiles);
+    await hydrateSelectionContext(finalSelectedFiles);
 
     if (shouldAutoRunAfterSelection(finalSelectedFiles)) {
       requestAutoRun("Auto-run triggered after file upload.");
