@@ -390,9 +390,24 @@ export default function Home() {
                     <path d="M14 2v6h6" strokeLinecap="round" strokeLinejoin="round" />
                   </svg>
                 </div>
-                <p className="font-semibold text-slate-900">{dropFile.name}</p>
+                {dropFiles.length > 1 ? (
+                  <div className="flex max-w-full flex-wrap items-center justify-center gap-1.5">
+                    {dropFiles.map((f, i) => (
+                      <span key={`${f.name}-${i}`} className="inline-flex max-w-[180px] items-center gap-1 rounded-full bg-slate-100 px-2.5 py-0.5 text-xs font-medium text-slate-700">
+                        <span className="truncate">{f.name}</span>
+                      </span>
+                    ))}
+                  </div>
+                ) : (
+                  <p className="font-semibold text-slate-900">{dropFile.name}</p>
+                )}
                 <div className="flex flex-wrap items-center justify-center gap-x-4 gap-y-1 text-sm text-slate-500 drop-zone-hint">
-                  <span>{(dropFile.size / 1024 / 1024).toFixed(1)} MB</span>
+                  <span>{(dropFiles.reduce((sum, f) => sum + f.size, 0) / 1024 / 1024).toFixed(1)} MB</span>
+                  {dropFiles.length > 1 ? (
+                    <span className="inline-flex items-center gap-1 rounded-full bg-slate-200/70 px-2.5 py-0.5 text-xs font-medium text-slate-700">
+                      {dropFiles.length} files
+                    </span>
+                  ) : null}
                   {dropFileInfo?.kind === "pdf" && dropFileInfo.pageCount ? (
                     <span className="inline-flex items-center gap-1 rounded-full bg-slate-200/70 px-2.5 py-0.5 text-xs font-medium text-slate-700">
                       {dropFileInfo.pageCount} page{dropFileInfo.pageCount !== 1 ? "s" : ""}
