@@ -17,6 +17,13 @@ export const TOOL_ITEMS: ToolItem[] = [
     runtime: "client",
   },
   {
+    slug: "convert-to-pdf",
+    name: "Convert to PDF",
+    description: "Convert any mix of files — PDF, Word, Excel, PowerPoint, images, HTML — into one PDF.",
+    category: "Convert",
+    runtime: "client",
+  },
+  {
     slug: "split-pdf",
     name: "Split PDF",
     description: "Extract specific pages or ranges into a new PDF.",

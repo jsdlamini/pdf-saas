@@ -126,6 +126,13 @@ async function sanitizeLegacyWatermarks(blob: Blob) {
 
 function isFileCompatibleForTool(toolSlug: string, file: File) {
   const lower = file.name.toLowerCase();
+  if (toolSlug === "convert-to-pdf") {
+    return (
+      file.type === "application/pdf" || lower.endsWith(".pdf") ||
+      file.type.startsWith("image/") || /\.(png|jpe?g|webp|gif)$/.test(lower) ||
+      /\.(docx?|xlsx?|pptx?|html?|txt)$/.test(lower)
+    );
+  }
   if (toolSlug === "images-to-pdf" || toolSlug === "images-to-pdf" || toolSlug === "scan-to-pdf") {
     return file.type.startsWith("image/") || /\.(png|jpe?g|webp)$/.test(lower);
   }
@@ -2394,6 +2401,9 @@ export default function ToolWorkbench({ tool }: WorkbenchProps) {
   const acceptsMultiple = true;
 
   const inputAccept = useMemo(() => {
+    if (tool.slug === "convert-to-pdf") {
+      return "application/pdf,.pdf,image/*,.png,.jpg,.jpeg,.webp,.gif,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.html,.htm,.txt";
+    }
     if (tool.slug === "images-to-pdf" || tool.slug === "images-to-pdf" || tool.slug === "scan-to-pdf") {
       return "image/jpeg,image/png,image/webp";
     }
@@ -3057,6 +3067,45 @@ export default function ToolWorkbench({ tool }: WorkbenchProps) {
         }
         stageOutput(asPdfBlob(await output.save()), "merged.pdf", "Preview merged pages before downloading.");
         complete("Merged PDF ready for preview.");
+        return;
+      }
+
+      if (tool.slug === "convert-to-pdf") {
+        const output = await PDFDocument.create();
+        for (const file of files) {
+          const lower = file.name.toLowerCase();
+          const isPdfFile = file.type === "application/pdf" || lower.endsWith(".pdf");
+          const isImageFile = file.type.startsWith("image/") || /\.(png|jpe?g|webp|gif)$/i.test(lower);
+
+          if (isPdfFile) {
+            const source = await PDFDocument.load(await readAsArrayBuffer(file));
+            const copied = await output.copyPages(source, source.getPageIndices());
+            copied.forEach((p) => output.addPage(p));
+          } else if (isImageFile) {
+            const { image, width, height } = await fileToPdfImage(output, file);
+            const page = output.addPage([width, height]);
+            page.drawImage(image, { x: 0, y: 0, width, height });
+          } else {
+            // Office/HTML files → server-side LibreOffice conversion to PDF
+            const form = new FormData();
+            form.append("file", file);
+            const res = await fetch("/api/office-to-pdf", { method: "POST", body: form });
+            if (!res.ok) {
+              const data = (await res.json().catch(() => null)) as { error?: string } | null;
+              throw new Error(data?.error || `Could not convert ${file.name}`);
+            }
+            const pdfBytes = new Uint8Array(await res.arrayBuffer());
+            const source = await PDFDocument.load(pdfBytes);
+            const copied = await output.copyPages(source, source.getPageIndices());
+            copied.forEach((p) => output.addPage(p));
+          }
+        }
+
+        if (!output.getPageCount()) {
+          throw new Error("Add at least one file to convert.");
+        }
+        stageOutput(asPdfBlob(await output.save()), "converted.pdf", "Preview converted PDF before downloading.");
+        complete("Converted PDF ready for preview.");
         return;
       }
 
