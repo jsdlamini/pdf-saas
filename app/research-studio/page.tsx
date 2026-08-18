@@ -1753,10 +1753,17 @@ export default function ResearchStudioPage() {
     const internalPath = event.dataTransfer.getData("application/x-wiserfiles-image");
     if (internalPath) {
       const cursor = computeDropCursor(event);
-      const snippet = `\\includegraphics[width=0.8\\linewidth]{${internalPath}}`;
+      const safeName = (internalPath.split("/").pop() || "image").replace(/[^a-zA-Z0-9._-]/g, "_");
+      const snippet = `\\begin{figure}[htbp]
+  \\centering
+  \\includegraphics[width=0.8\\linewidth]{${internalPath}}
+  \\caption{Figure caption}
+  \\label{fig:${safeName.replace(/\.[^.]+$/, "")}}
+\\end{figure}
+`;
       const nextText = activeSource.slice(0, cursor) + snippet + activeSource.slice(cursor);
-      updateActiveFile(nextText);
-      setCompileNotice(`Inserted ${internalPath} at drop point.`);
+      applyEditorUpdate(nextText, cursor + snippet.length, cursor + snippet.length);
+      setCompileNotice(`Inserted ${internalPath} as a figure at drop point.`);
       return;
     }
 
@@ -1793,7 +1800,7 @@ export default function ResearchStudioPage() {
 \\end{figure}
 `;
       const nextText = activeSource.slice(0, cursor) + snippet + activeSource.slice(cursor);
-      updateActiveFile(nextText);
+      applyEditorUpdate(nextText, cursor + snippet.length, cursor + snippet.length);
       setCompileNotice(`Image "${safeName}" added to figures/ and inserted at drop point.`);
     };
     reader.readAsDataURL(imageFile);
@@ -3810,6 +3817,7 @@ export default function ResearchStudioPage() {
       if (!textarea) return;
       textarea.focus();
       textarea.setSelectionRange(selectionStart, selectionEnd);
+      setEditorScroll({ top: textarea.scrollTop, left: textarea.scrollLeft });
     });
   }
 
