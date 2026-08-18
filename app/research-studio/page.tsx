@@ -4688,6 +4688,36 @@ export default function ResearchStudioPage() {
             </svg>
             <span className="hidden sm:inline">Save</span>
           </button>
+          <a
+            href="/"
+            className="studio-btn studio-btn-ghost"
+            aria-label="Back to WiserFiles home"
+            title="Back to WiserFiles home"
+            style={{ width: 32, padding: 0, textDecoration: "none" }}
+          >
+            <svg viewBox="0 0 20 20" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="1.8">
+              <path d="M3 9l7-6 7 6v8a1 1 0 0 1-1 1h-4v-5H8v5H4a1 1 0 0 1-1-1V9z" strokeLinecap="round" strokeLinejoin="round" />
+            </svg>
+          </a>
+          <button
+            type="button"
+            onClick={() => {
+              const current = document.documentElement.dataset.theme === "dark" ? "dark" : "light";
+              const next = current === "dark" ? "light" : "dark";
+              document.documentElement.dataset.theme = next;
+              document.documentElement.style.colorScheme = next;
+              try { localStorage.setItem("wiserfiles-theme", next); } catch {}
+            }}
+            className="studio-btn studio-btn-ghost"
+            aria-label="Toggle dark/light mode"
+            title="Toggle dark/light mode"
+            style={{ width: 32, padding: 0 }}
+          >
+            <svg viewBox="0 0 20 20" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="1.8">
+              <circle cx="10" cy="10" r="3.5" />
+              <path d="M10 2v2M10 16v2M2 10h2M16 10h2M4.9 4.9l1.4 1.4M13.7 13.7l1.4 1.4M15.1 4.9l-1.4 1.4M6.3 13.7l-1.4 1.4" strokeLinecap="round" />
+            </svg>
+          </button>
           <button
             type="button"
             onClick={() => setShowShortcuts((c) => !c)}
