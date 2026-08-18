@@ -735,7 +735,7 @@ body {
   color: transparent;
   caret-color: #4ade80;
   -webkit-text-fill-color: transparent;
-  overflow: hidden;
+  overflow: auto;
 }
 
 .studio-editor-textarea::selection {
