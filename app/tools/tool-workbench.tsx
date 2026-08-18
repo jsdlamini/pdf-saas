@@ -16,7 +16,7 @@ import { MAX_OCR_UPLOAD_BYTES, OCR_LANGUAGE_OPTIONS } from "@/lib/ocr";
 import { formatDurationMs, hashBlob, hashFile, summarizeRunConfidence, type RunReport } from "@/lib/run-report";
 import { TOOL_ITEMS, type ToolItem } from "@/lib/tools";
 import Swal from "sweetalert2";
-import { consumeWorkflowPipeline, stageWorkflowPipeline } from "@/lib/workflow-pipeline";
+import { consumeWorkflowPipeline, stageWorkflowPipeline, loadPersistedWorkflowPipeline } from "@/lib/workflow-pipeline";
 import { loadUploadedFiles, persistUploadedFiles, clearUploadedFiles } from "@/lib/file-persistence";
 import { getNextRecipeStep, type WorkflowRecipe } from "@/lib/workflow-recipes";
 import ShareButton from "@/app/components/share-button";
@@ -999,23 +999,35 @@ async function renderComparePageWithDiffs(
 export default function ToolWorkbench({ tool }: WorkbenchProps) {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const [pipelineBootstrap] = useState(() => {
-    const payload = consumeWorkflowPipeline(tool.slug);
-    if (!payload) return null;
+  const [pipelineBootstrap, setPipelineBootstrap] = useState<{ payload: any; file: File; accepted: boolean; allFiles: File[] } | null>(null);
+  const [files, setFiles] = useState<File[]>([]);
 
-    const file = new File([payload.blob], payload.fileName, {
-      type: payload.mime || "application/octet-stream",
-    });
-    const accepted = isFileCompatibleForTool(tool.slug, file);
-    const allFiles = (payload.files && payload.files.length ? payload.files : [{ name: payload.fileName, type: payload.mime || "application/octet-stream", blob: payload.blob }])
-      .map((f) => new File([f.blob], f.name, { type: f.type || "application/octet-stream" }));
-    return { payload, file, accepted, allFiles };
-  });
+  // Load the pipeline (in-memory first, then persisted IndexedDB so it survives reloads).
+  useEffect(() => {
+    let cancelled = false;
+    async function loadPipeline() {
+      let payload = consumeWorkflowPipeline(tool.slug);
+      if (!payload) {
+        payload = await loadPersistedWorkflowPipeline(tool.slug);
+      }
+      if (cancelled || !payload) return;
 
-  const [files, setFiles] = useState<File[]>(() => {
-    if (pipelineBootstrap?.accepted && pipelineBootstrap.allFiles?.length) return pipelineBootstrap.allFiles;
-    return pipelineBootstrap?.accepted ? [pipelineBootstrap.file] : [];
-  });
+      const file = new File([payload.blob], payload.fileName, {
+        type: payload.mime || "application/octet-stream",
+      });
+      const accepted = isFileCompatibleForTool(tool.slug, file);
+      const allFiles = (payload.files && payload.files.length ? payload.files : [{ name: payload.fileName, type: payload.mime || "application/octet-stream", blob: payload.blob }])
+        .map((f) => new File([f.blob], f.name, { type: f.type || "application/octet-stream" }));
+
+      if (cancelled) return;
+      setPipelineBootstrap({ payload, file, accepted, allFiles });
+      if (accepted) {
+        setFiles(allFiles.length ? allFiles : [file]);
+      }
+    }
+    void loadPipeline();
+    return () => { cancelled = true; };
+  }, [tool.slug]);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [status, setStatus] = useState("");

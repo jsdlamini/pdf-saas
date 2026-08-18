@@ -392,11 +392,20 @@ export default function Home() {
                 </div>
                 {dropFiles.length > 1 ? (
                   <div className="flex max-w-full flex-wrap items-center justify-center gap-1.5">
-                    {dropFiles.map((f, i) => (
-                      <span key={`${f.name}-${i}`} className="inline-flex max-w-[180px] items-center gap-1 rounded-full bg-slate-100 px-2.5 py-0.5 text-xs font-medium text-slate-700">
-                        <span className="truncate">{f.name}</span>
-                      </span>
-                    ))}
+                    {dropFiles.map((f, i) => {
+                      const isPdfFile = isPdf(f);
+                      const isImageFile = isImage(f);
+                      const accent = isPdfFile ? "border-rose-200 bg-rose-50 text-rose-700" : isImageFile ? "border-emerald-200 bg-emerald-50 text-emerald-700" : "border-cyan-200 bg-cyan-50 text-cyan-700";
+                      return (
+                        <span key={`${f.name}-${i}`} className={`inline-flex max-w-[200px] items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs font-medium shadow-sm ${accent}`}>
+                          <svg viewBox="0 0 20 20" className="h-3.5 w-3.5 shrink-0" fill="none" stroke="currentColor" strokeWidth="1.8">
+                            <path d="M6 3h6l4 4v10H6V3z" strokeLinecap="round" strokeLinejoin="round" />
+                            <path d="M12 3v4h4" strokeLinecap="round" strokeLinejoin="round" />
+                          </svg>
+                          <span className="truncate">{f.name}</span>
+                        </span>
+                      );
+                    })}
                   </div>
                 ) : (
                   <p className="font-semibold text-slate-900">{dropFile.name}</p>
