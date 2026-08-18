@@ -68,7 +68,7 @@ function getDropSuggestions(file: File): string[] {
     return ["merge-pdf", "compress-pdf", "ocr-pdf"];
   }
   if (isImage(file)) {
-    return ["images-to-pdf", "images-to-pdf", "ocr-pdf"];
+    return ["images-to-pdf", "ocr-pdf"];
   }
   if (isWord(file)) {
     return ["word-to-pdf"];

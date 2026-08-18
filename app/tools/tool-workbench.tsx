@@ -1005,6 +1005,9 @@ export default function ToolWorkbench({ tool }: WorkbenchProps) {
   });
   const [signaturePlacement, setSignaturePlacement] = useState({ xRatio: 0.82, yRatio: 0.12 });
   const [signaturePlacementPreview, setSignaturePlacementPreview] = useState("");
+  const [signPageNumber, setSignPageNumber] = useState(1);
+  const [signAllPages, setSignAllPages] = useState(true);
+  const [signPageCount, setSignPageCount] = useState(1);
   const [mergePages, setMergePages] = useState<MergePageNode[]>([]);
   const [rotateAngle, setRotateAngle] = useState(90);
   const [pageRotations, setPageRotations] = useState<Record<number, number>>({});
@@ -1123,6 +1126,7 @@ export default function ToolWorkbench({ tool }: WorkbenchProps) {
     }
   });
   const signatureCanvasRef = useRef<HTMLCanvasElement | null>(null);
+  const signPdfBytesRef = useRef<Uint8Array | null>(null);
   const cameraVideoRef = useRef<HTMLVideoElement | null>(null);
   const cameraCanvasRef = useRef<HTMLCanvasElement | null>(null);
   const cameraStreamRef = useRef<MediaStream | null>(null);
@@ -1467,7 +1471,11 @@ export default function ToolWorkbench({ tool }: WorkbenchProps) {
       }
 
       if (isSignTool) {
-        setSignaturePlacementPreview(await renderPdfFirstPagePreview(firstBytes));
+        signPdfBytesRef.current = firstBytes;
+        const preview = await renderPdfPagePreview(firstBytes, 1);
+        setSignaturePlacementPreview(preview.dataUrl);
+        setSignPageCount(preview.pageCount);
+        setSignPageNumber(1);
       }
 
       if (isEditTool) {
@@ -2637,6 +2645,15 @@ export default function ToolWorkbench({ tool }: WorkbenchProps) {
     } else {
       setSignaturePlacement({ xRatio: xTopRatio, yRatio: yPdfRatio });
     }
+  }
+
+  async function loadSignPage(pageNumber: number) {
+    const bytes = signPdfBytesRef.current;
+    if (!bytes) return;
+    const preview = await renderPdfPagePreview(bytes, pageNumber);
+    setSignaturePlacementPreview(preview.dataUrl);
+    setSignPageCount(preview.pageCount);
+    setSignPageNumber(pageNumber);
   }
 
   async function getSignatureImageBytes() {
@@ -3911,6 +3928,8 @@ export default function ToolWorkbench({ tool }: WorkbenchProps) {
 
         source.getPages().forEach((page, index) => {
           if (tool.slug === "sign-pdf") {
+            // When signing a single page, skip all other pages.
+            if (!signAllPages && index + 1 !== signPageNumber) return;
             const { width, height } = page.getSize();
 
             for (const sig of allSignatures) {
@@ -5176,6 +5195,38 @@ export default function ToolWorkbench({ tool }: WorkbenchProps) {
               </div>
 
               <div className="space-y-2 rounded-xl border border-slate-300 bg-slate-50 p-3">
+                <div className="flex flex-wrap items-center gap-3">
+                  <label className="flex items-center gap-1.5 text-xs font-medium text-slate-700">
+                    <input
+                      type="checkbox"
+                      checked={signAllPages}
+                      onChange={(e) => setSignAllPages(e.target.checked)}
+                      className="h-3.5 w-3.5"
+                    />
+                    Sign all pages
+                  </label>
+                  {!signAllPages ? (
+                    <div className="flex items-center gap-1.5">
+                      <button
+                        type="button"
+                        onClick={() => void loadSignPage(Math.max(1, signPageNumber - 1))}
+                        disabled={signPageNumber <= 1}
+                        className="rounded-md border border-slate-300 bg-white px-2 py-0.5 text-xs font-semibold text-slate-700 disabled:opacity-40"
+                      >
+                        Prev
+                      </button>
+                      <span className="text-xs text-slate-600">Page {signPageNumber} of {signPageCount}</span>
+                      <button
+                        type="button"
+                        onClick={() => void loadSignPage(Math.min(signPageCount, signPageNumber + 1))}
+                        disabled={signPageNumber >= signPageCount}
+                        className="rounded-md border border-slate-300 bg-white px-2 py-0.5 text-xs font-semibold text-slate-700 disabled:opacity-40"
+                      >
+                        Next
+                      </button>
+                    </div>
+                  ) : null}
+                </div>
                 <p className="field-help">Click the preview to choose where the signature should be placed.</p>
                 {thumbnailLoading ? (
                   <p className="field-help">Generating placement preview...</p>
