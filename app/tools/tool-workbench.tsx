@@ -1664,28 +1664,71 @@ export default function ToolWorkbench({ tool }: WorkbenchProps) {
   async function pipeOutputToTool() {
     if (!outputPreview) return;
     const targetTools = TOOL_ITEMS.filter((t) => t.slug !== tool.slug);
-    const options = targetTools.reduce((acc, t) => {
-      acc[t.slug] = t.name;
-      return acc;
-    }, {} as Record<string, string>);
+    const toolCards = targetTools
+      .map(
+        (t) => `
+          <button type="button" data-tool-slug="${t.slug}" data-tool-name="${t.name}" class="swal-tool-card">
+            <span class="swal-tool-card-name">${t.name}</span>
+            <span class="swal-tool-card-cat">${t.category || ""}</span>
+          </button>`
+      )
+      .join("");
 
-    const { value } = await Swal.fire({
+    let selectedSlug = "";
+
+    const result = await Swal.fire({
       title: "Send output to another tool",
-      text: "The processed output will be piped directly into the selected tool — no download and re-upload needed.",
-      input: "select",
-      inputOptions: options,
-      inputPlaceholder: "Select a tool",
+      html: `
+        <div style="text-align:left">
+          <p style="font-size:12px;color:#64748b;margin:0 0 8px">The processed output is piped directly into the selected tool — no download and re-upload needed.</p>
+          <input id="swal-tool-search" class="swal2-input" placeholder="Search tools…" style="background:#f1f5f9;color:#0f172a;border-color:#e2e8f0;margin-bottom:8px">
+          <div id="swal-tool-grid" class="swal-tool-grid">${toolCards}</div>
+        </div>
+      `,
       showCancelButton: true,
       confirmButtonText: "Continue",
       cancelButtonText: "Cancel",
-      confirmButtonColor: "#0f766e",
-      cancelButtonColor: "#334155",
+      confirmButtonColor: "#6366f1",
+      cancelButtonColor: "#94a3b8",
       background: "#ffffff",
+      color: "#0f172a",
       position: "top",
+      width: "min(92vw, 560px)",
+      didOpen: () => {
+        const grid = document.getElementById("swal-tool-grid");
+        const search = document.getElementById("swal-tool-search") as HTMLInputElement | null;
+        const confirmBtn = Swal.getConfirmButton();
+        if (confirmBtn) confirmBtn.disabled = true;
+
+        search?.addEventListener("input", () => {
+          const q = (search.value || "").toLowerCase().trim();
+          grid?.querySelectorAll(".swal-tool-card").forEach((card) => {
+            const el = card as HTMLElement;
+            const name = el.getAttribute("data-tool-name") || "";
+            el.style.display = !q || name.toLowerCase().includes(q) ? "" : "none";
+          });
+        });
+
+        grid?.querySelectorAll(".swal-tool-card").forEach((card) => {
+          card.addEventListener("click", () => {
+            grid?.querySelectorAll(".swal-tool-card").forEach((c) => c.classList.remove("swal-tool-card-selected"));
+            card.classList.add("swal-tool-card-selected");
+            selectedSlug = (card as HTMLElement).getAttribute("data-tool-slug") || "";
+            if (confirmBtn) confirmBtn.disabled = false;
+          });
+        });
+      },
+      preConfirm: () => {
+        if (!selectedSlug) {
+          Swal.showValidationMessage("Select a tool");
+          return false;
+        }
+        return selectedSlug;
+      },
     });
 
-    if (!value) return;
-    const targetSlug = value as string;
+    const targetSlug = result.isConfirmed ? (result.value as string) : "";
+    if (!targetSlug) return;
     const file = new File([outputPreview.blob], outputPreview.fileName, {
       type: outputPreview.mime || "application/octet-stream",
     });
@@ -1730,7 +1773,8 @@ export default function ToolWorkbench({ tool }: WorkbenchProps) {
           <button
             type="button"
             onClick={() => void pipeOutputToTool()}
-            className="btn btn-secondary rounded-full px-4 py-2 text-xs uppercase tracking-wide"
+            className="rounded-full px-4 py-2 text-xs font-bold uppercase tracking-wide text-white shadow-lg transition hover:scale-[1.02] hover:shadow-xl"
+            style={{ background: "#6366f1", boxShadow: "0 4px 14px rgba(99,102,241,0.4)" }}
           >
             Send to another tool
           </button>
@@ -1738,7 +1782,8 @@ export default function ToolWorkbench({ tool }: WorkbenchProps) {
             type="button"
             onClick={handleDownloadOutput}
             disabled={downloadingOutput}
-            className={`${downloadingOutput ? "" : "animate-pulse"} btn btn-primary rounded-full px-4 py-2 text-xs uppercase tracking-wide shadow-[0_0_0_0_rgba(8,145,178,0.45)] disabled:cursor-not-allowed disabled:bg-cyan-200`}
+            className={`${downloadingOutput ? "" : "animate-pulse"} rounded-full px-4 py-2 text-xs font-bold uppercase tracking-wide text-white shadow-lg transition hover:scale-[1.02] hover:shadow-xl disabled:cursor-not-allowed disabled:opacity-50`}
+            style={{ background: "#10b981", boxShadow: "0 4px 14px rgba(16,185,129,0.4)" }}
           >
             {downloadingOutput ? "Downloading..." : "Download output"}
           </button>

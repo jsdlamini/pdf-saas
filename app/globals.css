@@ -2365,3 +2365,51 @@ html[data-theme="light"] .studio-dark ::-webkit-scrollbar-thumb {
   font-weight: 500;
 }
 
+
+/* ── Tool selector grid (pipe output dialog) ───── */
+.swal-tool-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 6px;
+  max-height: 46vh;
+  overflow-y: auto;
+  padding-right: 2px;
+}
+.swal-tool-card {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  text-align: left;
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  padding: 8px 10px;
+  cursor: pointer;
+  transition: border-color 0.12s ease, background 0.12s ease, transform 0.12s ease;
+}
+.swal-tool-card:hover {
+  border-color: #6366f1;
+  background: #eef2ff;
+  transform: translateY(-1px);
+}
+.swal-tool-card-selected {
+  border-color: #6366f1;
+  background: #e0e7ff;
+  box-shadow: 0 0 0 2px rgba(99, 102, 241, 0.3);
+}
+.swal-tool-card-name {
+  font-size: 12.5px;
+  font-weight: 600;
+  color: #0f172a;
+}
+.swal-tool-card-cat {
+  font-size: 10px;
+  color: #64748b;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+@media (max-width: 480px) {
+  .swal-tool-grid {
+    grid-template-columns: 1fr;
+  }
+}
