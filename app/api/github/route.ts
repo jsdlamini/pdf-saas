@@ -106,10 +106,23 @@ export async function POST(request: Request) {
         base64 = Buffer.from(file.content, "utf8").toString("base64");
       }
 
+      // Fetch the existing file's blob SHA so updates replace it correctly.
+      let sha: string | undefined;
+      try {
+        const headRes = await githubRequest(token, `/repos/${owner}/${repoName}/contents/${encodeURIComponent(safePath)}`);
+        if (headRes.ok) {
+          const existing = (await headRes.json()) as { sha?: string };
+          if (existing.sha) sha = existing.sha;
+        }
+      } catch { /* ignore */ }
+
+      const uploadBody: Record<string, unknown> = { message, content: base64 };
+      if (sha) uploadBody.sha = sha;
+
       const uploadRes = await githubRequest(token, `/repos/${owner}/${repoName}/contents/${encodeURIComponent(safePath)}`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ message, content: base64 }),
+        body: JSON.stringify(uploadBody),
       });
       if (uploadRes.ok) {
         results.push(safePath);
