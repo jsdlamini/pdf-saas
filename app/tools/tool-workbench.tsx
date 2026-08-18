@@ -18,7 +18,7 @@ import { TOOL_ITEMS, type ToolItem } from "@/lib/tools";
 import Swal from "sweetalert2";
 import { consumeWorkflowPipeline, stageWorkflowPipeline } from "@/lib/workflow-pipeline";
 import { loadUploadedFiles, persistUploadedFiles, clearUploadedFiles } from "@/lib/file-persistence";
-import { getNextRecipeStep, getRecipesForTool } from "@/lib/workflow-recipes";
+import { getNextRecipeStep, type WorkflowRecipe } from "@/lib/workflow-recipes";
 import ShareButton from "@/app/components/share-button";
 import { showToast } from "@/app/components/toast";
 
@@ -1170,7 +1170,9 @@ export default function ToolWorkbench({ tool }: WorkbenchProps) {
     return { originalBytes, estimatedBytes, reductionPercent };
   }, [compressionOptions, files, tool.slug]);
 
-  const applicableRecipes = useMemo(() => getRecipesForTool(tool.slug), [tool.slug]);
+  // Pre-defined workflow recipes removed — piping output to any tool via the
+  // "Send to another tool" button now covers this use case.
+  const applicableRecipes = useMemo<WorkflowRecipe[]>(() => [], []);
 
   // Thumbnail previews for image-to-pdf files (for reordering).
   const imageThumbUrls = useMemo(() => {
@@ -2376,12 +2378,7 @@ export default function ToolWorkbench({ tool }: WorkbenchProps) {
     setStatus("Camera image captured. You can capture more or run Scan to PDF.");
   }
 
-  const acceptsMultiple =
-    tool.slug === "merge-pdf" ||
-    tool.slug === "images-to-pdf" ||
-    tool.slug === "images-to-pdf" ||
-    tool.slug === "scan-to-pdf" ||
-    tool.slug === "compare-pdf";
+  const acceptsMultiple = true;
 
   const inputAccept = useMemo(() => {
     if (tool.slug === "images-to-pdf" || tool.slug === "images-to-pdf" || tool.slug === "scan-to-pdf") {
@@ -4151,25 +4148,6 @@ export default function ToolWorkbench({ tool }: WorkbenchProps) {
 
         <p className="text-sm text-slate-700">{tool.description}</p>
 
-        {(() => {
-          if (suggestedWorkflow) {
-            return (
-              <div className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2">
-                <div className="flex flex-wrap items-center gap-1.5">
-                  {suggestedWorkflow.steps.map((step, index) => (
-                    <span key={step.toolSlug} className="flex items-center gap-1.5">
-                      <span className="rounded-full bg-cyan-100 px-2.5 py-0.5 text-xs font-medium text-cyan-900">{step.label}</span>
-                      {index < suggestedWorkflow.steps.length - 1 ? <span className="text-xs text-slate-400">→</span> : null}
-                    </span>
-                  ))}
-                </div>
-                <p className="mt-1 text-[11px] text-slate-500">{suggestedWorkflow.description}</p>
-              </div>
-            );
-          }
-          return null;
-        })()}
-
         <p className="field-help">{uploadHint}</p>
 
         {shouldShowFileInput ? (
@@ -4224,16 +4202,6 @@ export default function ToolWorkbench({ tool }: WorkbenchProps) {
                 className="rounded-full border border-rose-300 bg-white px-4 py-2 text-sm font-semibold text-rose-700 transition hover:bg-rose-50 disabled:cursor-not-allowed disabled:opacity-50"
               >
                 Retry
-              </button>
-            ) : null}
-            {suggestedWorkflow ? (
-              <button
-                type="button"
-                onClick={() => startSuggestedWorkflow(suggestedWorkflow)}
-                disabled={busy}
-                className="rounded-full border border-cyan-300 bg-white px-4 py-2 text-sm font-semibold text-cyan-900 transition hover:bg-cyan-50 disabled:cursor-not-allowed disabled:opacity-50"
-              >
-                Start suggested workflow
               </button>
             ) : null}
             {busy ? <span className="status-chip status-chip-busy">Processing</span> : null}
@@ -5148,10 +5116,10 @@ export default function ToolWorkbench({ tool }: WorkbenchProps) {
                         <button
                           type="button"
                           onClick={() => removeSignatureFromDocument(sig.id)}
-                          className="text-[10px] text-slate-400 hover:text-rose-600"
+                          className="text-[10px] font-semibold text-rose-500 hover:text-rose-700"
                           aria-label="Remove signature"
                         >
-                          ×
+                          Remove
                         </button>
                       </div>
                     ))}
