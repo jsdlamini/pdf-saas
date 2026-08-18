@@ -1194,6 +1194,11 @@ export default function ToolWorkbench({ tool }: WorkbenchProps) {
   const isSignTool = tool.slug === "sign-pdf";
   const isMergeTool = tool.slug === "merge-pdf";
   const isConvertTool = tool.slug === "convert-to-pdf";
+  const isMultiFileTool =
+    tool.slug === "merge-pdf" ||
+    tool.slug === "convert-to-pdf" ||
+    tool.slug === "scan-to-pdf" ||
+    tool.slug === "compare-pdf";
   const isScanTool = tool.slug === "scan-to-pdf";
   const isImageToPdfTool =
     tool.slug === "images-to-pdf" || tool.slug === "images-to-pdf" || tool.slug === "scan-to-pdf";
@@ -1263,7 +1268,7 @@ export default function ToolWorkbench({ tool }: WorkbenchProps) {
 
   const hasChosenWorkflow = Boolean(selectedRecipeSlug && selectedRecipe);
   const isFirstWorkflowStep = hasChosenWorkflow && currentRecipeStepIndex === 0;
-  const shouldShowFileInput = (!hasChosenWorkflow || isFirstWorkflowStep) && !pipelineBootstrap?.accepted;
+  const shouldShowFileInput = (!hasChosenWorkflow || isFirstWorkflowStep) && (!pipelineBootstrap?.accepted || isMultiFileTool);
   const shouldShowPreflight = !hasChosenWorkflow;
   const suggestedWorkflow = smartIntake?.recommendedWorkflow ?? null;
 
@@ -2917,7 +2922,7 @@ export default function ToolWorkbench({ tool }: WorkbenchProps) {
       return;
     }
 
-    const finalSelectedFiles = isScanTool ? [...files, ...nextFiles] : nextFiles;
+    const finalSelectedFiles = isMultiFileTool ? [...files, ...nextFiles] : nextFiles;
     setFiles(finalSelectedFiles);
     void persistUploadedFiles(tool.slug, finalSelectedFiles);
     addLocalStoredFiles(nextFiles, `Uploaded for ${tool.name}`);
