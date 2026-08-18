@@ -2367,28 +2367,41 @@ html[data-theme="light"] .studio-dark ::-webkit-scrollbar-thumb {
 
 
 /* ── Tool selector grid (pipe output dialog) ───── */
+.swal-pipe-popup {
+  border-radius: 16px !important;
+  padding: 1.4rem 1.6rem !important;
+  box-shadow: 0 24px 60px -12px rgba(15, 23, 42, 0.35) !important;
+}
+.swal-pipe-popup .swal2-title {
+  font-size: 17px !important;
+  font-weight: 700 !important;
+  letter-spacing: -0.01em;
+}
+.swal-pipe-popup .swal2-html-container {
+  overflow: visible !important;
+}
 .swal-center-container {
   align-items: center !important;
   padding-top: 0 !important;
 }
 .swal-tool-search {
-  width: 100%;
-  max-width: 100%;
-  min-width: 0;
-  box-sizing: border-box;
-  padding: 9px 12px;
-  border: 1px solid #e2e8f0;
-  border-radius: 10px;
-  background: #f8fafc;
-  color: #0f172a;
-  font-size: 13px;
+  width: 100% !important;
+  max-width: 100% !important;
+  min-width: 0 !important;
+  box-sizing: border-box !important;
+  margin: 0 0 10px 0 !important;
+  padding: 9px 12px !important;
+  border: 1px solid #e2e8f0 !important;
+  border-radius: 10px !important;
+  background: #f8fafc !important;
+  color: #0f172a !important;
+  font-size: 13px !important;
   outline: none;
-  margin-bottom: 10px;
   transition: border-color 0.15s ease, box-shadow 0.15s ease;
 }
 .swal-tool-search:focus {
-  border-color: #6366f1;
-  box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.15);
+  border-color: #6366f1 !important;
+  box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.15) !important;
 }
 .swal-tool-grid {
   display: flex;

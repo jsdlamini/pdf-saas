@@ -986,6 +986,16 @@ export default function ToolWorkbench({ tool }: WorkbenchProps) {
   });
   const [signatureMode, setSignatureMode] = useState<"text" | "draw">("text");
   const [signatureDrawn, setSignatureDrawn] = useState(false);
+  const [savedSignatures, setSavedSignatures] = useState<Array<{ id: string; kind: "text" | "draw"; label: string; text?: string; dataUrl?: string }>>(() => {
+    if (typeof window === "undefined") return [];
+    try {
+      const raw = localStorage.getItem("wiserfiles-saved-signatures");
+      const parsed = raw ? JSON.parse(raw) : [];
+      return Array.isArray(parsed) ? parsed : [];
+    } catch {
+      return [];
+    }
+  });
   const [signaturePlacement, setSignaturePlacement] = useState({ xRatio: 0.82, yRatio: 0.12 });
   const [signaturePlacementPreview, setSignaturePlacementPreview] = useState("");
   const [mergePages, setMergePages] = useState<MergePageNode[]>([]);
@@ -1694,7 +1704,7 @@ export default function ToolWorkbench({ tool }: WorkbenchProps) {
       color: "#0f172a",
       position: "center",
       width: "min(94vw, 760px)",
-      customClass: { container: "swal-center-container" },
+      customClass: { container: "swal-center-container", popup: "swal-pipe-popup" },
       didOpen: () => {
         const grid = document.getElementById("swal-tool-grid");
         const search = document.getElementById("swal-tool-search") as HTMLInputElement | null;
@@ -2521,6 +2531,51 @@ export default function ToolWorkbench({ tool }: WorkbenchProps) {
     signatureActiveStrokeRef.current = [];
     redrawSignatureCanvas();
     setSignatureDrawn(false);
+  }
+
+  function saveCurrentSignature() {
+    let entry: { id: string; kind: "text" | "draw"; label: string; text?: string; dataUrl?: string } | null = null;
+    if (signatureMode === "text") {
+      const text = editText.trim();
+      if (!text) { setError("Type a signature before saving."); return; }
+      entry = { id: `sig-${Date.now()}`, kind: "text", label: text, text };
+    } else {
+      const canvas = signatureCanvasRef.current;
+      if (!canvas || !signatureDrawn) { setError("Draw a signature before saving."); return; }
+      entry = { id: `sig-${Date.now()}`, kind: "draw", label: "Drawn signature", dataUrl: canvas.toDataURL("image/png") };
+    }
+    if (!entry) return;
+    const next = [...savedSignatures, entry].slice(-12);
+    setSavedSignatures(next);
+    try { localStorage.setItem("wiserfiles-saved-signatures", JSON.stringify(next)); } catch {}
+    setStatus("Signature saved for future use.");
+  }
+
+  function applySavedSignature(sig: { kind: "text" | "draw"; text?: string; dataUrl?: string }) {
+    if (sig.kind === "text") {
+      setSignatureMode("text");
+      setEditText(sig.text || "");
+    } else if (sig.dataUrl) {
+      setSignatureMode("draw");
+      const img = new Image();
+      img.onload = () => {
+        const canvas = signatureCanvasRef.current;
+        if (!canvas) return;
+        setupSignatureCanvas(canvas);
+        const ctx = canvas.getContext("2d");
+        if (!ctx) return;
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+        setSignatureDrawn(true);
+      };
+      img.src = sig.dataUrl;
+    }
+  }
+
+  function deleteSavedSignature(id: string) {
+    const next = savedSignatures.filter((s) => s.id !== id);
+    setSavedSignatures(next);
+    try { localStorage.setItem("wiserfiles-saved-signatures", JSON.stringify(next)); } catch {}
   }
 
   function onSignaturePlacementPick(event: React.MouseEvent<HTMLImageElement>) {
@@ -4988,6 +5043,48 @@ export default function ToolWorkbench({ tool }: WorkbenchProps) {
                   <p className="field-help">This text will be placed on the PDF as your signature.</p>
                 </div>
               )}
+
+              <div className="space-y-2 rounded-xl border border-slate-300 bg-white p-3">
+                <div className="flex items-center justify-between">
+                  <p className="field-help">Save this signature to reuse it later.</p>
+                  <button
+                    type="button"
+                    onClick={saveCurrentSignature}
+                    className="btn btn-secondary rounded-md px-3 py-1 text-xs"
+                  >
+                    Save signature
+                  </button>
+                </div>
+                {savedSignatures.length > 0 ? (
+                  <div className="flex flex-wrap gap-2">
+                    {savedSignatures.map((sig) => (
+                      <div key={sig.id} className="group relative inline-flex items-center gap-1 rounded-full border border-slate-200 bg-slate-50 pl-2 pr-1 py-0.5">
+                        <button
+                          type="button"
+                          onClick={() => applySavedSignature(sig)}
+                          className="flex items-center gap-1 text-xs font-medium text-slate-700 hover:text-cyan-700"
+                          title="Use this signature"
+                        >
+                          {sig.kind === "draw" && sig.dataUrl ? (
+                            // eslint-disable-next-line @next/next/no-img-element
+                            <img src={sig.dataUrl} alt="Saved signature" className="h-5 w-9 rounded-sm object-contain" />
+                          ) : (
+                            <span className="text-sm italic" style={{ fontFamily: 'Georgia, "Times New Roman", serif' }}>{sig.label}</span>
+                          )}
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => deleteSavedSignature(sig.id)}
+                          className="text-[10px] text-slate-400 hover:text-rose-600"
+                          aria-label="Delete saved signature"
+                        >
+                          ×
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                ) : null}
+              </div>
 
               <div className="space-y-2 rounded-xl border border-slate-300 bg-slate-50 p-3">
                 <p className="field-help">Click the preview to choose where the signature should be placed.</p>

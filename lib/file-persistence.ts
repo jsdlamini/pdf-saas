@@ -35,29 +35,35 @@ type StoredFile = {
 
 export async function persistUploadedFiles(toolSlug: string, files: File[]): Promise<void> {
   try {
+    // Read all file bytes BEFORE opening the transaction. IndexedDB transactions
+    // auto-commit when there are no pending requests, so any await inside the
+    // transaction body (e.g. file.arrayBuffer()) silently breaks the writes.
+    const buffers = await Promise.all(files.map((file) => file.arrayBuffer()));
+
     const db = await openDb();
     const tx = db.transaction(STORE, "readwrite");
     const store = tx.objectStore(STORE);
 
-    // Clear existing files for this tool, then store the new batch.
-    const existing = await new Promise<StoredFile[]>((resolve) => {
-      const req = store.getAll() as IDBRequest<StoredFile[]>;
-      req.onsuccess = () => resolve(req.result || []);
-      req.onerror = () => resolve([]);
-    });
-    for (const entry of existing) {
-      if (entry.toolSlug === toolSlug) store.delete(entry.id);
-    }
+    // Clear existing files for this tool.
+    const clearReq = store.openCursor();
+    clearReq.onsuccess = () => {
+      const cursor = clearReq.result;
+      if (!cursor) return;
+      const entry = cursor.value as StoredFile;
+      if (entry.toolSlug === toolSlug) cursor.delete();
+      cursor.continue();
+    };
 
-    for (const file of files) {
-      const data = await file.arrayBuffer();
+    // Store the new batch synchronously within the transaction.
+    for (let i = 0; i < files.length; i += 1) {
+      const file = files[i];
       const record: StoredFile = {
         id: `${toolSlug}:${file.name}:${file.size}`,
         toolSlug,
         name: file.name,
         type: file.type || "application/octet-stream",
         size: file.size,
-        data,
+        data: buffers[i],
         createdAt: Date.now(),
       };
       store.put(record);
