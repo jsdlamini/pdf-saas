@@ -807,6 +807,41 @@ function sortSlidePaths(paths: string[]) {
   });
 }
 
+async function convertMixedFilesToPdfBytes(files: File[]): Promise<Uint8Array> {
+  const output = await PDFDocument.create();
+  for (const file of files) {
+    const lower = file.name.toLowerCase();
+    const isPdfFile = file.type === "application/pdf" || lower.endsWith(".pdf");
+    const isImageFile = file.type.startsWith("image/") || /\.(png|jpe?g|webp|gif)$/i.test(lower);
+
+    if (isPdfFile) {
+      const source = await PDFDocument.load(await readAsArrayBuffer(file));
+      const copied = await output.copyPages(source, source.getPageIndices());
+      copied.forEach((p) => output.addPage(p));
+    } else if (isImageFile) {
+      const { image, width, height } = await fileToPdfImage(output, file);
+      const page = output.addPage([width, height]);
+      page.drawImage(image, { x: 0, y: 0, width, height });
+    } else {
+      const form = new FormData();
+      form.append("file", file);
+      const res = await fetch("/api/office-to-pdf", { method: "POST", body: form });
+      if (!res.ok) {
+        const data = (await res.json().catch(() => null)) as { error?: string } | null;
+        throw new Error(data?.error || `Could not convert ${file.name}`);
+      }
+      const pdfBytes = new Uint8Array(await res.arrayBuffer());
+      const source = await PDFDocument.load(pdfBytes);
+      const copied = await output.copyPages(source, source.getPageIndices());
+      copied.forEach((p) => output.addPage(p));
+    }
+  }
+  if (!output.getPageCount()) {
+    throw new Error("Add at least one file to convert.");
+  }
+  return output.save();
+}
+
 async function buildOfficePreviewText(blob: Blob, mime: string) {
   const lowerMime = mime.toLowerCase();
   const zip = await JSZip.loadAsync(await blob.arrayBuffer());
@@ -1158,6 +1193,7 @@ export default function ToolWorkbench({ tool }: WorkbenchProps) {
   const isRotateTool = tool.slug === "rotate-pdf";
   const isSignTool = tool.slug === "sign-pdf";
   const isMergeTool = tool.slug === "merge-pdf";
+  const isConvertTool = tool.slug === "convert-to-pdf";
   const isScanTool = tool.slug === "scan-to-pdf";
   const isImageToPdfTool =
     tool.slug === "images-to-pdf" || tool.slug === "images-to-pdf" || tool.slug === "scan-to-pdf";
@@ -1457,12 +1493,12 @@ export default function ToolWorkbench({ tool }: WorkbenchProps) {
     const first = nextFiles[0];
     if (!first) return;
     const isPdf = first.type === "application/pdf" || first.name.toLowerCase().endsWith(".pdf");
-    if (!isPdf) return;
-    if (!usesThumbnailEditor && !isSignTool && !isMergeTool && !isEditTool) return;
+    if (!isPdf && !isConvertTool) return;
+    if (!usesThumbnailEditor && !isSignTool && !isMergeTool && !isConvertTool && !isEditTool) return;
 
     try {
       setThumbnailLoading(true);
-      if (isMergeTool) {
+      if (isMergeTool || isConvertTool) {
         setMergeLoading(true);
       }
       const firstBytes = new Uint8Array(await readAsArrayBuffer(first));
@@ -1506,6 +1542,22 @@ export default function ToolWorkbench({ tool }: WorkbenchProps) {
           }
         }
 
+        setMergePages(allPages);
+        setMergePageOrder(allPages.map((item) => item.id));
+      }
+
+      if (isConvertTool) {
+        // Convert all mixed files to one PDF, then render page thumbnails.
+        const combinedBytes = await convertMixedFilesToPdfBytes(nextFiles);
+        const thumbs = await renderPdfThumbnails(combinedBytes);
+        const allPages: MergePageNode[] = thumbs.map((thumb) => ({
+          id: `convert-${thumb.pageNumber}-${Math.random().toString(36).slice(2, 7)}`,
+          fileIndex: 0,
+          fileName: "converted.pdf",
+          pageIndex: thumb.pageNumber - 1,
+          pageNumber: thumb.pageNumber,
+          dataUrl: thumb.dataUrl,
+        }));
         setMergePages(allPages);
         setMergePageOrder(allPages.map((item) => item.id));
       }
@@ -2058,6 +2110,9 @@ export default function ToolWorkbench({ tool }: WorkbenchProps) {
   const uploadHint = useMemo(() => {
     if (tool.slug === "merge-pdf") {
       return "Upload multiple PDFs, then optionally reorder or remove individual pages before merging.";
+    }
+    if (tool.slug === "convert-to-pdf") {
+      return "Upload any mix of files (PDF, images, Word, Excel, PowerPoint, HTML), then drag page thumbnails to reorder.";
     }
     if (tool.slug === "compare-pdf") return "Upload two PDFs to compare textual differences.";
     if (tool.slug === "split-pdf" || tool.slug === "extract-pages") {
@@ -3071,34 +3126,21 @@ export default function ToolWorkbench({ tool }: WorkbenchProps) {
       }
 
       if (tool.slug === "convert-to-pdf") {
+        const combinedBytes = await convertMixedFilesToPdfBytes(files);
+        const combined = await PDFDocument.load(combinedBytes);
         const output = await PDFDocument.create();
-        for (const file of files) {
-          const lower = file.name.toLowerCase();
-          const isPdfFile = file.type === "application/pdf" || lower.endsWith(".pdf");
-          const isImageFile = file.type.startsWith("image/") || /\.(png|jpe?g|webp|gif)$/i.test(lower);
 
-          if (isPdfFile) {
-            const source = await PDFDocument.load(await readAsArrayBuffer(file));
-            const copied = await output.copyPages(source, source.getPageIndices());
-            copied.forEach((p) => output.addPage(p));
-          } else if (isImageFile) {
-            const { image, width, height } = await fileToPdfImage(output, file);
-            const page = output.addPage([width, height]);
-            page.drawImage(image, { x: 0, y: 0, width, height });
-          } else {
-            // Office/HTML files → server-side LibreOffice conversion to PDF
-            const form = new FormData();
-            form.append("file", file);
-            const res = await fetch("/api/office-to-pdf", { method: "POST", body: form });
-            if (!res.ok) {
-              const data = (await res.json().catch(() => null)) as { error?: string } | null;
-              throw new Error(data?.error || `Could not convert ${file.name}`);
-            }
-            const pdfBytes = new Uint8Array(await res.arrayBuffer());
-            const source = await PDFDocument.load(pdfBytes);
-            const copied = await output.copyPages(source, source.getPageIndices());
-            copied.forEach((p) => output.addPage(p));
-          }
+        // Reorder pages if the user arranged them via thumbnails.
+        if (mergePageOrder.length && mergePages.length) {
+          const pageById = new Map(mergePages.map((page) => [page.id, page]));
+          const order = mergePageOrder
+            .map((id) => pageById.get(id))
+            .filter(Boolean) as MergePageNode[];
+          const copied = await output.copyPages(combined, order.map((node) => node.pageIndex));
+          copied.forEach((p) => output.addPage(p));
+        } else {
+          const copied = await output.copyPages(combined, combined.getPageIndices());
+          copied.forEach((p) => output.addPage(p));
         }
 
         if (!output.getPageCount()) {
@@ -4839,17 +4881,17 @@ export default function ToolWorkbench({ tool }: WorkbenchProps) {
         </div>
       ) : null}
 
-      {isMergeTool ? (
+      {(isMergeTool || isConvertTool) ? (
         <div className="space-y-2 rounded-2xl border border-slate-200 bg-slate-50 p-3">
           <div className="flex items-center justify-between gap-3">
             <p className="text-xs font-semibold uppercase tracking-[0.14em] text-slate-600">
-              Merge Page Organizer
+              {isConvertTool ? "Page Organizer" : "Merge Page Organizer"}
             </p>
             <p className="text-xs text-slate-500">{mergePageOrder.length} pages in output</p>
           </div>
 
           <p className="field-help">
-            Drag thumbnails to reorder pages. Remove pages you do not want in the merged output.
+            Drag thumbnails to reorder pages. Remove pages you do not want in the output.
           </p>
 
           {mergeLoading ? <p className="text-sm text-slate-600">Generating merge page thumbnails...</p> : null}
