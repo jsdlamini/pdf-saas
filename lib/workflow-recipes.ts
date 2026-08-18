@@ -46,7 +46,7 @@ export const WORKFLOW_RECIPES: WorkflowRecipe[] = [
     name: "Image Ingest",
     description: "Convert camera/image inputs to PDF, OCR them, and send as searchable docs.",
     steps: [
-      { toolSlug: "images-to-pdf", label: "Convert images to PDF" },
+      { toolSlug: "convert-to-pdf", label: "Convert images to PDF" },
       { toolSlug: "ocr-pdf", label: "Extract searchable text" },
       { toolSlug: "compress-pdf", label: "Reduce size for sharing" },
     ],

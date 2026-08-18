@@ -5,6 +5,17 @@ import { notFound } from "next/navigation";
 import ProjectSessionCta from "@/app/project-session-cta";
 import ToolWorkbench from "../tool-workbench";
 import { getToolBySlug, TOOL_ITEMS } from "@/lib/tools";
+import { redirect } from "next/navigation";
+
+// Legacy individual "to PDF" tools now redirect to the unified Convert to PDF.
+const LEGACY_TO_PDF_REDIRECTS = new Set([
+  "word-to-pdf",
+  "powerpoint-to-pdf",
+  "excel-to-pdf",
+  "images-to-pdf",
+  "html-to-pdf",
+  "jpg-to-pdf",
+]);
 
 type ToolPageProps = {
   params: Promise<{ slug: string }>;
@@ -53,6 +64,9 @@ export async function generateMetadata({ params }: ToolPageProps): Promise<Metad
 
 export default async function ToolPage({ params }: ToolPageProps) {
   const { slug } = await params;
+  if (LEGACY_TO_PDF_REDIRECTS.has(slug)) {
+    redirect("/tools/convert-to-pdf");
+  }
   const tool = getToolBySlug(slug);
 
   if (!tool) {

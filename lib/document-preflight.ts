@@ -131,7 +131,7 @@ export function analyzeDocumentSelection(
     addIfAvailable(
       recommendations,
       availableTools,
-      "images-to-pdf",
+      "convert-to-pdf",
       "Convert images to a PDF before further processing.",
       "high"
     );
@@ -141,17 +141,17 @@ export function analyzeDocumentSelection(
     findings.push("Office document detected.");
     const fileName = files[0]?.name.toLowerCase() || "";
     if (fileName.endsWith(".doc") || fileName.endsWith(".docx")) {
-      addIfAvailable(recommendations, availableTools, "word-to-pdf", "Convert Word to PDF first.", "high");
+      addIfAvailable(recommendations, availableTools, "convert-to-pdf", "Convert Word to PDF first.", "high");
     } else if (fileName.endsWith(".ppt") || fileName.endsWith(".pptx")) {
       addIfAvailable(
         recommendations,
         availableTools,
-        "powerpoint-to-pdf",
+        "convert-to-pdf",
         "Convert PowerPoint to PDF first.",
         "high"
       );
     } else if (fileName.endsWith(".xls") || fileName.endsWith(".xlsx")) {
-      addIfAvailable(recommendations, availableTools, "excel-to-pdf", "Convert Excel to PDF first.", "high");
+      addIfAvailable(recommendations, availableTools, "convert-to-pdf", "Convert Excel to PDF first.", "high");
     }
   }
 
