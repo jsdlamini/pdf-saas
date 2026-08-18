@@ -126,7 +126,7 @@ async function sanitizeLegacyWatermarks(blob: Blob) {
 
 function isFileCompatibleForTool(toolSlug: string, file: File) {
   const lower = file.name.toLowerCase();
-  if (toolSlug === "convert-to-pdf") {
+  if (toolSlug === "convert-to-pdf" || toolSlug === "merge-pdf") {
     return (
       file.type === "application/pdf" || lower.endsWith(".pdf") ||
       file.type.startsWith("image/") || /\.(png|jpe?g|webp|gif)$/.test(lower) ||
@@ -807,13 +807,17 @@ function sortSlidePaths(paths: string[]) {
   });
 }
 
-async function convertMixedFilesToPdfBytes(files: File[]): Promise<Uint8Array> {
+async function convertMixedFilesToPdf(files: File[]): Promise<{ bytes: Uint8Array; ranges: Array<{ fileIndex: number; fileName: string; start: number; end: number }> }> {
   const output = await PDFDocument.create();
-  for (const file of files) {
+  const ranges: Array<{ fileIndex: number; fileName: string; start: number; end: number }> = [];
+
+  for (let fileIndex = 0; fileIndex < files.length; fileIndex += 1) {
+    const file = files[fileIndex];
     const lower = file.name.toLowerCase();
     const isPdfFile = file.type === "application/pdf" || lower.endsWith(".pdf");
     const isImageFile = file.type.startsWith("image/") || /\.(png|jpe?g|webp|gif)$/i.test(lower);
 
+    const start = output.getPageCount();
     if (isPdfFile) {
       const source = await PDFDocument.load(await readAsArrayBuffer(file));
       const copied = await output.copyPages(source, source.getPageIndices());
@@ -835,11 +839,36 @@ async function convertMixedFilesToPdfBytes(files: File[]): Promise<Uint8Array> {
       const copied = await output.copyPages(source, source.getPageIndices());
       copied.forEach((p) => output.addPage(p));
     }
+    const end = output.getPageCount();
+    if (end > start) {
+      ranges.push({ fileIndex, fileName: file.name, start, end });
+    }
   }
+
   if (!output.getPageCount()) {
     throw new Error("Add at least one file to convert.");
   }
-  return output.save();
+  return { bytes: await output.save(), ranges };
+}
+
+async function convertMixedFilesToPdfBytes(files: File[]): Promise<Uint8Array> {
+  return (await convertMixedFilesToPdf(files)).bytes;
+}
+
+async function buildMixedFilePageNodes(files: File[]): Promise<MergePageNode[]> {
+  const { bytes, ranges } = await convertMixedFilesToPdf(files);
+  const thumbs = await renderPdfThumbnails(bytes);
+  return thumbs.map((thumb) => {
+    const range = ranges.find((r) => thumb.pageNumber > r.start && thumb.pageNumber <= r.end);
+    return {
+      id: `page-${thumb.pageNumber}-${Math.random().toString(36).slice(2, 7)}`,
+      fileIndex: range?.fileIndex ?? 0,
+      fileName: range?.fileName ?? "converted.pdf",
+      pageIndex: thumb.pageNumber - 1,
+      pageNumber: thumb.pageNumber,
+      dataUrl: thumb.dataUrl,
+    };
+  });
 }
 
 async function buildOfficePreviewText(blob: Blob, mime: string) {
@@ -1530,39 +1559,9 @@ export default function ToolWorkbench({ tool }: WorkbenchProps) {
         await loadEditPreview(first, 1);
       }
 
-      if (isMergeTool) {
-        const allPages: MergePageNode[] = [];
-        for (let fileIndex = 0; fileIndex < nextFiles.length; fileIndex += 1) {
-          const file = nextFiles[fileIndex];
-          const thumbs = await renderPdfThumbnails(new Uint8Array(await readAsArrayBuffer(file)));
-          for (const thumb of thumbs) {
-            allPages.push({
-              id: `${fileIndex}-${thumb.pageNumber}-${Math.random().toString(36).slice(2, 7)}`,
-              fileIndex,
-              fileName: file.name,
-              pageIndex: thumb.pageNumber - 1,
-              pageNumber: thumb.pageNumber,
-              dataUrl: thumb.dataUrl,
-            });
-          }
-        }
-
-        setMergePages(allPages);
-        setMergePageOrder(allPages.map((item) => item.id));
-      }
-
-      if (isConvertTool) {
-        // Convert all mixed files to one PDF, then render page thumbnails.
-        const combinedBytes = await convertMixedFilesToPdfBytes(nextFiles);
-        const thumbs = await renderPdfThumbnails(combinedBytes);
-        const allPages: MergePageNode[] = thumbs.map((thumb) => ({
-          id: `convert-${thumb.pageNumber}-${Math.random().toString(36).slice(2, 7)}`,
-          fileIndex: 0,
-          fileName: "converted.pdf",
-          pageIndex: thumb.pageNumber - 1,
-          pageNumber: thumb.pageNumber,
-          dataUrl: thumb.dataUrl,
-        }));
+      if (isMergeTool || isConvertTool) {
+        // Build page nodes for all files (PDF, images, office) with source-file tracking.
+        const allPages = await buildMixedFilePageNodes(nextFiles);
         setMergePages(allPages);
         setMergePageOrder(allPages.map((item) => item.id));
       }
@@ -2115,7 +2114,7 @@ export default function ToolWorkbench({ tool }: WorkbenchProps) {
 
   const uploadHint = useMemo(() => {
     if (tool.slug === "merge-pdf") {
-      return "Upload multiple PDFs, then optionally reorder or remove individual pages before merging.";
+      return "Upload any mix of files (PDF, images, Word, Excel, PowerPoint, HTML), then drag thumbnails to reorder pages.";
     }
     if (tool.slug === "convert-to-pdf") {
       return "Upload any mix of files (PDF, images, Word, Excel, PowerPoint, HTML), then drag page thumbnails to reorder.";
@@ -2462,7 +2461,7 @@ export default function ToolWorkbench({ tool }: WorkbenchProps) {
   const acceptsMultiple = true;
 
   const inputAccept = useMemo(() => {
-    if (tool.slug === "convert-to-pdf") {
+    if (tool.slug === "convert-to-pdf" || tool.slug === "merge-pdf") {
       return "application/pdf,.pdf,image/*,.png,.jpg,.jpeg,.webp,.gif,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.html,.htm,.txt";
     }
     if (tool.slug === "images-to-pdf" || tool.slug === "images-to-pdf" || tool.slug === "scan-to-pdf") {
@@ -3097,52 +3096,17 @@ export default function ToolWorkbench({ tool }: WorkbenchProps) {
       logProcessing(`Running ${tool.name} in ${tool.runtime} mode.`);
       const firstFile = files[0];
 
-      if (tool.slug === "merge-pdf") {
-        const output = await PDFDocument.create();
-        if (mergePageOrder.length && mergePages.length) {
-          const pageById = new Map(mergePages.map((page) => [page.id, page]));
-          const loadedDocs = new Map<number, PDFDocument>();
-          for (const pageId of mergePageOrder) {
-            const node = pageById.get(pageId);
-            if (!node) continue;
-
-            let source = loadedDocs.get(node.fileIndex);
-            if (!source) {
-              source = await PDFDocument.load(await readAsArrayBuffer(files[node.fileIndex]));
-              loadedDocs.set(node.fileIndex, source);
-            }
-
-            const [copied] = await output.copyPages(source, [node.pageIndex]);
-            output.addPage(copied);
-          }
-        } else {
-          for (const file of files) {
-            const source = await PDFDocument.load(await readAsArrayBuffer(file));
-            const copied = await output.copyPages(source, source.getPageIndices());
-            copied.forEach((page) => output.addPage(page));
-          }
-        }
-
-        if (!output.getPageCount()) {
-          throw new Error("Select at least one page to merge.");
-        }
-        stageOutput(asPdfBlob(await output.save()), "merged.pdf", "Preview merged pages before downloading.");
-        complete("Merged PDF ready for preview.");
-        return;
-      }
-
-      if (tool.slug === "convert-to-pdf") {
-        const combinedBytes = await convertMixedFilesToPdfBytes(files);
-        const combined = await PDFDocument.load(combinedBytes);
+      if (tool.slug === "merge-pdf" || tool.slug === "convert-to-pdf") {
+        const { bytes } = await convertMixedFilesToPdf(files);
+        const combined = await PDFDocument.load(bytes);
         const output = await PDFDocument.create();
 
-        // Reorder pages if the user arranged them via thumbnails.
         if (mergePageOrder.length && mergePages.length) {
           const pageById = new Map(mergePages.map((page) => [page.id, page]));
-          const order = mergePageOrder
-            .map((id) => pageById.get(id))
-            .filter(Boolean) as MergePageNode[];
-          const copied = await output.copyPages(combined, order.map((node) => node.pageIndex));
+          const indices = mergePageOrder
+            .map((id) => pageById.get(id)?.pageIndex)
+            .filter((i): i is number => typeof i === "number");
+          const copied = await output.copyPages(combined, indices);
           copied.forEach((p) => output.addPage(p));
         } else {
           const copied = await output.copyPages(combined, combined.getPageIndices());
@@ -3150,10 +3114,12 @@ export default function ToolWorkbench({ tool }: WorkbenchProps) {
         }
 
         if (!output.getPageCount()) {
-          throw new Error("Add at least one file to convert.");
+          throw new Error(tool.slug === "merge-pdf" ? "Select at least one page to merge." : "Add at least one file to convert.");
         }
-        stageOutput(asPdfBlob(await output.save()), "converted.pdf", "Preview converted PDF before downloading.");
-        complete("Converted PDF ready for preview.");
+        const outName = tool.slug === "merge-pdf" ? "merged.pdf" : "converted.pdf";
+        const outNote = tool.slug === "merge-pdf" ? "Preview merged pages before downloading." : "Preview converted PDF before downloading.";
+        stageOutput(asPdfBlob(await output.save()), outName, outNote);
+        complete(tool.slug === "merge-pdf" ? "Merged PDF ready for preview." : "Converted PDF ready for preview.");
         return;
       }
 
@@ -4895,6 +4861,23 @@ export default function ToolWorkbench({ tool }: WorkbenchProps) {
             </p>
             <p className="text-xs text-slate-500">{mergePageOrder.length} pages in output</p>
           </div>
+
+          {files.length > 0 ? (
+            <div className="flex flex-wrap gap-1.5">
+              {files.map((file, i) => {
+                const duplicate = files.some((other, j) => j !== i && other.name === file.name && other.size === file.size);
+                const tone = getFileToneClass(i).split(" ")[0].replace("border-", "");
+                const dotColor = tone === "cyan" ? "#22d3ee" : tone === "amber" ? "#fbbf24" : tone === "emerald" ? "#34d399" : tone === "violet" ? "#a78bfa" : tone === "rose" ? "#fb7185" : "#818cf8";
+                return (
+                  <span key={`${file.name}-${i}`} className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[11px] ${duplicate ? "border-rose-300 bg-rose-50 text-rose-700" : getFileToneClass(i)}`}>
+                    <span className="h-2 w-2 rounded-full" style={{ background: dotColor }} />
+                    <span className="max-w-[140px] truncate">{file.name}</span>
+                    {duplicate ? <span className="font-semibold">(duplicate)</span> : null}
+                  </span>
+                );
+              })}
+            </div>
+          ) : null}
 
           <p className="field-help">
             Drag thumbnails to reorder pages. Remove pages you do not want in the output.
