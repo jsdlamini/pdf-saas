@@ -2578,6 +2578,73 @@ export default function ResearchStudioPage() {
     setFigureName("");
   }
 
+  async function pushToGithub() {
+    if (!userId) {
+      setCompileNotice("Sign in to push projects to GitHub.");
+      return;
+    }
+    const { value } = await Swal.fire({
+      title: "Push to GitHub",
+      html: `
+        <div style="text-align:left;display:flex;flex-direction:column;gap:10px">
+          <label style="font-size:12px;font-weight:600;color:#e2e8f0">Repository name</label>
+          <input id="swal-gh-repo" class="swal2-input" placeholder="my-research-paper" style="background:#0f172a;color:#e2e8f0;border-color:#334155">
+          <label style="font-size:12px;font-weight:600;color:#e2e8f0">GitHub personal access token</label>
+          <input id="swal-gh-token" type="password" class="swal2-input" placeholder="ghp_..." style="background:#0f172a;color:#e2e8f0;border-color:#334155">
+          <label style="font-size:12px;color:#94a3b8"><input id="swal-gh-private" type="checkbox" style="margin-right:6px"> Private repository</label>
+        </div>
+      `,
+      showCancelButton: true,
+      confirmButtonText: "Push",
+      cancelButtonText: "Cancel",
+      confirmButtonColor: "#4ade80",
+      cancelButtonColor: "#334155",
+      background: "#1a1d2b",
+      color: "#e2e8f0",
+      position: "top",
+      preConfirm: () => {
+        const repo = (document.getElementById("swal-gh-repo") as HTMLInputElement)?.value?.trim();
+        const token = (document.getElementById("swal-gh-token") as HTMLInputElement)?.value?.trim();
+        const isPrivate = (document.getElementById("swal-gh-private") as HTMLInputElement)?.checked;
+        if (!repo) { Swal.showValidationMessage("Enter a repository name"); return false; }
+        if (!token) { Swal.showValidationMessage("Enter a personal access token"); return false; }
+        return { repo, token, isPrivate };
+      },
+    });
+
+    if (!value) return;
+    const { repo, token, isPrivate } = value as { repo: string; token: string; isPrivate: boolean };
+
+    setCompileNotice(`Pushing ${projectEntries.filter((e) => e.kind === "file").length} files to GitHub...`);
+    try {
+      const res = await fetch("/api/github", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          token,
+          repoName: repo,
+          isPrivate,
+          message: `Update ${projectName || "project"} from WiserFiles`,
+          files: projectEntries.filter((e) => e.kind === "file").map((e) => ({ path: e.path, content: e.content })),
+        }),
+      });
+      const data = (await res.json()) as { ok?: boolean; url?: string; pushed?: string[]; failed?: string[]; error?: string };
+      if (!res.ok || !data.ok) {
+        throw new Error(data.error || "GitHub push failed.");
+      }
+      setCompileNotice(`Pushed to GitHub: ${data.url}`);
+      showToast(`Pushed ${data.pushed?.length || 0} files to GitHub`, "success");
+      if (data.failed?.length) {
+        appendPreviewError(`Some files failed: ${data.failed.join(", ")}`);
+      }
+      trackStudioEvent("github-push", repo);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "GitHub push failed.";
+      setCompileNotice(message);
+      appendPreviewError(message);
+    }
+  }
+
   async function exportDocument(format: "docx" | "md") {
     const rootPath = editableFiles.some((e) => e.path === "main.tex") ? "main.tex" : activeEntry?.path;
     if (!rootPath || !rootPath.endsWith(".tex")) {
@@ -4671,6 +4738,8 @@ export default function ResearchStudioPage() {
               ] as any[] : []),
               "-",
               { label: <>Import ZIP</>, action: () => { setOpenMenu(""); document.getElementById("zip-import-editor-menu")?.click(); } },
+              "-",
+              { label: <>Push to GitHub</>, action: () => { setOpenMenu(""); void pushToGithub(); } },
             ]
           },
           {

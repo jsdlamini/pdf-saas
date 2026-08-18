@@ -52,7 +52,15 @@ export async function POST(request: Request) {
       if (!isSafePath(file.path)) continue;
       const target = join(tempDir, file.path);
       await mkdir(dirname(target), { recursive: true });
-      await writeFile(target, file.content, "utf8");
+      // Decode binary assets (figures/images) from base64 so pandoc can embed them.
+      if (/\.(png|jpg|jpeg|gif|webp|pdf|eps|svg)$/i.test(file.path)) {
+        const raw = file.content.includes(",") && file.content.startsWith("data:")
+          ? file.content.slice(file.content.indexOf(",") + 1)
+          : file.content;
+        await writeFile(target, Buffer.from(raw, "base64"));
+      } else {
+        await writeFile(target, file.content, "utf8");
+      }
     }
 
     const outputName = format === "docx" ? "document.docx" : "document.md";
