@@ -5,6 +5,7 @@ export type WorkflowPipelinePayload = {
   fileName: string;
   mime: string;
   blob: Blob;
+  files?: Array<{ name: string; type: string; blob: Blob }>;
   createdAt: number;
 };
 

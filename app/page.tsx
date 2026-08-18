@@ -142,7 +142,8 @@ export default function Home() {
 
   /* ── drop-zone state ──────────────────────────────────────────── */
   const [dragOver, setDragOver] = useState(false);
-  const [dropFile, setDropFile] = useState<File | null>(null);
+  const [dropFiles, setDropFiles] = useState<File[]>([]);
+  const dropFile = dropFiles[0] ?? null;
   const [dropFileInfo, setDropFileInfo] = useState<{
     kind: "pdf" | "image";
     pageCount?: number;
@@ -212,7 +213,7 @@ export default function Home() {
   }, [dropFile]);
 
   function clearDrop() {
-    setDropFile(null);
+    setDropFiles([]);
     setDropFileInfo(null);
     setDragOver(false);
   }
@@ -231,17 +232,26 @@ export default function Home() {
     e.preventDefault();
     e.stopPropagation();
     setDragOver(false);
-    const f = e.dataTransfer.files?.[0];
-    if (f && (isPdf(f) || isImage(f) || isWord(f))) {
+    const files = Array.from(e.dataTransfer.files || []);
+    const compatible = files.filter((f) => isPdf(f) || isImage(f) || isWord(f));
+    if (compatible.length) {
       setDropFileInfo(null);
-      setDropFile(f);
+      setDropFiles(compatible);
     }
   }
 
   function handleBrowse(file: File) {
     if (isPdf(file) || isImage(file)) {
       setDropFileInfo(null);
-      setDropFile(file);
+      setDropFiles([file]);
+    }
+  }
+
+  function handleBrowseMultiple(files: File[]) {
+    const compatible = files.filter((f) => isPdf(f) || isImage(f) || isWord(f));
+    if (compatible.length) {
+      setDropFileInfo(null);
+      setDropFiles(compatible);
     }
   }
 
@@ -253,6 +263,7 @@ export default function Home() {
       fileName: dropFile.name,
       mime: dropFile.type || "application/octet-stream",
       blob: dropFile,
+      files: dropFiles.map((f) => ({ name: f.name, type: f.type || "application/octet-stream", blob: f })),
       createdAt: getWorkflowCreatedAt(),
     });
     router.push(`/tools/${slug}?pipeline=true`);
@@ -345,10 +356,11 @@ export default function Home() {
               id="hero-file-input"
               type="file"
               accept={ACCEPTED_TYPES.join(",")}
+              multiple
               className="hidden"
               onChange={(e) => {
-                const f = e.target.files?.[0];
-                if (f) handleBrowse(f);
+                const files = Array.from(e.target.files || []);
+                if (files.length) handleBrowseMultiple(files);
                 e.currentTarget.value = "";
               }}
             />
@@ -465,11 +477,14 @@ export default function Home() {
                   </svg>
                 </div>
                 <p className="font-display text-2xl font-semibold tracking-tight bg-gradient-to-r from-red-500 to-pink-500 bg-clip-text text-transparent md:text-3xl">
-                  Drop your file here
+                  Drop your file(s) here
                 </p>
                 <p className="text-sm text-slate-500 drop-zone-subtitle">
                   Or click to browse — PDF, Word, PNG, JPG, WebP accepted
                 </p>
+                {dropFiles.length > 1 ? (
+                  <p className="text-xs font-semibold text-cyan-700">{dropFiles.length} files selected</p>
+                ) : null}
               </div>
             )}
           </div>

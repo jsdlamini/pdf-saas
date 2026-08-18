@@ -936,10 +936,15 @@ export default function ToolWorkbench({ tool }: WorkbenchProps) {
       type: payload.mime || "application/octet-stream",
     });
     const accepted = isFileCompatibleForTool(tool.slug, file);
-    return { payload, file, accepted };
+    const allFiles = (payload.files && payload.files.length ? payload.files : [{ name: payload.fileName, type: payload.mime || "application/octet-stream", blob: payload.blob }])
+      .map((f) => new File([f.blob], f.name, { type: f.type || "application/octet-stream" }));
+    return { payload, file, accepted, allFiles };
   });
 
-  const [files, setFiles] = useState<File[]>(() => (pipelineBootstrap?.accepted ? [pipelineBootstrap.file] : []));
+  const [files, setFiles] = useState<File[]>(() => {
+    if (pipelineBootstrap?.accepted && pipelineBootstrap.allFiles?.length) return pipelineBootstrap.allFiles;
+    return pipelineBootstrap?.accepted ? [pipelineBootstrap.file] : [];
+  });
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [status, setStatus] = useState("");
