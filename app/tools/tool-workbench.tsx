@@ -17,6 +17,7 @@ import { formatDurationMs, hashBlob, hashFile, summarizeRunConfidence, type RunR
 import { TOOL_ITEMS, type ToolItem } from "@/lib/tools";
 import Swal from "sweetalert2";
 import { consumeWorkflowPipeline, stageWorkflowPipeline } from "@/lib/workflow-pipeline";
+import { loadUploadedFiles, persistUploadedFiles, clearUploadedFiles } from "@/lib/file-persistence";
 import { getNextRecipeStep, getRecipesForTool } from "@/lib/workflow-recipes";
 import ShareButton from "@/app/components/share-button";
 import { showToast } from "@/app/components/toast";
@@ -1874,6 +1875,18 @@ export default function ToolWorkbench({ tool }: WorkbenchProps) {
     };
   }, [outputPreview]);
 
+  // Restore uploaded files after a page refresh.
+  useEffect(() => {
+    let cancelled = false;
+    void loadUploadedFiles(tool.slug).then((restored) => {
+      if (cancelled || !restored.length) return;
+      setFiles(restored);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [tool.slug]);
+
   useEffect(() => {
     if (!outputPreview) return;
 
@@ -2716,6 +2729,7 @@ export default function ToolWorkbench({ tool }: WorkbenchProps) {
 
     const finalSelectedFiles = isScanTool ? [...files, ...nextFiles] : nextFiles;
     setFiles(finalSelectedFiles);
+    void persistUploadedFiles(tool.slug, finalSelectedFiles);
     addLocalStoredFiles(nextFiles, `Uploaded for ${tool.name}`);
     const selectedFilesForAnalysis = finalSelectedFiles;
     if (shouldShowPreflight) {
@@ -4312,6 +4326,7 @@ export default function ToolWorkbench({ tool }: WorkbenchProps) {
                 type="button"
                 onClick={() => {
                   setFiles([]);
+                  void clearUploadedFiles(tool.slug);
                   setPipelineNotice("");
                   logProcessing("Pipeline handoff dismissed.");
                 }}
