@@ -1692,7 +1692,7 @@ export default function ToolWorkbench({ tool }: WorkbenchProps) {
       cancelButtonColor: "#94a3b8",
       background: "#ffffff",
       color: "#0f172a",
-      position: "top",
+      position: "center",
       width: "min(92vw, 560px)",
       didOpen: () => {
         const grid = document.getElementById("swal-tool-grid");
