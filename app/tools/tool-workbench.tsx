@@ -2066,8 +2066,6 @@ export default function ToolWorkbench({ tool }: WorkbenchProps) {
       background: "#ffffff",
       color: "#0f172a",
       draggable: true,
-      heightAuto: false,
-      grow: "fullscreen",
       position: "center",
       width: "min(94vw, 760px)",
       customClass: { container: "swal-center-container", popup: "swal-pipe-popup" },

@@ -2424,6 +2424,7 @@ html[data-theme="light"] .studio-dark ::-webkit-scrollbar-thumb {
   padding: 1.4rem 1.6rem !important;
   box-shadow: 0 24px 60px -12px rgba(15, 23, 42, 0.35) !important;
   box-sizing: border-box !important;
+  max-height: calc(100vh - 2rem) !important;
 }
 .swal-pipe-popup .swal2-title {
   font-size: 17px !important;

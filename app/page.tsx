@@ -684,7 +684,7 @@ export default function Home() {
                 key={recipe.slug}
                 type="button"
                 onClick={() => startWorkflow(recipe)}
-                className="ai-workflow-card group rounded-xl p-4 text-left transition hover:-translate-y-0.5"
+                className="ai-workflow-card group rounded-xl p-4 text-left transition"
               >
                 <p className="text-sm font-semibold text-slate-900 group-hover:text-slate-900">
                   {recipe.name}
