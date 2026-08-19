@@ -26,8 +26,9 @@ ENV HOSTNAME=0.0.0.0
 # scoped package managers only, so the web process cannot touch the rest of the
 # filesystem. See /etc/sudoers.d/app below.
 RUN apt-get update \
- && apt-get install -y --no-install-recommends ocrmypdf tesseract-ocr ghostscript qpdf latexmk texlive-extra-utils texlive-latex-base texlive-latex-recommended texlive-latex-extra texlive-fonts-recommended texlive-fonts-extra texlive-science texlive-publishers texlive-pictures texlive-bibtex-extra biber tesseract-ocr-deu tesseract-ocr-eng tesseract-ocr-fra tesseract-ocr-spa tesseract-ocr-ita tesseract-ocr-por tesseract-ocr-nld tesseract-ocr-pol libreoffice-writer python3 python3-matplotlib g++ sudo pandoc \
+ && apt-get install -y --no-install-recommends ocrmypdf tesseract-ocr ghostscript qpdf latexmk texlive-extra-utils texlive-latex-base texlive-latex-recommended texlive-latex-extra texlive-fonts-recommended texlive-fonts-extra texlive-science texlive-publishers texlive-pictures texlive-bibtex-extra biber tesseract-ocr-deu tesseract-ocr-eng tesseract-ocr-fra tesseract-ocr-spa tesseract-ocr-ita tesseract-ocr-por tesseract-ocr-nld tesseract-ocr-pol libreoffice-writer python3 python3-pip python3-matplotlib g++ sudo pandoc \
  && rm -rf /var/lib/apt/lists/* \
+ && pip3 install --no-cache-dir --break-system-packages pdf2docx \
  && useradd --create-home --shell /bin/bash app \
  && echo "app ALL=(root) NOPASSWD: /usr/bin/apt-get, /usr/bin/tlmgr" > /etc/sudoers.d/app \
  && chmod 0440 /etc/sudoers.d/app
@@ -38,6 +39,7 @@ RUN npm install --omit=dev
 COPY --from=builder /app/.next ./.next
 COPY --from=builder /app/public ./public
 COPY --from=builder /app/next.config.ts ./next.config.ts
+COPY scripts/pdf2word-convert.py ./scripts/pdf2word-convert.py
 
 # Give the runtime user ownership of the app directory (Next.js writes .next/cache),
 # then drop privileges. apt/tlmgr auto-install still works via scoped sudo.
