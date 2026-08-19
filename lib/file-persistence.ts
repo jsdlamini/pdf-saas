@@ -134,3 +134,7 @@ export function persistSharedFiles(files: File[]): Promise<void> {
 export function loadSharedFiles(): Promise<File[]> {
   return loadUploadedFiles(SHARED_FILES_SLUG);
 }
+
+export function clearSharedFiles(): Promise<void> {
+  return clearUploadedFiles(SHARED_FILES_SLUG);
+}

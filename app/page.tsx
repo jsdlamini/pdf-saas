@@ -16,7 +16,7 @@ import {
   clearWorkflowPipeline,
   stageWorkflowPipeline,
 } from "@/lib/workflow-pipeline";
-import { loadSharedFiles, persistSharedFiles } from "@/lib/file-persistence";
+import { loadSharedFiles, persistSharedFiles, clearSharedFiles } from "@/lib/file-persistence";
 
 /* ── helpers ────────────────────────────────────────────────────── */
 
@@ -258,6 +258,16 @@ export default function Home() {
     setDropFiles([]);
     setDropFileInfo(null);
     setDragOver(false);
+    void clearSharedFiles();
+  }
+
+  function removeDropFile(index: number) {
+    setDropFiles((current) => {
+      if (index < 0 || index >= current.length) return current;
+      const next = current.filter((_, i) => i !== index);
+      void persistSharedFiles(next);
+      return next;
+    });
   }
 
   function onDragOver(e: DragEvent) {
@@ -441,12 +451,32 @@ export default function Home() {
                             <path d="M12 3v4h4" strokeLinecap="round" strokeLinejoin="round" />
                           </svg>
                           <span className="truncate">{f.name}</span>
+                          <button
+                            type="button"
+                            onClick={(e) => { e.stopPropagation(); removeDropFile(i); }}
+                            className="inline-flex h-4 w-4 shrink-0 items-center justify-center rounded-full text-current opacity-60 transition hover:bg-slate-200 hover:opacity-100"
+                            aria-label={`Remove ${f.name}`}
+                            title="Remove file"
+                          >
+                            ×
+                          </button>
                         </span>
                       );
                     })}
                   </div>
                 ) : (
-                  <p className="font-semibold text-slate-900">{dropFile.name}</p>
+                  <div className="flex items-center justify-center gap-2">
+                    <p className="font-semibold text-slate-900">{dropFile.name}</p>
+                    <button
+                      type="button"
+                      onClick={(e) => { e.stopPropagation(); removeDropFile(0); }}
+                      className="inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-full text-slate-400 transition hover:bg-slate-200 hover:text-slate-700"
+                      aria-label={`Remove ${dropFile.name}`}
+                      title="Remove file"
+                    >
+                      ×
+                    </button>
+                  </div>
                 )}
                 <div className="flex flex-wrap items-center justify-center gap-x-4 gap-y-1 text-sm text-slate-500 drop-zone-hint">
                   <span>{(dropFiles.reduce((sum, f) => sum + f.size, 0) / 1024 / 1024).toFixed(1)} MB</span>
@@ -517,9 +547,9 @@ export default function Home() {
                     e.stopPropagation();
                     clearDrop();
                   }}
-                  className="text-xs text-slate-400 underline hover:text-slate-600"
+                  className="inline-flex items-center gap-1 rounded-full border border-slate-300 bg-white px-3 py-1 text-xs font-semibold text-slate-600 shadow-sm transition hover:border-rose-300 hover:bg-rose-50 hover:text-rose-700"
                 >
-                  Choose a different file
+                  Clear all files
                 </button>
               </div>
             ) : (
