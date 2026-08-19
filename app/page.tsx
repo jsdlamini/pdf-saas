@@ -181,25 +181,38 @@ export default function Home() {
   }, [dropFile, dropSuggestions]);
 
   useEffect(() => {
-    if (!dropFile) return;
+    if (!dropFiles.length) return;
 
     let cancelled = false;
 
     async function readFileInfo() {
-      if (isPdf(dropFile!)) {
+      const pdfFiles = dropFiles.filter((f) => isPdf(f));
+      if (pdfFiles.length) {
         try {
           const { PDFDocument: PDFDoc } = await import("pdf-lib");
-          const buffer = await dropFile!.arrayBuffer();
-          if (cancelled) return;
-          const doc = await PDFDoc.load(buffer, { ignoreEncryption: true });
-          if (!cancelled) setDropFileInfo({ kind: "pdf", pageCount: doc.getPageCount() });
+          let totalPages = 0;
+          for (const file of pdfFiles) {
+            if (cancelled) return;
+            try {
+              const buffer = await file.arrayBuffer();
+              const doc = await PDFDoc.load(buffer, { ignoreEncryption: true });
+              totalPages += doc.getPageCount();
+            } catch {
+              // skip files that can't be read
+            }
+          }
+          if (!cancelled) setDropFileInfo({ kind: "pdf", pageCount: totalPages || undefined });
         } catch {
           if (!cancelled) setDropFileInfo({ kind: "pdf" });
         }
-      } else if (isImage(dropFile!)) {
+        return;
+      }
+
+      const imageFile = dropFiles.find((f) => isImage(f));
+      if (imageFile) {
         try {
           const img = new Image();
-          const url = URL.createObjectURL(dropFile!);
+          const url = URL.createObjectURL(imageFile);
           await new Promise<void>((resolve, reject) => {
             img.onload = () => resolve();
             img.onerror = () => reject(new Error("Failed to load image"));
@@ -217,7 +230,7 @@ export default function Home() {
 
     readFileInfo();
     return () => { cancelled = true; };
-  }, [dropFile]);
+  }, [dropFiles]);
 
   function clearDrop() {
     setDropFiles([]);
@@ -637,13 +650,13 @@ export default function Home() {
 
         {/* ── Trust badge ──────────────────────────────────────── */}
         <div className="flex justify-center">
-          <div className="trust-badge inline-flex items-center gap-2 rounded-full border border-emerald-200 bg-white px-4 py-2 text-sm text-emerald-800 shadow-sm">
-            <svg viewBox="0 0 20 20" className="trust-badge-icon h-4 w-4 text-emerald-600" fill="none" stroke="currentColor" strokeWidth="1.8">
-              <path d="M10 2l1.5 4.5h4.8l-3.9 2.8 1.5 4.7L10 11.5l-3.9 2.5 1.5-4.7-3.9-2.8h4.8z" strokeLinecap="round" strokeLinejoin="round" />
-              <path d="M10 6v13M6 14l4 4 4-4" strokeLinecap="round" strokeLinejoin="round" />
+          <div className="trust-badge inline-flex items-center gap-2 rounded-full border border-slate-200 bg-white px-4 py-2 text-sm text-slate-600 shadow-sm">
+            <svg viewBox="0 0 20 20" className="trust-badge-icon h-4 w-4 text-slate-400" fill="none" stroke="currentColor" strokeWidth="1.8">
+              <path d="M10 2l6 2.5v5c0 4-2.6 6.8-6 8.5-3.4-1.7-6-4.5-6-8.5v-5L10 2z" strokeLinecap="round" strokeLinejoin="round" />
+              <path d="M7.5 10l1.8 1.8 3.2-3.6" strokeLinecap="round" strokeLinejoin="round" />
             </svg>
             <span className="text-xs font-medium">
-              Your files are encrypted during transfer and automatically deleted after processing. We never store or share your documents.
+              Files are encrypted in transit and deleted automatically after processing — never stored or shared.
             </span>
           </div>
         </div>
