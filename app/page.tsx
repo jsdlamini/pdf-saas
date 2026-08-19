@@ -684,9 +684,9 @@ export default function Home() {
                 key={recipe.slug}
                 type="button"
                 onClick={() => startWorkflow(recipe)}
-                className="ai-workflow-card group rounded-xl p-4 text-left transition hover:-translate-y-0.5 hover:border-cyan-300 hover:bg-cyan-50"
+                className="ai-workflow-card group rounded-xl p-4 text-left transition hover:-translate-y-0.5 hover:border-slate-300 hover:bg-slate-100"
               >
-                <p className="text-sm font-semibold text-slate-900 group-hover:text-cyan-900">
+                <p className="text-sm font-semibold text-slate-900 group-hover:text-slate-900">
                   {recipe.name}
                 </p>
                 <p className="mt-1 text-xs text-slate-600">
@@ -698,16 +698,16 @@ export default function Home() {
                       key={`${recipe.slug}-${step.toolSlug}`}
                       className="flex items-center"
                     >
-                      <span className="inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-slate-200 text-[10px] font-bold text-slate-600 group-hover:bg-cyan-200 group-hover:text-cyan-900">
+                      <span className="inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-slate-200 text-[10px] font-bold text-slate-600 group-hover:bg-slate-300 group-hover:text-slate-900">
                         {index + 1}
                       </span>
                       {index < recipe.steps.length - 1 ? (
-                        <span className="mx-1 block h-px w-3 bg-slate-300 group-hover:bg-cyan-300" />
+                        <span className="mx-1 block h-px w-3 bg-slate-300 group-hover:bg-slate-400" />
                       ) : null}
                     </div>
                   ))}
                 </div>
-                <span className="mt-2 inline-block text-[10px] font-bold uppercase tracking-wide text-cyan-700 opacity-0 transition-opacity group-hover:opacity-100">
+                <span className="mt-2 inline-block text-[10px] font-bold uppercase tracking-wide text-slate-600 opacity-0 transition-opacity group-hover:opacity-100">
                   Start ›
                 </span>
               </button>
