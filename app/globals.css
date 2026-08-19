@@ -120,6 +120,22 @@ body {
   outline: none;
 }
 
+/* Tool carousel — seamless horizontal marquee */
+@keyframes tool-scroll {
+  from {
+    transform: translateX(0);
+  }
+  to {
+    transform: translateX(-50%);
+  }
+}
+.animate-tool-scroll {
+  animation: tool-scroll 45s linear infinite;
+}
+.animate-tool-scroll:hover {
+  animation-play-state: paused;
+}
+
 /* ── Research Studio Shell ───── */
 .studio-shell {
   display: flex;
