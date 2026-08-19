@@ -7,7 +7,7 @@ import JSZip from "jszip";
 import * as mammoth from "mammoth";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
-import { PDFDocument, StandardFonts, degrees, rgb, type PDFImage } from "pdf-lib";
+import { PDFDocument, StandardFonts, degrees, rgb, pushGraphicsState, popGraphicsState, translate, rotateDegrees, setLineWidth, setFillingRgbColor, setStrokingRgbColor, moveTo, lineTo, appendQuadraticCurve, closePath, fillAndStroke, PDFTextField, PDFCheckBox, PDFRadioGroup, PDFDropdown, PDFOptionList, type PDFImage } from "pdf-lib";
 import { useEffect, useMemo, useRef, useState } from "react";
 import PptxGenJS from "pptxgenjs";
 import * as XLSX from "xlsx";
@@ -180,20 +180,161 @@ type EditLineShape = { id: string; kind: "line"; start: CanvasPoint; end: Canvas
 type EditArrowShape = { id: string; kind: "arrow"; start: CanvasPoint; end: CanvasPoint; color: string; strokeWidth: number; opacity: number };
 type EditShape = EditRectShape | EditEllipseShape | EditLineShape | EditArrowShape;
 type EditWhiteout = { id: string; x: number; y: number; width: number; height: number };
+type EditImageAnnotation = {
+  id: string;
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+  rotation: number;
+  dataUrl: string;
+  mime: string;
+};
+type EditStamp = { id: string; x: number; y: number; text: string; color: string; size: number; rotation: number };
 type EditPageLayer = {
   strokes: EditStroke[];
   textNotes: EditTextNote[];
   highlights: EditHighlight[];
   shapes: EditShape[];
   whiteouts: EditWhiteout[];
+  images: EditImageAnnotation[];
+  stamps: EditStamp[];
 };
 
-type EditToolMode = "select" | "draw" | "highlight" | "text" | "rect" | "ellipse" | "line" | "arrow" | "whiteout";
+type EditToolMode = "select" | "draw" | "highlight" | "text" | "edit-text" | "rect" | "ellipse" | "line" | "arrow" | "whiteout" | "stamp";
 type EditDraftShape = { kind: "rect" | "ellipse" | "highlight" | "whiteout" | "line" | "arrow"; start: CanvasPoint; current: CanvasPoint };
-type EditSelection = { kind: "stroke" | "text" | "highlight" | "shape" | "whiteout"; id: string };
+type EditSelection = { kind: "stroke" | "text" | "highlight" | "shape" | "whiteout" | "image" | "stamp"; id: string };
+type EditTextSpan = {
+  text: string;
+  x: number;
+  y: number;
+  fontSize: number;
+  width: number;
+  bbox: { x: number; y: number; width: number; height: number };
+};
+type EditFormField = {
+  name: string;
+  type: "text" | "checkbox" | "radio" | "dropdown";
+  options: string[];
+  value: string | boolean;
+};
+type EditWatermark = {
+  text: string;
+  color: string;
+  opacity: number;
+  rotation: number;
+  size: number;
+  imageDataUrl: string;
+  imageMime: string;
+};
+type EditBatchScope = "this" | "all" | "range";
+type EditAlignmentGuides = { x: number | null; y: number | null };
 
 function emptyEditLayer(): EditPageLayer {
-  return { strokes: [], textNotes: [], highlights: [], shapes: [], whiteouts: [] };
+  return { strokes: [], textNotes: [], highlights: [], shapes: [], whiteouts: [], images: [], stamps: [] };
+}
+
+const STAMP_PRESETS: Array<{ text: string; color: string }> = [
+  { text: "Approved", color: "#16a34a" },
+  { text: "Confidential", color: "#dc2626" },
+  { text: "Draft", color: "#d97706" },
+  { text: "Reviewed", color: "#2563eb" },
+];
+
+const DEFAULT_EDIT_WATERMARK: EditWatermark = {
+  text: "DRAFT",
+  color: "#ef4444",
+  opacity: 0.18,
+  rotation: -30,
+  size: 72,
+  imageDataUrl: "",
+  imageMime: "",
+};
+
+// Canvas-space math helpers (y grows downward, positive rotation is clockwise on screen).
+function rotatePointDeg(point: CanvasPoint, center: CanvasPoint, angleDeg: number): CanvasPoint {
+  const rad = (angleDeg * Math.PI) / 180;
+  const dx = point.x - center.x;
+  const dy = point.y - center.y;
+  return {
+    x: center.x + dx * Math.cos(rad) - dy * Math.sin(rad),
+    y: center.y + dx * Math.sin(rad) + dy * Math.cos(rad),
+  };
+}
+
+// pdf-lib `rotate: degrees(angle)` is counterclockwise in PDF space, which renders
+// counterclockwise on screen — the opposite of the canvas convention used above.
+// These helpers compute the (bottom-left) anchor so the content ends up centered
+// at (cx, cyPdf) with the same *visual* rotation the canvas preview shows.
+function pdfRotatedImageAnchor(cx: number, cyPdf: number, width: number, height: number, visualDeg: number) {
+  const rad = (visualDeg * Math.PI) / 180;
+  const cosA = Math.cos(rad);
+  const sinA = Math.sin(rad);
+  return {
+    x: cx - (width / 2) * cosA - (height / 2) * sinA,
+    y: cyPdf + (width / 2) * sinA - (height / 2) * cosA,
+  };
+}
+
+function pdfRotatedTextAnchor(cx: number, cyPdf: number, textWidth: number, size: number, visualDeg: number) {
+  const rad = (visualDeg * Math.PI) / 180;
+  const cosA = Math.cos(rad);
+  const sinA = Math.sin(rad);
+  const up = size * 0.35;
+  return {
+    x: cx - (textWidth / 2) * cosA - up * sinA,
+    y: cyPdf + (textWidth / 2) * sinA - up * cosA,
+  };
+}
+
+function mixHexWithWhite(hex: string, whiteAmount: number): string {
+  const { red, green, blue } = hexToRgb(hex);
+  const mix = (channel: number) => Math.round((channel * (1 - whiteAmount) + 1 * whiteAmount) * 255);
+  return `#${[mix(red), mix(green), mix(blue)].map((value) => value.toString(16).padStart(2, "0")).join("")}`;
+}
+
+function drawRoundedRectPath(
+  context: CanvasRenderingContext2D,
+  x: number,
+  y: number,
+  width: number,
+  height: number,
+  radius: number
+) {
+  const r = Math.min(radius, width / 2, height / 2);
+  context.beginPath();
+  context.moveTo(x + r, y);
+  context.arcTo(x + width, y, x + width, y + height, r);
+  context.arcTo(x + width, y + height, x, y + height, r);
+  context.arcTo(x, y + height, x, y, r);
+  context.arcTo(x, y, x + width, y, r);
+  context.closePath();
+}
+
+function parseEditBatchPageNumbers(raw: string, pageCount: number): number[] {
+  const pages = new Set<number>();
+  for (const part of raw.split(",")) {
+    const trimmed = part.trim();
+    if (!trimmed) continue;
+    const rangeMatch = /^(\d+)\s*-\s*(\d+)$/.exec(trimmed);
+    if (rangeMatch) {
+      const start = Number(rangeMatch[1]);
+      const end = Number(rangeMatch[2]);
+      for (let page = start; page <= end; page += 1) {
+        if (page >= 1 && page <= pageCount) pages.add(page);
+      }
+    } else if (/^\d+$/.test(trimmed)) {
+      const page = Number(trimmed);
+      if (page >= 1 && page <= pageCount) pages.add(page);
+    }
+  }
+  return Array.from(pages).sort((a, b) => a - b);
+}
+
+function dataUrlToUint8Array(dataUrl: string) {
+  return fetch(dataUrl)
+    .then((response) => response.arrayBuffer())
+    .then((buffer) => new Uint8Array(buffer));
 }
 
 function rectFromPoints(start: CanvasPoint, end: CanvasPoint) {
@@ -365,11 +506,13 @@ const EDIT_TOOL_OPTIONS: Array<{ mode: EditToolMode; label: string; hint: string
   { mode: "draw", label: "Draw", hint: "Drag on the page to draw freehand ink." },
   { mode: "highlight", label: "Highlight", hint: "Drag a box to highlight the text underneath." },
   { mode: "text", label: "Text", hint: "Type your text, then click the page to place it." },
+  { mode: "edit-text", label: "Edit text", hint: "Click a word in the PDF to replace it in place." },
   { mode: "rect", label: "Rectangle", hint: "Drag on the page to draw a rectangle." },
   { mode: "ellipse", label: "Ellipse", hint: "Drag on the page to draw an ellipse." },
   { mode: "line", label: "Line", hint: "Drag on the page to draw a straight line." },
   { mode: "arrow", label: "Arrow", hint: "Drag on the page to draw an arrow." },
   { mode: "whiteout", label: "Whiteout", hint: "Drag a box to cover content with solid white." },
+  { mode: "stamp", label: "Stamp", hint: "Choose a stamp badge, then click the page to apply it." },
 ];
 
 const EDIT_TOOL_HINTS: Record<EditToolMode, string> = Object.fromEntries(
@@ -446,6 +589,22 @@ function EditToolGlyph({ mode }: { mode: EditToolMode }) {
           <path d="m7 21-4.3-4.3c-1-1-1-2.5 0-3.4l9.6-9.6c1-1 2.5-1 3.4 0l5.6 5.6c1 1 1 2.5 0 3.4L13 21" />
           <path d="M22 21H7" />
           <path d="m5 11 9 9" />
+        </svg>
+      );
+    case "edit-text":
+      return (
+        <svg {...commonProps}>
+          <path d="M5 4h6a1 1 0 0 1 1 1v2" />
+          <path d="M12 7H4" />
+          <path d="M9 12v9" />
+          <path d="m20.5 9.5 2 2L14 20l-3 .5.5-3Z" />
+        </svg>
+      );
+    case "stamp":
+      return (
+        <svg {...commonProps}>
+          <rect x="3" y="3" width="18" height="18" rx="4" />
+          <path d="M12 8c-2.2 0-3.5 1.1-3.5 2.4 0 1.2 1 2 2.4 2.3-.4.6-.6 1.4-.6 2.1h3.4c0-.7-.2-1.5-.6-2.1 1.4-.3 2.4-1.1 2.4-2.3C15.5 9.1 14.2 8 12 8Z" />
         </svg>
       );
   }
@@ -834,6 +993,114 @@ async function renderPdfPagePreview(bytes: Uint8Array, pageNumber = 1, password?
     pageCount: pdf.numPages,
     safePage,
   };
+}
+
+async function extractPageTextSpans(pdfPage: unknown, viewport: { transform: number[] }): Promise<EditTextSpan[]> {
+  const spans: EditTextSpan[] = [];
+  try {
+    const page = pdfPage as {
+      getTextContent: () => Promise<{
+        items: Array<{ str?: string; width?: number; transform?: number[] }>;
+      }>;
+    };
+    const textContent = await page.getTextContent();
+    const pdfjs = await import("pdfjs-dist/legacy/build/pdf.mjs");
+    for (const item of textContent.items) {
+      const str = item.str;
+      const transform = item.transform;
+      if (!str || !str.trim() || !transform) continue;
+      const composed = pdfjs.Util.transform(viewport.transform, transform);
+      const [a, b, , , e, f] = composed;
+      const fontSize = Math.hypot(a, b);
+      if (fontSize < 2) continue;
+      const userScale = Math.hypot(transform[0], transform[1]) || fontSize;
+      const canvasScale = fontSize / userScale;
+      const itemCanvasWidth = (item.width ?? str.length * fontSize * 0.6) * canvasScale;
+      for (const match of str.matchAll(/\S+/g)) {
+        const word = match[0];
+        const start = match.index ?? 0;
+        const startX = e + (itemCanvasWidth * start) / str.length;
+        const wordWidth = (itemCanvasWidth * word.length) / str.length;
+        const baselineY = f;
+        const pad = fontSize * 0.15 + 1;
+        spans.push({
+          text: word,
+          x: startX,
+          y: baselineY,
+          fontSize,
+          width: wordWidth,
+          bbox: {
+            x: startX - pad,
+            y: baselineY - fontSize * 0.86 - pad,
+            width: wordWidth + pad * 2,
+            height: fontSize * 1.12 + pad * 2,
+          },
+        });
+      }
+    }
+  } catch {
+    // Text extraction is best-effort; an empty span list just disables click-to-edit.
+  }
+  return spans;
+}
+
+async function renderEditPagePreview(bytes: Uint8Array, pageNumber = 1, password?: string) {
+  const pdfjs = await import("pdfjs-dist/legacy/build/pdf.mjs");
+  configurePdfJsWorker(pdfjs);
+  const task = pdfjs.getDocument({ data: new Uint8Array(bytes), password: password || undefined });
+  const pdf = await task.promise;
+  const safePage = Math.min(Math.max(1, pageNumber), pdf.numPages);
+  const page = await pdf.getPage(safePage);
+  const viewport = page.getViewport({ scale: 1.2 });
+  const canvas = document.createElement("canvas");
+  const context = canvas.getContext("2d");
+  if (!context) throw new Error("Canvas rendering context unavailable.");
+
+  canvas.width = Math.max(1, Math.floor(viewport.width));
+  canvas.height = Math.max(1, Math.floor(viewport.height));
+  await page.render({ canvas, canvasContext: context, viewport }).promise;
+  const spans = await extractPageTextSpans(page, viewport);
+
+  return {
+    dataUrl: canvas.toDataURL("image/jpeg", 0.9),
+    width: canvas.width,
+    height: canvas.height,
+    pageCount: pdf.numPages,
+    safePage,
+    spans,
+  };
+}
+
+async function extractPdfFormFields(bytes: Uint8Array): Promise<EditFormField[]> {
+  try {
+    const doc = await PDFDocument.load(bytes, { ignoreEncryption: true, updateMetadata: false });
+    const fields = doc.getForm().getFields();
+    return fields
+      .map((field): EditFormField | null => {
+        const name = field.getName();
+        if (field instanceof PDFTextField) {
+          return { name, type: "text", options: [], value: field.getText() ?? "" };
+        }
+        if (field instanceof PDFCheckBox) {
+          return { name, type: "checkbox", options: [], value: field.isChecked() };
+        }
+        if (field instanceof PDFRadioGroup) {
+          return { name, type: "radio", options: field.getOptions(), value: field.getSelected() ?? "" };
+        }
+        if (field instanceof PDFDropdown) {
+          const selections = field.getSelected();
+          return { name, type: "dropdown", options: field.getOptions(), value: selections[0] ?? "" };
+        }
+        if (field instanceof PDFOptionList) {
+          const selections = field.getSelected();
+          return { name, type: "dropdown", options: field.getOptions(), value: selections[0] ?? "" };
+        }
+        return null;
+      })
+      .filter((field): field is EditFormField => field !== null);
+  } catch {
+    return [];
+  }
 }
 
 async function dataUrlToImage(dataUrl: string) {
@@ -1313,6 +1580,15 @@ export default function ToolWorkbench({ tool }: WorkbenchProps) {
   const [editHighlights, setEditHighlights] = useState<EditHighlight[]>([]);
   const [editShapes, setEditShapes] = useState<EditShape[]>([]);
   const [editWhiteouts, setEditWhiteouts] = useState<EditWhiteout[]>([]);
+  const [editImages, setEditImages] = useState<EditImageAnnotation[]>([]);
+  const [editStamps, setEditStamps] = useState<EditStamp[]>([]);
+  const [editStampPreset, setEditStampPreset] = useState(0);
+  const [editBatchScope, setEditBatchScope] = useState<EditBatchScope>("this");
+  const [editBatchRange, setEditBatchRange] = useState("");
+  const [editSnapToGrid, setEditSnapToGrid] = useState(false);
+  const [editFormFields, setEditFormFields] = useState<EditFormField[]>([]);
+  const [editWatermark, setEditWatermark] = useState<EditWatermark | null>(null);
+  const [editAlignmentGuides, setEditAlignmentGuides] = useState<EditAlignmentGuides | null>(null);
   const [editLayersByPage, setEditLayersByPage] = useState<Record<number, EditPageLayer>>({});
   const [activeEditStroke, setActiveEditStroke] = useState<CanvasPoint[]>([]);
   const [editDraft, setEditDraft] = useState<EditDraftShape | null>(null);
@@ -1472,7 +1748,22 @@ export default function ToolWorkbench({ tool }: WorkbenchProps) {
   const editUndoStacksRef = useRef<Record<number, EditPageLayer[]>>({});
   const editRedoStacksRef = useRef<Record<number, EditPageLayer[]>>({});
   const editCanvasSizesRef = useRef<Record<number, { width: number; height: number }>>({});
-  const editDragRef = useRef<{ startX: number; startY: number; lastX: number; lastY: number; layer: EditPageLayer } | null>(null);
+  const editTextSpansRef = useRef<Record<number, EditTextSpan[]>>({});
+  const editImageElementsRef = useRef<Record<string, HTMLImageElement>>({});
+  const editWatermarkImageRef = useRef<HTMLImageElement | null>(null);
+  const editImageInputRef = useRef<HTMLInputElement | null>(null);
+  const editWatermarkImageInputRef = useRef<HTMLInputElement | null>(null);
+  const editDragRef = useRef<{
+    startX: number;
+    startY: number;
+    lastX: number;
+    lastY: number;
+    layer: EditPageLayer;
+    kind?: "move" | "resize-image";
+    startWidth?: number;
+    startHeight?: number;
+    aspect?: number;
+  } | null>(null);
   const signaturePointerState = useRef<{ drawing: boolean }>({ drawing: false });
   const signatureStrokesRef = useRef<Array<Array<{ x: number; y: number }>>>([]);
   const signatureActiveStrokeRef = useRef<Array<{ x: number; y: number }>>([]);
@@ -1793,12 +2084,20 @@ export default function ToolWorkbench({ tool }: WorkbenchProps) {
     setEditHighlights([]);
     setEditShapes([]);
     setEditWhiteouts([]);
+    setEditImages([]);
+    setEditStamps([]);
+    setEditFormFields([]);
+    setEditWatermark(null);
+    setEditAlignmentGuides(null);
     setActiveEditStroke([]);
     setEditDraft(null);
     setSelectedEditId(null);
     editUndoStacksRef.current = {};
     editRedoStacksRef.current = {};
     editCanvasSizesRef.current = {};
+    editTextSpansRef.current = {};
+    editImageElementsRef.current = {};
+    editWatermarkImageRef.current = null;
     setDraggedPage(null);
     setDragOverPage(null);
     if (usesThumbnailEditor) {
@@ -1839,6 +2138,7 @@ export default function ToolWorkbench({ tool }: WorkbenchProps) {
       if (isEditTool) {
         const thumbs = await renderPdfThumbnails(firstBytes);
         setPageThumbnails(thumbs);
+        void extractPdfFormFields(firstBytes).then((fields) => setEditFormFields(fields));
         await loadEditPreview(first, 1);
       }
 
@@ -2391,6 +2691,10 @@ export default function ToolWorkbench({ tool }: WorkbenchProps) {
     editHighlights,
     editShapes,
     editWhiteouts,
+    editImages,
+    editStamps,
+    editWatermark,
+    editAlignmentGuides,
     activeEditStroke,
     editDraft,
     editColor,
@@ -2458,6 +2762,8 @@ export default function ToolWorkbench({ tool }: WorkbenchProps) {
     editHighlights,
     editShapes,
     editWhiteouts,
+    editImages,
+    editStamps,
   ]);
 
   const uploadHint = useMemo(() => {
@@ -2558,6 +2864,55 @@ export default function ToolWorkbench({ tool }: WorkbenchProps) {
         );
       }
 
+      // Images sit above vector shapes but below stamps/strokes.
+      for (const imageAnn of editImages) {
+        const imageElement = editImageElementsRef.current[imageAnn.id];
+        context.save();
+        context.translate(imageAnn.x + imageAnn.width / 2, imageAnn.y + imageAnn.height / 2);
+        context.rotate((imageAnn.rotation * Math.PI) / 180);
+        if (imageElement) {
+          context.drawImage(imageElement, -imageAnn.width / 2, -imageAnn.height / 2, imageAnn.width, imageAnn.height);
+        } else {
+          context.setLineDash([5, 4]);
+          context.strokeStyle = "#94a3b8";
+          context.lineWidth = 1;
+          context.strokeRect(-imageAnn.width / 2, -imageAnn.height / 2, imageAnn.width, imageAnn.height);
+          context.setLineDash([]);
+          context.fillStyle = "#94a3b8";
+          context.font = "11px \"DM Sans\", sans-serif";
+          context.textAlign = "center";
+          context.textBaseline = "middle";
+          context.fillText("loading…", 0, 0);
+          context.textAlign = "start";
+          context.textBaseline = "alphabetic";
+        }
+        context.restore();
+      }
+
+      // Stamps render as rounded, tinted labels.
+      for (const stamp of editStamps) {
+        context.save();
+        context.font = `700 ${stamp.size}px "DM Sans", sans-serif`;
+        const textWidth = context.measureText(stamp.text).width;
+        const pillWidth = textWidth + stamp.size * 1.7;
+        const pillHeight = stamp.size * 1.9;
+        context.translate(stamp.x, stamp.y);
+        context.rotate((stamp.rotation * Math.PI) / 180);
+        context.fillStyle = mixHexWithWhite(stamp.color, 0.82);
+        context.strokeStyle = stamp.color;
+        context.lineWidth = Math.max(1.25, stamp.size / 12);
+        drawRoundedRectPath(context, -pillWidth / 2, -pillHeight / 2, pillWidth, pillHeight, pillHeight / 2);
+        context.fill();
+        context.stroke();
+        context.fillStyle = stamp.color;
+        context.textAlign = "center";
+        context.textBaseline = "middle";
+        context.fillText(stamp.text, 0, 0);
+        context.restore();
+        context.textAlign = "start";
+        context.textBaseline = "alphabetic";
+      }
+
       const strokesToDraw =
         activeEditStroke.length > 1
           ? [...editStrokes, { id: "active", points: activeEditStroke, color: editColor, width: editBrushSize }]
@@ -2577,8 +2932,58 @@ export default function ToolWorkbench({ tool }: WorkbenchProps) {
         context.stroke();
       }
 
+      // Document-level watermark preview (scale 1.2 mirrors renderEditPagePreview).
+      if (editWatermark) {
+        context.save();
+        context.globalAlpha = Math.min(1, Math.max(0.02, editWatermark.opacity));
+        const watermarkImage = editWatermarkImageRef.current;
+        if (watermarkImage && editWatermark.imageDataUrl) {
+          const maxWidth = canvas.width * 0.5;
+          const maxHeight = canvas.height * 0.5;
+          const scale = Math.min(1, maxWidth / Math.max(1, watermarkImage.naturalWidth), maxHeight / Math.max(1, watermarkImage.naturalHeight));
+          const drawWidth = watermarkImage.naturalWidth * scale;
+          const drawHeight = watermarkImage.naturalHeight * scale;
+          context.translate(canvas.width / 2, canvas.height / 2);
+          context.rotate((editWatermark.rotation * Math.PI) / 180);
+          context.drawImage(watermarkImage, -drawWidth / 2, -drawHeight / 2, drawWidth, drawHeight);
+        } else if (editWatermark.text.trim()) {
+          const size = editWatermark.size * 1.2;
+          context.fillStyle = editWatermark.color;
+          context.font = `700 ${size}px "DM Sans", sans-serif`;
+          const textWidth = context.measureText(editWatermark.text).width;
+          context.translate(canvas.width / 2, canvas.height / 2);
+          context.rotate((editWatermark.rotation * Math.PI) / 180);
+          context.textAlign = "center";
+          context.textBaseline = "middle";
+          context.fillText(editWatermark.text, 0, 0);
+          context.textAlign = "start";
+          context.textBaseline = "alphabetic";
+        }
+        context.restore();
+      }
+
       if (selectedEditId) {
         drawEditSelectionOutline(context);
+      }
+
+      if (editAlignmentGuides && (editAlignmentGuides.x != null || editAlignmentGuides.y != null)) {
+        context.save();
+        context.setLineDash([6, 4]);
+        context.strokeStyle = "rgba(34, 211, 238, 0.9)";
+        context.lineWidth = 1;
+        if (editAlignmentGuides.x != null) {
+          context.beginPath();
+          context.moveTo(editAlignmentGuides.x, 0);
+          context.lineTo(editAlignmentGuides.x, canvas.height);
+          context.stroke();
+        }
+        if (editAlignmentGuides.y != null) {
+          context.beginPath();
+          context.moveTo(0, editAlignmentGuides.y);
+          context.lineTo(canvas.width, editAlignmentGuides.y);
+          context.stroke();
+        }
+        context.restore();
       }
     };
     image.src = editPreview;
@@ -2619,6 +3024,23 @@ export default function ToolWorkbench({ tool }: WorkbenchProps) {
       if (whiteout) {
         bounds = { x: whiteout.x - 3, y: whiteout.y - 3, width: whiteout.width + 6, height: whiteout.height + 6 };
       }
+    } else if (selection.kind === "image") {
+      const image = editImages.find((item) => item.id === selection.id);
+      if (image) {
+        bounds = { x: image.x - 3, y: image.y - 3, width: image.width + 6, height: image.height + 6 };
+      }
+    } else if (selection.kind === "stamp") {
+      const stamp = editStamps.find((item) => item.id === selection.id);
+      if (stamp) {
+        context.font = `700 ${stamp.size}px "DM Sans", sans-serif`;
+        const textWidth = context.measureText(stamp.text).width;
+        bounds = {
+          x: stamp.x - textWidth / 2 - stamp.size * 0.85 - 4,
+          y: stamp.y - stamp.size * 0.95 - 4,
+          width: textWidth + stamp.size * 1.7 + 8,
+          height: stamp.size * 1.9 + 8,
+        };
+      }
     } else {
       const shape = editShapes.find((item) => item.id === selection.id);
       if (shape) {
@@ -2643,6 +3065,125 @@ export default function ToolWorkbench({ tool }: WorkbenchProps) {
     context.lineWidth = 1.5;
     context.strokeRect(bounds.x, bounds.y, bounds.width, bounds.height);
     context.restore();
+
+    if (selection.kind === "image") {
+      const image = editImages.find((item) => item.id === selection.id);
+      if (image) {
+        const center = { x: image.x + image.width / 2, y: image.y + image.height / 2 };
+        const corner = rotatePointDeg({ x: image.x + image.width, y: image.y + image.height }, center, image.rotation);
+        context.save();
+        context.fillStyle = "#ffffff";
+        context.strokeStyle = "#22d3ee";
+        context.lineWidth = 1.5;
+        context.fillRect(corner.x - 4, corner.y - 4, 8, 8);
+        context.strokeRect(corner.x - 4, corner.y - 4, 8, 8);
+        context.restore();
+      }
+    }
+  }
+
+  // Bounding box (without padding) used by alignment guides and resizing.
+  function getEditAnnotationBounds(
+    selection: EditSelection
+  ): { x: number; y: number; width: number; height: number } | null {
+    const context = editCanvasRef.current?.getContext("2d") ?? null;
+
+    if (selection.kind === "stroke") {
+      const stroke = editStrokes.find((item) => item.id === selection.id);
+      if (stroke && stroke.points.length) {
+        const xs = stroke.points.map((point) => point.x);
+        const ys = stroke.points.map((point) => point.y);
+        return {
+          x: Math.min(...xs),
+          y: Math.min(...ys),
+          width: Math.max(...xs) - Math.min(...xs),
+          height: Math.max(...ys) - Math.min(...ys),
+        };
+      }
+    } else if (selection.kind === "text") {
+      const note = editTextNotes.find((item) => item.id === selection.id);
+      if (note) {
+        if (context) context.font = `${note.size}px "DM Sans", sans-serif`;
+        const textWidth = context ? context.measureText(note.text).width : note.text.length * note.size * 0.62;
+        return { x: note.x, y: note.y - note.size, width: textWidth, height: note.size };
+      }
+    } else if (selection.kind === "highlight") {
+      const highlight = editHighlights.find((item) => item.id === selection.id);
+      if (highlight) return { x: highlight.x, y: highlight.y, width: highlight.width, height: highlight.height };
+    } else if (selection.kind === "whiteout") {
+      const whiteout = editWhiteouts.find((item) => item.id === selection.id);
+      if (whiteout) return { x: whiteout.x, y: whiteout.y, width: whiteout.width, height: whiteout.height };
+    } else if (selection.kind === "image") {
+      const image = editImages.find((item) => item.id === selection.id);
+      if (image) return { x: image.x, y: image.y, width: image.width, height: image.height };
+    } else if (selection.kind === "stamp") {
+      const stamp = editStamps.find((item) => item.id === selection.id);
+      if (stamp) {
+        if (context) context.font = `700 ${stamp.size}px "DM Sans", sans-serif`;
+        const textWidth = context ? context.measureText(stamp.text).width : stamp.text.length * stamp.size * 0.62;
+        return {
+          x: stamp.x - textWidth / 2 - stamp.size * 0.85,
+          y: stamp.y - stamp.size * 0.95,
+          width: textWidth + stamp.size * 1.7,
+          height: stamp.size * 1.9,
+        };
+      }
+    } else {
+      const shape = editShapes.find((item) => item.id === selection.id);
+      if (shape) {
+        if (shape.kind === "line" || shape.kind === "arrow") {
+          return {
+            x: Math.min(shape.start.x, shape.end.x),
+            y: Math.min(shape.start.y, shape.end.y),
+            width: Math.abs(shape.end.x - shape.start.x),
+            height: Math.abs(shape.end.y - shape.start.y),
+          };
+        }
+        return { x: shape.x, y: shape.y, width: shape.width, height: shape.height };
+      }
+    }
+    return null;
+  }
+
+  // Feature 6 — alignment guides: show faint center lines when the moving
+  // annotation lines up with the page center or another annotation's center.
+  function computeEditAlignmentGuides(selection: EditSelection): EditAlignmentGuides | null {
+    const canvas = editCanvasRef.current;
+    const bounds = getEditAnnotationBounds(selection);
+    if (!canvas || !bounds) return null;
+    const centerX = bounds.x + bounds.width / 2;
+    const centerY = bounds.y + bounds.height / 2;
+    const tolerance = 4;
+
+    const centers: Array<{ x: number; y: number }> = [
+      { x: canvas.width / 2, y: canvas.height / 2 },
+    ];
+    const collect = (list: EditSelection[]) => {
+      for (const candidate of list) {
+        if (candidate.kind === selection.kind && candidate.id === selection.id) continue;
+        const candidateBounds = getEditAnnotationBounds(candidate);
+        if (!candidateBounds || (candidateBounds.width < 1 && candidateBounds.height < 1)) continue;
+        centers.push({
+          x: candidateBounds.x + candidateBounds.width / 2,
+          y: candidateBounds.y + candidateBounds.height / 2,
+        });
+      }
+    };
+    collect(editStrokes.map((item) => ({ kind: "stroke" as const, id: item.id })));
+    collect(editTextNotes.map((item) => ({ kind: "text" as const, id: item.id })));
+    collect(editHighlights.map((item) => ({ kind: "highlight" as const, id: item.id })));
+    collect(editShapes.map((item) => ({ kind: "shape" as const, id: item.id })));
+    collect(editWhiteouts.map((item) => ({ kind: "whiteout" as const, id: item.id })));
+    collect(editImages.map((item) => ({ kind: "image" as const, id: item.id })));
+    collect(editStamps.map((item) => ({ kind: "stamp" as const, id: item.id })));
+
+    let guideX: number | null = null;
+    let guideY: number | null = null;
+    for (const center of centers) {
+      if (Math.abs(centerX - center.x) <= tolerance) guideX = center.x;
+      if (Math.abs(centerY - center.y) <= tolerance) guideY = center.y;
+    }
+    return guideX == null && guideY == null ? null : { x: guideX, y: guideY };
   }
 
   function findEditAnnotationAt(canvas: HTMLCanvasElement, x: number, y: number): EditSelection | null {
@@ -2653,6 +3194,33 @@ export default function ToolWorkbench({ tool }: WorkbenchProps) {
       const stroke = editStrokes[i];
       if (stroke.points.some((point) => Math.hypot(point.x - x, point.y - y) <= Math.max(8, stroke.width + 5))) {
         return { kind: "stroke", id: stroke.id };
+      }
+    }
+
+    for (let i = editStamps.length - 1; i >= 0; i -= 1) {
+      const stamp = editStamps[i];
+      if (context) {
+        context.font = `700 ${stamp.size}px "DM Sans", sans-serif`;
+      }
+      const textWidth = context
+        ? context.measureText(stamp.text).width
+        : stamp.text.length * stamp.size * 0.62;
+      const pillWidth = textWidth + stamp.size * 1.7;
+      const pillHeight = stamp.size * 1.9;
+      if (
+        x >= stamp.x - pillWidth / 2 - 4 &&
+        x <= stamp.x + pillWidth / 2 + 4 &&
+        y >= stamp.y - pillHeight / 2 - 4 &&
+        y <= stamp.y + pillHeight / 2 + 4
+      ) {
+        return { kind: "stamp", id: stamp.id };
+      }
+    }
+
+    for (let i = editImages.length - 1; i >= 0; i -= 1) {
+      const image = editImages[i];
+      if (x >= image.x - 6 && x <= image.x + image.width + 6 && y >= image.y - 6 && y <= image.y + image.height + 6) {
+        return { kind: "image", id: image.id };
       }
     }
 
@@ -2706,7 +3274,9 @@ export default function ToolWorkbench({ tool }: WorkbenchProps) {
       !layer.textNotes.length &&
       !layer.highlights.length &&
       !layer.shapes.length &&
-      !layer.whiteouts.length
+      !layer.whiteouts.length &&
+      !layer.images.length &&
+      !layer.stamps.length
     );
   }
 
@@ -2717,6 +3287,8 @@ export default function ToolWorkbench({ tool }: WorkbenchProps) {
       highlights: editHighlights,
       shapes: editShapes,
       whiteouts: editWhiteouts,
+      images: editImages,
+      stamps: editStamps,
     };
   }
 
@@ -2726,6 +3298,8 @@ export default function ToolWorkbench({ tool }: WorkbenchProps) {
     setEditHighlights(layer.highlights);
     setEditShapes(layer.shapes);
     setEditWhiteouts(layer.whiteouts);
+    setEditImages(layer.images);
+    setEditStamps(layer.stamps);
 
     const current = editLayersRef.current;
     let next: Record<number, EditPageLayer>;
@@ -2743,6 +3317,114 @@ export default function ToolWorkbench({ tool }: WorkbenchProps) {
     setEditLayersByPage(next);
   }
 
+  function diffAddedEditItems<T extends { id: string }>(previous: T[], next: T[]): T[] {
+    const previousIds = new Set(previous.map((item) => item.id));
+    return next.filter((item) => !previousIds.has(item.id));
+  }
+
+  function scaleEditLayerForPage(
+    layer: EditPageLayer,
+    source: { width: number; height: number },
+    target: { width: number; height: number }
+  ): EditPageLayer {
+    const sx = target.width / Math.max(1, source.width);
+    const sy = target.height / Math.max(1, source.height);
+    const scalePoint = (point: CanvasPoint): CanvasPoint => ({ x: point.x * sx, y: point.y * sy });
+    return {
+      strokes: layer.strokes.map((stroke) => ({ ...stroke, points: stroke.points.map(scalePoint) })),
+      textNotes: layer.textNotes.map((note) => ({
+        ...note,
+        x: note.x * sx,
+        y: note.y * sy,
+        size: note.size * ((sx + sy) / 2),
+      })),
+      highlights: layer.highlights.map((highlight) => ({
+        ...highlight,
+        x: highlight.x * sx,
+        y: highlight.y * sy,
+        width: highlight.width * sx,
+        height: highlight.height * sy,
+      })),
+      shapes: layer.shapes.map((shape) =>
+        shape.kind === "line" || shape.kind === "arrow"
+          ? { ...shape, start: scalePoint(shape.start), end: scalePoint(shape.end) }
+          : { ...shape, x: shape.x * sx, y: shape.y * sy, width: shape.width * sx, height: shape.height * sy }
+      ),
+      whiteouts: layer.whiteouts.map((whiteout) => ({
+        ...whiteout,
+        x: whiteout.x * sx,
+        y: whiteout.y * sy,
+        width: whiteout.width * sx,
+        height: whiteout.height * sy,
+      })),
+      images: layer.images.map((image) => ({
+        ...image,
+        x: image.x * sx,
+        y: image.y * sy,
+        width: image.width * sx,
+        height: image.height * sy,
+      })),
+      stamps: layer.stamps.map((stamp) => ({
+        ...stamp,
+        x: stamp.x * sx,
+        y: stamp.y * sy,
+        size: stamp.size * ((sx + sy) / 2),
+      })),
+    };
+  }
+
+  // Feature 5 — batch apply: clone only the *added* annotations of a commit onto
+  // other pages (this page / all pages / page range).
+  function applyEditBatchClones(previous: EditPageLayer, next: EditPageLayer, sourcePage: number) {
+    if (editBatchScope === "this") return;
+    const added: EditPageLayer = {
+      strokes: diffAddedEditItems(previous.strokes, next.strokes),
+      textNotes: diffAddedEditItems(previous.textNotes, next.textNotes),
+      highlights: diffAddedEditItems(previous.highlights, next.highlights),
+      shapes: diffAddedEditItems(previous.shapes, next.shapes),
+      whiteouts: diffAddedEditItems(previous.whiteouts, next.whiteouts),
+      images: diffAddedEditItems(previous.images, next.images),
+      stamps: diffAddedEditItems(previous.stamps, next.stamps),
+    };
+    if (
+      !added.strokes.length &&
+      !added.textNotes.length &&
+      !added.highlights.length &&
+      !added.shapes.length &&
+      !added.whiteouts.length &&
+      !added.images.length &&
+      !added.stamps.length
+    ) {
+      return;
+    }
+
+    const sourceSize = editCanvasSizesRef.current[sourcePage] ?? editCanvasSize;
+    const targets =
+      editBatchScope === "all"
+        ? Array.from({ length: editPageCount }, (_, index) => index + 1)
+        : parseEditBatchPageNumbers(editBatchRange, editPageCount);
+
+    const current = editLayersRef.current;
+    const nextLayers: Record<number, EditPageLayer> = { ...current };
+    for (const targetPage of targets) {
+      if (targetPage === sourcePage) continue;
+      const targetSize = editCanvasSizesRef.current[targetPage] ?? sourceSize;
+      const existing = current[targetPage] ?? emptyEditLayer();
+      const scaled = scaleEditLayerForPage(added, sourceSize, targetSize);
+      nextLayers[targetPage] = {
+        strokes: [...existing.strokes, ...scaled.strokes],
+        textNotes: [...existing.textNotes, ...scaled.textNotes],
+        highlights: [...existing.highlights, ...scaled.highlights],
+        shapes: [...existing.shapes, ...scaled.shapes],
+        whiteouts: [...existing.whiteouts, ...scaled.whiteouts],
+        images: [...existing.images, ...scaled.images],
+        stamps: [...existing.stamps, ...scaled.stamps],
+      };
+    }
+    editLayersRef.current = nextLayers;
+    setEditLayersByPage(nextLayers);
+  }
+
   function pushEditUndo(pageNumber: number, layer: EditPageLayer) {
     const undoStack = editUndoStacksRef.current[pageNumber] ?? [];
     undoStack.push(layer);
@@ -2754,7 +3436,9 @@ export default function ToolWorkbench({ tool }: WorkbenchProps) {
   function commitEditLayer(pageNumber: number, updater: (current: EditPageLayer) => EditPageLayer) {
     const previous = currentEditLayer();
     pushEditUndo(pageNumber, previous);
-    applyEditLayerToPage(pageNumber, updater(previous));
+    const next = updater(previous);
+    applyEditLayerToPage(pageNumber, next);
+    applyEditBatchClones(previous, next, pageNumber);
   }
 
   function undoEditAction() {
@@ -2792,6 +3476,11 @@ export default function ToolWorkbench({ tool }: WorkbenchProps) {
         next.highlights = layer.highlights.filter((item) => item.id !== selection.id);
       } else if (selection.kind === "whiteout") {
         next.whiteouts = layer.whiteouts.filter((item) => item.id !== selection.id);
+      } else if (selection.kind === "image") {
+        next.images = layer.images.filter((item) => item.id !== selection.id);
+        delete editImageElementsRef.current[selection.id];
+      } else if (selection.kind === "stamp") {
+        next.stamps = layer.stamps.filter((item) => item.id !== selection.id);
       } else {
         next.shapes = layer.shapes.filter((item) => item.id !== selection.id);
       }
@@ -2800,43 +3489,84 @@ export default function ToolWorkbench({ tool }: WorkbenchProps) {
     setSelectedEditId(null);
   }
 
-  function moveEditAnnotation(selection: EditSelection, dx: number, dy: number) {
+  function moveEditAnnotation(selection: EditSelection, dx: number, dy: number, snapToGrid = false) {
+    const snapDelta = (anchorX: number, anchorY: number) => {
+      if (!snapToGrid) return { dx, dy };
+      const grid = 8;
+      const nextX = Math.round((anchorX + dx) / grid) * grid;
+      const nextY = Math.round((anchorY + dy) / grid) * grid;
+      return { dx: nextX - anchorX, dy: nextY - anchorY };
+    };
+
     if (selection.kind === "stroke") {
       setEditStrokes((current) =>
-        current.map((stroke) =>
-          stroke.id === selection.id
-            ? { ...stroke, points: stroke.points.map((point) => ({ x: point.x + dx, y: point.y + dy })) }
-            : stroke
-        )
+        current.map((stroke) => {
+          if (stroke.id !== selection.id || !stroke.points.length) return stroke;
+          const xs = stroke.points.map((point) => point.x);
+          const ys = stroke.points.map((point) => point.y);
+          const { dx: appliedDx, dy: appliedDy } = snapDelta(Math.min(...xs), Math.min(...ys));
+          return {
+            ...stroke,
+            points: stroke.points.map((point) => ({ x: point.x + appliedDx, y: point.y + appliedDy })),
+          };
+        })
       );
     } else if (selection.kind === "text") {
       setEditTextNotes((current) =>
-        current.map((note) => (note.id === selection.id ? { ...note, x: note.x + dx, y: note.y + dy } : note))
+        current.map((note) => {
+          if (note.id !== selection.id) return note;
+          const { dx: appliedDx, dy: appliedDy } = snapDelta(note.x, note.y);
+          return { ...note, x: note.x + appliedDx, y: note.y + appliedDy };
+        })
       );
     } else if (selection.kind === "highlight") {
       setEditHighlights((current) =>
-        current.map((highlight) =>
-          highlight.id === selection.id ? { ...highlight, x: highlight.x + dx, y: highlight.y + dy } : highlight
-        )
+        current.map((highlight) => {
+          if (highlight.id !== selection.id) return highlight;
+          const { dx: appliedDx, dy: appliedDy } = snapDelta(highlight.x, highlight.y);
+          return { ...highlight, x: highlight.x + appliedDx, y: highlight.y + appliedDy };
+        })
       );
     } else if (selection.kind === "whiteout") {
       setEditWhiteouts((current) =>
-        current.map((whiteout) =>
-          whiteout.id === selection.id ? { ...whiteout, x: whiteout.x + dx, y: whiteout.y + dy } : whiteout
-        )
+        current.map((whiteout) => {
+          if (whiteout.id !== selection.id) return whiteout;
+          const { dx: appliedDx, dy: appliedDy } = snapDelta(whiteout.x, whiteout.y);
+          return { ...whiteout, x: whiteout.x + appliedDx, y: whiteout.y + appliedDy };
+        })
+      );
+    } else if (selection.kind === "image") {
+      setEditImages((current) =>
+        current.map((image) => {
+          if (image.id !== selection.id) return image;
+          const { dx: appliedDx, dy: appliedDy } = snapDelta(image.x, image.y);
+          return { ...image, x: image.x + appliedDx, y: image.y + appliedDy };
+        })
+      );
+    } else if (selection.kind === "stamp") {
+      setEditStamps((current) =>
+        current.map((stamp) => {
+          if (stamp.id !== selection.id) return stamp;
+          const { dx: appliedDx, dy: appliedDy } = snapDelta(stamp.x, stamp.y);
+          return { ...stamp, x: stamp.x + appliedDx, y: stamp.y + appliedDy };
+        })
       );
     } else {
       setEditShapes((current) =>
         current.map((shape) => {
           if (shape.id !== selection.id) return shape;
           if (shape.kind === "line" || shape.kind === "arrow") {
+            const anchorX = Math.min(shape.start.x, shape.end.x);
+            const anchorY = Math.min(shape.start.y, shape.end.y);
+            const { dx: appliedDx, dy: appliedDy } = snapDelta(anchorX, anchorY);
             return {
               ...shape,
-              start: { x: shape.start.x + dx, y: shape.start.y + dy },
-              end: { x: shape.end.x + dx, y: shape.end.y + dy },
+              start: { x: shape.start.x + appliedDx, y: shape.start.y + appliedDy },
+              end: { x: shape.end.x + appliedDx, y: shape.end.y + appliedDy },
             };
           }
-          return { ...shape, x: shape.x + dx, y: shape.y + dy };
+          const { dx: appliedDx, dy: appliedDy } = snapDelta(shape.x, shape.y);
+          return { ...shape, x: shape.x + appliedDx, y: shape.y + appliedDy };
         })
       );
     }
@@ -2845,8 +3575,9 @@ export default function ToolWorkbench({ tool }: WorkbenchProps) {
   async function loadEditPreview(file: File, targetPage: number) {
     try {
       setEditCanvasLoading(true);
-      const preview = await renderPdfPagePreview(new Uint8Array(await readAsArrayBuffer(file)), targetPage);
+      const preview = await renderEditPagePreview(new Uint8Array(await readAsArrayBuffer(file)), targetPage);
       const layer = editLayersRef.current[preview.safePage] ?? emptyEditLayer();
+      editTextSpansRef.current[preview.safePage] = preview.spans;
       setEditPreview(preview.dataUrl);
       setEditCanvasSize({ width: preview.width, height: preview.height });
       editCanvasSizesRef.current[preview.safePage] = { width: preview.width, height: preview.height };
@@ -2857,9 +3588,12 @@ export default function ToolWorkbench({ tool }: WorkbenchProps) {
       setEditHighlights(layer.highlights);
       setEditShapes(layer.shapes);
       setEditWhiteouts(layer.whiteouts);
+      setEditImages(layer.images);
+      setEditStamps(layer.stamps);
       setActiveEditStroke([]);
       setEditDraft(null);
       setSelectedEditId(null);
+      setEditAlignmentGuides(null);
     } catch {
       setError("Could not prepare editable canvas for this PDF.");
     } finally {
@@ -2870,7 +3604,7 @@ export default function ToolWorkbench({ tool }: WorkbenchProps) {
   function onEditPointerDown(event: React.PointerEvent<HTMLCanvasElement>) {
     const canvas = editCanvasRef.current;
     if (!canvas) return;
-    if (editMode === "text") return;
+    if (editMode === "text" || editMode === "edit-text" || editMode === "stamp") return;
 
     const point = getEditCanvasPoint(canvas, event);
     canvas.setPointerCapture(event.pointerId);
@@ -2879,13 +3613,31 @@ export default function ToolWorkbench({ tool }: WorkbenchProps) {
       const hit = findEditAnnotationAt(canvas, point.x, point.y);
       setSelectedEditId(hit);
       if (hit) {
-        editDragRef.current = {
+        const base = {
           startX: point.x,
           startY: point.y,
           lastX: point.x,
           lastY: point.y,
           layer: currentEditLayer(),
         };
+        if (hit.kind === "image") {
+          const image = editImages.find((item) => item.id === hit.id);
+          if (image) {
+            const center = { x: image.x + image.width / 2, y: image.y + image.height / 2 };
+            const corner = rotatePointDeg({ x: image.x + image.width, y: image.y + image.height }, center, image.rotation);
+            if (Math.hypot(point.x - corner.x, point.y - corner.y) <= 10) {
+              editDragRef.current = {
+                ...base,
+                kind: "resize-image",
+                startWidth: image.width,
+                startHeight: image.height,
+                aspect: image.height / Math.max(1, image.width),
+              };
+              return;
+            }
+          }
+        }
+        editDragRef.current = { ...base, kind: "move" };
       }
       return;
     }
@@ -2906,9 +3658,28 @@ export default function ToolWorkbench({ tool }: WorkbenchProps) {
     if (editMode === "select") {
       const drag = editDragRef.current;
       if (drag && selectedEditId) {
-        moveEditAnnotation(selectedEditId, point.x - drag.lastX, point.y - drag.lastY);
+        if (drag.kind === "resize-image") {
+          const image = editImages.find((item) => item.id === selectedEditId.id);
+          if (image) {
+            let nextWidth = (drag.startWidth ?? image.width) + (point.x - drag.startX);
+            nextWidth = Math.max(16, nextWidth);
+            if (editSnapToGrid) nextWidth = Math.round(nextWidth / 8) * 8;
+            const nextHeight = Math.max(16, nextWidth * (drag.aspect ?? image.height / Math.max(1, image.width)));
+            const nextImages = editImages.map((item) =>
+              item.id === image.id ? { ...item, width: nextWidth, height: nextHeight } : item
+            );
+            setEditImages(nextImages);
+            applyEditLayerToPage(editPageNumber, { ...currentEditLayer(), images: nextImages });
+            setEditAlignmentGuides(computeEditAlignmentGuides(selectedEditId));
+          }
+          drag.lastX = point.x;
+          drag.lastY = point.y;
+          return;
+        }
+        moveEditAnnotation(selectedEditId, point.x - drag.lastX, point.y - drag.lastY, editSnapToGrid);
         drag.lastX = point.x;
         drag.lastY = point.y;
+        setEditAlignmentGuides(computeEditAlignmentGuides(selectedEditId));
       }
       return;
     }
@@ -2919,7 +3690,7 @@ export default function ToolWorkbench({ tool }: WorkbenchProps) {
       return;
     }
 
-    if (editMode === "text") return;
+    if (editMode === "text" || editMode === "edit-text" || editMode === "stamp") return;
 
     setEditDraft((current) => (current ? { ...current, current: point } : current));
   }
@@ -2933,10 +3704,13 @@ export default function ToolWorkbench({ tool }: WorkbenchProps) {
     if (editMode === "select") {
       const drag = editDragRef.current;
       editDragRef.current = null;
+      setEditAlignmentGuides(null);
       if (drag && selectedEditId && (Math.abs(drag.lastX - drag.startX) > 1 || Math.abs(drag.lastY - drag.startY) > 1)) {
         // Live position changes are already in state; record a single undo entry.
         pushEditUndo(editPageNumber, drag.layer);
-        applyEditLayerToPage(editPageNumber, currentEditLayer());
+        if (drag.kind !== "resize-image") {
+          applyEditLayerToPage(editPageNumber, currentEditLayer());
+        }
       }
       return;
     }
@@ -2955,7 +3729,7 @@ export default function ToolWorkbench({ tool }: WorkbenchProps) {
       return;
     }
 
-    if (editMode === "text") return;
+    if (editMode === "text" || editMode === "edit-text" || editMode === "stamp") return;
 
     if (editDraft) {
       const draft = editDraft;
@@ -3015,6 +3789,36 @@ export default function ToolWorkbench({ tool }: WorkbenchProps) {
   }
 
   function onEditCanvasClick(event: React.MouseEvent<HTMLCanvasElement>) {
+    if (editMode === "stamp") {
+      const canvas = editCanvasRef.current;
+      if (!canvas) return;
+      const preset = STAMP_PRESETS[editStampPreset] ?? STAMP_PRESETS[0];
+      const point = getEditCanvasPoint(canvas, event);
+      commitEditLayer(editPageNumber, (layer) => ({
+        ...layer,
+        stamps: [
+          ...layer.stamps,
+          {
+            id: nextEditAnnotationId(),
+            x: point.x,
+            y: point.y,
+            text: preset.text,
+            color: preset.color,
+            size: Math.max(16, editFontSize),
+            rotation: -8,
+          },
+        ],
+      }));
+      return;
+    }
+
+    if (editMode === "edit-text") {
+      const canvas = editCanvasRef.current;
+      if (!canvas) return;
+      void replaceTextSpanAt(getEditCanvasPoint(canvas, event));
+      return;
+    }
+
     if (editMode !== "text") return;
     if (!editText.trim()) return;
     const canvas = editCanvasRef.current;
@@ -3031,6 +3835,79 @@ export default function ToolWorkbench({ tool }: WorkbenchProps) {
           text: editText.trim(),
           color: editColor,
           size: editFontSize,
+        },
+      ],
+    }));
+  }
+
+  // Feature 2 — click-to-edit existing text: whiteout the clicked word's bbox and
+  // place a text note with the replacement at the same position/font size.
+  async function replaceTextSpanAt(point: CanvasPoint) {
+    const spans = editTextSpansRef.current[editPageNumber] ?? [];
+    if (!spans.length) {
+      setStatus("No selectable text was found on this page.");
+      return;
+    }
+
+    const distanceTo = (span: EditTextSpan) =>
+      Math.hypot(span.x + span.width / 2 - point.x, span.y - span.fontSize * 0.35 - point.y);
+    const nearestIn = (list: EditTextSpan[]) =>
+      [...list].sort((a, b) => distanceTo(a) - distanceTo(b))[0] ?? null;
+
+    let span: EditTextSpan | null = nearestIn(
+      spans.filter(
+        (candidate) =>
+          point.x >= candidate.bbox.x &&
+          point.x <= candidate.bbox.x + candidate.bbox.width &&
+          point.y >= candidate.bbox.y &&
+          point.y <= candidate.bbox.y + candidate.bbox.height
+      )
+    );
+    if (!span) {
+      const nearest = nearestIn(spans);
+      if (nearest && distanceTo(nearest) <= 28) {
+        span = nearest;
+      } else {
+        setStatus("Click closer to a word to edit it.");
+        return;
+      }
+    }
+
+    const result = await Swal.fire({
+      title: "Replace text",
+      text: "Type the replacement for the selected word.",
+      input: "text",
+      inputValue: span.text,
+      showCancelButton: true,
+      confirmButtonText: "Replace",
+      cancelButtonText: "Cancel",
+    });
+    if (!result.isConfirmed) return;
+    const replacement = String(result.value ?? "").trim();
+    if (!replacement) return;
+
+    const pad = 2;
+    commitEditLayer(editPageNumber, (layer) => ({
+      ...layer,
+      whiteouts: [
+        ...layer.whiteouts,
+        {
+          id: nextEditAnnotationId(),
+          x: span.bbox.x - pad,
+          y: span.bbox.y - pad,
+          width: span.bbox.width + pad * 2,
+          height: span.bbox.height + pad * 2,
+        },
+      ],
+      textNotes: [
+        ...layer.textNotes,
+        {
+          id: nextEditAnnotationId(),
+          x: span.bbox.x,
+          y: span.y,
+          text: replacement,
+          color: "#0f172a",
+          size: span.fontSize,
         },
       ],
     }));
@@ -3063,11 +3940,105 @@ export default function ToolWorkbench({ tool }: WorkbenchProps) {
     setEditHighlights([]);
     setEditShapes([]);
     setEditWhiteouts([]);
+    setEditImages([]);
+    setEditStamps([]);
+    setEditAlignmentGuides(null);
     setActiveEditStroke([]);
     setEditDraft(null);
     setSelectedEditId(null);
     editUndoStacksRef.current = {};
     editRedoStacksRef.current = {};
+    editImageElementsRef.current = {};
+  }
+
+  // Feature 3 — insert images as movable/resizable annotations.
+  function insertEditImageAtCenter(dataUrl: string, mime: string) {
+    if (!editPreview) {
+      setStatus("Upload a PDF first, then insert an image.");
+      return;
+    }
+    const image = new Image();
+    image.onload = () => {
+      const canvas = editCanvasRef.current;
+      const pageSize = editCanvasSizesRef.current[editPageNumber] ?? editCanvasSize;
+      const maxWidth = Math.max(60, (canvas?.width ?? pageSize.width) * 0.5);
+      const maxHeight = Math.max(60, (canvas?.height ?? pageSize.height) * 0.5);
+      const scale = Math.min(1, maxWidth / Math.max(1, image.naturalWidth), maxHeight / Math.max(1, image.naturalHeight));
+      const width = Math.max(12, image.naturalWidth * scale);
+      const height = Math.max(12, image.naturalHeight * scale);
+      const id = nextEditAnnotationId();
+      editImageElementsRef.current[id] = image;
+      commitEditLayer(editPageNumber, (layer) => ({
+        ...layer,
+        images: [
+          ...layer.images,
+          {
+            id,
+            x: (pageSize.width - width) / 2,
+            y: (pageSize.height - height) / 2,
+            width,
+            height,
+            rotation: 0,
+            dataUrl,
+            mime,
+          },
+        ],
+      }));
+      setEditMode("select");
+      setSelectedEditId({ kind: "image", id });
+    };
+    image.src = dataUrl;
+  }
+
+  function onEditImageInputChange(event: React.ChangeEvent<HTMLInputElement>) {
+    const file = event.target.files?.[0];
+    event.target.value = "";
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = () => {
+      const dataUrl = typeof reader.result === "string" ? reader.result : "";
+      if (dataUrl) insertEditImageAtCenter(dataUrl, file.type || "image/png");
+    };
+    reader.readAsDataURL(file);
+  }
+
+  function rotateEditImage(delta: number) {
+    if (!selectedEditId || selectedEditId.kind !== "image") return;
+    const targetId = selectedEditId.id;
+    commitEditLayer(editPageNumber, (layer) => ({
+      ...layer,
+      images: layer.images.map((image) =>
+        image.id === targetId ? { ...image, rotation: (image.rotation + delta + 360) % 360 } : image
+      ),
+    }));
+  }
+
+  function onEditWatermarkImageInputChange(event: React.ChangeEvent<HTMLInputElement>) {
+    const file = event.target.files?.[0];
+    event.target.value = "";
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = () => {
+      const dataUrl = typeof reader.result === "string" ? reader.result : "";
+      if (!dataUrl) return;
+      const image = new Image();
+      image.onload = () => {
+        editWatermarkImageRef.current = image;
+        setEditWatermark((current) => ({
+          ...(current ?? DEFAULT_EDIT_WATERMARK),
+          imageDataUrl: dataUrl,
+          imageMime: file.type || "image/png",
+        }));
+      };
+      image.src = dataUrl;
+    };
+    reader.readAsDataURL(file);
+  }
+
+  function updateEditFormFieldValue(name: string, value: string | boolean) {
+    setEditFormFields((current) =>
+      current.map((field) => (field.name === name ? { ...field, value } : field))
+    );
   }
 
   const editPageLayerHasContent =
@@ -3075,7 +4046,9 @@ export default function ToolWorkbench({ tool }: WorkbenchProps) {
     editTextNotes.length > 0 ||
     editHighlights.length > 0 ||
     editShapes.length > 0 ||
-    editWhiteouts.length > 0;
+    editWhiteouts.length > 0 ||
+    editImages.length > 0 ||
+    editStamps.length > 0;
   const editPageCountEdited = Object.keys(editLayersByPage).length;
 
   function stopCamera() {
@@ -4765,9 +5738,70 @@ export default function ToolWorkbench({ tool }: WorkbenchProps) {
                   highlights: editHighlights,
                   shapes: editShapes,
                   whiteouts: editWhiteouts,
+                  images: editImages,
+                  stamps: editStamps,
                 },
               }
             : {};
+
+        // Feature 1 — apply filled AcroForm values before saving (form is kept intact).
+        if (tool.slug === "edit-pdf" && editFormFields.length) {
+          try {
+            const form = source.getForm();
+            for (const field of editFormFields) {
+              try {
+                if (field.type === "text") {
+                  form.getTextField(field.name)?.setText(String(field.value));
+                } else if (field.type === "checkbox") {
+                  const checkBox = form.getCheckBox(field.name);
+                  if (checkBox) {
+                    if (field.value) checkBox.check();
+                    else checkBox.uncheck();
+                  }
+                } else if (field.type === "radio") {
+                  const radioGroup = form.getRadioGroup(field.name);
+                  if (radioGroup && typeof field.value === "string" && field.value) radioGroup.select(field.value);
+                } else {
+                  const dropdown = form.getDropdown(field.name);
+                  if (dropdown && typeof field.value === "string" && field.value) dropdown.select(field.value);
+                }
+              } catch {
+                // Unsupported field value — leave the original value untouched.
+              }
+            }
+            try {
+              form.updateFieldAppearances(font);
+            } catch {
+              // Appearance refresh is best-effort.
+            }
+          } catch {
+            // Malformed AcroForm — keep the original form untouched.
+          }
+        }
+
+        // Feature 3/4 — embed annotation and watermark images once per document.
+        const embeddedEditImages: Record<string, PDFImage> = {};
+        if (tool.slug === "edit-pdf") {
+          for (const layer of Object.values(pageLayers)) {
+            for (const imageAnn of layer?.images ?? []) {
+              if (embeddedEditImages[imageAnn.id]) continue;
+              try {
+                const imageBytes = await dataUrlToUint8Array(imageAnn.dataUrl);
+                embeddedEditImages[imageAnn.id] =
+                  imageAnn.mime === "image/png" ? await source.embedPng(imageBytes) : await source.embedJpg(imageBytes);
+              } catch { /* skip failed image */ }
+            }
+          }
+          if (editWatermark?.imageDataUrl) {
+            try {
+              const watermarkBytes = await dataUrlToUint8Array(editWatermark.imageDataUrl);
+              embeddedEditImages.watermark =
+                editWatermark.imageMime === "image/png"
+                  ? await source.embedPng(watermarkBytes)
+                  : await source.embedJpg(watermarkBytes);
+            } catch { /* skip failed image */ }
+          }
+        }
         // Build the list of signatures to apply (multiple supported).
         let allSignatures = signatures;
         if (!allSignatures.length) {
@@ -4842,8 +5876,18 @@ export default function ToolWorkbench({ tool }: WorkbenchProps) {
             const pageHighlights = pageLayer?.highlights ?? [];
             const pageShapes = pageLayer?.shapes ?? [];
             const pageWhiteouts = pageLayer?.whiteouts ?? [];
+            const pageImages = pageLayer?.images ?? [];
+            const pageStamps = pageLayer?.stamps ?? [];
 
-            if (pageStrokes.length || pageTextNotes.length || pageHighlights.length || pageShapes.length || pageWhiteouts.length) {
+            if (
+              pageStrokes.length ||
+              pageTextNotes.length ||
+              pageHighlights.length ||
+              pageShapes.length ||
+              pageWhiteouts.length ||
+              pageImages.length ||
+              pageStamps.length
+            ) {
               const { width, height } = page.getSize();
               const canvasSize = editCanvasSizesRef.current[index + 1] ?? editCanvasSize;
               const scaleX = canvasSize.width ? width / canvasSize.width : 1;
@@ -4944,6 +5988,66 @@ export default function ToolWorkbench({ tool }: WorkbenchProps) {
                 }
               }
 
+              // Inserted images (selectable/movable/resizable annotations).
+              for (const imageAnn of pageImages) {
+                const embedded = embeddedEditImages[imageAnn.id];
+                if (!embedded) continue;
+                const drawWidth = Math.max(1, imageAnn.width * scaleX);
+                const drawHeight = Math.max(1, imageAnn.height * scaleY);
+                const centerX = (imageAnn.x + imageAnn.width / 2) * scaleX;
+                const centerYPdf = height - (imageAnn.y + imageAnn.height / 2) * scaleY;
+                const anchor = pdfRotatedImageAnchor(centerX, centerYPdf, drawWidth, drawHeight, imageAnn.rotation);
+                page.drawImage(embedded, {
+                  x: anchor.x,
+                  y: anchor.y,
+                  width: drawWidth,
+                  height: drawHeight,
+                  rotate: degrees(-imageAnn.rotation),
+                });
+              }
+
+              // Stamps: rounded, tinted labels rotated around their center.
+              for (const stamp of pageStamps) {
+                const stampSize = Math.max(8, stamp.size * ((scaleX + scaleY) / 2));
+                const textWidth = font.widthOfTextAtSize(stamp.text, stampSize);
+                const pillWidth = textWidth + stampSize * 1.7;
+                const pillHeight = stampSize * 1.9;
+                const centerX = stamp.x * scaleX;
+                const centerYPdf = height - stamp.y * scaleY;
+                const stampColor = hexToRgb(stamp.color);
+                const pillTint = hexToRgb(mixHexWithWhite(stamp.color, 0.82));
+                const pillRadius = pillHeight / 2;
+                const halfW = pillWidth / 2;
+                const halfH = pillHeight / 2;
+                page.pushOperators(
+                  pushGraphicsState(),
+                  translate(centerX, centerYPdf),
+                  rotateDegrees(-stamp.rotation),
+                  setLineWidth(Math.max(1, stampSize / 12)),
+                  setFillingRgbColor(pillTint.red, pillTint.green, pillTint.blue),
+                  setStrokingRgbColor(stampColor.red, stampColor.green, stampColor.blue),
+                  moveTo(-halfW + pillRadius, -halfH),
+                  lineTo(halfW - pillRadius, -halfH),
+                  appendQuadraticCurve(halfW, -halfH, halfW, -halfH + pillRadius),
+                  lineTo(halfW, halfH - pillRadius),
+                  appendQuadraticCurve(halfW, halfH, halfW - pillRadius, halfH),
+                  lineTo(-halfW + pillRadius, halfH),
+                  appendQuadraticCurve(-halfW, halfH, -halfW, halfH - pillRadius),
+                  lineTo(-halfW, -halfH + pillRadius),
+                  appendQuadraticCurve(-halfW, -halfH, -halfW + pillRadius, -halfH),
+                  closePath(),
+                  fillAndStroke()
+                );
+                page.drawText(stamp.text, {
+                  x: -textWidth / 2,
+                  y: -stampSize * 0.35,
+                  size: stampSize,
+                  font,
+                  color: stampColor,
+                });
+                page.pushOperators(popGraphicsState());
+              }
+
               for (const stroke of pageStrokes) {
                 if (stroke.points.length < 2) continue;
                 const strokeColor = hexToRgb(stroke.color);
@@ -4961,6 +6065,46 @@ export default function ToolWorkbench({ tool }: WorkbenchProps) {
             }
           }
         });
+
+        // Feature 4 — document-level watermark drawn on every page, after annotations.
+        if (tool.slug === "edit-pdf" && editWatermark) {
+          const watermarkOpacity = Math.min(1, Math.max(0.02, editWatermark.opacity));
+          for (const page of source.getPages()) {
+            const { width, height } = page.getSize();
+            const centerX = width / 2;
+            const centerYPdf = height / 2;
+            const watermarkImage = embeddedEditImages.watermark;
+            if (watermarkImage) {
+              const maxWidth = width * 0.5;
+              const maxHeight = height * 0.5;
+              const imageScale = Math.min(1, maxWidth / Math.max(1, watermarkImage.width), maxHeight / Math.max(1, watermarkImage.height));
+              const drawWidth = watermarkImage.width * imageScale;
+              const drawHeight = watermarkImage.height * imageScale;
+              const anchor = pdfRotatedImageAnchor(centerX, centerYPdf, drawWidth, drawHeight, editWatermark.rotation);
+              page.drawImage(watermarkImage, {
+                x: anchor.x,
+                y: anchor.y,
+                width: drawWidth,
+                height: drawHeight,
+                rotate: degrees(-editWatermark.rotation),
+                opacity: watermarkOpacity,
+              });
+            } else if (editWatermark.text.trim()) {
+              const textWidth = font.widthOfTextAtSize(editWatermark.text, editWatermark.size);
+              const anchor = pdfRotatedTextAnchor(centerX, centerYPdf, textWidth, editWatermark.size, editWatermark.rotation);
+              page.drawText(editWatermark.text, {
+                x: anchor.x,
+                y: anchor.y,
+                size: editWatermark.size,
+                font,
+                color: hexToRgb(editWatermark.color),
+                rotate: degrees(-editWatermark.rotation),
+                opacity: watermarkOpacity,
+              });
+            }
+          }
+        }
+
         const suffix = tool.slug === "sign-pdf" ? "signed" : "edited";
         stageOutput(
           asPdfBlob(await source.save()),
@@ -6330,6 +7474,31 @@ export default function ToolWorkbench({ tool }: WorkbenchProps) {
 
                 <button
                   type="button"
+                  onClick={() => editImageInputRef.current?.click()}
+                  title="Insert image — pick a PNG or JPG and it appears on the page"
+                  className="inline-flex items-center gap-1.5 rounded-md px-2 py-1.5 text-[11px] font-medium text-slate-400 transition hover:bg-slate-800 hover:text-slate-200"
+                >
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round" className="h-4 w-4">
+                    <rect x="3" y="3" width="18" height="18" rx="2" />
+                    <circle cx="9" cy="9" r="2" />
+                    <path d="m21 15-3.086-3.086a2 2 0 0 0-2.828 0L6 21" />
+                  </svg>
+                  <span className="hidden xl:inline">Insert image</span>
+                </button>
+                <input
+                  ref={editImageInputRef}
+                  type="file"
+                  accept="image/png,image/jpeg"
+                  className="hidden"
+                  onChange={onEditImageInputChange}
+                  aria-hidden="true"
+                  tabIndex={-1}
+                />
+
+                <span className="mx-1 h-4 w-px bg-slate-700/70" />
+
+                <button
+                  type="button"
                   onClick={undoEditAction}
                   disabled={!(editUndoStacksRef.current[editPageNumber]?.length)}
                   title="Undo (Ctrl+Z)"
@@ -6423,6 +7592,65 @@ export default function ToolWorkbench({ tool }: WorkbenchProps) {
                   </>
                 ) : null}
 
+                {editMode === "stamp" ? (
+                  <>
+                    <div className="flex items-center gap-1">
+                      {STAMP_PRESETS.map((preset, index) => (
+                        <button
+                          key={preset.text}
+                          type="button"
+                          onClick={() => setEditStampPreset(index)}
+                          className={`rounded-full border px-2.5 py-1 text-[11px] font-bold uppercase tracking-wide transition ${
+                            editStampPreset === index
+                              ? "border-sky-400 bg-sky-500/20 text-sky-200 ring-1 ring-sky-400/50"
+                              : "border-slate-700 text-slate-400 hover:border-slate-500 hover:text-slate-200"
+                          }`}
+                          style={editStampPreset === index ? { color: preset.color } : undefined}
+                        >
+                          {preset.text}
+                        </button>
+                      ))}
+                    </div>
+                    <label className="inline-flex items-center gap-2 text-[11px] font-medium text-slate-400">
+                      <input
+                        type="range"
+                        min={16}
+                        max={56}
+                        step={2}
+                        value={editFontSize}
+                        onChange={(event) => setEditFontSize(Number(event.target.value))}
+                        className="w-24 accent-sky-400"
+                      />
+                      Size {editFontSize}px
+                    </label>
+                  </>
+                ) : null}
+
+                {editMode === "select" && selectedEditId?.kind === "image" ? (
+                  <>
+                    <span className="text-[11px] text-slate-500">Image</span>
+                    <div className="flex items-center gap-1">
+                      <button
+                        type="button"
+                        onClick={() => rotateEditImage(-15)}
+                        title="Rotate left 15°"
+                        className="rounded-md border border-slate-700 px-2 py-1 text-[11px] font-medium text-slate-400 transition hover:border-slate-500 hover:text-slate-200"
+                      >
+                        ↺ 15°
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => rotateEditImage(15)}
+                        title="Rotate right 15°"
+                        className="rounded-md border border-slate-700 px-2 py-1 text-[11px] font-medium text-slate-400 transition hover:border-slate-500 hover:text-slate-200"
+                      >
+                        ↻ 15°
+                      </button>
+                    </div>
+                    <span className="text-[11px] text-slate-500">Drag the corner handle to resize</span>
+                  </>
+                ) : null}
+
                 {editMode === "highlight" || editMode === "rect" || editMode === "ellipse" || editMode === "line" || editMode === "arrow" ? (
                   <label className="inline-flex items-center gap-2 text-[11px] font-medium text-slate-400">
                     <input
@@ -6450,9 +7678,43 @@ export default function ToolWorkbench({ tool }: WorkbenchProps) {
                   </label>
                 ) : null}
 
-                {editMode === "select" || editMode === "whiteout" ? (
+                {editMode === "select" || editMode === "whiteout" || editMode === "edit-text" ? (
                   <span className="text-[11px] text-slate-500">{EDIT_TOOL_HINTS[editMode]}</span>
                 ) : null}
+
+                {/* Feature 5 — batch apply scope + Feature 6 — snap-to-grid */}
+                <div className="flex items-center gap-1.5 text-[11px] font-medium text-slate-400">
+                  <span className="text-slate-500">Apply to:</span>
+                  <select
+                    value={editBatchScope}
+                    onChange={(event) => setEditBatchScope(event.target.value as EditBatchScope)}
+                    className="rounded border border-slate-700 bg-slate-800 px-1.5 py-1 text-[11px] text-slate-300 focus:border-sky-400 focus:outline-none"
+                    aria-label="Apply annotations to"
+                  >
+                    <option value="this">This page</option>
+                    <option value="all">All pages</option>
+                    <option value="range">Page range</option>
+                  </select>
+                  {editBatchScope === "range" ? (
+                    <input
+                      type="text"
+                      value={editBatchRange}
+                      onChange={(event) => setEditBatchRange(event.target.value)}
+                      placeholder="e.g. 2-5"
+                      className="w-20 rounded border border-slate-700 bg-slate-800 px-1.5 py-1 text-[11px] text-slate-200 placeholder:text-slate-600 focus:border-sky-400 focus:outline-none"
+                      aria-label="Page range for batch apply"
+                    />
+                  ) : null}
+                </div>
+                <label className="inline-flex items-center gap-2 text-[11px] font-medium text-slate-400">
+                  <input
+                    type="checkbox"
+                    checked={editSnapToGrid}
+                    onChange={(event) => setEditSnapToGrid(event.target.checked)}
+                    className="h-3.5 w-3.5 accent-sky-400"
+                  />
+                  Snap to grid
+                </label>
 
                 <button
                   type="button"
@@ -6474,11 +7736,11 @@ export default function ToolWorkbench({ tool }: WorkbenchProps) {
 
               <div className="flex">
                 {/* Page thumbnail sidebar */}
-                <div className="hidden w-40 shrink-0 flex-col border-r border-slate-700/70 bg-slate-950 md:flex" style={{ maxHeight: "72vh" }}>
+                <div className="hidden w-52 shrink-0 flex-col border-r border-slate-700/70 bg-slate-950 md:flex" style={{ maxHeight: "72vh" }}>
                   <p className="border-b border-slate-800 px-3 py-2 text-[10px] font-semibold uppercase tracking-[0.14em] text-slate-500">
                     Pages
                   </p>
-                  <div className="flex-1 space-y-2 overflow-y-auto p-2">
+                  <div className="flex-1 space-y-2 overflow-y-auto p-2" style={{ maxHeight: "40vh" }}>
                     {pageThumbnails.length > 0 ? (
                       pageThumbnails.map((thumb) => {
                         const pageLayer = editLayersByPage[thumb.pageNumber];
@@ -6488,14 +7750,18 @@ export default function ToolWorkbench({ tool }: WorkbenchProps) {
                               pageLayer.textNotes.length ||
                               pageLayer.highlights.length ||
                               pageLayer.shapes.length ||
-                              pageLayer.whiteouts.length)
+                              pageLayer.whiteouts.length ||
+                              pageLayer.images.length ||
+                              pageLayer.stamps.length)
                         );
                         const annotationCount = pageLayer
                           ? pageLayer.strokes.length +
                             pageLayer.textNotes.length +
                             pageLayer.highlights.length +
                             pageLayer.shapes.length +
-                            pageLayer.whiteouts.length
+                            pageLayer.whiteouts.length +
+                            pageLayer.images.length +
+                            pageLayer.stamps.length
                           : 0;
                         const isActivePage = thumb.pageNumber === editPageNumber;
                         return (
@@ -6536,6 +7802,219 @@ export default function ToolWorkbench({ tool }: WorkbenchProps) {
                       <p className="p-2 text-[11px] text-slate-500">Upload a PDF to see page thumbnails.</p>
                     )}
                   </div>
+
+                  {/* Feature 1 — Forms panel (only when the PDF has AcroForm fields) */}
+                  {editFormFields.length > 0 ? (
+                    <div className="border-t border-slate-700/70">
+                      <details open className="group">
+                        <summary className="flex cursor-pointer items-center justify-between px-3 py-2 text-[10px] font-semibold uppercase tracking-[0.14em] text-slate-500 hover:text-slate-300">
+                          Forms ({editFormFields.length})
+                          <span className="text-slate-600 group-open:rotate-180">▾</span>
+                        </summary>
+                        <div className="space-y-2.5 overflow-y-auto p-2" style={{ maxHeight: "28vh" }}>
+                          {editFormFields.map((field) => (
+                            <div key={field.name} className="space-y-1">
+                              <p className="break-words text-[10px] font-medium leading-tight text-slate-400" title={field.name}>
+                                {field.name}
+                              </p>
+                              {field.type === "text" ? (
+                                <input
+                                  type="text"
+                                  value={typeof field.value === "string" ? field.value : ""}
+                                  onChange={(event) => updateEditFormFieldValue(field.name, event.target.value)}
+                                  className="w-full rounded border border-slate-700 bg-slate-800 px-2 py-1 text-[11px] text-slate-200 placeholder:text-slate-600 focus:border-sky-400 focus:outline-none"
+                                  placeholder="Fill value…"
+                                />
+                              ) : field.type === "checkbox" ? (
+                                <label className="flex items-center gap-1.5 text-[11px] text-slate-300">
+                                  <input
+                                    type="checkbox"
+                                    checked={Boolean(field.value)}
+                                    onChange={(event) => updateEditFormFieldValue(field.name, event.target.checked)}
+                                    className="h-3.5 w-3.5 accent-sky-400"
+                                  />
+                                  Checked
+                                </label>
+                              ) : field.type === "radio" ? (
+                                <div className="space-y-1">
+                                  {field.options.map((option) => (
+                                    <label key={option} className="flex items-center gap-1.5 text-[11px] text-slate-300">
+                                      <input
+                                        type="radio"
+                                        name={field.name}
+                                        checked={field.value === option}
+                                        onChange={() => updateEditFormFieldValue(field.name, option)}
+                                        className="h-3.5 w-3.5 accent-sky-400"
+                                      />
+                                      {option || "(empty)"}
+                                    </label>
+                                  ))}
+                                </div>
+                              ) : (
+                                <select
+                                  value={typeof field.value === "string" ? field.value : ""}
+                                  onChange={(event) => updateEditFormFieldValue(field.name, event.target.value)}
+                                  className="w-full rounded border border-slate-700 bg-slate-800 px-1.5 py-1 text-[11px] text-slate-200 focus:border-sky-400 focus:outline-none"
+                                >
+                                  <option value="">— select —</option>
+                                  {field.options.map((option) => (
+                                    <option key={option} value={option}>
+                                      {option}
+                                    </option>
+                                  ))}
+                                </select>
+                              )}
+                            </div>
+                          ))}
+                        </div>
+                      </details>
+                    </div>
+                  ) : null}
+
+                  {/* Feature 4 — document-level watermark controls */}
+                  <div className="border-t border-slate-700/70">
+                    <details className="group">
+                      <summary className="flex cursor-pointer items-center justify-between px-3 py-2 text-[10px] font-semibold uppercase tracking-[0.14em] text-slate-500 hover:text-slate-300">
+                        Document
+                        <span className="text-slate-600 group-open:rotate-180">▾</span>
+                      </summary>
+                        <div className="space-y-2 overflow-y-auto p-2" style={{ maxHeight: "24vh" }}>
+                        <label className="flex items-center gap-1.5 text-[11px] font-medium text-slate-300">
+                          <input
+                            type="checkbox"
+                            checked={Boolean(editWatermark)}
+                            onChange={(event) => {
+                              if (event.target.checked) {
+                                setEditWatermark({ ...DEFAULT_EDIT_WATERMARK });
+                              } else {
+                                setEditWatermark(null);
+                                editWatermarkImageRef.current = null;
+                              }
+                            }}
+                            className="h-3.5 w-3.5 accent-sky-400"
+                          />
+                          Watermark all pages
+                        </label>
+                        {editWatermark ? (
+                          <>
+                            {!editWatermark.imageDataUrl ? (
+                              <>
+                                <input
+                                  type="text"
+                                  value={editWatermark.text}
+                                  onChange={(event) =>
+                                    setEditWatermark((current) =>
+                                      current ? { ...current, text: event.target.value } : current
+                                    )
+                                  }
+                                  placeholder="Watermark text"
+                                  className="w-full rounded border border-slate-700 bg-slate-800 px-2 py-1 text-[11px] text-slate-200 placeholder:text-slate-600 focus:border-sky-400 focus:outline-none"
+                                />
+                                <label className="flex items-center gap-1.5 text-[11px] text-slate-400">
+                                  <input
+                                    type="range"
+                                    min={24}
+                                    max={160}
+                                    step={2}
+                                    value={editWatermark.size}
+                                    onChange={(event) =>
+                                      setEditWatermark((current) =>
+                                        current ? { ...current, size: Number(event.target.value) } : current
+                                      )
+                                    }
+                                    className="w-full accent-sky-400"
+                                  />
+                                  Size {editWatermark.size}
+                                </label>
+                              </>
+                            ) : null}
+                            <label className="flex items-center gap-1.5 text-[11px] text-slate-400">
+                              <input
+                                type="range"
+                                min={5}
+                                max={90}
+                                step={5}
+                                value={Math.round(editWatermark.opacity * 100)}
+                                onChange={(event) =>
+                                  setEditWatermark((current) =>
+                                    current ? { ...current, opacity: Number(event.target.value) / 100 } : current
+                                  )
+                                }
+                                className="w-full accent-sky-400"
+                              />
+                              Opacity {Math.round(editWatermark.opacity * 100)}%
+                            </label>
+                            <label className="flex items-center gap-1.5 text-[11px] text-slate-400">
+                              <input
+                                type="range"
+                                min={-90}
+                                max={90}
+                                step={5}
+                                value={editWatermark.rotation}
+                                onChange={(event) =>
+                                  setEditWatermark((current) =>
+                                    current ? { ...current, rotation: Number(event.target.value) } : current
+                                  )
+                                }
+                                className="w-full accent-sky-400"
+                              />
+                              Rotation {editWatermark.rotation}°
+                            </label>
+                            {!editWatermark.imageDataUrl ? (
+                              <label className="inline-flex items-center gap-2 text-[11px] font-medium text-slate-400">
+                                <span className="relative inline-block h-6 w-9 overflow-hidden rounded-md border border-slate-600 bg-slate-800 shadow-inner">
+                                  <input
+                                    type="color"
+                                    value={editWatermark.color}
+                                    onChange={(event) =>
+                                      setEditWatermark((current) =>
+                                        current ? { ...current, color: event.target.value } : current
+                                      )
+                                    }
+                                    className="absolute -inset-1 h-8 w-11 cursor-pointer"
+                                    aria-label="Watermark color"
+                                  />
+                                </span>
+                                Color
+                              </label>
+                            ) : null}
+                            <div className="flex flex-wrap items-center gap-1.5">
+                              <button
+                                type="button"
+                                onClick={() => editWatermarkImageInputRef.current?.click()}
+                                className="rounded-md border border-slate-700 px-2 py-1 text-[11px] font-medium text-slate-400 transition hover:border-slate-500 hover:text-slate-200"
+                              >
+                                {editWatermark.imageDataUrl ? "Change image" : "Use image instead"}
+                              </button>
+                              {editWatermark.imageDataUrl ? (
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    editWatermarkImageRef.current = null;
+                                    setEditWatermark((current) =>
+                                      current ? { ...current, imageDataUrl: "", imageMime: "" } : current
+                                    );
+                                  }}
+                                  className="rounded-md border border-slate-700 px-2 py-1 text-[11px] font-medium text-rose-300 transition hover:border-rose-500/60"
+                                >
+                                  Remove image
+                                </button>
+                              ) : null}
+                            </div>
+                            <input
+                              ref={editWatermarkImageInputRef}
+                              type="file"
+                              accept="image/png,image/jpeg"
+                              className="hidden"
+                              onChange={onEditWatermarkImageInputChange}
+                              aria-hidden="true"
+                              tabIndex={-1}
+                            />
+                          </>
+                        ) : null}
+                      </div>
+                    </details>
+                  </div>
                 </div>
 
                 {/* Editor canvas */}
@@ -6573,9 +8052,10 @@ export default function ToolWorkbench({ tool }: WorkbenchProps) {
                           editMode === "ellipse" ||
                           editMode === "line" ||
                           editMode === "arrow" ||
-                          editMode === "whiteout"
+                          editMode === "whiteout" ||
+                          editMode === "stamp"
                             ? "cursor-crosshair"
-                            : editMode === "text"
+                            : editMode === "text" || editMode === "edit-text"
                               ? "cursor-text"
                               : "cursor-default"
                         }`}
