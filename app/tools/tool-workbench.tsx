@@ -1117,7 +1117,7 @@ export default function ToolWorkbench({ tool }: WorkbenchProps) {
   });
   const [signatureMode, setSignatureMode] = useState<"text" | "draw">("text");
   const [signatureDrawn, setSignatureDrawn] = useState(false);
-  const [signatures, setSignatures] = useState<Array<{ id: string; kind: "text" | "draw"; text?: string; dataUrl?: string; xRatio: number; yRatio: number }>>([]);
+  const [signatures, setSignatures] = useState<Array<{ id: string; kind: "text" | "draw"; text?: string; dataUrl?: string; xRatio: number; yRatio: number; pageNumber: number | null }>>([]);
   const [activeSignatureId, setActiveSignatureId] = useState("");
   const [savedSignatures, setSavedSignatures] = useState<Array<{ id: string; kind: "text" | "draw"; label: string; text?: string; dataUrl?: string }>>(() => {
     if (typeof window === "undefined") return [];
@@ -1951,7 +1951,11 @@ export default function ToolWorkbench({ tool }: WorkbenchProps) {
               <div className="pointer-events-none absolute inset-0 flex items-center justify-between px-2">
                 <button
                   type="button"
-                  onClick={() => void loadOutputPdfPreviewPage(pdfPreviewPage - 1)}
+                  onClick={() => {
+                    const next = pdfPreviewPage - 1;
+                    void loadOutputPdfPreviewPage(next);
+                    if (tool.slug === "sign-pdf") void loadSignPage(next);
+                  }}
                   disabled={pdfPreviewLoading || pdfPreviewPage <= 1}
                   className="pointer-events-auto rounded-full border border-slate-400/45 bg-slate-900/20 px-2 py-1 text-[11px] font-semibold text-slate-100 shadow-sm backdrop-blur-[1px] transition hover:bg-slate-900/30 disabled:cursor-not-allowed disabled:opacity-35"
                 >
@@ -1959,7 +1963,11 @@ export default function ToolWorkbench({ tool }: WorkbenchProps) {
                 </button>
                 <button
                   type="button"
-                  onClick={() => void loadOutputPdfPreviewPage(pdfPreviewPage + 1)}
+                  onClick={() => {
+                    const next = pdfPreviewPage + 1;
+                    void loadOutputPdfPreviewPage(next);
+                    if (tool.slug === "sign-pdf") void loadSignPage(next);
+                  }}
                   disabled={pdfPreviewLoading || pdfPreviewPage >= pdfPreviewPageCount}
                   className="pointer-events-auto rounded-full border border-slate-400/45 bg-slate-900/20 px-2 py-1 text-[11px] font-semibold text-slate-100 shadow-sm backdrop-blur-[1px] transition hover:bg-slate-900/30 disabled:cursor-not-allowed disabled:opacity-35"
                 >
@@ -2758,6 +2766,7 @@ export default function ToolWorkbench({ tool }: WorkbenchProps) {
   }
 
   function addSignatureToDocument() {
+    const targetPage = signAllPages ? null : signPageNumber;
     if (signatureMode === "text") {
       const text = editText.trim();
       if (!text) { setError("Type a signature before adding it."); return; }
@@ -2768,6 +2777,7 @@ export default function ToolWorkbench({ tool }: WorkbenchProps) {
         text,
         xRatio: 0.82 - (count % 3) * 0.06,
         yRatio: 0.12 + Math.floor(count / 3) * 0.08,
+        pageNumber: targetPage,
       };
       setSignatures((prev) => [...prev, newSig]);
       setActiveSignatureId(newSig.id);
@@ -2782,11 +2792,16 @@ export default function ToolWorkbench({ tool }: WorkbenchProps) {
         dataUrl,
         xRatio: 0.82 - (count % 3) * 0.06,
         yRatio: 0.12 + Math.floor(count / 3) * 0.08,
+        pageNumber: targetPage,
       };
       setSignatures((prev) => [...prev, newSig]);
       setActiveSignatureId(newSig.id);
     }
     setStatus("Signature added. Click the preview to position it.");
+  }
+
+  function signaturesForPage(pageNumber: number) {
+    return signatures.filter((s) => s.pageNumber == null || s.pageNumber === pageNumber);
   }
 
   function removeSignatureFromDocument(id: string) {
@@ -2821,6 +2836,10 @@ export default function ToolWorkbench({ tool }: WorkbenchProps) {
     setSignaturePlacementPreview(preview.dataUrl);
     setSignPageCount(preview.pageCount);
     setSignPageNumber(pageNumber);
+    // Keep the output preview on the same page so both previews stay in sync.
+    if (outputPreview && outputPreview.mime.includes("pdf")) {
+      void loadOutputPdfPreviewPage(pageNumber, outputPreview);
+    }
   }
 
   async function getSignatureImageBytes() {
@@ -4066,10 +4085,11 @@ export default function ToolWorkbench({ tool }: WorkbenchProps) {
         // Build the list of signatures to apply (multiple supported).
         let allSignatures = signatures;
         if (!allSignatures.length) {
+          const fallbackPage = signAllPages ? null : signPageNumber;
           if (signatureMode === "text") {
-            allSignatures = [{ id: "single", kind: "text", text: editText || "Signed electronically", xRatio: signaturePlacement.xRatio, yRatio: signaturePlacement.yRatio }];
+            allSignatures = [{ id: "single", kind: "text", text: editText || "Signed electronically", xRatio: signaturePlacement.xRatio, yRatio: signaturePlacement.yRatio, pageNumber: fallbackPage }];
           } else if (signatureDrawn && signatureCanvasRef.current) {
-            allSignatures = [{ id: "single", kind: "draw", dataUrl: trimSignatureCanvas(signatureCanvasRef.current), xRatio: signaturePlacement.xRatio, yRatio: signaturePlacement.yRatio }];
+            allSignatures = [{ id: "single", kind: "draw", dataUrl: trimSignatureCanvas(signatureCanvasRef.current), xRatio: signaturePlacement.xRatio, yRatio: signaturePlacement.yRatio, pageNumber: fallbackPage }];
           } else {
             allSignatures = [];
           }
@@ -4088,11 +4108,11 @@ export default function ToolWorkbench({ tool }: WorkbenchProps) {
 
         source.getPages().forEach((page, index) => {
           if (tool.slug === "sign-pdf") {
-            // When signing a single page, skip all other pages.
-            if (!signAllPages && index + 1 !== signPageNumber) return;
+            const pageNum = index + 1;
             const { width, height } = page.getSize();
 
             for (const sig of allSignatures) {
+              if (sig.pageNumber != null && sig.pageNumber !== pageNum) continue;
               const anchorX = clamp(width * sig.xRatio, 24, width - 24);
               const anchorY = clamp(height * sig.yRatio, 24, height - 24);
 
@@ -5251,16 +5271,21 @@ export default function ToolWorkbench({ tool }: WorkbenchProps) {
                         key={sig.id}
                         type="button"
                         onClick={() => applySavedSignature(sig)}
-                        className="group relative flex min-h-[68px] flex-col items-center justify-center gap-0.5 rounded-lg border border-slate-200 bg-slate-50 p-2 text-center transition hover:border-cyan-400 hover:bg-cyan-50"
+                        className="group relative flex min-h-[80px] flex-col items-center justify-center gap-1.5 rounded-lg border border-slate-200 bg-slate-50 p-2 text-center transition hover:border-cyan-400 hover:bg-cyan-50"
                         title="Click to use this signature"
                       >
-                        {sig.kind === "draw" && sig.dataUrl ? (
-                          // eslint-disable-next-line @next/next/no-img-element
-                          <img src={sig.dataUrl} alt="Saved signature" className="h-9 max-w-full rounded-sm object-contain" />
-                        ) : (
-                          <span className="text-lg italic text-slate-800" style={{ fontFamily: 'Georgia, "Times New Roman", serif' }}>{sig.label}</span>
-                        )}
-                        <span className="text-[10px] font-medium text-slate-400 group-hover:text-cyan-700">Tap to reuse</span>
+                        <span
+                          className="flex h-11 w-full items-center justify-center overflow-hidden rounded-md"
+                          style={{ background: "#ffffff", boxShadow: "inset 0 0 0 1px rgba(15,23,42,0.08)" }}
+                        >
+                          {sig.kind === "draw" && sig.dataUrl ? (
+                            // eslint-disable-next-line @next/next/no-img-element
+                            <img src={sig.dataUrl} alt="Saved signature" className="max-h-9 max-w-full object-contain" />
+                          ) : (
+                            <span className="text-lg italic text-slate-900" style={{ fontFamily: 'Georgia, "Times New Roman", serif' }}>{sig.label}</span>
+                          )}
+                        </span>
+                        <span className="text-[10px] font-medium text-slate-500 group-hover:text-cyan-700">Tap to reuse</span>
                         <span
                           role="button"
                           tabIndex={0}
@@ -5383,10 +5408,16 @@ export default function ToolWorkbench({ tool }: WorkbenchProps) {
                       >
                         <button
                           type="button"
-                          onClick={() => setActiveSignatureId(sig.id)}
+                          onClick={() => {
+                            setActiveSignatureId(sig.id);
+                            if (sig.pageNumber != null && sig.pageNumber !== signPageNumber) {
+                              void loadSignPage(sig.pageNumber);
+                            }
+                          }}
                           className="text-xs font-medium text-slate-700 hover:text-indigo-700"
                         >
-                          {sig.kind === "draw" ? `Drawn signature ${i + 1}` : sig.text}
+                          {sig.kind === "draw" ? `Drawn ${i + 1}` : sig.text}
+                          <span className="ml-1 text-[10px] text-slate-400">{sig.pageNumber == null ? "all pages" : `p. ${sig.pageNumber}`}</span>
                         </button>
                         <button
                           type="button"
@@ -5414,6 +5445,11 @@ export default function ToolWorkbench({ tool }: WorkbenchProps) {
                     />
                     Sign all pages
                   </label>
+                  {signAllPages ? (
+                    <span className="text-[11px] text-slate-400">new signatures appear on every page</span>
+                  ) : (
+                    <span className="text-[11px] text-slate-400">new signatures appear on the current page only</span>
+                  )}
                   {!signAllPages ? (
                     <div className="flex items-center gap-1.5">
                       <button
@@ -5448,6 +5484,20 @@ export default function ToolWorkbench({ tool }: WorkbenchProps) {
                       onClick={onSignaturePlacementPick}
                       className="h-auto w-full cursor-crosshair"
                     />
+                    {signaturesForPage(signPageNumber).map((sig) => (
+                      <span
+                        key={sig.id}
+                        className={`pointer-events-none absolute -translate-x-1/2 -translate-y-1/2 ${activeSignatureId === sig.id ? "rounded-sm outline outline-2 outline-offset-1 outline-cyan-500" : ""}`}
+                        style={{ left: `${sig.xRatio * 100}%`, top: `${(1 - sig.yRatio) * 100}%` }}
+                      >
+                        {sig.kind === "draw" && sig.dataUrl ? (
+                          // eslint-disable-next-line @next/next/no-img-element
+                          <img src={sig.dataUrl} alt="Placed signature" className="max-h-14 max-w-28 rounded-sm border border-cyan-400/70 bg-white/85 shadow-sm" />
+                        ) : (
+                          <span className="whitespace-nowrap text-sm italic text-indigo-900 drop-shadow-sm" style={{ fontFamily: 'Georgia, "Times New Roman", serif' }}>{sig.text}</span>
+                        )}
+                      </span>
+                    ))}
                     <span
                       className="pointer-events-none absolute h-4 w-4 -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-cyan-600 bg-cyan-300/40"
                       style={{
