@@ -4256,8 +4256,21 @@ export default function ToolWorkbench({ tool }: WorkbenchProps) {
             accept={inputAccept}
             multiple={acceptsMultiple}
             onChange={(event) => onSelect(event.target.files)}
-            className="w-full rounded-xl border border-slate-300 bg-slate-50 px-3 py-2 text-sm text-slate-700 file:mr-3 file:rounded-md file:border-0 file:bg-slate-200 file:px-3 file:py-1.5 file:text-sm file:font-semibold file:text-slate-800 hover:file:bg-slate-300"
+            className="hidden"
           />
+        ) : null}
+
+        {shouldShowFileInput ? (
+          <button
+            type="button"
+            onClick={() => fileInputRef.current?.click()}
+            className="inline-flex items-center gap-2 rounded-full border border-cyan-300 bg-white px-4 py-2 text-sm font-semibold text-cyan-800 shadow-sm transition hover:bg-cyan-50"
+          >
+            <svg viewBox="0 0 20 20" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="2">
+              <path d="M10 4v12M4 10h12" strokeLinecap="round" />
+            </svg>
+            {files.length > 0 ? "Add More Files" : "Choose Files"}
+          </button>
         ) : null}
 
         {shouldShowFileInput ? (
@@ -4963,7 +4976,8 @@ export default function ToolWorkbench({ tool }: WorkbenchProps) {
                     <button
                       type="button"
                       onClick={() => removeMergePage(page.id)}
-                      className="btn btn-destructive mt-2 w-full rounded-md px-2 py-1 text-xs"
+                      className="mt-2 w-full rounded-md px-2 py-1 text-xs font-bold text-white shadow-sm transition hover:scale-[1.02]"
+                      style={{ background: "#ef4444", boxShadow: "0 2px 8px rgba(239,68,68,0.35)" }}
                     >
                       Remove page
                     </button>
