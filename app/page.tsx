@@ -16,6 +16,7 @@ import {
   clearWorkflowPipeline,
   stageWorkflowPipeline,
 } from "@/lib/workflow-pipeline";
+import { loadSharedFiles, persistSharedFiles } from "@/lib/file-persistence";
 
 /* ── helpers ────────────────────────────────────────────────────── */
 
@@ -96,6 +97,27 @@ export default function Home() {
   const [listening, setListening] = useState(false);
   const recognitionRef = useRef<any>(null);
   const [serverOnline, setServerOnline] = useState<boolean | null>(null);
+
+  /* ── clear "previous tool" marker while on home ──────────────── */
+  useEffect(() => {
+    try {
+      localStorage.removeItem("wiserfiles-last-tool");
+    } catch {
+      // ignore
+    }
+  }, []);
+
+  /* ── restore previously uploaded files when returning home ───── */
+  useEffect(() => {
+    let cancelled = false;
+    void loadSharedFiles().then((restored) => {
+      if (cancelled || !restored.length) return;
+      setDropFiles(restored);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   /* ── server status check ──────────────────────────────────── */
   useEffect(() => {
@@ -257,6 +279,7 @@ export default function Home() {
     if (compatible.length) {
       setDropFileInfo(null);
       setDropFiles(compatible);
+      void persistSharedFiles(compatible);
     }
   }
 
@@ -264,6 +287,7 @@ export default function Home() {
     if (isPdf(file) || isImage(file)) {
       setDropFileInfo(null);
       setDropFiles([file]);
+      void persistSharedFiles([file]);
     }
   }
 
@@ -272,6 +296,7 @@ export default function Home() {
     if (compatible.length) {
       setDropFileInfo(null);
       setDropFiles(compatible);
+      void persistSharedFiles(compatible);
     }
   }
 

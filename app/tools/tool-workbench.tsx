@@ -1723,7 +1723,8 @@ export default function ToolWorkbench({ tool }: WorkbenchProps) {
 
   const backTarget = useMemo(() => {
     if (pipelineBootstrap?.accepted && pipelineBackTarget) return pipelineBackTarget;
-    return prevTool;
+    if (prevTool) return prevTool;
+    return { href: "/", label: "Home" };
   }, [pipelineBootstrap, pipelineBackTarget, prevTool]);
   const [switchDropdownOpen, setSwitchDropdownOpen] = useState(false);
 
