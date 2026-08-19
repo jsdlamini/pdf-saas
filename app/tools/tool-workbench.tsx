@@ -164,9 +164,132 @@ type MergePageNode = {
 };
 
 type CanvasPoint = { x: number; y: number };
-type EditStroke = { points: CanvasPoint[]; color: string; width: number };
-type EditTextNote = { x: number; y: number; text: string; color: string; size: number };
-type EditPageLayer = { strokes: EditStroke[]; textNotes: EditTextNote[] };
+
+let editAnnotationCounter = 0;
+function nextEditAnnotationId() {
+  editAnnotationCounter += 1;
+  return `edit-${Date.now().toString(36)}-${editAnnotationCounter}`;
+}
+
+type EditStroke = { id: string; points: CanvasPoint[]; color: string; width: number };
+type EditTextNote = { id: string; x: number; y: number; text: string; color: string; size: number };
+type EditHighlight = { id: string; x: number; y: number; width: number; height: number; color: string; opacity: number };
+type EditRectShape = { id: string; kind: "rect"; x: number; y: number; width: number; height: number; color: string; strokeWidth: number; opacity: number; fill: boolean };
+type EditEllipseShape = { id: string; kind: "ellipse"; x: number; y: number; width: number; height: number; color: string; strokeWidth: number; opacity: number; fill: boolean };
+type EditLineShape = { id: string; kind: "line"; start: CanvasPoint; end: CanvasPoint; color: string; strokeWidth: number; opacity: number };
+type EditArrowShape = { id: string; kind: "arrow"; start: CanvasPoint; end: CanvasPoint; color: string; strokeWidth: number; opacity: number };
+type EditShape = EditRectShape | EditEllipseShape | EditLineShape | EditArrowShape;
+type EditWhiteout = { id: string; x: number; y: number; width: number; height: number };
+type EditPageLayer = {
+  strokes: EditStroke[];
+  textNotes: EditTextNote[];
+  highlights: EditHighlight[];
+  shapes: EditShape[];
+  whiteouts: EditWhiteout[];
+};
+
+type EditToolMode = "select" | "draw" | "highlight" | "text" | "rect" | "ellipse" | "line" | "arrow" | "whiteout";
+type EditDraftShape = { kind: "rect" | "ellipse" | "highlight" | "whiteout" | "line" | "arrow"; start: CanvasPoint; current: CanvasPoint };
+type EditSelection = { kind: "stroke" | "text" | "highlight" | "shape" | "whiteout"; id: string };
+
+function emptyEditLayer(): EditPageLayer {
+  return { strokes: [], textNotes: [], highlights: [], shapes: [], whiteouts: [] };
+}
+
+function rectFromPoints(start: CanvasPoint, end: CanvasPoint) {
+  const x = Math.min(start.x, end.x);
+  const y = Math.min(start.y, end.y);
+  return { x, y, width: Math.abs(end.x - start.x), height: Math.abs(end.y - start.y) };
+}
+
+function distanceToSegment(point: CanvasPoint, start: CanvasPoint, end: CanvasPoint) {
+  const dx = end.x - start.x;
+  const dy = end.y - start.y;
+  const lengthSquared = dx * dx + dy * dy;
+  if (lengthSquared === 0) return Math.hypot(point.x - start.x, point.y - start.y);
+  const t = Math.max(0, Math.min(1, ((point.x - start.x) * dx + (point.y - start.y) * dy) / lengthSquared));
+  return Math.hypot(point.x - (start.x + t * dx), point.y - (start.y + t * dy));
+}
+
+function drawArrowHead(context: CanvasRenderingContext2D, start: CanvasPoint, end: CanvasPoint, headLength: number) {
+  const angle = Math.atan2(end.y - start.y, end.x - start.x);
+  const left = {
+    x: end.x - headLength * Math.cos(angle - Math.PI / 6),
+    y: end.y - headLength * Math.sin(angle - Math.PI / 6),
+  };
+  const right = {
+    x: end.x - headLength * Math.cos(angle + Math.PI / 6),
+    y: end.y - headLength * Math.sin(angle + Math.PI / 6),
+  };
+  context.beginPath();
+  context.moveTo(end.x, end.y);
+  context.lineTo(left.x, left.y);
+  context.lineTo(right.x, right.y);
+  context.closePath();
+  context.fill();
+}
+
+function drawEditShapeOnContext(context: CanvasRenderingContext2D, shape: EditShape) {
+  context.save();
+  context.globalAlpha = Math.min(1, Math.max(0.05, shape.opacity));
+  context.strokeStyle = shape.color;
+  context.fillStyle = shape.color;
+  context.lineWidth = Math.max(0.75, shape.strokeWidth);
+  context.lineCap = "round";
+  context.lineJoin = "round";
+
+  if (shape.kind === "rect") {
+    if (shape.fill) context.fillRect(shape.x, shape.y, shape.width, shape.height);
+    context.strokeRect(shape.x, shape.y, shape.width, shape.height);
+  } else if (shape.kind === "ellipse") {
+    context.beginPath();
+    context.ellipse(
+      shape.x + shape.width / 2,
+      shape.y + shape.height / 2,
+      Math.max(0.5, shape.width / 2),
+      Math.max(0.5, shape.height / 2),
+      0,
+      0,
+      Math.PI * 2
+    );
+    if (shape.fill) context.fill();
+    context.stroke();
+  } else if (shape.kind === "line") {
+    context.beginPath();
+    context.moveTo(shape.start.x, shape.start.y);
+    context.lineTo(shape.end.x, shape.end.y);
+    context.stroke();
+  } else {
+    context.beginPath();
+    context.moveTo(shape.start.x, shape.start.y);
+    context.lineTo(shape.end.x, shape.end.y);
+    context.stroke();
+    drawArrowHead(context, shape.start, shape.end, Math.max(10, shape.strokeWidth * 5));
+  }
+  context.restore();
+}
+
+function editShapeFromDraft(
+  draft: EditDraftShape,
+  color: string,
+  strokeWidth: number,
+  opacity: number,
+  fill: boolean
+): EditShape {
+  if (draft.kind === "rect" || draft.kind === "ellipse") {
+    const bounds = rectFromPoints(draft.start, draft.current);
+    return { id: "draft", kind: draft.kind, ...bounds, color, strokeWidth, opacity, fill } as EditShape;
+  }
+  return {
+    id: "draft",
+    kind: draft.kind,
+    start: draft.start,
+    end: draft.current,
+    color,
+    strokeWidth,
+    opacity,
+  } as EditShape;
+}
 
 type CompressionOptions = {
   grayscale: boolean;
@@ -237,14 +360,96 @@ const FILE_TONE_CLASSES = [
   "border-indigo-200 bg-indigo-50/70",
 ] as const;
 
-const EDIT_RIBBON_TABS = ["Home", "Insert", "Layout", "Review", "View"] as const;
-const EDIT_RIBBON_SHORTCUTS: Record<(typeof EDIT_RIBBON_TABS)[number], string> = {
-  Home: "H",
-  Insert: "N",
-  Layout: "P",
-  Review: "R",
-  View: "W",
-};
+const EDIT_TOOL_OPTIONS: Array<{ mode: EditToolMode; label: string; hint: string }> = [
+  { mode: "select", label: "Select", hint: "Click an annotation to select it — drag to move, press Delete to remove it." },
+  { mode: "draw", label: "Draw", hint: "Drag on the page to draw freehand ink." },
+  { mode: "highlight", label: "Highlight", hint: "Drag a box to highlight the text underneath." },
+  { mode: "text", label: "Text", hint: "Type your text, then click the page to place it." },
+  { mode: "rect", label: "Rectangle", hint: "Drag on the page to draw a rectangle." },
+  { mode: "ellipse", label: "Ellipse", hint: "Drag on the page to draw an ellipse." },
+  { mode: "line", label: "Line", hint: "Drag on the page to draw a straight line." },
+  { mode: "arrow", label: "Arrow", hint: "Drag on the page to draw an arrow." },
+  { mode: "whiteout", label: "Whiteout", hint: "Drag a box to cover content with solid white." },
+];
+
+const EDIT_TOOL_HINTS: Record<EditToolMode, string> = Object.fromEntries(
+  EDIT_TOOL_OPTIONS.map((option) => [option.mode, option.hint])
+) as Record<EditToolMode, string>;
+
+function EditToolGlyph({ mode }: { mode: EditToolMode }) {
+  const commonProps = {
+    viewBox: "0 0 24 24",
+    fill: "none",
+    stroke: "currentColor",
+    strokeWidth: 1.8,
+    strokeLinecap: "round",
+    strokeLinejoin: "round",
+    className: "h-4 w-4",
+  } as const;
+
+  switch (mode) {
+    case "select":
+      return (
+        <svg {...commonProps}>
+          <path d="m3 3 7.07 16.97 2.51-7.39 7.39-2.51L3 3z" />
+        </svg>
+      );
+    case "draw":
+      return (
+        <svg {...commonProps}>
+          <path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z" />
+        </svg>
+      );
+    case "highlight":
+      return (
+        <svg {...commonProps}>
+          <path d="m9 11-6 6v3h9l3-3" />
+          <path d="m22 12-4.6 4.6a2 2 0 0 1-2.8 0l-5.2-5.2a2 2 0 0 1 0-2.8L14 4" />
+        </svg>
+      );
+    case "text":
+      return (
+        <svg {...commonProps}>
+          <path d="M4 7V4h16v3" />
+          <path d="M9 20h6" />
+          <path d="M12 4v16" />
+        </svg>
+      );
+    case "rect":
+      return (
+        <svg {...commonProps}>
+          <rect x="3.5" y="5" width="17" height="14" rx="1.5" />
+        </svg>
+      );
+    case "ellipse":
+      return (
+        <svg {...commonProps}>
+          <circle cx="12" cy="12" r="8.5" />
+        </svg>
+      );
+    case "line":
+      return (
+        <svg {...commonProps}>
+          <path d="M5 19 19 5" />
+        </svg>
+      );
+    case "arrow":
+      return (
+        <svg {...commonProps}>
+          <path d="M13 5h6v6" />
+          <path d="m19 5-14 14" />
+        </svg>
+      );
+    case "whiteout":
+      return (
+        <svg {...commonProps}>
+          <path d="m7 21-4.3-4.3c-1-1-1-2.5 0-3.4l9.6-9.6c1-1 2.5-1 3.4 0l5.6 5.6c1 1 1 2.5 0 3.4L13 21" />
+          <path d="M22 21H7" />
+          <path d="m5 11 9 9" />
+        </svg>
+      );
+  }
+}
 
 function downloadBlob(blob: Blob, fileName: string) {
   const href = URL.createObjectURL(blob);
@@ -1096,16 +1301,22 @@ export default function ToolWorkbench({ tool }: WorkbenchProps) {
   const [editPageNumber, setEditPageNumber] = useState(1);
   const [editPageCount, setEditPageCount] = useState(1);
   const [editCanvasLoading, setEditCanvasLoading] = useState(false);
-  const [editRibbonTab, setEditRibbonTab] = useState<(typeof EDIT_RIBBON_TABS)[number]>("Home");
-  const [editMode, setEditMode] = useState<"draw" | "text">("draw");
+  const [editMode, setEditMode] = useState<EditToolMode>("select");
   const [editColor, setEditColor] = useState("#0f172a");
   const [editBrushSize, setEditBrushSize] = useState(2.6);
   const [editFontSize, setEditFontSize] = useState(16);
+  const [editOpacity, setEditOpacity] = useState(45);
+  const [editFillShape, setEditFillShape] = useState(false);
   const [editZoom, setEditZoom] = useState(100);
   const [editStrokes, setEditStrokes] = useState<EditStroke[]>([]);
   const [editTextNotes, setEditTextNotes] = useState<EditTextNote[]>([]);
+  const [editHighlights, setEditHighlights] = useState<EditHighlight[]>([]);
+  const [editShapes, setEditShapes] = useState<EditShape[]>([]);
+  const [editWhiteouts, setEditWhiteouts] = useState<EditWhiteout[]>([]);
   const [editLayersByPage, setEditLayersByPage] = useState<Record<number, EditPageLayer>>({});
   const [activeEditStroke, setActiveEditStroke] = useState<CanvasPoint[]>([]);
+  const [editDraft, setEditDraft] = useState<EditDraftShape | null>(null);
+  const [selectedEditId, setSelectedEditId] = useState<EditSelection | null>(null);
   const [compressionOptions, setCompressionOptions] = useState<CompressionOptions>({
     grayscale: false,
     blackWhite: false,
@@ -1257,6 +1468,11 @@ export default function ToolWorkbench({ tool }: WorkbenchProps) {
   const cameraCanvasRef = useRef<HTMLCanvasElement | null>(null);
   const cameraStreamRef = useRef<MediaStream | null>(null);
   const editCanvasRef = useRef<HTMLCanvasElement | null>(null);
+  const editLayersRef = useRef<Record<number, EditPageLayer>>({});
+  const editUndoStacksRef = useRef<Record<number, EditPageLayer[]>>({});
+  const editRedoStacksRef = useRef<Record<number, EditPageLayer[]>>({});
+  const editCanvasSizesRef = useRef<Record<number, { width: number; height: number }>>({});
+  const editDragRef = useRef<{ startX: number; startY: number; lastX: number; lastY: number; layer: EditPageLayer } | null>(null);
   const signaturePointerState = useRef<{ drawing: boolean }>({ drawing: false });
   const signatureStrokesRef = useRef<Array<Array<{ x: number; y: number }>>>([]);
   const signatureActiveStrokeRef = useRef<Array<{ x: number; y: number }>>([]);
@@ -1568,12 +1784,21 @@ export default function ToolWorkbench({ tool }: WorkbenchProps) {
     setEditCanvasSize({ width: 0, height: 0 });
     setEditPageNumber(1);
     setEditPageCount(1);
-    setEditRibbonTab("Home");
+    setEditMode("select");
     setEditZoom(100);
     setEditLayersByPage({});
+    editLayersRef.current = {};
     setEditStrokes([]);
     setEditTextNotes([]);
+    setEditHighlights([]);
+    setEditShapes([]);
+    setEditWhiteouts([]);
     setActiveEditStroke([]);
+    setEditDraft(null);
+    setSelectedEditId(null);
+    editUndoStacksRef.current = {};
+    editRedoStacksRef.current = {};
+    editCanvasSizesRef.current = {};
     setDraggedPage(null);
     setDragOverPage(null);
     if (usesThumbnailEditor) {
@@ -1612,6 +1837,8 @@ export default function ToolWorkbench({ tool }: WorkbenchProps) {
       }
 
       if (isEditTool) {
+        const thumbs = await renderPdfThumbnails(firstBytes);
+        setPageThumbnails(thumbs);
         await loadEditPreview(first, 1);
       }
 
@@ -2154,7 +2381,22 @@ export default function ToolWorkbench({ tool }: WorkbenchProps) {
     redrawEditCanvas();
     // redrawEditCanvas intentionally depends on state used by drawing overlays
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [editPreview, editStrokes, editTextNotes, activeEditStroke, editColor, editBrushSize]);
+  }, [
+    editPreview,
+    editStrokes,
+    editTextNotes,
+    editHighlights,
+    editShapes,
+    editWhiteouts,
+    activeEditStroke,
+    editDraft,
+    editColor,
+    editBrushSize,
+    editFontSize,
+    editOpacity,
+    editFillShape,
+    selectedEditId,
+  ]);
 
   useEffect(() => {
     if (!isScanTool) return;
@@ -2165,30 +2407,55 @@ export default function ToolWorkbench({ tool }: WorkbenchProps) {
     if (!isEditTool) return;
 
     const onKeyDown = (event: KeyboardEvent) => {
-      if (!event.altKey || event.ctrlKey || event.metaKey || event.shiftKey) return;
-
       const target = event.target;
-      if (
+      const inFormField =
         target instanceof HTMLElement &&
         (target.tagName === "INPUT" ||
           target.tagName === "TEXTAREA" ||
           target.tagName === "SELECT" ||
-          target.isContentEditable)
-      ) {
+          target.isContentEditable);
+
+      if (event.key === "Escape") {
+        setSelectedEditId(null);
         return;
       }
+      if (inFormField) return;
 
-      const pressedKey = event.key.toUpperCase();
-      const nextTab = EDIT_RIBBON_TABS.find((tab) => EDIT_RIBBON_SHORTCUTS[tab] === pressedKey);
-      if (!nextTab) return;
-
-      event.preventDefault();
-      setEditRibbonTab(nextTab);
+      const modifier = event.ctrlKey || event.metaKey;
+      if (modifier && event.key.toLowerCase() === "z") {
+        event.preventDefault();
+        if (event.shiftKey) {
+          redoEditAction();
+        } else {
+          undoEditAction();
+        }
+        return;
+      }
+      if (modifier && event.key.toLowerCase() === "y") {
+        event.preventDefault();
+        redoEditAction();
+        return;
+      }
+      if ((event.key === "Delete" || event.key === "Backspace") && selectedEditId) {
+        event.preventDefault();
+        deleteEditAnnotation(selectedEditId);
+      }
     };
 
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
-  }, [isEditTool]);
+    // Handlers above read edit state through fresh closures on each render.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [
+    isEditTool,
+    editPageNumber,
+    selectedEditId,
+    editStrokes,
+    editTextNotes,
+    editHighlights,
+    editShapes,
+    editWhiteouts,
+  ]);
 
   const uploadHint = useMemo(() => {
     if (tool.slug === "merge-pdf") {
@@ -2251,9 +2518,46 @@ export default function ToolWorkbench({ tool }: WorkbenchProps) {
       context.clearRect(0, 0, canvas.width, canvas.height);
       context.drawImage(image, 0, 0, canvas.width, canvas.height);
 
+      // Z-order: highlights, whiteouts, text, shapes, strokes (top).
+      for (const highlight of editHighlights) {
+        context.globalAlpha = Math.min(1, Math.max(0.05, highlight.opacity));
+        context.fillStyle = highlight.color;
+        context.fillRect(highlight.x, highlight.y, highlight.width, highlight.height);
+      }
+      context.globalAlpha = 1;
+
+      for (const whiteout of editWhiteouts) {
+        context.fillStyle = "#ffffff";
+        context.fillRect(whiteout.x, whiteout.y, whiteout.width, whiteout.height);
+      }
+
+      if (editDraft && (editDraft.kind === "highlight" || editDraft.kind === "whiteout")) {
+        const bounds = rectFromPoints(editDraft.start, editDraft.current);
+        context.globalAlpha = editDraft.kind === "highlight" ? Math.min(1, Math.max(0.05, editOpacity / 100)) : 1;
+        context.fillStyle = editDraft.kind === "highlight" ? editColor : "#ffffff";
+        context.fillRect(bounds.x, bounds.y, bounds.width, bounds.height);
+        context.globalAlpha = 1;
+      }
+
+      for (const note of editTextNotes) {
+        context.fillStyle = note.color;
+        context.font = `${note.size}px ${"DM Sans"}`;
+        context.fillText(note.text, note.x, note.y);
+      }
+
+      for (const shape of editShapes) {
+        drawEditShapeOnContext(context, shape);
+      }
+      if (editDraft && editDraft.kind !== "highlight" && editDraft.kind !== "whiteout") {
+        drawEditShapeOnContext(
+          context,
+          editShapeFromDraft(editDraft, editColor, editBrushSize, editOpacity / 100, editFillShape)
+        );
+      }
+
       const strokesToDraw =
         activeEditStroke.length > 1
-          ? [...editStrokes, { points: activeEditStroke, color: editColor, width: editBrushSize }]
+          ? [...editStrokes, { id: "active", points: activeEditStroke, color: editColor, width: editBrushSize }]
           : editStrokes;
 
       for (const stroke of strokesToDraw) {
@@ -2270,43 +2574,289 @@ export default function ToolWorkbench({ tool }: WorkbenchProps) {
         context.stroke();
       }
 
-      for (const note of editTextNotes) {
-        context.fillStyle = note.color;
-        context.font = `${note.size}px ${"DM Sans"}`;
-        context.fillText(note.text, note.x, note.y);
+      if (selectedEditId) {
+        drawEditSelectionOutline(context);
       }
     };
     image.src = editPreview;
   }
 
-  function persistPageLayer(pageNumber: number, strokes: EditStroke[], textNotes: EditTextNote[]) {
-    setEditLayersByPage((current) => {
-      if (!strokes.length && !textNotes.length) {
-        if (!current[pageNumber]) return current;
-        const next = { ...current };
-        delete next[pageNumber];
-        return next;
-      }
+  function drawEditSelectionOutline(context: CanvasRenderingContext2D) {
+    if (!selectedEditId) return;
+    const selection = selectedEditId;
+    let bounds: { x: number; y: number; width: number; height: number } | null = null;
 
-      return {
-        ...current,
-        [pageNumber]: { strokes, textNotes },
-      };
+    if (selection.kind === "stroke") {
+      const stroke = editStrokes.find((item) => item.id === selection.id);
+      if (stroke && stroke.points.length) {
+        const xs = stroke.points.map((point) => point.x);
+        const ys = stroke.points.map((point) => point.y);
+        const pad = Math.max(8, stroke.width + 5);
+        bounds = {
+          x: Math.min(...xs) - pad,
+          y: Math.min(...ys) - pad,
+          width: Math.max(...xs) - Math.min(...xs) + pad * 2,
+          height: Math.max(...ys) - Math.min(...ys) + pad * 2,
+        };
+      }
+    } else if (selection.kind === "text") {
+      const note = editTextNotes.find((item) => item.id === selection.id);
+      if (note) {
+        context.font = `${note.size}px "DM Sans", sans-serif`;
+        const textWidth = context.measureText(note.text).width;
+        bounds = { x: note.x - 4, y: note.y - note.size - 4, width: textWidth + 8, height: note.size + 8 };
+      }
+    } else if (selection.kind === "highlight") {
+      const highlight = editHighlights.find((item) => item.id === selection.id);
+      if (highlight) {
+        bounds = { x: highlight.x - 3, y: highlight.y - 3, width: highlight.width + 6, height: highlight.height + 6 };
+      }
+    } else if (selection.kind === "whiteout") {
+      const whiteout = editWhiteouts.find((item) => item.id === selection.id);
+      if (whiteout) {
+        bounds = { x: whiteout.x - 3, y: whiteout.y - 3, width: whiteout.width + 6, height: whiteout.height + 6 };
+      }
+    } else {
+      const shape = editShapes.find((item) => item.id === selection.id);
+      if (shape) {
+        const pad = Math.max(8, shape.strokeWidth + 5);
+        if (shape.kind === "line" || shape.kind === "arrow") {
+          bounds = {
+            x: Math.min(shape.start.x, shape.end.x) - pad,
+            y: Math.min(shape.start.y, shape.end.y) - pad,
+            width: Math.abs(shape.end.x - shape.start.x) + pad * 2,
+            height: Math.abs(shape.end.y - shape.start.y) + pad * 2,
+          };
+        } else {
+          bounds = { x: shape.x - pad, y: shape.y - pad, width: shape.width + pad * 2, height: shape.height + pad * 2 };
+        }
+      }
+    }
+
+    if (!bounds) return;
+    context.save();
+    context.setLineDash([5, 4]);
+    context.strokeStyle = "#22d3ee";
+    context.lineWidth = 1.5;
+    context.strokeRect(bounds.x, bounds.y, bounds.width, bounds.height);
+    context.restore();
+  }
+
+  function findEditAnnotationAt(canvas: HTMLCanvasElement, x: number, y: number): EditSelection | null {
+    const context = canvas.getContext("2d");
+
+    // Strokes render on top, so they are hit-tested first.
+    for (let i = editStrokes.length - 1; i >= 0; i -= 1) {
+      const stroke = editStrokes[i];
+      if (stroke.points.some((point) => Math.hypot(point.x - x, point.y - y) <= Math.max(8, stroke.width + 5))) {
+        return { kind: "stroke", id: stroke.id };
+      }
+    }
+
+    for (let i = editShapes.length - 1; i >= 0; i -= 1) {
+      const shape = editShapes[i];
+      if (shape.kind === "rect" || shape.kind === "ellipse") {
+        if (x >= shape.x - 6 && x <= shape.x + shape.width + 6 && y >= shape.y - 6 && y <= shape.y + shape.height + 6) {
+          return { kind: "shape", id: shape.id };
+        }
+      } else if (distanceToSegment({ x, y }, shape.start, shape.end) <= Math.max(8, shape.strokeWidth + 5)) {
+        return { kind: "shape", id: shape.id };
+      }
+    }
+
+    for (let i = editTextNotes.length - 1; i >= 0; i -= 1) {
+      const note = editTextNotes[i];
+      if (context) {
+        context.font = `${note.size}px "DM Sans", sans-serif`;
+        const textWidth = context.measureText(note.text).width;
+        if (x >= note.x - 4 && x <= note.x + textWidth + 4 && y >= note.y - note.size - 4 && y <= note.y + 4) {
+          return { kind: "text", id: note.id };
+        }
+      } else {
+        const textWidth = note.text.length * note.size * 0.62;
+        if (x >= note.x - 4 && x <= note.x + textWidth + 4 && y >= note.y - note.size - 4 && y <= note.y + 4) {
+          return { kind: "text", id: note.id };
+        }
+      }
+    }
+
+    for (let i = editHighlights.length - 1; i >= 0; i -= 1) {
+      const highlight = editHighlights[i];
+      if (x >= highlight.x - 3 && x <= highlight.x + highlight.width + 3 && y >= highlight.y - 3 && y <= highlight.y + highlight.height + 3) {
+        return { kind: "highlight", id: highlight.id };
+      }
+    }
+
+    for (let i = editWhiteouts.length - 1; i >= 0; i -= 1) {
+      const whiteout = editWhiteouts[i];
+      if (x >= whiteout.x - 3 && x <= whiteout.x + whiteout.width + 3 && y >= whiteout.y - 3 && y <= whiteout.y + whiteout.height + 3) {
+        return { kind: "whiteout", id: whiteout.id };
+      }
+    }
+
+    return null;
+  }
+
+  function isEditLayerEmpty(layer: EditPageLayer) {
+    return (
+      !layer.strokes.length &&
+      !layer.textNotes.length &&
+      !layer.highlights.length &&
+      !layer.shapes.length &&
+      !layer.whiteouts.length
+    );
+  }
+
+  function currentEditLayer(): EditPageLayer {
+    return {
+      strokes: editStrokes,
+      textNotes: editTextNotes,
+      highlights: editHighlights,
+      shapes: editShapes,
+      whiteouts: editWhiteouts,
+    };
+  }
+
+  function applyEditLayerToPage(pageNumber: number, layer: EditPageLayer) {
+    setEditStrokes(layer.strokes);
+    setEditTextNotes(layer.textNotes);
+    setEditHighlights(layer.highlights);
+    setEditShapes(layer.shapes);
+    setEditWhiteouts(layer.whiteouts);
+
+    const current = editLayersRef.current;
+    let next: Record<number, EditPageLayer>;
+    if (isEditLayerEmpty(layer)) {
+      if (!current[pageNumber]) {
+        next = current;
+      } else {
+        next = { ...current };
+        delete next[pageNumber];
+      }
+    } else {
+      next = { ...current, [pageNumber]: layer };
+    }
+    editLayersRef.current = next;
+    setEditLayersByPage(next);
+  }
+
+  function pushEditUndo(pageNumber: number, layer: EditPageLayer) {
+    const undoStack = editUndoStacksRef.current[pageNumber] ?? [];
+    undoStack.push(layer);
+    if (undoStack.length > 80) undoStack.shift();
+    editUndoStacksRef.current[pageNumber] = undoStack;
+    delete editRedoStacksRef.current[pageNumber];
+  }
+
+  function commitEditLayer(pageNumber: number, updater: (current: EditPageLayer) => EditPageLayer) {
+    const previous = currentEditLayer();
+    pushEditUndo(pageNumber, previous);
+    applyEditLayerToPage(pageNumber, updater(previous));
+  }
+
+  function undoEditAction() {
+    const undoStack = editUndoStacksRef.current[editPageNumber];
+    if (!undoStack?.length) return;
+    const previous = undoStack.pop();
+    if (!previous) return;
+    const redoStack = editRedoStacksRef.current[editPageNumber] ?? [];
+    redoStack.push(currentEditLayer());
+    editRedoStacksRef.current[editPageNumber] = redoStack;
+    setSelectedEditId(null);
+    applyEditLayerToPage(editPageNumber, previous);
+  }
+
+  function redoEditAction() {
+    const redoStack = editRedoStacksRef.current[editPageNumber];
+    if (!redoStack?.length) return;
+    const nextLayer = redoStack.pop();
+    if (!nextLayer) return;
+    const undoStack = editUndoStacksRef.current[editPageNumber] ?? [];
+    undoStack.push(currentEditLayer());
+    editUndoStacksRef.current[editPageNumber] = undoStack;
+    setSelectedEditId(null);
+    applyEditLayerToPage(editPageNumber, nextLayer);
+  }
+
+  function deleteEditAnnotation(selection: EditSelection) {
+    commitEditLayer(editPageNumber, (layer) => {
+      const next = { ...layer };
+      if (selection.kind === "stroke") {
+        next.strokes = layer.strokes.filter((item) => item.id !== selection.id);
+      } else if (selection.kind === "text") {
+        next.textNotes = layer.textNotes.filter((item) => item.id !== selection.id);
+      } else if (selection.kind === "highlight") {
+        next.highlights = layer.highlights.filter((item) => item.id !== selection.id);
+      } else if (selection.kind === "whiteout") {
+        next.whiteouts = layer.whiteouts.filter((item) => item.id !== selection.id);
+      } else {
+        next.shapes = layer.shapes.filter((item) => item.id !== selection.id);
+      }
+      return next;
     });
+    setSelectedEditId(null);
+  }
+
+  function moveEditAnnotation(selection: EditSelection, dx: number, dy: number) {
+    if (selection.kind === "stroke") {
+      setEditStrokes((current) =>
+        current.map((stroke) =>
+          stroke.id === selection.id
+            ? { ...stroke, points: stroke.points.map((point) => ({ x: point.x + dx, y: point.y + dy })) }
+            : stroke
+        )
+      );
+    } else if (selection.kind === "text") {
+      setEditTextNotes((current) =>
+        current.map((note) => (note.id === selection.id ? { ...note, x: note.x + dx, y: note.y + dy } : note))
+      );
+    } else if (selection.kind === "highlight") {
+      setEditHighlights((current) =>
+        current.map((highlight) =>
+          highlight.id === selection.id ? { ...highlight, x: highlight.x + dx, y: highlight.y + dy } : highlight
+        )
+      );
+    } else if (selection.kind === "whiteout") {
+      setEditWhiteouts((current) =>
+        current.map((whiteout) =>
+          whiteout.id === selection.id ? { ...whiteout, x: whiteout.x + dx, y: whiteout.y + dy } : whiteout
+        )
+      );
+    } else {
+      setEditShapes((current) =>
+        current.map((shape) => {
+          if (shape.id !== selection.id) return shape;
+          if (shape.kind === "line" || shape.kind === "arrow") {
+            return {
+              ...shape,
+              start: { x: shape.start.x + dx, y: shape.start.y + dy },
+              end: { x: shape.end.x + dx, y: shape.end.y + dy },
+            };
+          }
+          return { ...shape, x: shape.x + dx, y: shape.y + dy };
+        })
+      );
+    }
   }
 
   async function loadEditPreview(file: File, targetPage: number) {
     try {
       setEditCanvasLoading(true);
       const preview = await renderPdfPagePreview(new Uint8Array(await readAsArrayBuffer(file)), targetPage);
-      const layer = editLayersByPage[preview.safePage];
+      const layer = editLayersRef.current[preview.safePage] ?? emptyEditLayer();
       setEditPreview(preview.dataUrl);
       setEditCanvasSize({ width: preview.width, height: preview.height });
+      editCanvasSizesRef.current[preview.safePage] = { width: preview.width, height: preview.height };
       setEditPageCount(preview.pageCount);
       setEditPageNumber(preview.safePage);
-      setEditStrokes(layer?.strokes ?? []);
-      setEditTextNotes(layer?.textNotes ?? []);
+      setEditStrokes(layer.strokes);
+      setEditTextNotes(layer.textNotes);
+      setEditHighlights(layer.highlights);
+      setEditShapes(layer.shapes);
+      setEditWhiteouts(layer.whiteouts);
       setActiveEditStroke([]);
+      setEditDraft(null);
+      setSelectedEditId(null);
     } catch {
       setError("Could not prepare editable canvas for this PDF.");
     } finally {
@@ -2315,38 +2865,150 @@ export default function ToolWorkbench({ tool }: WorkbenchProps) {
   }
 
   function onEditPointerDown(event: React.PointerEvent<HTMLCanvasElement>) {
-    if (editMode !== "draw") return;
     const canvas = editCanvasRef.current;
     if (!canvas) return;
+    if (editMode === "text") return;
+
     const point = getEditCanvasPoint(canvas, event);
-    setActiveEditStroke([point]);
     canvas.setPointerCapture(event.pointerId);
+
+    if (editMode === "select") {
+      const hit = findEditAnnotationAt(canvas, point.x, point.y);
+      setSelectedEditId(hit);
+      if (hit) {
+        editDragRef.current = {
+          startX: point.x,
+          startY: point.y,
+          lastX: point.x,
+          lastY: point.y,
+          layer: currentEditLayer(),
+        };
+      }
+      return;
+    }
+
+    if (editMode === "draw") {
+      setActiveEditStroke([point]);
+      return;
+    }
+
+    setEditDraft({ kind: editMode, start: point, current: point });
   }
 
   function onEditPointerMove(event: React.PointerEvent<HTMLCanvasElement>) {
-    if (editMode !== "draw") return;
-    if (!activeEditStroke.length) return;
     const canvas = editCanvasRef.current;
     if (!canvas) return;
     const point = getEditCanvasPoint(canvas, event);
-    setActiveEditStroke((current) => [...current, point]);
+
+    if (editMode === "select") {
+      const drag = editDragRef.current;
+      if (drag && selectedEditId) {
+        moveEditAnnotation(selectedEditId, point.x - drag.lastX, point.y - drag.lastY);
+        drag.lastX = point.x;
+        drag.lastY = point.y;
+      }
+      return;
+    }
+
+    if (editMode === "draw") {
+      if (!activeEditStroke.length) return;
+      setActiveEditStroke((current) => [...current, point]);
+      return;
+    }
+
+    if (editMode === "text") return;
+
+    setEditDraft((current) => (current ? { ...current, current: point } : current));
   }
 
   function onEditPointerUp(event: React.PointerEvent<HTMLCanvasElement>) {
-    if (editMode !== "draw") return;
     const canvas = editCanvasRef.current;
     if (canvas && canvas.hasPointerCapture(event.pointerId)) {
       canvas.releasePointerCapture(event.pointerId);
     }
 
-    if (activeEditStroke.length > 1) {
-      setEditStrokes((current) => {
-        const next = [...current, { points: activeEditStroke, color: editColor, width: editBrushSize }];
-        persistPageLayer(editPageNumber, next, editTextNotes);
+    if (editMode === "select") {
+      const drag = editDragRef.current;
+      editDragRef.current = null;
+      if (drag && selectedEditId && (Math.abs(drag.lastX - drag.startX) > 1 || Math.abs(drag.lastY - drag.startY) > 1)) {
+        // Live position changes are already in state; record a single undo entry.
+        pushEditUndo(editPageNumber, drag.layer);
+        applyEditLayerToPage(editPageNumber, currentEditLayer());
+      }
+      return;
+    }
+
+    if (editMode === "draw") {
+      if (activeEditStroke.length > 1) {
+        const stroke: EditStroke = {
+          id: nextEditAnnotationId(),
+          points: activeEditStroke,
+          color: editColor,
+          width: editBrushSize,
+        };
+        commitEditLayer(editPageNumber, (layer) => ({ ...layer, strokes: [...layer.strokes, stroke] }));
+      }
+      setActiveEditStroke([]);
+      return;
+    }
+
+    if (editMode === "text") return;
+
+    if (editDraft) {
+      const draft = editDraft;
+      const isTinyBox =
+        (draft.kind === "rect" || draft.kind === "ellipse" || draft.kind === "highlight" || draft.kind === "whiteout") &&
+        Math.abs(draft.current.x - draft.start.x) < 4 &&
+        Math.abs(draft.current.y - draft.start.y) < 4;
+      const isTinyLine =
+        (draft.kind === "line" || draft.kind === "arrow") &&
+        Math.hypot(draft.current.x - draft.start.x, draft.current.y - draft.start.y) < 4;
+      setEditDraft(null);
+      if (isTinyBox || isTinyLine) return;
+
+      commitEditLayer(editPageNumber, (layer) => {
+        const next = { ...layer };
+        if (draft.kind === "highlight" || draft.kind === "whiteout") {
+          const bounds = rectFromPoints(draft.start, draft.current);
+          if (draft.kind === "highlight") {
+            next.highlights = [
+              ...layer.highlights,
+              { id: nextEditAnnotationId(), ...bounds, color: editColor, opacity: editOpacity / 100 },
+            ];
+          } else {
+            next.whiteouts = [...layer.whiteouts, { id: nextEditAnnotationId(), ...bounds }];
+          }
+        } else if (draft.kind === "rect" || draft.kind === "ellipse") {
+          const bounds = rectFromPoints(draft.start, draft.current);
+          next.shapes = [
+            ...layer.shapes,
+            {
+              id: nextEditAnnotationId(),
+              kind: draft.kind,
+              ...bounds,
+              color: editColor,
+              strokeWidth: editBrushSize,
+              opacity: editOpacity / 100,
+              fill: editFillShape,
+            } as EditShape,
+          ];
+        } else {
+          next.shapes = [
+            ...layer.shapes,
+            {
+              id: nextEditAnnotationId(),
+              kind: draft.kind,
+              start: draft.start,
+              end: draft.current,
+              color: editColor,
+              strokeWidth: editBrushSize,
+              opacity: editOpacity / 100,
+            } as EditShape,
+          ];
+        }
         return next;
       });
     }
-    setActiveEditStroke([]);
   }
 
   function onEditCanvasClick(event: React.MouseEvent<HTMLCanvasElement>) {
@@ -2355,45 +3017,63 @@ export default function ToolWorkbench({ tool }: WorkbenchProps) {
     const canvas = editCanvasRef.current;
     if (!canvas) return;
     const point = getEditCanvasPoint(canvas, event);
-    setEditTextNotes((current) => {
-      const next = [
-        ...current,
-        { x: point.x, y: point.y, text: editText.trim(), color: editColor, size: editFontSize },
-      ];
-      persistPageLayer(editPageNumber, editStrokes, next);
-      return next;
-    });
+    commitEditLayer(editPageNumber, (layer) => ({
+      ...layer,
+      textNotes: [
+        ...layer.textNotes,
+        {
+          id: nextEditAnnotationId(),
+          x: point.x,
+          y: point.y,
+          text: editText.trim(),
+          color: editColor,
+          size: editFontSize,
+        },
+      ],
+    }));
   }
 
-  function undoEditAction() {
-    if (editMode === "text") {
-      setEditTextNotes((current) => {
-        const next = current.slice(0, -1);
-        persistPageLayer(editPageNumber, editStrokes, next);
-        return next;
-      });
-      return;
-    }
-    setEditStrokes((current) => {
-      const next = current.slice(0, -1);
-      persistPageLayer(editPageNumber, next, editTextNotes);
-      return next;
-    });
+  function changeEditZoom(direction: -1 | 1) {
+    const presets = [50, 75, 90, 100, 110, 125, 150, 175, 200];
+    const index = presets.indexOf(editZoom);
+    const next =
+      index === -1
+        ? direction === 1
+          ? 110
+          : 90
+        : presets[Math.min(presets.length - 1, Math.max(0, index + direction))];
+    setEditZoom(next);
   }
 
   function clearEditCanvasActions() {
-    persistPageLayer(editPageNumber, [], []);
-    setEditStrokes([]);
-    setEditTextNotes([]);
+    if (!editPageLayerHasContent) return;
+    commitEditLayer(editPageNumber, () => emptyEditLayer());
     setActiveEditStroke([]);
+    setSelectedEditId(null);
   }
 
   function clearEditDocumentActions() {
     setEditLayersByPage({});
+    editLayersRef.current = {};
     setEditStrokes([]);
     setEditTextNotes([]);
+    setEditHighlights([]);
+    setEditShapes([]);
+    setEditWhiteouts([]);
     setActiveEditStroke([]);
+    setEditDraft(null);
+    setSelectedEditId(null);
+    editUndoStacksRef.current = {};
+    editRedoStacksRef.current = {};
   }
+
+  const editPageLayerHasContent =
+    editStrokes.length > 0 ||
+    editTextNotes.length > 0 ||
+    editHighlights.length > 0 ||
+    editShapes.length > 0 ||
+    editWhiteouts.length > 0;
+  const editPageCountEdited = Object.keys(editLayersByPage).length;
 
   function stopCamera() {
     if (cameraStreamRef.current) {
@@ -4079,6 +4759,9 @@ export default function ToolWorkbench({ tool }: WorkbenchProps) {
                 [editPageNumber]: {
                   strokes: editStrokes,
                   textNotes: editTextNotes,
+                  highlights: editHighlights,
+                  shapes: editShapes,
+                  whiteouts: editWhiteouts,
                 },
               }
             : {};
@@ -4153,11 +4836,110 @@ export default function ToolWorkbench({ tool }: WorkbenchProps) {
             const pageLayer = pageLayers[index + 1];
             const pageStrokes = pageLayer?.strokes ?? [];
             const pageTextNotes = pageLayer?.textNotes ?? [];
+            const pageHighlights = pageLayer?.highlights ?? [];
+            const pageShapes = pageLayer?.shapes ?? [];
+            const pageWhiteouts = pageLayer?.whiteouts ?? [];
 
-            if (pageStrokes.length || pageTextNotes.length) {
+            if (pageStrokes.length || pageTextNotes.length || pageHighlights.length || pageShapes.length || pageWhiteouts.length) {
               const { width, height } = page.getSize();
-              const scaleX = editCanvasSize.width ? width / editCanvasSize.width : 1;
-              const scaleY = editCanvasSize.height ? height / editCanvasSize.height : 1;
+              const canvasSize = editCanvasSizesRef.current[index + 1] ?? editCanvasSize;
+              const scaleX = canvasSize.width ? width / canvasSize.width : 1;
+              const scaleY = canvasSize.height ? height / canvasSize.height : 1;
+
+              // Highlights sit behind text; whiteouts erase content (drawn after highlights).
+              for (const highlight of pageHighlights) {
+                if (highlight.width < 1 || highlight.height < 1) continue;
+                page.drawRectangle({
+                  x: highlight.x * scaleX,
+                  y: height - (highlight.y + highlight.height) * scaleY,
+                  width: highlight.width * scaleX,
+                  height: highlight.height * scaleY,
+                  color: hexToRgb(highlight.color),
+                  opacity: Math.min(1, Math.max(0.05, highlight.opacity)),
+                });
+              }
+
+              for (const whiteout of pageWhiteouts) {
+                if (whiteout.width < 1 || whiteout.height < 1) continue;
+                page.drawRectangle({
+                  x: whiteout.x * scaleX,
+                  y: height - (whiteout.y + whiteout.height) * scaleY,
+                  width: whiteout.width * scaleX,
+                  height: whiteout.height * scaleY,
+                  color: rgb(1, 1, 1),
+                });
+              }
+
+              for (const note of pageTextNotes) {
+                page.drawText(note.text, {
+                  x: note.x * scaleX,
+                  y: height - note.y * scaleY,
+                  size: Math.max(8, note.size * scaleY),
+                  font,
+                  color: hexToRgb(note.color),
+                });
+              }
+
+              for (const shape of pageShapes) {
+                const strokeColor = hexToRgb(shape.color);
+                const strokeWidth = Math.max(0.8, shape.strokeWidth * ((scaleX + scaleY) / 2));
+                const opacity = Math.min(1, Math.max(0.05, shape.opacity));
+                if (shape.kind === "rect") {
+                  if (shape.width < 1 || shape.height < 1) continue;
+                  page.drawRectangle({
+                    x: shape.x * scaleX,
+                    y: height - (shape.y + shape.height) * scaleY,
+                    width: shape.width * scaleX,
+                    height: shape.height * scaleY,
+                    borderColor: strokeColor,
+                    borderWidth: strokeWidth,
+                    color: shape.fill ? strokeColor : undefined,
+                    opacity,
+                    borderOpacity: opacity,
+                  });
+                } else if (shape.kind === "ellipse") {
+                  if (shape.width < 1 || shape.height < 1) continue;
+                  page.drawEllipse({
+                    x: (shape.x + shape.width / 2) * scaleX,
+                    y: height - (shape.y + shape.height / 2) * scaleY,
+                    xScale: (shape.width / 2) * scaleX,
+                    yScale: (shape.height / 2) * scaleY,
+                    borderColor: strokeColor,
+                    borderWidth: strokeWidth,
+                    color: shape.fill ? strokeColor : undefined,
+                    opacity,
+                    borderOpacity: opacity,
+                  });
+                } else {
+                  const headX = shape.end.x * scaleX;
+                  const headY = height - shape.end.y * scaleY;
+                  page.drawLine({
+                    start: { x: shape.start.x * scaleX, y: height - shape.start.y * scaleY },
+                    end: { x: headX, y: headY },
+                    color: strokeColor,
+                    thickness: strokeWidth,
+                    opacity,
+                  });
+                  if (shape.kind === "arrow") {
+                    const angle = Math.atan2(headY - (height - shape.start.y * scaleY), headX - shape.start.x * scaleX);
+                    const headLength = Math.max(8, strokeWidth * 4);
+                    page.drawLine({
+                      start: { x: headX, y: headY },
+                      end: { x: headX - headLength * Math.cos(angle - Math.PI / 6), y: headY - headLength * Math.sin(angle - Math.PI / 6) },
+                      color: strokeColor,
+                      thickness: strokeWidth,
+                      opacity,
+                    });
+                    page.drawLine({
+                      start: { x: headX, y: headY },
+                      end: { x: headX - headLength * Math.cos(angle + Math.PI / 6), y: headY - headLength * Math.sin(angle + Math.PI / 6) },
+                      color: strokeColor,
+                      thickness: strokeWidth,
+                      opacity,
+                    });
+                  }
+                }
+              }
 
               for (const stroke of pageStrokes) {
                 if (stroke.points.length < 2) continue;
@@ -4172,16 +4954,6 @@ export default function ToolWorkbench({ tool }: WorkbenchProps) {
                     thickness: Math.max(0.8, stroke.width * ((scaleX + scaleY) / 2)),
                   });
                 }
-              }
-
-              for (const note of pageTextNotes) {
-                page.drawText(note.text, {
-                  x: note.x * scaleX,
-                  y: height - note.y * scaleY,
-                  size: Math.max(8, note.size * scaleY),
-                  font,
-                  color: hexToRgb(note.color),
-                });
               }
             }
           }
@@ -5512,253 +6284,245 @@ export default function ToolWorkbench({ tool }: WorkbenchProps) {
               </div>
             </div>
           ) : (
-            <div className="space-y-3">
-              <div className="rounded-2xl border border-slate-300 bg-gradient-to-b from-slate-100 to-slate-200 p-3 shadow-[inset_0_1px_0_rgba(255,255,255,0.75)]">
-                <div className="flex flex-wrap items-center justify-between gap-2">
-                  <div>
-                    <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-500">Document editor</p>
-                    <p className="text-sm font-semibold text-slate-800">{files[0]?.name ?? "No document loaded"}</p>
-                  </div>
-                  <div className="flex flex-wrap items-center gap-2 text-[11px] font-semibold text-slate-600">
-                    <span className="rounded-full border border-slate-300 bg-white px-2 py-1">
-                      Page {editPageNumber} / {editPageCount}
-                    </span>
-                    <span className="rounded-full border border-slate-300 bg-white px-2 py-1">
-                      Edited pages: {Object.keys(editLayersByPage).length}
-                    </span>
-                  </div>
-                </div>
+            <div className="overflow-hidden rounded-2xl border border-slate-700/80 bg-slate-900 shadow-[0_18px_50px_-20px_rgba(2,6,23,0.6)]">
+              {/* Toolbar */}
+              <div className="flex flex-wrap items-center gap-1 border-b border-slate-700/70 bg-slate-950 px-2 py-1.5">
+                {EDIT_TOOL_OPTIONS.map((option) => (
+                  <button
+                    key={option.mode}
+                    type="button"
+                    onClick={() => setEditMode(option.mode)}
+                    aria-pressed={editMode === option.mode}
+                    title={`${option.label} — ${option.hint}`}
+                    className={`inline-flex items-center gap-1.5 rounded-md px-2 py-1.5 text-[11px] font-medium transition ${
+                      editMode === option.mode
+                        ? "bg-sky-500/15 text-sky-300 ring-1 ring-sky-400/40"
+                        : "text-slate-400 hover:bg-slate-800 hover:text-slate-200"
+                    }`}
+                  >
+                    <EditToolGlyph mode={option.mode} />
+                    <span className="hidden xl:inline">{option.label}</span>
+                  </button>
+                ))}
 
-                <div className="mt-3 rounded-xl border border-slate-300 bg-white px-2 py-2">
-                  <div className="mb-2 flex flex-wrap items-center gap-2 border-b border-slate-200 pb-2 text-[11px] font-semibold uppercase tracking-[0.12em] text-slate-500">
-                    {EDIT_RIBBON_TABS.map((tab) => (
-                      <button
-                        key={tab}
-                        type="button"
-                        onClick={() => setEditRibbonTab(tab)}
-                        aria-pressed={editRibbonTab === tab}
-                        title={`Alt+${EDIT_RIBBON_SHORTCUTS[tab]}`}
-                        className={`group relative flex items-center gap-2 rounded-md border px-3 py-1.5 transition ${
-                          editRibbonTab === tab
-                            ? "border-cyan-300 bg-linear-to-b from-white to-cyan-50 text-slate-900 shadow-[inset_0_1px_0_rgba(255,255,255,0.95),0_8px_18px_-12px_rgba(8,145,178,0.85)]"
-                            : "border-transparent text-slate-500 hover:border-slate-200 hover:bg-slate-100/80 hover:text-slate-700"
-                        }`}
-                      >
-                        <span
-                          className={`absolute inset-x-2 -bottom-[9px] h-[3px] rounded-full transition ${
-                            editRibbonTab === tab ? "bg-cyan-500" : "bg-transparent group-hover:bg-slate-300"
-                          }`}
-                        />
-                        {tab}
-                        <span
-                          className={`rounded border px-1.5 py-0.5 text-[9px] font-bold tracking-[0.16em] ${
-                            editRibbonTab === tab
-                              ? "border-cyan-300 bg-cyan-100 text-cyan-800"
-                              : "border-slate-200 bg-white text-slate-400"
-                          }`}
-                        >
-                          Alt+{EDIT_RIBBON_SHORTCUTS[tab]}
-                        </span>
-                      </button>
-                    ))}
-                  </div>
+                <span className="mx-1 h-4 w-px bg-slate-700/70" />
 
-                  <p className="mb-3 text-[11px] font-medium text-slate-500">
-                    Switch ribbon tabs with Alt+H, Alt+N, Alt+P, Alt+R, or Alt+W.
-                  </p>
+                <button
+                  type="button"
+                  onClick={undoEditAction}
+                  disabled={!(editUndoStacksRef.current[editPageNumber]?.length)}
+                  title="Undo (Ctrl+Z)"
+                  aria-label="Undo"
+                  className="rounded-md p-1.5 text-slate-400 transition hover:bg-slate-800 hover:text-slate-200 disabled:cursor-not-allowed disabled:opacity-30"
+                >
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round" className="h-4 w-4">
+                    <path d="M9 14 4 9l5-5" />
+                    <path d="M4 9h10.5a5.5 5.5 0 0 1 5.5 5.5v0a5.5 5.5 0 0 1-5.5 5.5H11" />
+                  </svg>
+                </button>
+                <button
+                  type="button"
+                  onClick={redoEditAction}
+                  disabled={!(editRedoStacksRef.current[editPageNumber]?.length)}
+                  title="Redo (Ctrl+Shift+Z)"
+                  aria-label="Redo"
+                  className="rounded-md p-1.5 text-slate-400 transition hover:bg-slate-800 hover:text-slate-200 disabled:cursor-not-allowed disabled:opacity-30"
+                >
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round" className="h-4 w-4">
+                    <path d="m15 14 5-5-5-5" />
+                    <path d="M20 9H9.5A5.5 5.5 0 0 0 4 14.5v0A5.5 5.5 0 0 0 9.5 20H13" />
+                  </svg>
+                </button>
 
-                  {editRibbonTab === "Home" ? (
-                    <div className="flex flex-wrap items-center gap-2">
-                      <button
-                        type="button"
-                        onClick={() => setEditMode("draw")}
-                        className={`btn rounded-md px-3 py-1.5 text-xs font-semibold ${
-                          editMode === "draw"
-                            ? "btn-primary"
-                            : "btn-secondary"
-                        }`}
-                      >
-                        Draw Ink
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => setEditMode("text")}
-                        className={`btn rounded-md px-3 py-1.5 text-xs font-semibold ${
-                          editMode === "text"
-                            ? "btn-primary"
-                            : "btn-secondary"
-                        }`}
-                      >
-                        Text Box
-                      </button>
-                      <label className="inline-flex items-center gap-2 rounded-md border border-slate-300 bg-white px-2 py-1 text-xs font-semibold text-slate-700">
-                        Color
-                        <input
-                          type="color"
-                          value={editColor}
-                          onChange={(event) => setEditColor(event.target.value)}
-                          className="h-6 w-8 rounded border border-slate-300 bg-white"
-                        />
-                      </label>
-                      {editMode === "draw" ? (
-                        <label className="inline-flex items-center gap-2 rounded-md border border-slate-300 bg-white px-2 py-1 text-xs font-semibold text-slate-700">
-                          Ink width
-                          <input
-                            type="range"
-                            min={1}
-                            max={12}
-                            step={0.5}
-                            value={editBrushSize}
-                            onChange={(event) => setEditBrushSize(Number(event.target.value))}
-                          />
-                        </label>
-                      ) : (
-                        <label className="inline-flex items-center gap-2 rounded-md border border-slate-300 bg-white px-2 py-1 text-xs font-semibold text-slate-700">
-                          Font size
-                          <input
-                            type="range"
-                            min={10}
-                            max={48}
-                            step={1}
-                            value={editFontSize}
-                            onChange={(event) => setEditFontSize(Number(event.target.value))}
-                          />
-                        </label>
-                      )}
-                    </div>
-                  ) : null}
-
-                  {editRibbonTab === "Insert" ? (
-                    <div className="flex flex-wrap items-center gap-2">
-                      <button
-                        type="button"
-                        onClick={() => setEditMode("text")}
-                        className="btn btn-secondary rounded-md px-3 py-1.5 text-xs"
-                      >
-                        Insert text box
-                      </button>
-                      <input
-                        id="edit-text"
-                        type="text"
-                        value={editText}
-                        onChange={(event) => setEditText(event.target.value)}
-                        placeholder="Text for text box mode"
-                        className="min-w-[240px] flex-1 rounded-xl border border-slate-300 bg-slate-50 px-3 py-2 text-sm text-slate-800"
-                      />
-                      <p className="text-xs text-slate-500">Select Text Box, then click anywhere on the page.</p>
-                    </div>
-                  ) : null}
-
-                  {editRibbonTab === "Layout" ? (
-                    <div className="flex flex-wrap items-center gap-2">
-                      <button
-                        type="button"
-                        onClick={() => {
-                          if (!files[0]) return;
-                          void loadEditPreview(files[0], Math.max(1, editPageNumber - 1));
-                        }}
-                        disabled={!files[0] || editPageNumber <= 1 || editCanvasLoading}
-                        className="btn btn-secondary rounded-md px-3 py-1 text-xs disabled:cursor-not-allowed disabled:opacity-60"
-                      >
-                        Prev
-                      </button>
-                      <select
-                        value={editPageNumber}
-                        onChange={(event) => {
-                          if (!files[0]) return;
-                          void loadEditPreview(files[0], Number(event.target.value));
-                        }}
-                        disabled={!files[0] || editCanvasLoading}
-                        className="rounded-md border border-slate-300 bg-white px-2 py-1 text-xs font-semibold text-slate-700"
-                      >
-                        {Array.from({ length: editPageCount }, (_, index) => index + 1).map((pageNo) => (
-                          <option key={pageNo} value={pageNo}>
-                            Page {pageNo}
-                          </option>
-                        ))}
-                      </select>
-                      <button
-                        type="button"
-                        onClick={() => {
-                          if (!files[0]) return;
-                          void loadEditPreview(files[0], Math.min(editPageCount, editPageNumber + 1));
-                        }}
-                        disabled={!files[0] || editPageNumber >= editPageCount || editCanvasLoading}
-                        className="btn btn-secondary rounded-md px-3 py-1 text-xs disabled:cursor-not-allowed disabled:opacity-60"
-                      >
-                        Next
-                      </button>
-                      <p className="text-xs text-slate-500">Move between pages while keeping each page&apos;s edits bound to that page.</p>
-                    </div>
-                  ) : null}
-
-                  {editRibbonTab === "Review" ? (
-                    <div className="flex flex-wrap items-center gap-2">
-                      <button
-                        type="button"
-                        onClick={undoEditAction}
-                        className="btn btn-secondary rounded-md px-3 py-1 text-xs"
-                      >
-                        Undo
-                      </button>
-                      <button
-                        type="button"
-                        onClick={clearEditCanvasActions}
-                        className="btn btn-destructive rounded-md px-3 py-1 text-xs"
-                      >
-                        Clear page
-                      </button>
-                      <button
-                        type="button"
-                        onClick={clearEditDocumentActions}
-                        className="btn btn-destructive rounded-md px-3 py-1 text-xs"
-                      >
-                        Clear document
-                      </button>
-                    </div>
-                  ) : null}
-
-                  {editRibbonTab === "View" ? (
-                    <div className="flex flex-wrap items-center gap-2">
-                      <label className="inline-flex items-center gap-2 rounded-md border border-slate-300 bg-white px-2 py-1 text-xs font-semibold text-slate-700">
-                        Zoom
-                        <select
-                          value={editZoom}
-                          onChange={(event) => setEditZoom(Number(event.target.value))}
-                          className="rounded border border-slate-300 bg-white px-1 py-0.5"
-                        >
-                          {[75, 90, 100, 110, 125, 150, 175].map((zoomValue) => (
-                            <option key={zoomValue} value={zoomValue}>{zoomValue}%</option>
-                          ))}
-                        </select>
-                      </label>
-                      <p className="text-xs text-slate-500">Adjust page zoom without changing the exported PDF.</p>
-                    </div>
-                  ) : null}
-                </div>
+                <span className="ml-auto hidden max-w-[240px] truncate text-[11px] font-medium text-slate-500 sm:inline">
+                  {files[0]?.name ?? "No document loaded"}
+                </span>
               </div>
 
-              {editRibbonTab !== "Insert" ? (
-                <input
-                  id="edit-text"
-                  type="text"
-                  value={editText}
-                  onChange={(event) => setEditText(event.target.value)}
-                  placeholder="Text for text box mode"
-                  className="w-full rounded-xl border border-slate-300 bg-slate-50 px-3 py-2 text-sm text-slate-800"
-                />
-              ) : null}
+              {/* Properties bar */}
+              <div className="flex flex-wrap items-center gap-x-4 gap-y-2 border-b border-slate-700/70 bg-slate-900 px-3 py-2">
+                {editMode === "draw" ||
+                editMode === "text" ||
+                editMode === "highlight" ||
+                editMode === "rect" ||
+                editMode === "ellipse" ||
+                editMode === "line" ||
+                editMode === "arrow" ? (
+                  <label className="inline-flex items-center gap-2 text-[11px] font-medium text-slate-400">
+                    <span className="relative inline-block h-6 w-9 overflow-hidden rounded-md border border-slate-600 bg-slate-800 shadow-inner">
+                      <input
+                        type="color"
+                        value={editColor}
+                        onChange={(event) => setEditColor(event.target.value)}
+                        className="absolute -inset-1 h-8 w-11 cursor-pointer"
+                        aria-label="Annotation color"
+                      />
+                    </span>
+                    Color
+                  </label>
+                ) : null}
 
-              <div className="rounded-2xl border border-slate-300 bg-gradient-to-b from-slate-200 to-slate-300 p-3">
-                <div className="mb-2 h-6 rounded border border-slate-300 bg-white px-3 py-1 text-[10px] font-semibold tracking-[0.22em] text-slate-500">
-                  0    1    2    3    4    5    6    7    8    9   10
+                {editMode === "draw" || editMode === "rect" || editMode === "ellipse" || editMode === "line" || editMode === "arrow" ? (
+                  <label className="inline-flex items-center gap-2 text-[11px] font-medium text-slate-400">
+                    <input
+                      type="range"
+                      min={1}
+                      max={12}
+                      step={0.5}
+                      value={editBrushSize}
+                      onChange={(event) => setEditBrushSize(Number(event.target.value))}
+                      className="w-24 accent-sky-400"
+                    />
+                    {editMode === "draw" ? "Brush" : "Stroke"} {editBrushSize.toFixed(1)}px
+                  </label>
+                ) : null}
+
+                {editMode === "text" ? (
+                  <>
+                    <label className="inline-flex items-center gap-2 text-[11px] font-medium text-slate-400">
+                      <input
+                        type="range"
+                        min={10}
+                        max={48}
+                        step={1}
+                        value={editFontSize}
+                        onChange={(event) => setEditFontSize(Number(event.target.value))}
+                        className="w-24 accent-sky-400"
+                      />
+                      Size {editFontSize}px
+                    </label>
+                    <input
+                      id="edit-text"
+                      type="text"
+                      value={editText}
+                      onChange={(event) => setEditText(event.target.value)}
+                      placeholder="Type your text, then click the page to place it"
+                      className="min-w-[220px] flex-1 rounded-md border border-slate-600 bg-slate-800 px-2.5 py-1.5 text-xs text-slate-100 placeholder:text-slate-500 focus:border-sky-400 focus:outline-none"
+                    />
+                  </>
+                ) : null}
+
+                {editMode === "highlight" || editMode === "rect" || editMode === "ellipse" || editMode === "line" || editMode === "arrow" ? (
+                  <label className="inline-flex items-center gap-2 text-[11px] font-medium text-slate-400">
+                    <input
+                      type="range"
+                      min={10}
+                      max={100}
+                      step={5}
+                      value={editOpacity}
+                      onChange={(event) => setEditOpacity(Number(event.target.value))}
+                      className="w-24 accent-sky-400"
+                    />
+                    Opacity {editOpacity}%
+                  </label>
+                ) : null}
+
+                {editMode === "rect" || editMode === "ellipse" ? (
+                  <label className="inline-flex items-center gap-2 text-[11px] font-medium text-slate-400">
+                    <input
+                      type="checkbox"
+                      checked={editFillShape}
+                      onChange={(event) => setEditFillShape(event.target.checked)}
+                      className="h-3.5 w-3.5 accent-sky-400"
+                    />
+                    Fill
+                  </label>
+                ) : null}
+
+                {editMode === "select" || editMode === "whiteout" ? (
+                  <span className="text-[11px] text-slate-500">{EDIT_TOOL_HINTS[editMode]}</span>
+                ) : null}
+
+                <button
+                  type="button"
+                  onClick={clearEditCanvasActions}
+                  disabled={!editPageLayerHasContent}
+                  className="ml-auto rounded-md border border-slate-700 px-2 py-1 text-[11px] font-medium text-slate-400 transition hover:border-rose-500/50 hover:text-rose-300 disabled:cursor-not-allowed disabled:opacity-30"
+                >
+                  Clear page
+                </button>
+                <button
+                  type="button"
+                  onClick={clearEditDocumentActions}
+                  disabled={!editPageCountEdited && !editPageLayerHasContent}
+                  className="rounded-md border border-slate-700 px-2 py-1 text-[11px] font-medium text-slate-400 transition hover:border-rose-500/50 hover:text-rose-300 disabled:cursor-not-allowed disabled:opacity-30"
+                >
+                  Clear document
+                </button>
+              </div>
+
+              <div className="flex">
+                {/* Page thumbnail sidebar */}
+                <div className="hidden w-40 shrink-0 flex-col border-r border-slate-700/70 bg-slate-950 md:flex" style={{ maxHeight: "72vh" }}>
+                  <p className="border-b border-slate-800 px-3 py-2 text-[10px] font-semibold uppercase tracking-[0.14em] text-slate-500">
+                    Pages
+                  </p>
+                  <div className="flex-1 space-y-2 overflow-y-auto p-2">
+                    {pageThumbnails.length > 0 ? (
+                      pageThumbnails.map((thumb) => {
+                        const pageLayer = editLayersByPage[thumb.pageNumber];
+                        const hasEdits = Boolean(
+                          pageLayer &&
+                            (pageLayer.strokes.length ||
+                              pageLayer.textNotes.length ||
+                              pageLayer.highlights.length ||
+                              pageLayer.shapes.length ||
+                              pageLayer.whiteouts.length)
+                        );
+                        const annotationCount = pageLayer
+                          ? pageLayer.strokes.length +
+                            pageLayer.textNotes.length +
+                            pageLayer.highlights.length +
+                            pageLayer.shapes.length +
+                            pageLayer.whiteouts.length
+                          : 0;
+                        const isActivePage = thumb.pageNumber === editPageNumber;
+                        return (
+                          <button
+                            key={thumb.pageNumber}
+                            type="button"
+                            onClick={() => {
+                              if (files[0]) void loadEditPreview(files[0], thumb.pageNumber);
+                            }}
+                            title={`Go to page ${thumb.pageNumber}`}
+                            className={`relative block w-full overflow-hidden rounded-md border text-left transition ${
+                              isActivePage
+                                ? "border-sky-400 bg-sky-500/10 ring-1 ring-sky-400/50"
+                                : "border-slate-700/70 bg-slate-800/60 hover:border-slate-500"
+                            }`}
+                          >
+                            {/* eslint-disable-next-line @next/next/no-img-element */}
+                            <img src={thumb.dataUrl} alt={`Page ${thumb.pageNumber}`} className="h-auto w-full" />
+                            <span
+                              className={`absolute bottom-1 left-1 rounded px-1 text-[9px] font-bold ${
+                                isActivePage ? "bg-sky-400 text-slate-950" : "bg-slate-950/80 text-slate-300"
+                              }`}
+                            >
+                              {thumb.pageNumber}
+                            </span>
+                            {hasEdits ? (
+                              <span
+                                className="absolute right-1 top-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-amber-400 px-1 text-[9px] font-bold text-slate-950 shadow"
+                                title={`${annotationCount} edit(s) on this page`}
+                              >
+                                {annotationCount}
+                              </span>
+                            ) : null}
+                          </button>
+                        );
+                      })
+                    ) : (
+                      <p className="p-2 text-[11px] text-slate-500">Upload a PDF to see page thumbnails.</p>
+                    )}
+                  </div>
                 </div>
 
-                {editCanvasLoading ? (
-                  <p className="field-help">Preparing editable page canvas...</p>
-                ) : editPreview ? (
-                  <div className="overflow-auto rounded-xl border border-slate-300 bg-slate-400/25 p-4">
-                    <div className="mx-auto w-fit rounded-sm border border-slate-300 bg-white p-3 shadow-[0_10px_30px_rgba(15,23,42,0.2)]">
+                {/* Editor canvas */}
+                <div className="min-w-0 flex-1 overflow-auto bg-slate-950 p-6" style={{ maxHeight: "72vh" }}>
+                  {editCanvasLoading ? (
+                    <p className="py-10 text-center text-xs text-slate-400">Preparing editable page canvas…</p>
+                  ) : editPreview ? (
+                    <div className="mx-auto w-fit rounded-sm border border-slate-600 bg-white p-2 shadow-[0_20px_60px_-15px_rgba(0,0,0,0.8)]">
                       <canvas
                         ref={(node) => {
                           editCanvasRef.current = node;
@@ -5782,21 +6546,101 @@ export default function ToolWorkbench({ tool }: WorkbenchProps) {
                             : undefined
                         }
                         className={`block touch-none rounded-sm bg-white ${
-                          editMode === "draw" ? "cursor-crosshair" : "cursor-text"
+                          editMode === "draw" ||
+                          editMode === "highlight" ||
+                          editMode === "rect" ||
+                          editMode === "ellipse" ||
+                          editMode === "line" ||
+                          editMode === "arrow" ||
+                          editMode === "whiteout"
+                            ? "cursor-crosshair"
+                            : editMode === "text"
+                              ? "cursor-text"
+                              : "cursor-default"
                         }`}
                         aria-label="Edit PDF canvas"
                       />
                     </div>
-                  </div>
-                ) : (
-                  <p className="field-help">Upload a PDF above to begin editing with the canvas.</p>
-                )}
+                  ) : (
+                    <div className="py-16 text-center">
+                      <p className="text-sm font-medium text-slate-300">No document loaded</p>
+                      <p className="mt-1 text-xs text-slate-500">Upload a PDF above to start editing.</p>
+                    </div>
+                  )}
+                </div>
+              </div>
 
-                <p className="mt-2 text-xs text-slate-600">
-                  {editMode === "draw"
-                    ? "Ink mode: draw directly on the page like Word Draw tools."
-                    : "Text box mode: click a location to place the current text."}
-                </p>
+              {/* Status bar */}
+              <div className="flex flex-wrap items-center gap-x-4 gap-y-1 border-t border-slate-700/70 bg-slate-950 px-3 py-1.5 text-[11px] text-slate-400">
+                <div className="flex items-center gap-1">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (files[0]) void loadEditPreview(files[0], Math.max(1, editPageNumber - 1));
+                    }}
+                    disabled={!files[0] || editPageNumber <= 1 || editCanvasLoading}
+                    className="rounded px-1.5 py-0.5 transition hover:bg-slate-800 hover:text-slate-200 disabled:cursor-not-allowed disabled:opacity-30"
+                    aria-label="Previous page"
+                  >
+                    ◀
+                  </button>
+                  <span className="px-1">
+                    Page {editPageNumber} / {editPageCount}
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (files[0]) void loadEditPreview(files[0], Math.min(editPageCount, editPageNumber + 1));
+                    }}
+                    disabled={!files[0] || editPageNumber >= editPageCount || editCanvasLoading}
+                    className="rounded px-1.5 py-0.5 transition hover:bg-slate-800 hover:text-slate-200 disabled:cursor-not-allowed disabled:opacity-30"
+                    aria-label="Next page"
+                  >
+                    ▶
+                  </button>
+                </div>
+
+                <span className="hidden max-w-[300px] truncate text-slate-500 sm:inline">
+                  {EDIT_TOOL_HINTS[editMode]}
+                </span>
+
+                <div className="ml-auto flex items-center gap-2">
+                  <span className="rounded-full border border-slate-700 px-2 py-0.5 text-[10px] font-semibold text-slate-400">
+                    {editPageCountEdited} edited page{editPageCountEdited === 1 ? "" : "s"}
+                  </span>
+                  <div className="flex items-center gap-1">
+                    <button
+                      type="button"
+                      onClick={() => changeEditZoom(-1)}
+                      disabled={editZoom <= 50}
+                      className="rounded px-1.5 py-0.5 transition hover:bg-slate-800 hover:text-slate-200 disabled:cursor-not-allowed disabled:opacity-30"
+                      aria-label="Zoom out"
+                    >
+                      −
+                    </button>
+                    <select
+                      value={editZoom}
+                      onChange={(event) => setEditZoom(Number(event.target.value))}
+                      className="rounded border border-slate-700 bg-slate-800 px-1 py-0.5 text-[11px] text-slate-300 focus:border-sky-400 focus:outline-none"
+                      aria-label="Zoom level"
+                    >
+                      {[50, 75, 90, 100, 110, 125, 150, 175, 200].map((zoomValue) => (
+                        <option key={zoomValue} value={zoomValue}>
+                          {zoomValue}%
+                        </option>
+                      ))}
+                    </select>
+                    <button
+                      type="button"
+                      onClick={() => changeEditZoom(1)}
+                      disabled={editZoom >= 200}
+                      className="rounded px-1.5 py-0.5 transition hover:bg-slate-800 hover:text-slate-200 disabled:cursor-not-allowed disabled:opacity-30"
+                      aria-label="Zoom in"
+                    >
+                      +
+                    </button>
+                  </div>
+                </div>
               </div>
             </div>
           )}

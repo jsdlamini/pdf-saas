@@ -29,6 +29,13 @@ To add or change a tool, edit `TOOL_ITEMS` first, then wire its behavior in `Too
 ### Client tools: one big workbench
 `app/tools/tool-workbench.tsx` is a large `"use client"` component that handles every client-runtime tool. Its `runTool()` is a long `if (tool.slug === ...)` dispatch; per-tool UI affordances are similarly gated by slug-derived booleans (e.g. `isMergeTool`, `usesThumbnailEditor`, `isEditTool`). All PDF work happens in-browser via `pdf-lib`, `jspdf`, `pdfjs-dist`, `jszip`, `mammoth`, `xlsx`, `pptxgenjs`, and `docx`. Output is staged through `stageOutput` (builds an object URL + preview) and only written to disk on explicit download. When adding a client tool, add a new slug branch in `runTool()` rather than creating a new route/component.
 
+### Edit PDF: VSCode-style editor
+All edit-pdf code lives in `app/tools/tool-workbench.tsx` (the `isEditTool` branch):
+- Annotation model: `type EditPageLayer` (strokes, textNotes, highlights, shapes, whiteouts — every annotation has an `id`). Per-page state is bound via `editLayersByPage` + `editLayersRef` (ref mirror read by `loadEditPreview` to avoid stale closures on file swap).
+- The editor UI is a dark IDE-style panel (toolbar with `EDIT_TOOL_OPTIONS`/`EditToolGlyph`, contextual properties bar, page-thumbnail sidebar, status bar). Tool modes are `EditToolMode` (`"select" | "draw" | "highlight" | "text" | "rect" | "ellipse" | "line" | "arrow" | "whiteout"`).
+- History: per-page undo/redo stacks in `editUndoStacksRef` / `editRedoStacksRef`; every mutation goes through `commitEditLayer` / `applyEditLayerToPage` (never mutate layer state directly) or it won't be undoable/persisted.
+- Export: in `runTool()`, the `pageLayers` merge + pdf-lib draw loop (whiteouts, highlights, text, shapes with `drawRectangle`/`drawEllipse`/`drawLine`, arrowheads, strokes). Canvas coords are scaled per page via `editCanvasSizesRef`, falling back to `editCanvasSize`.
+
 Note: `pdfjs-dist` is loaded dynamically and its worker is wired via `configurePdfJsWorker` using the `legacy/build` entry points — keep that import path when touching PDF rendering.
 
 Many "convert" tools (PDF→Word/PPT/Excel, Word/PPT/Excel/HTML→PDF) are text-extraction approximations, not faithful layout conversions. Several tools listed in the registry are UI/placeholder only; see the README "Runtime behavior" section for what is actually implemented client-side vs. server-side.
