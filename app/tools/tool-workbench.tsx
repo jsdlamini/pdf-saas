@@ -1195,13 +1195,13 @@ export default function ToolWorkbench({ tool }: WorkbenchProps) {
     }
     return "";
   });
-  const pipelineChipLabel = useMemo(() => {
-    if (!pipelineBootstrap?.accepted) return null;
-    const from = pipelineBootstrap.payload.fromToolSlug === "home-dropzone"
-      ? "drop zone"
-      : pipelineBootstrap.payload.fromToolSlug;
-    return `From: ${from} → ${tool.name}`;
-  }, [pipelineBootstrap, tool.name]);
+  const pipelineBackTarget = useMemo(() => {
+    const slug = pipelineBootstrap?.payload.fromToolSlug;
+    if (!slug) return null;
+    if (slug === "home-dropzone") return { href: "/", label: "Home" };
+    const target = TOOL_ITEMS.find((item) => item.slug === slug);
+    return { href: `/tools/${slug}`, label: target?.name ?? slug };
+  }, [pipelineBootstrap]);
   const [switchDropdownOpen, setSwitchDropdownOpen] = useState(false);
 
   const switchableTools = useMemo(() => {
@@ -1838,6 +1838,9 @@ export default function ToolWorkbench({ tool }: WorkbenchProps) {
       cancelButtonColor: "#94a3b8",
       background: "#ffffff",
       color: "#0f172a",
+      draggable: true,
+      heightAuto: false,
+      grow: "fullscreen",
       position: "center",
       width: "min(94vw, 760px)",
       customClass: { container: "swal-center-container", popup: "swal-pipe-popup" },
@@ -4338,6 +4341,19 @@ export default function ToolWorkbench({ tool }: WorkbenchProps) {
 
       {/* ── Full-width top banner ── */}
       <div className="space-y-2">
+        {pipelineBootstrap?.accepted && pipelineBackTarget ? (
+          <button
+            type="button"
+            onClick={() => router.push(pipelineBackTarget.href)}
+            className="inline-flex items-center gap-1.5 rounded-full border border-slate-300 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 shadow-sm transition hover:border-cyan-300 hover:bg-cyan-50 hover:text-cyan-900"
+          >
+            <svg viewBox="0 0 16 16" className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth="2">
+              <path d="M10 3L5 8l5 5" strokeLinecap="round" strokeLinejoin="round" />
+            </svg>
+            Back to {pipelineBackTarget.label}
+          </button>
+        ) : null}
+
         <div className="flex flex-wrap items-baseline gap-x-3 gap-y-0.5">
           <h2 className="font-display text-2xl font-semibold text-slate-950">{tool.name}</h2>
           {(() => {
@@ -4386,7 +4402,7 @@ export default function ToolWorkbench({ tool }: WorkbenchProps) {
           </button>
         ) : null}
 
-        {shouldShowFileInput ? (
+        {shouldShowFileInput && files.length === 0 ? (
           <button
             type="button"
             onClick={async () => {
@@ -4406,6 +4422,32 @@ export default function ToolWorkbench({ tool }: WorkbenchProps) {
           >
             No file handy? Try with a sample document
           </button>
+        ) : null}
+
+        {shouldShowFileInput && files.length > 0 ? (
+          <div className="flex max-w-full flex-wrap items-center gap-1.5">
+            {files.map((file, index) => {
+              const isPdfFile = file.type === "application/pdf" || file.name.toLowerCase().endsWith(".pdf");
+              const isImageFile = file.type.startsWith("image/") || /\.(png|jpe?g|webp|gif)$/i.test(file.name);
+              const accent = isPdfFile
+                ? "border-rose-200 bg-rose-50 text-rose-700"
+                : isImageFile
+                  ? "border-emerald-200 bg-emerald-50 text-emerald-700"
+                  : "border-cyan-200 bg-cyan-50 text-cyan-700";
+              return (
+                <span
+                  key={`${file.name}-${index}`}
+                  className={`inline-flex max-w-[200px] items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs font-medium shadow-sm ${accent}`}
+                >
+                  <svg viewBox="0 0 20 20" className="h-3.5 w-3.5 shrink-0" fill="none" stroke="currentColor" strokeWidth="1.8">
+                    <path d="M6 3h6l4 4v10H6V3z" strokeLinecap="round" strokeLinejoin="round" />
+                    <path d="M12 3v4h4" strokeLinecap="round" strokeLinejoin="round" />
+                  </svg>
+                  <span className="truncate">{file.name}</span>
+                </span>
+              );
+            })}
+          </div>
         ) : null}
 
         <div className="sticky-action-bar">
@@ -4656,27 +4698,6 @@ export default function ToolWorkbench({ tool }: WorkbenchProps) {
                 className="mt-1 text-xs font-semibold text-amber-700 underline hover:text-amber-900"
               >
                 Clear and upload a new file
-              </button>
-            </div>
-          ) : null}
-
-          {pipelineChipLabel ? (
-            <div className="inline-flex items-center gap-1.5 rounded-full border border-cyan-300 bg-gradient-to-r from-cyan-100 to-blue-100 px-2.5 py-1 text-xs font-medium text-cyan-800 shadow-sm">
-              <svg viewBox="0 0 16 16" className="h-3 w-3 text-cyan-500" fill="none" stroke="currentColor" strokeWidth="2">
-                <path d="M3 8h10M8 3l5 5-5 5" strokeLinecap="round" strokeLinejoin="round" />
-              </svg>
-              <span>{pipelineChipLabel}</span>
-              <button
-                type="button"
-                onClick={() => {
-                  setFiles([]);
-                  setPipelineNotice("");
-                  logProcessing("Pipeline context dismissed.");
-                }}
-                className="ml-0.5 inline-flex h-4 w-4 items-center justify-center rounded-full text-cyan-600 hover:bg-cyan-200 hover:text-cyan-900"
-                aria-label="Dismiss pipeline context"
-              >
-                ×
               </button>
             </div>
           ) : null}
@@ -6031,57 +6052,6 @@ export default function ToolWorkbench({ tool }: WorkbenchProps) {
               </div>
             ) : null}
 
-            {lastRunSummary ? (
-              <div className="rounded-xl border border-slate-200 bg-slate-50 p-3">
-                <p className="type-eyebrow text-slate-600">Run Summary</p>
-                <p className="mt-1 text-sm font-medium text-slate-800">{lastRunSummary.message}</p>
-                <p className="field-help mt-1">
-                  Processed {lastRunSummary.inputCount} file(s) at {lastRunSummary.timestamp}
-                </p>
-              </div>
-            ) : null}
-
-            {runReport ? (
-              <div className="space-y-2 rounded-xl border border-slate-200 bg-slate-50 p-3">
-                <p className="type-eyebrow text-slate-600">Quality and Trust Report</p>
-                <p className="text-sm font-medium text-slate-800">
-                  Confidence: {runReport.confidence.toUpperCase()} ({runReport.confidenceReason})
-                </p>
-                <p className="field-help">Runtime: {runReport.mode} | Duration: {formatDurationMs(runReport.durationMs)}</p>
-                <ul className="space-y-1 text-sm text-slate-700">
-                  {runReport.transforms.slice(0, 6).map((item) => (
-                    <li key={item}>- {item}</li>
-                  ))}
-                </ul>
-                <div className="flex flex-wrap gap-2">
-                  <button
-                    type="button"
-                    onClick={downloadRunReport}
-                    className="rounded-full border border-slate-300 bg-white px-3 py-1 text-xs font-semibold text-slate-700 transition hover:bg-slate-100"
-                  >
-                    Download run report
-                  </button>
-                  <button
-                    type="button"
-                    onClick={downloadProcessingLog}
-                    className="rounded-full border border-slate-300 bg-white px-3 py-1 text-xs font-semibold text-slate-700 transition hover:bg-slate-100"
-                  >
-                    Download processing log
-                  </button>
-                </div>
-              </div>
-            ) : null}
-
-            {processingLog.length ? (
-              <div className="rounded-xl border border-slate-200 bg-slate-50 p-3">
-                <p className="type-eyebrow text-slate-600">Recent Processing Events</p>
-                <ul className="mt-2 space-y-1 text-xs text-slate-700">
-                  {processingLog.slice(0, 6).map((entry) => (
-                    <li key={`${entry.at}-${entry.message}`}>[{entry.at}] {entry.message}</li>
-                  ))}
-                </ul>
-              </div>
-            ) : null}
           </div>
         ) : null}
 
@@ -6205,6 +6175,62 @@ export default function ToolWorkbench({ tool }: WorkbenchProps) {
             </div>
           ) : null}
           {outputPreviewPanel}
+
+          {usesThumbnailEditor ? (
+            <div className="space-y-2 border-t border-slate-200 pt-3">
+              {lastRunSummary ? (
+                <div className="rounded-xl border border-slate-200 bg-slate-50 p-3">
+                  <p className="type-eyebrow text-slate-600">Run Summary</p>
+                  <p className="mt-1 text-sm font-medium text-slate-800">{lastRunSummary.message}</p>
+                  <p className="field-help mt-1">
+                    Processed {lastRunSummary.inputCount} file(s) at {lastRunSummary.timestamp}
+                  </p>
+                </div>
+              ) : null}
+
+              {runReport ? (
+                <div className="space-y-2 rounded-xl border border-slate-200 bg-slate-50 p-3">
+                  <p className="type-eyebrow text-slate-600">Quality and Trust Report</p>
+                  <p className="text-sm font-medium text-slate-800">
+                    Confidence: {runReport.confidence.toUpperCase()} ({runReport.confidenceReason})
+                  </p>
+                  <p className="field-help">Runtime: {runReport.mode} | Duration: {formatDurationMs(runReport.durationMs)}</p>
+                  <ul className="space-y-1 text-sm text-slate-700">
+                    {runReport.transforms.slice(0, 6).map((item) => (
+                      <li key={item}>- {item}</li>
+                    ))}
+                  </ul>
+                  <div className="flex flex-wrap gap-2">
+                    <button
+                      type="button"
+                      onClick={downloadRunReport}
+                      className="rounded-full border border-slate-300 bg-white px-3 py-1 text-xs font-semibold text-slate-700 transition hover:bg-slate-100"
+                    >
+                      Download run report
+                    </button>
+                    <button
+                      type="button"
+                      onClick={downloadProcessingLog}
+                      className="rounded-full border border-slate-300 bg-white px-3 py-1 text-xs font-semibold text-slate-700 transition hover:bg-slate-100"
+                    >
+                      Download processing log
+                    </button>
+                  </div>
+                </div>
+              ) : null}
+
+              {processingLog.length ? (
+                <div className="rounded-xl border border-slate-200 bg-slate-50 p-3">
+                  <p className="type-eyebrow text-slate-600">Recent Processing Events</p>
+                  <ul className="mt-2 space-y-1 text-xs text-slate-700">
+                    {processingLog.slice(0, 6).map((entry) => (
+                      <li key={`${entry.at}-${entry.message}`}>[{entry.at}] {entry.message}</li>
+                    ))}
+                  </ul>
+                </div>
+              ) : null}
+            </div>
+          ) : null}
         </div>
       </div>
     </section>
