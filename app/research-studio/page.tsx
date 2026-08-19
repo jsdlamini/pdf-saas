@@ -3881,10 +3881,14 @@ export default function ResearchStudioPage() {
       const zip = await JSZip.loadAsync(file);
       const entries: ProjectEntry[] = [];
       const folderSet = new Set<string>();
-      let mainTexPath = "main.tex";
+      let mainTexPath = "";
 
-      for (const [zipPath, zipEntry] of Object.entries(zip.files)) {
-        if (zipEntry.dir || zipPath.startsWith("__MACOSX") || zipPath.startsWith(".")) continue;
+      for (const [rawPath, zipEntry] of Object.entries(zip.files)) {
+        if (zipEntry.dir) continue;
+        // Normalize "./" prefixes and Windows backslashes so valid files are
+        // not mistaken for hidden entries.
+        const zipPath = rawPath.replace(/\\/g, "/").replace(/^\.\/+/, "");
+        if (!zipPath || zipPath.startsWith("__MACOSX/")) continue;
         const name = zipPath.split("/").pop() || zipPath;
         if (name.startsWith(".")) continue;
 
@@ -3905,13 +3909,31 @@ export default function ResearchStudioPage() {
         }
       }
 
+      const fileEntries = entries.filter((e) => e.kind === "file");
+      if (!fileEntries.length) {
+        setCompileNotice("Import failed — the zip contains no usable files.");
+        return;
+      }
+
       for (const folder of folderSet) {
         if (!entries.some((e) => e.path === folder)) {
           entries.push({ path: folder, kind: "folder", content: "" });
         }
       }
 
-      const projectName = file.name.replace(/\.zip$/i, "") || "Imported Project";
+      if (!mainTexPath) {
+        mainTexPath =
+          fileEntries.find((e) => e.path.toLowerCase().endsWith(".tex"))?.path ||
+          fileEntries[0].path;
+      }
+
+      const editorMode: EditorMode = entries.some((e) => e.path.toLowerCase().endsWith(".py"))
+        ? "python"
+        : entries.some((e) => /\.(cpp|cc|cxx|h|hpp|c)$/i.test(e.path))
+          ? "cpp"
+          : "latex";
+
+      const projectName = file.name.replace(/\.zip$/i, "").trim() || "Imported Project";
       const projectId = makeProjectId();
       const now = new Date().toISOString();
       const snapshot: SavedProjectData = {
@@ -3921,7 +3943,7 @@ export default function ResearchStudioPage() {
         selectedPath: mainTexPath,
         lastCompileAt: "Not compiled yet",
         updatedAt: now,
-        editorMode: "latex",
+        editorMode,
       };
 
       persistProjectSnapshot(snapshot);
@@ -3930,8 +3952,8 @@ export default function ResearchStudioPage() {
       setProjectName(projectName);
       setProjectEntries(entries);
       setSelectedPath(mainTexPath);
-      setEditorMode("latex");
-      setCompileNotice(`Imported ${entries.filter((e) => e.kind === "file").length} files from ${file.name}.`);
+      setEditorMode(editorMode);
+      setCompileNotice(`Imported ${fileEntries.length} files from ${file.name}.`);
       setWorkspaceScreen("editor");
     } catch (e) {
       setCompileNotice("Import failed. Make sure the file is a valid .zip archive.");
