@@ -2440,8 +2440,7 @@ html[data-theme="light"] .studio-dark ::-webkit-scrollbar-thumb {
 .swal-center-container {
   align-items: center !important;
   padding-top: 0 !important;
-  overflow-y: auto;
-  max-height: 100vh;
+  overflow: visible !important;
 }
 .swal-tool-search {
   display: block !important;
