@@ -1689,6 +1689,42 @@ export default function ToolWorkbench({ tool }: WorkbenchProps) {
     const target = TOOL_ITEMS.find((item) => item.slug === slug);
     return { href: `/tools/${slug}`, label: target?.name ?? slug };
   }, [pipelineBootstrap]);
+  const [prevTool, setPrevTool] = useState<{ href: string; label: string } | null>(null);
+
+  // Track the previously visited tool so a "Back" button works for ALL
+  // navigation, not only for tools reached through the pipeline.
+  useEffect(() => {
+    let storedSlug: string | null = null;
+    let storedName = "";
+    try {
+      const raw = localStorage.getItem("wiserfiles-last-tool");
+      if (raw) {
+        const parsed = JSON.parse(raw) as { slug?: string; name?: string };
+        if (parsed && typeof parsed.slug === "string" && parsed.slug && parsed.slug !== tool.slug) {
+          storedSlug = parsed.slug;
+          storedName = parsed.name || "";
+        }
+      }
+    } catch {
+      // ignore
+    }
+    if (storedSlug) {
+      const name = TOOL_ITEMS.find((t) => t.slug === storedSlug)?.name ?? storedName ?? storedSlug;
+      setPrevTool({ href: `/tools/${storedSlug}`, label: name });
+    } else {
+      setPrevTool(null);
+    }
+    try {
+      localStorage.setItem("wiserfiles-last-tool", JSON.stringify({ slug: tool.slug, name: tool.name }));
+    } catch {
+      // ignore
+    }
+  }, [tool.slug, tool.name]);
+
+  const backTarget = useMemo(() => {
+    if (pipelineBootstrap?.accepted && pipelineBackTarget) return pipelineBackTarget;
+    return prevTool;
+  }, [pipelineBootstrap, pipelineBackTarget, prevTool]);
   const [switchDropdownOpen, setSwitchDropdownOpen] = useState(false);
 
   const switchableTools = useMemo(() => {
@@ -4596,6 +4632,23 @@ export default function ToolWorkbench({ tool }: WorkbenchProps) {
     });
   }
 
+  function removeFileAtIndex(index: number) {
+    if (index < 0 || index >= files.length) return;
+    const next = files.filter((_, i) => i !== index);
+    setFiles(next);
+    void persistUploadedFiles(tool.slug, next);
+    setOutputPreview((current) => {
+      if (current) URL.revokeObjectURL(current.url);
+      return null;
+    });
+    latestOutputRef.current = null;
+    setMergePages([]);
+    setMergePageOrder([]);
+    setMergeDraggedId(null);
+    setMergeDragOverId(null);
+    logProcessing(`Removed a file. ${next.length} file(s) remaining.`);
+  }
+
   function detectFileType(file: File): { label: string; suggestedTool: string | null } {
     const lower = file.name.toLowerCase();
     if (lower.endsWith(".docx") || lower.endsWith(".doc") || file.type.includes("wordprocessingml")) {
@@ -6255,16 +6308,16 @@ export default function ToolWorkbench({ tool }: WorkbenchProps) {
 
       {/* ── Full-width top banner ── */}
       <div className="space-y-2">
-        {pipelineBootstrap?.accepted && pipelineBackTarget ? (
+        {backTarget ? (
           <button
             type="button"
-            onClick={() => router.push(pipelineBackTarget.href)}
+            onClick={() => router.push(backTarget.href)}
             className="inline-flex items-center gap-1.5 rounded-full border border-slate-300 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 shadow-sm transition hover:border-cyan-300 hover:bg-cyan-50 hover:text-cyan-900"
           >
             <svg viewBox="0 0 16 16" className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth="2">
               <path d="M10 3L5 8l5 5" strokeLinecap="round" strokeLinejoin="round" />
             </svg>
-            Back to {pipelineBackTarget.label}
+            Back to {backTarget.label}
           </button>
         ) : null}
 
@@ -6358,6 +6411,15 @@ export default function ToolWorkbench({ tool }: WorkbenchProps) {
                     <path d="M12 3v4h4" strokeLinecap="round" strokeLinejoin="round" />
                   </svg>
                   <span className="truncate">{file.name}</span>
+                  <button
+                    type="button"
+                    onClick={() => removeFileAtIndex(index)}
+                    className="inline-flex h-4 w-4 shrink-0 items-center justify-center rounded-full text-current opacity-60 transition hover:bg-slate-200 hover:opacity-100"
+                    aria-label={`Remove ${file.name}`}
+                    title="Remove file"
+                  >
+                    ×
+                  </button>
                 </span>
               );
             })}
