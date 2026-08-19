@@ -122,3 +122,15 @@ export async function clearUploadedFiles(toolSlug: string): Promise<void> {
     // best-effort
   }
 }
+
+// Shared "current files" slot: lets the user move between tools without
+// re-uploading. The most recent files are carried to any compatible tool.
+export const SHARED_FILES_SLUG = "__shared__";
+
+export function persistSharedFiles(files: File[]): Promise<void> {
+  return persistUploadedFiles(SHARED_FILES_SLUG, files);
+}
+
+export function loadSharedFiles(): Promise<File[]> {
+  return loadUploadedFiles(SHARED_FILES_SLUG);
+}

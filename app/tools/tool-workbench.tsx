@@ -17,7 +17,7 @@ import { formatDurationMs, hashBlob, hashFile, summarizeRunConfidence, type RunR
 import { TOOL_ITEMS, type ToolItem } from "@/lib/tools";
 import Swal from "sweetalert2";
 import { consumeWorkflowPipeline, stageWorkflowPipeline, loadPersistedWorkflowPipeline } from "@/lib/workflow-pipeline";
-import { loadUploadedFiles, persistUploadedFiles, clearUploadedFiles } from "@/lib/file-persistence";
+import { loadUploadedFiles, persistUploadedFiles, clearUploadedFiles, loadSharedFiles, persistSharedFiles } from "@/lib/file-persistence";
 import { getNextRecipeStep, type WorkflowRecipe } from "@/lib/workflow-recipes";
 import ShareButton from "@/app/components/share-button";
 import { showToast } from "@/app/components/toast";
@@ -2021,17 +2021,31 @@ export default function ToolWorkbench({ tool }: WorkbenchProps) {
     };
   }, [outputPreview]);
 
-  // Restore uploaded files after a page refresh.
+  // Restore uploaded files after a page refresh, and carry the last files
+  // across tools so switching tools doesn't force a re-upload.
   useEffect(() => {
     let cancelled = false;
-    void loadUploadedFiles(tool.slug).then((restored) => {
+    void (async () => {
+      let restored = await loadUploadedFiles(tool.slug);
+      if (!restored.length) {
+        const shared = await loadSharedFiles();
+        restored = shared.filter((file) => isFileCompatibleForTool(tool.slug, file));
+      }
       if (cancelled || !restored.length) return;
       setFiles(restored);
-    });
+    })();
     return () => {
       cancelled = true;
     };
   }, [tool.slug]);
+
+  // Keep the shared "current files" slot in sync so the latest files follow
+  // the user across tool navigation.
+  useEffect(() => {
+    if (files.length) {
+      void persistSharedFiles(files);
+    }
+  }, [files]);
 
   useEffect(() => {
     if (!outputPreview) return;

@@ -540,7 +540,7 @@ export default function Home() {
                 onChange={(event) => setIntentQuery(event.target.value)}
                 placeholder={listening ? "Listening..." : "Alternatively, type or say what you want — e.g. sign my PDF"}
                 aria-label="Search tools by intent"
-                className="ai-search-input w-full rounded-xl py-3 pl-9 pr-20 text-base text-slate-800 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-cyan-500"
+                className="ai-search-input w-full rounded-xl py-3 pl-9 pr-20 text-base"
               />
               <div className="absolute right-2 top-1/2 -translate-y-1/2 flex items-center gap-1">
                 <button

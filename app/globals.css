@@ -104,6 +104,22 @@ body {
   font-family: var(--font-body), "DM Sans", sans-serif;
 }
 
+/* Home search bar — visible in both light and dark themes */
+.ai-search-input {
+  background: var(--surface);
+  border: 2px solid var(--border);
+  color: var(--foreground);
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+.ai-search-input::placeholder {
+  color: var(--muted);
+}
+.ai-search-input:focus {
+  border-color: #06b6d4;
+  box-shadow: 0 0 0 4px rgba(6, 182, 212, 0.18);
+  outline: none;
+}
+
 /* ── Research Studio Shell ───── */
 .studio-shell {
   display: flex;
