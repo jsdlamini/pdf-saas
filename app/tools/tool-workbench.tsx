@@ -274,6 +274,49 @@ function normalizeFileName(fileName: string) {
   return fileName.replace(/\.[^/.]+$/, "");
 }
 
+// Crop a signature canvas to its visible (non-transparent) content, returning a
+// tight PNG data URL so signatures render at their natural size when embedded.
+function trimSignatureCanvas(canvas: HTMLCanvasElement): string {
+  const context = canvas.getContext("2d");
+  if (!context) return canvas.toDataURL("image/png");
+  const { width, height } = canvas;
+  if (!width || !height) return canvas.toDataURL("image/png");
+  let data: ImageData;
+  try {
+    data = context.getImageData(0, 0, width, height);
+  } catch {
+    return canvas.toDataURL("image/png");
+  }
+  const pixels = data.data;
+  let minX = width;
+  let minY = height;
+  let maxX = -1;
+  let maxY = -1;
+  for (let y = 0; y < height; y += 1) {
+    for (let x = 0; x < width; x += 1) {
+      if (pixels[(y * width + x) * 4 + 3] > 0) {
+        if (x < minX) minX = x;
+        if (x > maxX) maxX = x;
+        if (y < minY) minY = y;
+        if (y > maxY) maxY = y;
+      }
+    }
+  }
+  if (maxX < 0 || maxY < 0) return canvas.toDataURL("image/png");
+  const pad = 6;
+  const cropX = Math.max(0, minX - pad);
+  const cropY = Math.max(0, minY - pad);
+  const cropW = Math.min(width - cropX, maxX - minX + pad * 2 + 1);
+  const cropH = Math.min(height - cropY, maxY - minY + pad * 2 + 1);
+  const out = document.createElement("canvas");
+  out.width = Math.max(1, cropW);
+  out.height = Math.max(1, cropH);
+  const outContext = out.getContext("2d");
+  if (!outContext) return canvas.toDataURL("image/png");
+  outContext.drawImage(canvas, cropX, cropY, cropW, cropH, 0, 0, cropW, cropH);
+  return out.toDataURL("image/png");
+}
+
 function getFileNameFromDisposition(header: string | null) {
   if (!header) return null;
 
@@ -1217,6 +1260,7 @@ export default function ToolWorkbench({ tool }: WorkbenchProps) {
   const signaturePointerState = useRef<{ drawing: boolean }>({ drawing: false });
   const signatureStrokesRef = useRef<Array<Array<{ x: number; y: number }>>>([]);
   const signatureActiveStrokeRef = useRef<Array<{ x: number; y: number }>>([]);
+  const signatureImageRef = useRef<HTMLImageElement | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const autoWorkflowUploadPromptedRef = useRef(false);
   const autoRunHandledRef = useRef(0);
@@ -2525,6 +2569,17 @@ export default function ToolWorkbench({ tool }: WorkbenchProps) {
     const ratio = window.devicePixelRatio || 1;
     context.setTransform(1, 0, 0, 1, 0, 0);
     context.clearRect(0, 0, canvas.width, canvas.height);
+    if (signatureImageRef.current) {
+      const img = signatureImageRef.current;
+      const cssW = 420;
+      const cssH = 150;
+      const scale = Math.min(1, cssW / img.naturalWidth, cssH / img.naturalHeight);
+      const drawW = img.naturalWidth * scale * ratio;
+      const drawH = img.naturalHeight * scale * ratio;
+      const dx = (canvas.width - drawW) / 2;
+      const dy = (canvas.height - drawH) / 2;
+      context.drawImage(img, dx, dy, drawW, drawH);
+    }
     context.setTransform(ratio, 0, 0, ratio, 0, 0);
     context.lineCap = "round";
     context.lineJoin = "round";
@@ -2623,6 +2678,7 @@ export default function ToolWorkbench({ tool }: WorkbenchProps) {
   function clearSignatureCanvas() {
     signatureStrokesRef.current = [];
     signatureActiveStrokeRef.current = [];
+    signatureImageRef.current = null;
     redrawSignatureCanvas();
     setSignatureDrawn(false);
   }
@@ -2636,7 +2692,7 @@ export default function ToolWorkbench({ tool }: WorkbenchProps) {
     } else {
       const canvas = signatureCanvasRef.current;
       if (!canvas || !signatureDrawn) { setError("Draw a signature before saving."); return; }
-      entry = { id: `sig-${Date.now()}`, kind: "draw", label: "Drawn signature", dataUrl: canvas.toDataURL("image/png") };
+      entry = { id: `sig-${Date.now()}`, kind: "draw", label: "Drawn signature", dataUrl: trimSignatureCanvas(canvas) };
     }
     if (!entry) return;
     const next = [...savedSignatures, entry].slice(-12);
@@ -2658,8 +2714,23 @@ export default function ToolWorkbench({ tool }: WorkbenchProps) {
         setupSignatureCanvas(canvas);
         const ctx = canvas.getContext("2d");
         if (!ctx) return;
+        const ratio = window.devicePixelRatio || 1;
+        const cssW = 420;
+        const cssH = 150;
+        const scale = Math.min(1, cssW / img.naturalWidth, cssH / img.naturalHeight);
+        const drawW = img.naturalWidth * scale * ratio;
+        const drawH = img.naturalHeight * scale * ratio;
+        const dx = (canvas.width - drawW) / 2;
+        const dy = (canvas.height - drawH) / 2;
+        ctx.setTransform(1, 0, 0, 1, 0, 0);
         ctx.clearRect(0, 0, canvas.width, canvas.height);
-        ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+        ctx.drawImage(img, dx, dy, drawW, drawH);
+        ctx.setTransform(ratio, 0, 0, ratio, 0, 0);
+        ctx.lineCap = "round";
+        ctx.lineJoin = "round";
+        ctx.lineWidth = 2.4;
+        ctx.strokeStyle = "#0f172a";
+        signatureImageRef.current = img;
         setSignatureDrawn(true);
       };
       img.src = sig.dataUrl;
@@ -2689,7 +2760,7 @@ export default function ToolWorkbench({ tool }: WorkbenchProps) {
     } else {
       const canvas = signatureCanvasRef.current;
       if (!canvas || !signatureDrawn) { setError("Draw a signature before adding it."); return; }
-      const dataUrl = canvas.toDataURL("image/png");
+      const dataUrl = trimSignatureCanvas(canvas);
       const count = signatures.length;
       const newSig = {
         id: `docsig-${Date.now()}`,
@@ -2741,7 +2812,7 @@ export default function ToolWorkbench({ tool }: WorkbenchProps) {
   async function getSignatureImageBytes() {
     const canvas = signatureCanvasRef.current;
     if (!canvas || !signatureDrawn) return null;
-    const dataUrl = canvas.toDataURL("image/png");
+    const dataUrl = trimSignatureCanvas(canvas);
     const response = await fetch(dataUrl);
     return response.arrayBuffer();
   }
@@ -3984,7 +4055,7 @@ export default function ToolWorkbench({ tool }: WorkbenchProps) {
           if (signatureMode === "text") {
             allSignatures = [{ id: "single", kind: "text", text: editText || "Signed electronically", xRatio: signaturePlacement.xRatio, yRatio: signaturePlacement.yRatio }];
           } else if (signatureDrawn && signatureCanvasRef.current) {
-            allSignatures = [{ id: "single", kind: "draw", dataUrl: signatureCanvasRef.current.toDataURL("image/png"), xRatio: signaturePlacement.xRatio, yRatio: signaturePlacement.yRatio }];
+            allSignatures = [{ id: "single", kind: "draw", dataUrl: trimSignatureCanvas(signatureCanvasRef.current), xRatio: signaturePlacement.xRatio, yRatio: signaturePlacement.yRatio }];
           } else {
             allSignatures = [];
           }
@@ -4015,8 +4086,16 @@ export default function ToolWorkbench({ tool }: WorkbenchProps) {
               if (embedded) {
                 const rawWidth = embedded.width;
                 const rawHeight = embedded.height;
-                const signatureWidth = 170;
-                const signatureHeight = Math.max(30, (signatureWidth / rawWidth) * rawHeight);
+                let signatureWidth = 170;
+                let signatureHeight = (signatureWidth / rawWidth) * rawHeight;
+                if (signatureHeight < 24) {
+                  signatureHeight = 24;
+                  signatureWidth = (signatureHeight / rawHeight) * rawWidth;
+                }
+                if (signatureHeight > 150) {
+                  signatureHeight = 150;
+                  signatureWidth = (signatureHeight / rawHeight) * rawWidth;
+                }
                 page.drawImage(embedded, {
                   x: clamp(anchorX - signatureWidth / 2, 12, width - signatureWidth - 12),
                   y: clamp(anchorY - signatureHeight / 2, 12, height - signatureHeight - 12),
@@ -5139,30 +5218,78 @@ export default function ToolWorkbench({ tool }: WorkbenchProps) {
           </label>
           {tool.slug === "sign-pdf" ? (
             <div className="space-y-3">
-              <div className="flex flex-wrap gap-2">
-                <button
-                  type="button"
-                  onClick={() => setSignatureMode("text")}
-                  className={`btn rounded-full px-3 py-1 text-xs font-semibold uppercase tracking-wide ${
-                    signatureMode === "text"
-                      ? "btn-primary"
-                      : "btn-secondary"
-                  }`}
-                >
-                  Type signature
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setSignatureMode("draw")}
-                  className={`btn rounded-full px-3 py-1 text-xs font-semibold uppercase tracking-wide ${
-                    signatureMode === "draw"
-                      ? "btn-primary"
-                      : "btn-secondary"
-                  }`}
-                >
-                  Draw signature
-                </button>
+              {/* Saved signatures — reuse first */}
+              <div className="space-y-2 rounded-xl border border-slate-200 bg-white p-3">
+                <div className="flex items-center justify-between gap-2">
+                  <p className="text-xs font-semibold uppercase tracking-wide text-slate-600">Saved signatures</p>
+                  <button
+                    type="button"
+                    onClick={saveCurrentSignature}
+                    className="btn btn-secondary rounded-md px-2.5 py-1 text-xs"
+                  >
+                    Save current
+                  </button>
+                </div>
+                {savedSignatures.length > 0 ? (
+                  <div className="grid grid-cols-2 gap-2">
+                    {savedSignatures.map((sig) => (
+                      <button
+                        key={sig.id}
+                        type="button"
+                        onClick={() => applySavedSignature(sig)}
+                        className="group relative flex min-h-[68px] flex-col items-center justify-center gap-0.5 rounded-lg border border-slate-200 bg-slate-50 p-2 text-center transition hover:border-cyan-400 hover:bg-cyan-50"
+                        title="Click to use this signature"
+                      >
+                        {sig.kind === "draw" && sig.dataUrl ? (
+                          // eslint-disable-next-line @next/next/no-img-element
+                          <img src={sig.dataUrl} alt="Saved signature" className="h-9 max-w-full rounded-sm object-contain" />
+                        ) : (
+                          <span className="text-lg italic text-slate-800" style={{ fontFamily: 'Georgia, "Times New Roman", serif' }}>{sig.label}</span>
+                        )}
+                        <span className="text-[10px] font-medium text-slate-400 group-hover:text-cyan-700">Tap to reuse</span>
+                        <span
+                          role="button"
+                          tabIndex={0}
+                          onClick={(e) => { e.stopPropagation(); deleteSavedSignature(sig.id); }}
+                          onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.stopPropagation(); deleteSavedSignature(sig.id); } }}
+                          className="absolute -right-1.5 -top-1.5 flex h-5 w-5 items-center justify-center rounded-full bg-rose-500 text-[11px] font-bold leading-none text-white opacity-0 shadow transition group-hover:opacity-100"
+                          aria-label="Delete saved signature"
+                        >
+                          ×
+                        </span>
+                      </button>
+                    ))}
+                  </div>
+                ) : (
+                  <p className="field-help">No saved signatures yet. Create one below, then tap "Save current" to reuse it across documents.</p>
+                )}
               </div>
+
+              {/* Create a new signature */}
+              <div className="space-y-2 rounded-xl border border-slate-200 bg-white p-3">
+                <div className="flex items-center justify-between gap-2">
+                  <p className="text-xs font-semibold uppercase tracking-wide text-slate-600">New signature</p>
+                  <div className="flex gap-0.5 rounded-lg bg-slate-100 p-0.5">
+                    <button
+                      type="button"
+                      onClick={() => setSignatureMode("text")}
+                      className={`rounded-md px-2.5 py-1 text-xs font-semibold transition ${
+                        signatureMode === "text" ? "bg-white text-indigo-700 shadow-sm" : "text-slate-500 hover:text-slate-700"
+                      }`}
+                    >
+                      Type
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setSignatureMode("draw")}
+                      className={`rounded-md px-2.5 py-1 text-xs font-semibold transition ${
+                        signatureMode === "draw" ? "bg-white text-indigo-700 shadow-sm" : "text-slate-500 hover:text-slate-700"
+                      }`}
+                    >
+                      Draw
+                    </button>
+                  </div>
+                </div>
 
               {signatureMode === "draw" ? (
                 <div className="space-y-2 rounded-xl border border-slate-300 bg-white p-3">
@@ -5217,19 +5344,23 @@ export default function ToolWorkbench({ tool }: WorkbenchProps) {
                 </div>
               )}
 
-              <div className="space-y-2 rounded-xl border border-slate-300 bg-white p-3">
-                <div className="flex items-center justify-between gap-2">
-                  <p className="field-help">Add this signature to the document (you can add multiple).</p>
-                  <button
-                    type="button"
-                    onClick={addSignatureToDocument}
-                    className="rounded-md px-3 py-1 text-xs font-bold text-white"
-                    style={{ background: "#6366f1" }}
-                  >
-                    Add signature
-                  </button>
-                </div>
-                {signatures.length > 0 ? (
+              <div className="flex items-center justify-between gap-2">
+                <p className="field-help">Add this signature to the document (you can add multiple).</p>
+                <button
+                  type="button"
+                  onClick={addSignatureToDocument}
+                  className="rounded-md px-3 py-1 text-xs font-bold text-white"
+                  style={{ background: "#6366f1" }}
+                >
+                  Add signature
+                </button>
+              </div>
+              </div>
+
+              {/* Signatures on this document */}
+              {signatures.length > 0 ? (
+                <div className="space-y-2 rounded-xl border border-slate-200 bg-white p-3">
+                  <p className="text-xs font-semibold uppercase tracking-wide text-slate-600">On this document</p>
                   <div className="flex flex-wrap gap-2">
                     {signatures.map((sig, i) => (
                       <div
@@ -5254,51 +5385,9 @@ export default function ToolWorkbench({ tool }: WorkbenchProps) {
                       </div>
                     ))}
                   </div>
-                ) : null}
-                {activeSignatureId ? <p className="field-help">Select a signature above, then click the preview to position it.</p> : null}
-              </div>
-
-              <div className="space-y-2 rounded-xl border border-slate-300 bg-white p-3">
-                <div className="flex items-center justify-between">
-                  <p className="field-help">Save this signature to reuse it later.</p>
-                  <button
-                    type="button"
-                    onClick={saveCurrentSignature}
-                    className="btn btn-secondary rounded-md px-3 py-1 text-xs"
-                  >
-                    Save signature
-                  </button>
+                  {activeSignatureId ? <p className="field-help">Select a signature above, then click the preview to position it.</p> : null}
                 </div>
-                {savedSignatures.length > 0 ? (
-                  <div className="flex flex-wrap gap-2">
-                    {savedSignatures.map((sig) => (
-                      <div key={sig.id} className="group relative inline-flex items-center gap-1 rounded-full border border-slate-200 bg-slate-50 pl-2 pr-1 py-0.5">
-                        <button
-                          type="button"
-                          onClick={() => applySavedSignature(sig)}
-                          className="flex items-center gap-1 text-xs font-medium text-slate-700 hover:text-cyan-700"
-                          title="Use this signature"
-                        >
-                          {sig.kind === "draw" && sig.dataUrl ? (
-                            // eslint-disable-next-line @next/next/no-img-element
-                            <img src={sig.dataUrl} alt="Saved signature" className="h-5 w-9 rounded-sm object-contain" />
-                          ) : (
-                            <span className="text-sm italic" style={{ fontFamily: 'Georgia, "Times New Roman", serif' }}>{sig.label}</span>
-                          )}
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => deleteSavedSignature(sig.id)}
-                          className="text-[10px] text-slate-400 hover:text-rose-600"
-                          aria-label="Delete saved signature"
-                        >
-                          ×
-                        </button>
-                      </div>
-                    ))}
-                  </div>
-                ) : null}
-              </div>
+              ) : null}
 
               <div className="space-y-2 rounded-xl border border-slate-300 bg-slate-50 p-3">
                 <div className="flex flex-wrap items-center gap-3">
