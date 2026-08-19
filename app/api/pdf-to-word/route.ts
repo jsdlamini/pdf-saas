@@ -47,7 +47,7 @@ function extractConversionFailure(error: unknown) {
     if (withCode.code === "ENOENT") {
       return {
         status: 503,
-        message: "PDF-to-Word backend is unavailable. Install LibreOffice on the server.",
+        message: "PDF-to-Word backend is unavailable. Install pdf2docx or LibreOffice on the server.",
       };
     }
 
@@ -98,18 +98,29 @@ export async function handlePdfToWordPost(
   const tempDir = await dependencies.mkdtemp(join(tmpdir(), "wiserfiles-pdf2word-"));
   const sanitizedName = normalizeUploadName(uploadedFile.name);
   const inputPath = join(tempDir, `${sanitizedName}.pdf`);
+  const outputPath = join(tempDir, `${sanitizedName}.docx`);
 
   try {
     await dependencies.writeFile(inputPath, Buffer.from(await uploadedFile.arrayBuffer()));
 
-    // LibreOffice headless: runs in tempDir, converts the PDF to DOCX in the same directory
-    await dependencies.execFileAsync(
-      "libreoffice",
-      ["--headless", "--convert-to", "docx", "--outdir", tempDir, inputPath],
-      { maxBuffer: 64 * 1024 * 1024 }
-    );
+    // Primary engine: pdf2docx (PyMuPDF + python-docx) preserves layout, tables,
+    // images, and formatting. The script lives under scripts/ relative to the app root.
+    const scriptPath = join(process.cwd(), "scripts", "pdf2word-convert.py");
+    try {
+      await dependencies.execFileAsync(
+        "python3",
+        [scriptPath, inputPath, outputPath],
+        { maxBuffer: 64 * 1024 * 1024 }
+      );
+    } catch {
+      // Fallback: LibreOffice headless import (flat, text-only DOCX) in tempDir.
+      await dependencies.execFileAsync(
+        "libreoffice",
+        ["--headless", "--convert-to", "docx", "--outdir", tempDir, inputPath],
+        { maxBuffer: 64 * 1024 * 1024 }
+      );
+    }
 
-    const outputPath = join(tempDir, `${sanitizedName}.docx`);
     const outputBytes = await dependencies.readFile(outputPath);
 
     return new Response(outputBytes, {

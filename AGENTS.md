@@ -41,16 +41,21 @@ Note: `pdfjs-dist` is loaded dynamically and its worker is wired via `configureP
 Many "convert" tools (PDF→Word/PPT/Excel, Word/PPT/Excel/HTML→PDF) are text-extraction approximations, not faithful layout conversions. Several tools listed in the registry are UI/placeholder only; see the README "Runtime behavior" section for what is actually implemented client-side vs. server-side.
 
 ### Server tools: subprocess-backed API routes
-Server-runtime tools live under `app/api/*`. The only fully implemented one is OCR at `app/api/ocr-pdf/route.ts`:
+Server-runtime tools live under `app/api/*`. Fully implemented server tools include OCR (`app/api/ocr-pdf/route.ts`):
 - Runs `ocrmypdf` as a child process via `execFile`; the route is `runtime = "nodejs"` and `dynamic = "force-dynamic"`.
 - Core logic is `handleOcrPost(request, dependencies)` with an injected `OcrRouteDependencies` (fs + `execFileAsync`). Tests call `handleOcrPost` directly with mocked deps — preserve this dependency-injection seam when editing.
 - A missing `ocrmypdf` binary (`ENOENT`) is mapped to HTTP 503; OCRmyPDF stderr/stdout is surfaced as 500.
+
+PDF→Word (`app/api/pdf-to-word/route.ts`) tries `pdf2docx` first, then falls back to LibreOffice:
+- Runs `python3 scripts/pdf2word-convert.py <in.pdf> <out.docx>` (thin wrapper over `pdf2docx.Converter`), resolved via `join(process.cwd(), "scripts", "pdf2word-convert.py")`.
+- On a non-zero exit or `ENOENT` from that step it falls back to `libreoffice --headless --convert-to docx`.
+- Same injected-deps seam as OCR (`handlePdfToWordPost(request, dependencies)`); tests live in `app/api/pdf-to-word/route.test.ts`.
 
 ### Shared client/server contract
 `lib/ocr.ts` holds constants used by BOTH the browser and the API route: `MAX_OCR_UPLOAD_BYTES` (1 GB) and `OCR_LANGUAGE_OPTIONS` / `SUPPORTED_OCR_LANGUAGES`. The upload-size and language validations are enforced client-side (in `ToolWorkbench`) and re-checked server-side as a backstop. Adding an OCR language requires updating `OCR_LANGUAGE_OPTIONS` here AND installing the matching `tesseract-ocr-*` package in the `Dockerfile`.
 
 ## System dependencies & deployment
-OCR requires `ocrmypdf`, `tesseract-ocr` (+ per-language packs), `ghostscript`, and `qpdf` on the host. These are not npm packages — locally, OCR returns 503 unless they are installed. The `Dockerfile` (multi-stage, Node 22) installs them and is the intended way to run server tools; `docker-compose.yml` builds and exposes port 3000.
+OCR requires `ocrmypdf`, `tesseract-ocr` (+ per-language packs), `ghostscript`, and `qpdf` on the host. These are not npm packages — locally, OCR returns 503 unless they are installed. PDF→Word additionally needs `python3` + the `pdf2docx` pip package (both installed in the `Dockerfile`) with `libreoffice-writer` as the fallback engine. The `Dockerfile` (multi-stage, Node 22) installs all of these and is the intended way to run server tools; `docker-compose.yml` builds and exposes port 3000.
 
 ## Notes
 - `tmp-tests/` contains throwaway manual test artifacts (sample PDFs, captured response headers), not part of the automated suite.
