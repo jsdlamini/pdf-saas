@@ -136,6 +136,26 @@ body {
   animation-play-state: paused;
 }
 
+/* Workflow recipe cards — clearly visible, formal dim hover in both themes */
+.ai-workflow-card {
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  transition: background-color 0.15s ease, border-color 0.15s ease, transform 0.15s ease, box-shadow 0.15s ease;
+}
+.ai-workflow-card:hover {
+  background: #e2e8f0;
+  border-color: #cbd5e1;
+  box-shadow: 0 6px 18px -12px rgba(15, 23, 42, 0.35);
+}
+html[data-theme="dark"] .ai-workflow-card {
+  background: #131620;
+  border-color: #334155;
+}
+html[data-theme="dark"] .ai-workflow-card:hover {
+  background: #1a1d2b;
+  border-color: #475569;
+}
+
 /* ── Research Studio Shell ───── */
 .studio-shell {
   display: flex;
