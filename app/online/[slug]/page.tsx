@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { getSeoLandingBySlug, SEO_LANDING_PAGES } from "@/lib/seo-landing-pages";
-import { getToolBySlug, TOOL_ITEMS } from "@/lib/tools";
+import { ACTIVE_TOOL_ITEMS, getToolBySlug } from "@/lib/tools";
 
 type LandingPageProps = {
   params: Promise<{ slug: string }>;
@@ -58,7 +58,7 @@ export default async function LandingPage({ params }: LandingPageProps) {
   const tool = getToolBySlug(landing.toolSlug);
   if (!tool) notFound();
 
-  const relatedTools = TOOL_ITEMS.filter(
+  const relatedTools = ACTIVE_TOOL_ITEMS.filter(
     (candidate) => candidate.category === tool.category && candidate.slug !== tool.slug
   ).slice(0, 4);
 
