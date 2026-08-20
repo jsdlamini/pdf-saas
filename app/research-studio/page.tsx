@@ -3875,12 +3875,17 @@ export default function ResearchStudioPage() {
         if (!zipPath || zipPath.startsWith("__MACOSX/")) continue;
         const name = zipPath.split("/").pop() || zipPath;
         if (name.startsWith(".")) continue;
-        // Skip binary assets (images, PDFs, office docs, fonts, archives).
-        // They aren't editable as text, and reading them as a string bloats
-        // the save payload, which can make the imported project fail to persist.
-        if (/\.(png|jpe?g|gif|bmp|webp|ico|tiff?|pdf|zip|gz|tgz|tar|docx?|xlsx?|pptx?|odt|ods|odp|woff2?|ttf|otf|eot)$/i.test(name)) continue;
+        // Skip non-editable build artifacts and office docs. Raster images are
+        // imported as base64 so figure folders (Figures/, Pictures/) survive.
+        const isRasterImage = /\.(png|jpe?g|gif|bmp|webp|ico)$/i.test(name);
+        if (/\.(pdf|tiff?|zip|gz|tgz|tar|docx?|xlsx?|pptx?|odt|ods|odp|woff2?|ttf|otf|eot)$/i.test(name)) continue;
 
-        const content = await zipEntry.async("string");
+        let content: string;
+        if (isRasterImage) {
+          content = await zipEntry.async("base64");
+        } else {
+          content = await zipEntry.async("string");
+        }
         entries.push({ path: zipPath, kind: "file", content });
 
         // Add implicit parent folders
@@ -3892,7 +3897,7 @@ export default function ResearchStudioPage() {
         }
 
         // Detect main .tex file
-        if (content.includes("\\documentclass") && zipPath.toLowerCase().endsWith(".tex")) {
+        if (!isRasterImage && content.includes("\\documentclass") && zipPath.toLowerCase().endsWith(".tex")) {
           mainTexPath = zipPath;
         }
       }
@@ -4376,6 +4381,17 @@ export default function ResearchStudioPage() {
               <p className="studio-dashboard-subtitle">Create, open, and manage your LaTeX research projects</p>
             </div>
             <div className="flex items-center gap-2">
+              <a
+                href="/"
+                className="studio-btn studio-btn-ghost"
+                aria-label="Back to WiserFiles home"
+                title="Back to WiserFiles home"
+              >
+                <svg viewBox="0 0 20 20" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="1.8">
+                  <path d="M3 9l7-6 7 6v8a1 1 0 0 1-1 1h-4v-5H8v5H4a1 1 0 0 1-1-1V9z" strokeLinecap="round" strokeLinejoin="round" />
+                </svg>
+                Home
+              </a>
               <button
                 type="button"
                 onClick={createNewProject}

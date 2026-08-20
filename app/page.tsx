@@ -11,6 +11,7 @@ import {
 } from "react";
 import { rankToolsByIntent } from "@/lib/tool-intent-search";
 import { ACTIVE_TOOL_ITEMS, TOOL_ITEMS } from "@/lib/tools";
+import Swal from "sweetalert2";
 import { WORKFLOW_RECIPES } from "@/lib/workflow-recipes";
 import {
   clearWorkflowPipeline,
@@ -93,7 +94,6 @@ export default function Home() {
     (typeof WORKFLOW_RECIPES)[number] | null
   >(null);
   const [intentQuery, setIntentQuery] = useState("");
-  const [dropToolsOpen, setDropToolsOpen] = useState(false);
   const [listening, setListening] = useState(false);
   const recognitionRef = useRef<any>(null);
   const [serverOnline, setServerOnline] = useState<boolean | null>(null);
@@ -324,6 +324,59 @@ export default function Home() {
     router.push(`/tools/${slug}?pipeline=true`);
   }
 
+  // Searchable grid dialog for the full tool list — replaces the long
+  // vertical dropdown that overflowed the viewport.
+  function openAllToolsDialog() {
+    const tools = otherCompatibleTools.length ? otherCompatibleTools : ACTIVE_TOOL_ITEMS;
+    const cards = tools
+      .map(
+        (t) => `
+          <button type="button" data-tool-slug="${t.slug}" data-tool-name="${t.name}" class="swal-tool-card" title="${t.description || t.name}">
+            <span class="swal-tool-card-name">${t.name}</span>
+          </button>`
+      )
+      .join("");
+
+    void Swal.fire({
+      title: "All tools",
+      html: `
+        <div style="text-align:left">
+          <input id="swal-tool-search" class="swal-tool-search" placeholder="Search tools…">
+          <div id="swal-tool-grid" class="swal-tool-grid">${cards}</div>
+        </div>
+      `,
+      showConfirmButton: false,
+      showCancelButton: true,
+      cancelButtonText: "Close",
+      cancelButtonColor: "#94a3b8",
+      background: "#ffffff",
+      color: "#0f172a",
+      draggable: true,
+      position: "center",
+      width: "min(94vw, 760px)",
+      customClass: { container: "swal-center-container", popup: "swal-pipe-popup" },
+      didOpen: () => {
+        const grid = document.getElementById("swal-tool-grid");
+        const search = document.getElementById("swal-tool-search") as HTMLInputElement | null;
+        search?.addEventListener("input", () => {
+          const q = (search.value || "").toLowerCase().trim();
+          grid?.querySelectorAll(".swal-tool-card").forEach((card) => {
+            const el = card as HTMLElement;
+            const name = el.getAttribute("data-tool-name") || "";
+            el.style.display = !q || name.toLowerCase().includes(q) ? "" : "none";
+          });
+        });
+        grid?.querySelectorAll(".swal-tool-card").forEach((card) => {
+          card.addEventListener("click", () => {
+            const slug = (card as HTMLElement).getAttribute("data-tool-slug") || "";
+            Swal.close();
+            if (slug) navigateToTool(slug);
+          });
+        });
+      },
+    });
+  }
+
   /* ── search ───────────────────────────────────────────────────── */
   const searchResults = useMemo(() => {
     if (!intentQuery.trim()) return null;
@@ -512,35 +565,16 @@ export default function Home() {
                     </button>
                   ))}
                 </div>
-                <div className="relative">
-                  <button
-                    type="button"
-                    onClick={(e) => { e.stopPropagation(); setDropToolsOpen(!dropToolsOpen); }}
-                    className="inline-flex items-center gap-1.5 rounded-full border bg-gradient-to-r px-4 py-2 text-sm font-semibold transition-all hover:scale-105 hover:shadow-lg from-slate-100 to-slate-200 text-slate-700 hover:from-cyan-100 hover:to-blue-100 hover:text-cyan-800"
-                  >
-                    More tools
-                    <svg viewBox="0 0 20 20" className={`h-3.5 w-3.5 transition-transform ${dropToolsOpen ? "rotate-180" : ""}`} fill="none" stroke="currentColor" strokeWidth="1.8">
-                      <path d="M5 7l5 5 5-5" strokeLinecap="round" strokeLinejoin="round" />
-                    </svg>
-                  </button>
-                  {dropToolsOpen ? (
-                    <>
-                      <div className="fixed inset-0 z-40" onClick={(e) => { e.stopPropagation(); setDropToolsOpen(false); }} />
-                      <div className="absolute left-1/2 top-full z-50 mt-1 -translate-x-1/2 w-56 rounded-xl border border-slate-200 bg-white py-1 shadow-lg">
-                        {otherCompatibleTools.map((tool) => (
-                          <button
-                            key={tool.slug}
-                            type="button"
-                            onClick={(e) => { e.stopPropagation(); setDropToolsOpen(false); navigateToTool(tool.slug); }}
-                            className="flex w-full items-center gap-2 px-4 py-2.5 text-left text-sm font-semibold text-slate-700 transition hover:bg-cyan-50 hover:text-cyan-900"
-                          >
-                            <span>{tool.name}</span>
-                          </button>
-                        ))}
-                      </div>
-                    </>
-                  ) : null}
-                </div>
+                <button
+                  type="button"
+                  onClick={(e) => { e.stopPropagation(); openAllToolsDialog(); }}
+                  className="inline-flex items-center gap-1.5 rounded-full border bg-gradient-to-r px-4 py-2 text-sm font-semibold transition-all hover:scale-105 hover:shadow-lg from-slate-100 to-slate-200 text-slate-700 hover:from-cyan-100 hover:to-blue-100 hover:text-cyan-800"
+                >
+                  More tools
+                  <svg viewBox="0 0 20 20" className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth="1.8">
+                    <path d="M5 7l5 5 5-5" strokeLinecap="round" strokeLinejoin="round" />
+                  </svg>
+                </button>
                 <button
                   type="button"
                   onClick={(e) => {
