@@ -1,0 +1,54 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  unit-tests:
+    name: Unit tests (Vitest)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm test
+
+  baseline-pixels:
+    name: Baseline pixel renderer (Option B)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: node tests/baseline/render-check.mjs
+
+  redact-pixel:
+    name: Redact pixel test (Playwright)
+    runs-on: ubuntu-latest
+    env:
+      # Dummy Clerk keys: public pages render without auth; the redact test
+      # never signs in. A valid-format placeholder keeps ClerkProvider from
+      # throwing at startup.
+      NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY: pk_test_Y2ktZHVtbXk=
+      CLERK_SECRET_KEY: sk_test_Y2ktZHVtbXk=
+      NEXT_PUBLIC_SITE_URL: http://localhost:3000
+      # Analytics is Postgres-backed; point it at a placeholder so the pool
+      # constructor does not throw. The analytics route degrades to a 500.
+      DATABASE_URL: postgresql://ci:ci@127.0.0.1:5432/ci
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npx playwright install --with-deps chromium
+      - run: npx playwright test tests/redact-pixel.spec.ts

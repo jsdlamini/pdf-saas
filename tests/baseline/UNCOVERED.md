@@ -12,11 +12,12 @@ flag them explicitly rather than silently pass a passthrough hash.
   doesn't reorder under Playwright's `dragAndDrop`; the "reorder" capture is a
   passthrough (`1a3b8f67…`). Not verified.
 
-# Known production bug (not a coverage gap)
+# Pixel coverage (Option B + redact)
 
-- **unlock-pdf does not unlock.** It loads with `ignoreEncryption: true` and
-  re-saves, which parses without decrypting — the output is still encrypted.
-  Verified end-to-end against the live tool: a user-password PDF stays locked
-  (`PasswordError`), and an owner-password-only PDF is **corrupted**
-  (`unable to find /Root dictionary`). Needs a code fix before it can be
-  baseline'd. The password input is not used by the unlock path.
+- **redact-pdf** is covered twice: the baseline SSIM gate (double-run) and a
+  dedicated Playwright pixel test (`tests/redact-pixel.spec.ts`) that renders the
+  output with `@napi-rs/canvas` + pdf.js and asserts the default band is solid
+  black and the text layer is gone.
+- **unlock-pdf** (correct / wrong / owner) is now covered by the baseline after
+  the server-side qpdf fix. The previous "unlock-pdf does not unlock" bug is
+  fixed and no longer applies.
