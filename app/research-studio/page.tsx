@@ -3462,10 +3462,17 @@ export default function ResearchStudioPage() {
       setCodeOutput(null);
       setCompileNotice(`Running ${editorMode} code on server...`);
 
+      // Send every non-binary project file so sibling headers/sources
+      // (e.g. #include "samples.h") resolve against the same directory.
+      const BINARY_EXT = /\.(png|jpe?g|gif|bmp|webp|ico|svg|pdf|zip|gz|tar|woff2?|ttf|otf|eot|mp3|mp4|mov)$/i;
+      const files = projectEntries
+        .filter((e) => e.kind === "file" && !BINARY_EXT.test(e.path))
+        .map((e) => ({ path: e.path, content: e.content }));
+
       const response = await fetch("/api/run-code", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ code, language: editorMode }),
+        body: JSON.stringify({ language: editorMode, files, mainPath: activeEntry.path }),
       });
 
       const result = (await response.json()) as { output?: string; error?: string; exitCode?: number; message?: string };

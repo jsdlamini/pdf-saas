@@ -1,7 +1,7 @@
 import { execFile } from "node:child_process";
-import { mkdtemp, rm, writeFile, chmod } from "node:fs/promises";
+import { mkdir, mkdtemp, rm, writeFile, chmod } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
 import { promisify } from "node:util";
 import { auth } from "@clerk/nextjs/server";
 
@@ -23,9 +23,12 @@ function checkRateLimit(key: string): boolean {
   return true;
 }
 
+type ProjectFile = { path: string; content: string };
+
 type RunCodePayload = {
-  code: string;
   language: "python" | "cpp";
+  files: ProjectFile[];
+  mainPath: string;
 };
 
 type RunCodeResponse = {
@@ -36,6 +39,8 @@ type RunCodeResponse = {
 
 const TIMEOUT_MS = 15_000;
 const MAX_OUTPUT_BYTES = 100_000;
+const MAX_TOTAL_SOURCE_BYTES = 4 * 1024 * 1024;
+const MAX_FILE_COUNT = 500;
 
 function truncateOutput(raw: string): string {
   if (Buffer.byteLength(raw, "utf8") <= MAX_OUTPUT_BYTES) return raw;
@@ -43,9 +48,34 @@ function truncateOutput(raw: string): string {
   return truncated + "\n\n[Output truncated at 100KB]";
 }
 
-async function runPython(code: string, tempDir: string): Promise<RunCodeResponse> {
-  const scriptPath = join(tempDir, "script.py");
-  await writeFile(scriptPath, code, "utf8");
+// Normalise a project-relative path and drop any traversal segments so every
+// written file stays inside the temp directory.
+function sanitizeRelPath(path: string): string {
+  const normalized = path.replace(/\\/g, "/").replace(/^\.\/+/, "");
+  const parts = normalized.split("/").filter((p) => p && p !== "." && p !== "..");
+  return parts.length ? parts.join("/") : "main";
+}
+
+async function writeProjectFiles(files: ProjectFile[], tempDir: string): Promise<void> {
+  for (const file of files) {
+    const safe = sanitizeRelPath(file.path);
+    const full = join(tempDir, safe);
+    await mkdir(dirname(full), { recursive: true });
+    await writeFile(full, file.content, "utf8");
+  }
+}
+
+function findMainPath(files: ProjectFile[], mainPath: string): string {
+  const candidates = new Set(files.map((f) => sanitizeRelPath(f.path)));
+  const main = sanitizeRelPath(mainPath);
+  if (candidates.has(main)) return main;
+  const byBasename = files.find((f) => sanitizeRelPath(f.path).split("/").pop() === mainPath.split("/").pop());
+  if (byBasename) return sanitizeRelPath(byBasename.path);
+  return files[0] ? sanitizeRelPath(files[0].path) : "main";
+}
+
+async function runPython(mainPath: string, tempDir: string): Promise<RunCodeResponse> {
+  const scriptPath = join(tempDir, mainPath);
 
   try {
     const result = await execFileAsync("python3", [scriptPath], {
@@ -83,11 +113,9 @@ async function runPython(code: string, tempDir: string): Promise<RunCodeResponse
   }
 }
 
-async function runCpp(code: string, tempDir: string): Promise<RunCodeResponse> {
-  const sourcePath = join(tempDir, "program.cpp");
+async function runCpp(mainPath: string, tempDir: string): Promise<RunCodeResponse> {
+  const sourcePath = join(tempDir, mainPath);
   const binaryPath = join(tempDir, "program");
-
-  await writeFile(sourcePath, code, "utf8");
 
   // Compile
   try {
@@ -171,20 +199,32 @@ export async function POST(request: Request) {
     return jsonError("Invalid JSON payload.", 400);
   }
 
-  if (!payload.code || typeof payload.code !== "string") {
-    return jsonError("Provide a 'code' string.", 400);
-  }
-
   if (!payload.language || !["python", "cpp"].includes(payload.language)) {
     return jsonError("Language must be 'python' or 'cpp'.", 400);
   }
 
-  const code = payload.code;
-  if (Buffer.byteLength(code, "utf8") > 2 * 1024 * 1024) {
-    return jsonError("Code payload exceeds 2MB limit.", 400);
+  const files = Array.isArray(payload.files) ? payload.files : [];
+  if (!files.length) {
+    return jsonError("Provide at least one source 'file'.", 400);
+  }
+  if (files.length > MAX_FILE_COUNT) {
+    return jsonError(`Too many files (max ${MAX_FILE_COUNT}).`, 400);
   }
 
-  // Block dangerous imports/system calls for Python (basic sandbox)
+  for (const file of files) {
+    if (!file || typeof file.path !== "string" || typeof file.content !== "string") {
+      return jsonError("Each file must have 'path' and 'content' strings.", 400);
+    }
+  }
+
+  const totalBytes = files.reduce((sum, f) => sum + Buffer.byteLength(f.content, "utf8"), 0);
+  if (totalBytes > MAX_TOTAL_SOURCE_BYTES) {
+    return jsonError("Source files exceed the 4MB total limit.", 400);
+  }
+
+  const allCode = files.map((f) => f.content).join("\n");
+
+  // Block dangerous imports/system calls for Python (basic sandbox).
   if (payload.language === "python") {
     const dangerousPatterns = [
       /\bos\.system\b/,
@@ -199,13 +239,13 @@ export async function POST(request: Request) {
       /\brequests\b/,
     ];
     for (const pattern of dangerousPatterns) {
-      if (pattern.test(code)) {
+      if (pattern.test(allCode)) {
         return jsonError("Code contains restricted operations.", 403);
       }
     }
   }
 
-  // For C++, block includes that access the filesystem
+  // For C++, block includes that access the filesystem.
   if (payload.language === "cpp") {
     const blockedIncludes = [
       /#include\s*[<"]filesystem[>"]/,
@@ -215,7 +255,7 @@ export async function POST(request: Request) {
       /#include\s*[<"]fcntl\.h[>"]/,
     ];
     for (const pattern of blockedIncludes) {
-      if (pattern.test(code)) {
+      if (pattern.test(allCode)) {
         return jsonError("Code contains restricted includes.", 403);
       }
     }
@@ -224,11 +264,14 @@ export async function POST(request: Request) {
   const tempDir = await mkdtemp(join(tmpdir(), "wiserfiles-code-"));
 
   try {
+    await writeProjectFiles(files, tempDir);
+    const mainPath = findMainPath(files, payload.mainPath || files[0].path);
+
     let result: RunCodeResponse;
     if (payload.language === "python") {
-      result = await runPython(code, tempDir);
+      result = await runPython(mainPath, tempDir);
     } else {
-      result = await runCpp(code, tempDir);
+      result = await runCpp(mainPath, tempDir);
     }
 
     return Response.json(result);
