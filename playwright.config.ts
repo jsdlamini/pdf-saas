@@ -8,12 +8,13 @@ export default defineConfig({
   fullyParallel: false,
   retries: 1,
   use: {
-    baseURL: process.env.BASE_URL || "http://localhost:3000",
+    // Use a numeric host to avoid localhost/IPv6 DNS resolution quirks in CI.
+    baseURL: process.env.BASE_URL || "http://127.0.0.1:3000",
     headless: true,
   },
   webServer: {
-    command: "npm run dev",
-    url: "http://localhost:3000",
+    command: "npm run dev -- -H 127.0.0.1",
+    url: "http://127.0.0.1:3000",
     reuseExistingServer: true,
     timeout: 180_000,
   },
