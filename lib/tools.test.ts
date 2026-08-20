@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { TOOL_ITEMS, type ToolProcessing } from "./tools";
 
-const VALID_PROCESSING: ToolProcessing[] = ["local", "server"];
+const VALID_PROCESSING: ToolProcessing[] = ["local", "server", "conditional"];
 
 describe("TOOL_ITEMS registry", () => {
   it("is non-empty and every tool has a processing field", () => {
@@ -14,7 +14,7 @@ describe("TOOL_ITEMS registry", () => {
     }
   });
 
-  it("every processing field is 'local' or 'server'", () => {
+  it("every processing field is 'local', 'server', or 'conditional'", () => {
     for (const tool of TOOL_ITEMS) {
       expect(
         VALID_PROCESSING,

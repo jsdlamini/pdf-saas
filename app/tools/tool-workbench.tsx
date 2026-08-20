@@ -2019,7 +2019,7 @@ export default function ToolWorkbench({ tool }: WorkbenchProps) {
       runId: `${tool.slug}-${Date.now()}`,
       toolSlug: tool.slug,
       toolName: tool.name,
-      mode: tool.runtime,
+      mode: tool.processing,
       startedAt: new Date(startedAtMs).toISOString(),
       finishedAt: finishedAt.toISOString(),
       durationMs: finishedAt.getTime() - startedAtMs,
@@ -4917,7 +4917,7 @@ export default function ToolWorkbench({ tool }: WorkbenchProps) {
 
     try {
       setBusy(true);
-      logProcessing(`Running ${tool.name} in ${tool.runtime} mode.`);
+      logProcessing(`Running ${tool.name} in ${tool.processing} mode.`);
       const firstFile = files[0];
 
       if (tool.slug === "merge-pdf" || tool.slug === "convert-to-pdf") {
