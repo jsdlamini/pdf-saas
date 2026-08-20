@@ -83,7 +83,7 @@ const ENGINES: LatexEngine[] = [
   {
     name: "latexmk",
     binary: "latexmk",
-    buildArgs: (rootFile) => ["-pdf", "-interaction=nonstopmode", "-file-line-error", rootFile],
+    buildArgs: (rootFile) => ["-pdf", "-shell-escape", "-interaction=nonstopmode", "-file-line-error", rootFile],
   },
   {
     name: "texliveonfly",
@@ -92,7 +92,7 @@ const ENGINES: LatexEngine[] = [
       "--compiler",
       "latexmk",
       "--arguments",
-      "-pdf -interaction=nonstopmode -file-line-error",
+      "-pdf -shell-escape -interaction=nonstopmode -file-line-error",
       rootFile,
     ],
   },
@@ -405,7 +405,7 @@ async function tryAutoInstallMissingSty(sty: string): Promise<AutoInstallResult>
 async function compileWithEngine(tempDir: string, rootFile: string, engine: LatexEngine) {
   await execFileAsync(engine.binary, engine.buildArgs(rootFile), {
     cwd: tempDir,
-    timeout: 120_000,
+    timeout: 300_000,
     maxBuffer: 32 * 1024 * 1024,
   });
 
