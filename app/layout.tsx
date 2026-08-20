@@ -160,7 +160,7 @@ export default async function RootLayout({
                     "@type": "Organization",
                     name: SITE_NAME,
                     url: siteUrl.toString(),
-                    logo: `${siteUrl.toString()}globe.svg`,
+                    logo: `${siteUrl.toString()}icon-512.png`,
                   },
                 ],
               }),
