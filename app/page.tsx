@@ -12,6 +12,7 @@ import {
 import { rankToolsByIntent } from "@/lib/tool-intent-search";
 import { ACTIVE_TOOL_ITEMS, TOOL_ITEMS } from "@/lib/tools";
 import Swal from "sweetalert2";
+import { ToolIcon } from "@/app/components/tool-icon";
 import { WORKFLOW_RECIPES } from "@/lib/workflow-recipes";
 import {
   clearWorkflowPipeline,
@@ -679,9 +680,13 @@ export default function Home() {
               {intentQuery.trim() && searchResults !== null ? (
                 <div className="absolute left-0 right-0 top-[calc(100%+6px)] z-30 max-h-96 overflow-y-auto rounded-2xl border border-slate-200/80 bg-white/95 p-3 shadow-[0_16px_40px_-20px_rgba(15,23,42,0.32)] backdrop-blur-md dark:border-slate-700/80 dark:bg-slate-950/95">
                   {searchResults.length === 0 ? (
-                    <p className="px-1 py-2 text-sm text-slate-500">
-                      No tools match your search.
-                    </p>
+                    <div className="flex flex-col items-center gap-1.5 px-4 py-8 text-center">
+                      <svg viewBox="0 0 24 24" className="h-8 w-8 text-slate-300" fill="none" stroke="currentColor" strokeWidth="1.6">
+                        <path d="M21 21l-4.5-4.5M11 19a8 8 0 1 1 0-16 8 8 0 0 1 0 16z" strokeLinecap="round" strokeLinejoin="round" />
+                      </svg>
+                      <p className="text-sm font-medium text-slate-600">No tools match your search</p>
+                      <p className="text-xs text-slate-400">Try a different keyword, like “merge”, “compress”, or “sign”.</p>
+                    </div>
                   ) : (
                     <div className="grid gap-2 sm:grid-cols-2">
                       {searchResults.map((result) => (
@@ -692,6 +697,7 @@ export default function Home() {
                           className="flex flex-col gap-1 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5 text-left transition hover:border-cyan-300 hover:bg-cyan-50"
                         >
                           <div className="flex items-center gap-2">
+                            <ToolIcon category={result.category} className="h-5 w-5 shrink-0 text-slate-400" />
                             <span className="text-sm font-semibold text-slate-800">
                               {result.name}
                             </span>
@@ -731,6 +737,7 @@ export default function Home() {
                 href={`/tools/${tool.slug}`}
                 className={`inline-flex shrink-0 items-center gap-1.5 rounded-full border bg-gradient-to-r px-4 py-2 text-sm font-semibold transition-all hover:scale-105 hover:shadow-lg ${getCategoryColor(tool.category)}`}
               >
+                <ToolIcon category={tool.category} className="h-4 w-4" />
                 {tool.name}
               </Link>
             ))}
