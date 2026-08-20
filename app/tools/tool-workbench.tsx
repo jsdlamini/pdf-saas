@@ -1448,8 +1448,6 @@ export default function ToolWorkbench({ tool }: WorkbenchProps) {
       didOpen: () => {
         const grid = document.getElementById("swal-tool-grid");
         const search = document.getElementById("swal-tool-search") as HTMLInputElement | null;
-        const confirmBtn = Swal.getConfirmButton();
-        if (confirmBtn) confirmBtn.disabled = true;
 
         search?.addEventListener("input", () => {
           const q = (search.value || "").toLowerCase().trim();
@@ -1465,7 +1463,8 @@ export default function ToolWorkbench({ tool }: WorkbenchProps) {
             grid?.querySelectorAll(".swal-tool-card").forEach((c) => c.classList.remove("swal-tool-card-selected"));
             card.classList.add("swal-tool-card-selected");
             selectedSlug = (card as HTMLElement).getAttribute("data-tool-slug") || "";
-            if (confirmBtn) confirmBtn.disabled = false;
+            // Selecting a tool triggers the pipe immediately — no Continue step.
+            if (selectedSlug) Swal.clickConfirm();
           });
         });
       },
