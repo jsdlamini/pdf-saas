@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import FaqContent from "./faq-content";
 
 export const metadata: Metadata = {
-  title: "Frequently Asked Questions | WiserFiles",
+  title: "Frequently Asked Questions",
   description:
     "Answers to common questions about WiserFiles PDF tools — file safety, upload limits, offline tools, server tools, supported formats, and more.",
   alternates: {

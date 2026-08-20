@@ -36,11 +36,12 @@ export async function generateMetadata({ params }: ToolPageProps): Promise<Metad
     };
   }
 
-  const title = `${tool.name} — Free Online PDF Tool | WiserFiles`;
+  const pageTitle = `${tool.name} — Free Online PDF Tool`;
+  const socialTitle = `${tool.name} — Free Online PDF Tool | WiserFiles`;
   const description = tool.description;
 
   return {
-    title,
+    title: pageTitle,
     description,
     alternates: {
       canonical: `/tools/${tool.slug}`,
@@ -49,13 +50,13 @@ export async function generateMetadata({ params }: ToolPageProps): Promise<Metad
     openGraph: {
       type: "website",
       url: `/tools/${tool.slug}`,
-      title,
+      title: socialTitle,
       description,
       images: ["/opengraph-image"],
     },
     twitter: {
       card: "summary_large_image",
-      title,
+      title: socialTitle,
       description,
       images: ["/opengraph-image"],
     },
