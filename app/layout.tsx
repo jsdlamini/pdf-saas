@@ -155,17 +155,12 @@ export default async function RootLayout({
                     url: siteUrl.toString(),
                     description:
                       "Online PDF tools for merge, split, convert, OCR, security, editing, and signing workflows.",
-                    potentialAction: {
-                      "@type": "SearchAction",
-                      target: `${siteUrl.toString()}?q={search_term_string}`,
-                      "query-input": "required name=search_term_string",
-                    },
                   },
                   {
                     "@type": "Organization",
                     name: SITE_NAME,
                     url: siteUrl.toString(),
-                    logo: `${siteUrl.toString()}globe.svg`,
+                    logo: `${siteUrl.toString()}icon-512.png`,
                   },
                 ],
               }),

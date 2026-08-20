@@ -19,6 +19,7 @@ export default function robots(): MetadataRoute.Robots {
       {
         userAgent: "*",
         allow: "/",
+        disallow: ["/history", "/dashboard"],
       },
     ],
     sitemap: `${siteUrl.toString()}sitemap.xml`,

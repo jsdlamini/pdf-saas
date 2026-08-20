@@ -104,12 +104,6 @@ export default async function ToolPage({ params }: ToolPageProps) {
       {
         "@type": "ListItem",
         position: 2,
-        name: "Tools",
-        item: `${siteUrl.replace(/\/$/, "")}/`,
-      },
-      {
-        "@type": "ListItem",
-        position: 3,
         name: tool.name,
         item: toolUrl,
       },
@@ -135,19 +129,6 @@ export default async function ToolPage({ params }: ToolPageProps) {
     },
   ];
 
-  const faqSchema = {
-    "@context": "https://schema.org",
-    "@type": "FAQPage",
-    mainEntity: faqItems.map((faq) => ({
-      "@type": "Question",
-      name: faq.question,
-      acceptedAnswer: {
-        "@type": "Answer",
-        text: faq.answer,
-      },
-    })),
-  };
-
   return (
     <main className="depth-stage mx-auto flex w-full max-w-5xl flex-1 flex-col gap-8 px-6 py-10 md:px-10">
       <script
@@ -157,10 +138,6 @@ export default async function ToolPage({ params }: ToolPageProps) {
       <script
         type="application/ld+json"
         dangerouslySetInnerHTML={{ __html: JSON.stringify(breadcrumbSchema) }}
-      />
-      <script
-        type="application/ld+json"
-        dangerouslySetInnerHTML={{ __html: JSON.stringify(faqSchema) }}
       />
       <ProjectSessionCta />
       <Suspense>
