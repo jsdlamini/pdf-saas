@@ -2,7 +2,7 @@
 // fixture-a: multi-page, mixed page sizes, one page with a non-zero /Rotate.
 // fixture-b: a distinct second PDF for multi-file tools (merge, compare).
 import { PDFDocument, StandardFonts, degrees, rgb } from "pdf-lib";
-import { writeFileSync, mkdirSync } from "node:fs";
+import { writeFileSync, mkdirSync, readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -45,5 +45,12 @@ await makePdf(join(outDir, "fixture-b.pdf"), [
   { width: 612, height: 792, title: "Fixture B page 2", lines: 5 },
   { width: 612, height: 792, title: "Fixture B page 3", lines: 5 },
 ]);
+
+// fixture-encrypted: fixture-a encrypted with a known password, for unlock-pdf.
+{
+  const src = await PDFDocument.load(readFileSync(join(outDir, "fixture-a.pdf")));
+  src.encrypt({ userPassword: "secret123", ownerPassword: "secret123" });
+  writeFileSync(join(outDir, "fixture-encrypted.pdf"), await src.save());
+}
 
 console.log("fixtures written to", outDir);

@@ -19,9 +19,12 @@ const CASES = [
   { slug: "merge-pdf", name: "one", files: ["fixture-a.pdf"], run: true },
   { slug: "split-pdf", name: "default", files: ["fixture-a.pdf"], run: true },
   { slug: "split-pdf", name: "range", files: ["fixture-a.pdf"], run: true, setup: (p) => p.fill("#ranges", "2-4") },
-  { slug: "extract-pages", name: "default", files: ["fixture-a.pdf"], run: true },
   { slug: "remove-pages", name: "default", files: ["fixture-a.pdf"], run: true },
+  { slug: "remove-pages", name: "drop2", files: ["fixture-a.pdf"], run: true, setup: (p) => p.click('img[alt="Page 2"]') },
+  { slug: "extract-pages", name: "default", files: ["fixture-a.pdf"], run: true },
+  { slug: "extract-pages", name: "pick13", files: ["fixture-a.pdf"], run: true, setup: async (p) => { await p.click('img[alt="Page 1"]'); await p.click('img[alt="Page 3"]'); } },
   { slug: "organize-pdf", name: "default", files: ["fixture-a.pdf"], run: true },
+  { slug: "organize-pdf", name: "reorder", files: ["fixture-a.pdf"], run: true, setup: async (p) => { await p.dragAndDrop('img[alt="Page 1"]', 'img[alt="Page 3"]'); } },
   { slug: "rotate-pdf", name: "default", files: ["fixture-a.pdf"], run: true },
   { slug: "rotate-pdf", name: "deg180", files: ["fixture-a.pdf"], run: true, setup: (p) => p.click('button:has-text("180°")') },
   // --- Optimize ---
@@ -36,15 +39,28 @@ const CASES = [
   { slug: "pdf-to-jpg", name: "default", files: ["fixture-a.pdf"] },
   // --- Security ---
   { slug: "protect-pdf", name: "password", files: ["fixture-a.pdf"], run: true, setup: (p) => p.fill("#password", "secret123") },
-  { slug: "unlock-pdf", name: "default", files: ["fixture-a.pdf"] },
+  { slug: "unlock-pdf", name: "encrypted", files: ["fixture-encrypted.pdf"], run: true, setup: (p) => p.fill("#password", "secret123") },
   { slug: "redact-pdf", name: "default", files: ["fixture-a.pdf"] },
   // --- Edit ---
   { slug: "page-numbers", name: "default", files: ["fixture-a.pdf"] },
   { slug: "crop-pdf", name: "default", files: ["fixture-a.pdf"], run: true },
   { slug: "crop-pdf", name: "margin30", files: ["fixture-a.pdf"], run: true, setup: (p) => p.fill('input[placeholder="Example: 20"]', "30") },
   { slug: "edit-pdf", name: "default", files: ["fixture-a.pdf"], run: true },
+  { slug: "edit-pdf", name: "draw", files: ["fixture-a.pdf"], run: true, setup: async (p) => {
+    await p.click('button[title*="Draw"]');
+    const c = p.locator('canvas[aria-label="Edit PDF canvas"]');
+    const box = await c.boundingBox();
+    await p.mouse.move(box.x + 80, box.y + 80);
+    await p.mouse.down();
+    await p.mouse.move(box.x + 220, box.y + 160, { steps: 12 });
+    await p.mouse.up();
+  } },
   // --- Sign ---
   { slug: "sign-pdf", name: "default", files: ["fixture-a.pdf"], run: true },
+  { slug: "sign-pdf", name: "typed", files: ["fixture-a.pdf"], run: true, setup: async (p) => {
+    await p.fill("#edit-text", "Test Signature");
+    await p.click('button:has-text("Add signature")');
+  } },
   { slug: "compare-pdf", name: "two", files: ["fixture-a.pdf", "fixture-b.pdf"], run: true },
 ];
 
