@@ -1538,17 +1538,25 @@ export default function ResearchStudioPage() {
     setAutoSaveStatus("unsaved");
     if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
     saveTimerRef.current = setTimeout(() => {
-      try {
-        const snapshot = buildCurrentProjectSnapshot();
-        persistProjectSnapshot(snapshot);
-        if (userId && !accountSyncUnavailable) {
-          void upsertProjectSnapshotToServer(snapshot).catch(() => {});
+      void (async () => {
+        try {
+          const snapshot = buildCurrentProjectSnapshot();
+          persistProjectSnapshot(snapshot);
+          if (userId && !accountSyncUnavailable) {
+            await upsertProjectSnapshotToServer(snapshot);
+          }
+          setAutoSaveTimestamp(new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" }));
+          setAutoSaveStatus("saved");
+        } catch (error) {
+          const message = error instanceof Error ? error.message : "Could not sync this project.";
+          if (isAccountSyncUnavailableMessage(message)) {
+            setAccountSyncUnavailable(true);
+          } else {
+            setCompileNotice(`Save failed: ${message}`);
+          }
+          setAutoSaveStatus("unsaved");
         }
-        setAutoSaveTimestamp(new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" }));
-        setAutoSaveStatus("saved");
-      } catch {
-        // silent fail
-      }
+      })();
     }, 2000);
   }, [projectEntries, activeProjectId, projectName, selectedPath, lastCompileAt, userId, accountSyncUnavailable]);
 

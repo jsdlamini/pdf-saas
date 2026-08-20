@@ -16,7 +16,10 @@ export async function GET(request: Request) {
   const pool = new Pool({ connectionString: process.env.DATABASE_URL, max: 1 });
   const client = await pool.connect();
   const channel = `collab_${projectId}`;
-  await client.query(`LISTEN ${channel}`);
+  // Quote the channel: project IDs contain hyphens, which PostgreSQL would
+  // otherwise parse as an operator ("syntax error at or near '-'")
+  // rather than part of the LISTEN channel name.
+  await client.query(`LISTEN "${channel}"`);
 
   const encoder = new TextEncoder();
   let released = false;
