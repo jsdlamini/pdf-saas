@@ -1,0 +1,243 @@
+{
+  "results": [
+    {
+      "tool": "compare-pdf",
+      "case": "two",
+      "metric": "hash",
+      "hash": "61b4a0e9a859eae9e0f3f1b3603a49b354decc43d12e23cb411533e749ee8272",
+      "size": 249,
+      "pages": 0
+    },
+    {
+      "tool": "compress-pdf",
+      "case": "default",
+      "metric": "ssim",
+      "value": 1.0
+    },
+    {
+      "tool": "compress-pdf",
+      "case": "grayscale",
+      "metric": "ssim",
+      "value": 1.0
+    },
+    {
+      "tool": "crop-pdf",
+      "case": "default",
+      "metric": "hash",
+      "hash": "9c1603ca9ef7d6a6eba977fe5f7871593ede3420a5c88fcd3195535f29bba544",
+      "size": 2800,
+      "pages": 5
+    },
+    {
+      "tool": "crop-pdf",
+      "case": "margin30",
+      "metric": "hash",
+      "hash": "616e5eaa59b0cebe31a0b9454200dee6fd12fe38289d61fc548a4ffbd22d556e",
+      "size": 2804,
+      "pages": 5
+    },
+    {
+      "tool": "edit-pdf",
+      "case": "default",
+      "metric": "hash",
+      "hash": "1a3b8f673847938281ef5dc3919a156ddb078c620b523f92f8401d54d34eb662",
+      "size": 2786,
+      "pages": 5
+    },
+    {
+      "tool": "edit-pdf",
+      "case": "draw",
+      "metric": "hash",
+      "hash": "1a3b8f673847938281ef5dc3919a156ddb078c620b523f92f8401d54d34eb662",
+      "size": 2786,
+      "pages": 5
+    },
+    {
+      "tool": "extract-pages",
+      "case": "default",
+      "metric": "hash",
+      "hash": "fb0ece9267b5af998d5ab61c462038ec1de8329b91ba354e14e87688c7203d72",
+      "size": 582,
+      "pages": 1
+    },
+    {
+      "tool": "extract-pages",
+      "case": "pick13",
+      "metric": "hash",
+      "hash": "e0e6a9a6466e13aba02db02058967618245dd51d3e108cf9fefd6f660cd99086",
+      "size": 1500,
+      "pages": 2
+    },
+    {
+      "tool": "merge-pdf",
+      "case": "one",
+      "metric": "hash",
+      "hash": "9c75d0ed536f88d307be1975e9cc28091296038b28f915b9cf1008193639290c",
+      "size": 5705,
+      "pages": 13
+    },
+    {
+      "tool": "merge-pdf",
+      "case": "two",
+      "metric": "hash",
+      "hash": "d0c414f36508a4c8b66169ee7f22f7539b42949a47cbd24ae4d482bfe432f997",
+      "size": 3762,
+      "pages": 8
+    },
+    {
+      "tool": "organize-pdf",
+      "case": "default",
+      "metric": "hash",
+      "hash": "1a3b8f673847938281ef5dc3919a156ddb078c620b523f92f8401d54d34eb662",
+      "size": 2771,
+      "pages": 5
+    },
+    {
+      "tool": "organize-pdf",
+      "case": "reorder",
+      "metric": "hash",
+      "hash": "1a3b8f673847938281ef5dc3919a156ddb078c620b523f92f8401d54d34eb662",
+      "size": 2771,
+      "pages": 5
+    },
+    {
+      "tool": "page-numbers",
+      "case": "default",
+      "metric": "hash",
+      "hash": "297998c6a4c6993d5d1da4a2b58c002bd55a486fdb349f5cb29d2c5e43bbdee9",
+      "size": 3897,
+      "pages": 5
+    },
+    {
+      "tool": "pdf-to-excel",
+      "case": "default",
+      "metric": "hash",
+      "hash": "8398cae8c8efc5860cc667f0a128a6fb4c3d9a7d1563fa483ba2598a551e4642",
+      "size": 18137,
+      "pages": 10
+    },
+    {
+      "tool": "pdf-to-jpg",
+      "case": "default",
+      "metric": "hash",
+      "hash": "b81859fb9fa75b9fb7db3728de67c6b3e9cd6d3a7cfc8cf2e66d4f5037ca6fba",
+      "size": 326522,
+      "pages": 5
+    },
+    {
+      "tool": "pdf-to-latex",
+      "case": "default",
+      "metric": "hash",
+      "hash": "a45c1a4ddd2d12f362bda7f13de8773676fdf2135430553b700decd38149808d",
+      "size": 2324,
+      "pages": 0
+    },
+    {
+      "tool": "pdf-to-pdfa",
+      "case": "default",
+      "metric": "hash",
+      "hash": "9e41d702e71270c910453fa7247a936eb717d0b71be73f7c8242134f3eed0e90",
+      "size": 2883,
+      "pages": 5
+    },
+    {
+      "tool": "pdf-to-powerpoint",
+      "case": "default",
+      "metric": "hash",
+      "hash": "5ff3688e78c6239916c355af6b3344c35d9b5b77249ceaae99b7d06ab1be85f2",
+      "size": 69594,
+      "pages": 55
+    },
+    {
+      "tool": "protect-pdf",
+      "case": "password",
+      "metric": "ssim",
+      "value": 1.0
+    },
+    {
+      "tool": "redact-pdf",
+      "case": "default",
+      "metric": "ssim",
+      "value": 1.0
+    },
+    {
+      "tool": "remove-pages",
+      "case": "default",
+      "metric": "hash",
+      "hash": "1a3b8f673847938281ef5dc3919a156ddb078c620b523f92f8401d54d34eb662",
+      "size": 2771,
+      "pages": 5
+    },
+    {
+      "tool": "remove-pages",
+      "case": "drop2",
+      "metric": "hash",
+      "hash": "fef1bb8fcb515938f29b690ad308eb1f1f4e06879e58b7943e2d3820cb2f31a2",
+      "size": 2336,
+      "pages": 4
+    },
+    {
+      "tool": "repair-pdf",
+      "case": "default",
+      "metric": "hash",
+      "hash": "970f0037bd0d168692d78fbd3253990f5146f7ac66e4902a8d950ef16dae9798",
+      "size": 4650,
+      "pages": 5
+    },
+    {
+      "tool": "rotate-pdf",
+      "case": "default",
+      "metric": "hash",
+      "hash": "2ba4466cf95f9451d988778b2a73273b1b4fb87ae43e3cc9dfca4c133087ed4c",
+      "size": 2773,
+      "pages": 5
+    },
+    {
+      "tool": "rotate-pdf",
+      "case": "deg180",
+      "metric": "hash",
+      "hash": "62308db0b99c42c7c6c4c87d27d181cc3f1e03051e03587bcc29c7602f8d8025",
+      "size": 2775,
+      "pages": 5
+    },
+    {
+      "tool": "sign-pdf",
+      "case": "default",
+      "metric": "hash",
+      "hash": "ca91b6f7785d4e0ec1afac0361d0cd76ebb4b7f50ae111d719d1d794175d3887",
+      "size": 4022,
+      "pages": 5
+    },
+    {
+      "tool": "sign-pdf",
+      "case": "typed",
+      "metric": "hash",
+      "hash": "7a1ed2eb607095f0e206613b15d5dbb0a6f6c8012c4434756cb3521f97766335",
+      "size": 3980,
+      "pages": 5
+    },
+    {
+      "tool": "split-pdf",
+      "case": "default",
+      "metric": "hash",
+      "hash": "fb0ece9267b5af998d5ab61c462038ec1de8329b91ba354e14e87688c7203d72",
+      "size": 583,
+      "pages": 1
+    },
+    {
+      "tool": "split-pdf",
+      "case": "range",
+      "metric": "hash",
+      "hash": "75b20d57f2e1d4c42aedeb6fa1267f63ff6aa7bf5e86e067a734d249119dfcbb",
+      "size": 1940,
+      "pages": 3
+    },
+    {
+      "tool": "unlock-pdf",
+      "case": "encrypted",
+      "metric": "NONNORMALIZABLE",
+      "value": "PasswordError"
+    }
+  ],
+  "mismatches": []
+}
