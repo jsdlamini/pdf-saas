@@ -3,7 +3,7 @@
 import { FormEvent, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { rankToolsByIntent } from "@/lib/tool-intent-search";
-import { TOOL_ITEMS } from "@/lib/tools";
+import { ACTIVE_TOOL_ITEMS } from "@/lib/tools";
 
 type ToolNavSearchProps = {
   className?: string;
@@ -21,7 +21,7 @@ export default function ToolNavSearch({ className, onNavigate }: ToolNavSearchPr
 
   const suggestedTools = useMemo(() => {
     const normalized = query.trim();
-    return rankToolsByIntent(TOOL_ITEMS, normalized).map((entry) => entry.tool);
+    return rankToolsByIntent(ACTIVE_TOOL_ITEMS, normalized).map((entry) => entry.tool);
   }, [query]);
 
   function onSubmit(event: FormEvent<HTMLFormElement>) {
@@ -32,23 +32,23 @@ export default function ToolNavSearch({ className, onNavigate }: ToolNavSearchPr
       return;
     }
 
-    const exactSlug = TOOL_ITEMS.find((tool) => tool.slug.toLowerCase() === normalized);
+    const exactSlug = ACTIVE_TOOL_ITEMS.find((tool) => tool.slug.toLowerCase() === normalized);
     if (exactSlug) {
       goTo(`/tools/${exactSlug.slug}`);
       return;
     }
 
-    const nameMatch = TOOL_ITEMS.find((tool) => tool.name.toLowerCase() === normalized);
+    const nameMatch = ACTIVE_TOOL_ITEMS.find((tool) => tool.name.toLowerCase() === normalized);
     if (nameMatch) {
       goTo(`/tools/${nameMatch.slug}`);
       return;
     }
 
-    const partialMatch = TOOL_ITEMS.find((tool) => {
+    const partialMatch = ACTIVE_TOOL_ITEMS.find((tool) => {
       return tool.name.toLowerCase().includes(normalized);
     });
 
-    const ranked = rankToolsByIntent(TOOL_ITEMS, normalized);
+    const ranked = rankToolsByIntent(ACTIVE_TOOL_ITEMS, normalized);
     const bestIntentMatch = ranked[0];
     if (bestIntentMatch && bestIntentMatch.score >= 18) {
       goTo(`/tools/${bestIntentMatch.tool.slug}`);

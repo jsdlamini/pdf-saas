@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useState } from "react";
-import { TOOL_CATEGORIES, TOOL_ITEMS } from "@/lib/tools";
+import { ACTIVE_TOOL_ITEMS, TOOL_CATEGORIES } from "@/lib/tools";
 import ToolNavSearch from "./tool-nav-search";
 
 const MOBILE_NAV_PARENTS = ["All", ...TOOL_CATEGORIES] as const;
@@ -50,8 +50,8 @@ export default function MobileToolNav() {
               {MOBILE_NAV_PARENTS.map((parent) => {
                 const subgroupTools =
                   parent === "All"
-                    ? TOOL_ITEMS
-                    : TOOL_ITEMS.filter((tool) => tool.category === parent);
+                    ? ACTIVE_TOOL_ITEMS
+                    : ACTIVE_TOOL_ITEMS.filter((tool) => tool.category === parent);
 
                 return (
                   <details key={parent} className="group rounded-2xl border border-slate-200/80 bg-slate-50/80 px-3 py-2.5 dark:border-slate-700/80 dark:bg-slate-900/80">

@@ -1,5 +1,5 @@
 import type { MetadataRoute } from "next";
-import { TOOL_ITEMS } from "@/lib/tools";
+import { ACTIVE_TOOL_ITEMS } from "@/lib/tools";
 import { SEO_LANDING_PAGES } from "@/lib/seo-landing-pages";
 
 const DEFAULT_SITE_URL = "http://localhost:3000";
@@ -50,7 +50,7 @@ export default function sitemap(): MetadataRoute.Sitemap {
     },
   ];
 
-  const toolPages: MetadataRoute.Sitemap = TOOL_ITEMS.map((tool) => ({
+  const toolPages: MetadataRoute.Sitemap = ACTIVE_TOOL_ITEMS.map((tool) => ({
     url: `${siteUrl}/tools/${tool.slug}`,
     lastModified: now,
     changeFrequency: "weekly",

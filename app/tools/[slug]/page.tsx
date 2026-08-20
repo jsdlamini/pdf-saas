@@ -74,6 +74,25 @@ export default async function ToolPage({ params }: ToolPageProps) {
     notFound();
   }
 
+  if (tool.disabled) {
+    return (
+      <main className="depth-stage mx-auto flex w-full max-w-2xl flex-1 flex-col items-center justify-center gap-4 px-6 py-20 text-center">
+        <h1 className="font-display text-3xl font-semibold tracking-tight text-slate-950">
+          {tool.name} is temporarily unavailable
+        </h1>
+        <p className="text-slate-600">
+          We&apos;ve disabled this tool while we fix a bug. Please check back soon.
+        </p>
+        <Link
+          href="/"
+          className="rounded-full bg-gradient-to-r from-cyan-500 to-blue-600 px-5 py-2.5 text-sm font-bold text-white shadow-lg"
+        >
+          Back to all tools
+        </Link>
+      </main>
+    );
+  }
+
   const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || "http://localhost:3000";
   const toolUrl = `${siteUrl.replace(/\/$/, "")}/tools/${tool.slug}`;
   const toolSchema = {

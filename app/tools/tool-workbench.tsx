@@ -14,7 +14,7 @@ import * as XLSX from "xlsx";
 import { analyzeDocumentSelection } from "@/lib/document-preflight";
 import { MAX_OCR_UPLOAD_BYTES, OCR_LANGUAGE_OPTIONS } from "@/lib/ocr";
 import { formatDurationMs, hashBlob, hashFile, summarizeRunConfidence, type RunReport } from "@/lib/run-report";
-import { TOOL_ITEMS, type ToolItem } from "@/lib/tools";
+import { ACTIVE_TOOL_ITEMS, TOOL_ITEMS, type ToolItem } from "@/lib/tools";
 import Swal from "sweetalert2";
 import { consumeWorkflowPipeline, stageWorkflowPipeline, loadPersistedWorkflowPipeline } from "@/lib/workflow-pipeline";
 import { loadUploadedFiles, persistUploadedFiles, clearUploadedFiles, loadSharedFiles, persistSharedFiles } from "@/lib/file-persistence";
@@ -1730,7 +1730,7 @@ export default function ToolWorkbench({ tool }: WorkbenchProps) {
 
   const switchableTools = useMemo(() => {
     if (!files.length) return [];
-    return TOOL_ITEMS.filter((candidate) => {
+    return ACTIVE_TOOL_ITEMS.filter((candidate) => {
       if (candidate.slug === tool.slug) return false;
       return files.some((file) => isFileCompatibleForTool(candidate.slug, file));
     }).slice(0, 8);
@@ -2388,7 +2388,7 @@ export default function ToolWorkbench({ tool }: WorkbenchProps) {
 
   async function pipeOutputToTool() {
     if (!outputPreview) return;
-    const targetTools = TOOL_ITEMS.filter((t) => t.slug !== tool.slug);
+    const targetTools = ACTIVE_TOOL_ITEMS.filter((t) => t.slug !== tool.slug);
     const toolCards = targetTools
       .map(
         (t) => `

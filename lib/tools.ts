@@ -13,6 +13,9 @@ export type ToolItem = {
   // means only some accepted input types are uploaded. Source of truth for
   // "never uploaded" badges.
   processing: ToolProcessing;
+  // When true the tool is hidden from grids/search/sitemap and its page shows a
+  // "temporarily unavailable" notice instead of the workbench.
+  disabled?: boolean;
 };
 
 export const TOOL_ITEMS: ToolItem[] = [
@@ -139,6 +142,9 @@ export const TOOL_ITEMS: ToolItem[] = [
     description: "Remove password restrictions from authorized files.",
     category: "Security",
     processing: "local",
+    // Temporarily disabled: ignoreEncryption does not decrypt, so unlock-pdf
+    // returns still-locked (user-password) or corrupted (owner-only) files.
+    disabled: true,
   },
   {
     slug: "redact-pdf",
@@ -208,6 +214,10 @@ export const TOOL_CATEGORIES = [
   "Edit",
   "Sign",
 ] as const;
+
+// Tools that are safe to surface in grids, search, and the sitemap (excludes
+// temporarily disabled tools).
+export const ACTIVE_TOOL_ITEMS = TOOL_ITEMS.filter((tool) => !tool.disabled);
 
 export function getToolBySlug(slug: string) {
   return TOOL_ITEMS.find((tool) => tool.slug === slug);

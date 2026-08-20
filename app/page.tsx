@@ -10,7 +10,7 @@ import {
   type DragEvent,
 } from "react";
 import { rankToolsByIntent } from "@/lib/tool-intent-search";
-import { TOOL_ITEMS } from "@/lib/tools";
+import { ACTIVE_TOOL_ITEMS, TOOL_ITEMS } from "@/lib/tools";
 import { WORKFLOW_RECIPES } from "@/lib/workflow-recipes";
 import {
   clearWorkflowPipeline,
@@ -194,7 +194,7 @@ export default function Home() {
     if (!dropFile) return [];
     const slugs = new Set(dropSuggestions);
     const isPdfFile = isPdf(dropFile);
-    return TOOL_ITEMS.filter((t) => {
+    return ACTIVE_TOOL_ITEMS.filter((t) => {
       if (slugs.has(t.slug)) return false;
       if (t.slug === "ocr-pdf") return true; // OCR works with both
       if (isPdfFile) return t.slug.includes("pdf") || t.slug === "merge-pdf" || t.slug === "split-pdf" || t.slug === "compress-pdf" || t.slug === "sign-pdf" || t.slug === "protect-pdf" || t.slug === "unlock-pdf" || t.slug === "redact-pdf" || t.slug === "edit-pdf" || t.slug === "crop-pdf" || t.slug === "rotate-pdf" || t.slug === "organize-pdf" || t.slug === "remove-pages" || t.slug === "extract-pages" || t.slug === "repair-pdf" || t.slug === "page-numbers" || t.slug === "compare-pdf" || t.slug === "pdf-to-pdfa" || t.slug === "pdf-to-latex";
@@ -327,7 +327,7 @@ export default function Home() {
   /* ── search ───────────────────────────────────────────────────── */
   const searchResults = useMemo(() => {
     if (!intentQuery.trim()) return null;
-    return rankToolsByIntent(TOOL_ITEMS, intentQuery)
+    return rankToolsByIntent(ACTIVE_TOOL_ITEMS, intentQuery)
       .filter((entry) => entry.score > 0)
       .slice(0, 12)
       .map((entry) => entry.tool);
@@ -688,8 +688,8 @@ export default function Home() {
                 "merge-pdf", "split-pdf", "compress-pdf", "ocr-pdf",
                 "sign-pdf", "pdf-to-word", "convert-to-pdf", "protect-pdf",
               ]);
-              const topDuplicates = TOOL_ITEMS.filter((t) => TOP_TOOLS.has(t.slug));
-              const weighted = [...TOOL_ITEMS, ...topDuplicates];
+              const topDuplicates = ACTIVE_TOOL_ITEMS.filter((t) => TOP_TOOLS.has(t.slug));
+              const weighted = [...ACTIVE_TOOL_ITEMS, ...topDuplicates];
               return [...weighted, ...weighted];
             })().map((tool, i) => (
               <Link
