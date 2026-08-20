@@ -34,11 +34,11 @@ jobs:
     name: Redact pixel test (Playwright)
     runs-on: ubuntu-latest
     env:
-      # Dummy Clerk keys: public pages render without auth; the redact test
-      # never signs in. A valid-format placeholder keeps ClerkProvider from
-      # throwing at startup.
-      NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY: pk_test_Y2ktZHVtbXk=
-      CLERK_SECRET_KEY: sk_test_Y2ktZHVtbXk=
+      # Structurally-valid placeholder Clerk key (decodes to clerk.ci.example.com$)
+      # so ClerkProvider passes its publishable-key validation. Public pages render
+      # without auth; the redact test never signs in.
+      NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY: pk_test_Y2xlcmsuY2kuZXhhbXBsZS5jb20k
+      CLERK_SECRET_KEY: sk_test_Y2xlcmsuY2kuZXhhbXBsZS5jb20k
       NEXT_PUBLIC_SITE_URL: http://localhost:3000
       # Analytics is Postgres-backed; point it at a placeholder so the pool
       # constructor does not throw. The analytics route degrades to a 500.
