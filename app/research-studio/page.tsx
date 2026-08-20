@@ -3927,6 +3927,10 @@ export default function ResearchStudioPage() {
         if (!zipPath || zipPath.startsWith("__MACOSX/")) continue;
         const name = zipPath.split("/").pop() || zipPath;
         if (name.startsWith(".")) continue;
+        // Skip binary assets (images, PDFs, office docs, fonts, archives).
+        // They aren't editable as text, and reading them as a string bloats
+        // the save payload, which can make the imported project fail to persist.
+        if (/\.(png|jpe?g|gif|bmp|webp|ico|tiff?|pdf|zip|gz|tgz|tar|docx?|xlsx?|pptx?|odt|ods|odp|woff2?|ttf|otf|eot)$/i.test(name)) continue;
 
         const content = await zipEntry.async("string");
         entries.push({ path: zipPath, kind: "file", content });
@@ -3983,13 +3987,25 @@ export default function ResearchStudioPage() {
       };
 
       persistProjectSnapshot(snapshot);
-      queueServerProjectSync(snapshot);
+      let importNotice = `Imported ${fileEntries.length} files from ${file.name}.`;
+      if (userId && !accountSyncUnavailable) {
+        try {
+          await upsertProjectSnapshotToServer(snapshot);
+        } catch (error) {
+          const message = error instanceof Error ? error.message : "Could not sync this project.";
+          if (isAccountSyncUnavailableMessage(message)) {
+            setAccountSyncUnavailable(true);
+          } else {
+            importNotice = `Imported locally, but save failed: ${message}`;
+          }
+        }
+      }
       setActiveProjectId(projectId);
       setProjectName(projectName);
       setProjectEntries(entries);
       setSelectedPath(mainTexPath);
       setEditorMode(editorMode);
-      setCompileNotice(`Imported ${fileEntries.length} files from ${file.name}.`);
+      setCompileNotice(importNotice);
       setWorkspaceScreen("editor");
     } catch (e) {
       setCompileNotice("Import failed. Make sure the file is a valid .zip archive.");
