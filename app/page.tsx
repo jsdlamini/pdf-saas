@@ -26,18 +26,11 @@ function getWorkflowCreatedAt() {
   return Date.now();
 }
 
-function getCategoryColor(category: string) {
-  const colors: Record<string, string> = {
-    Organize: "from-sky-200 to-cyan-200 text-sky-900 border-sky-300 shadow-sky-200/60",
-    Optimize: "from-indigo-200 to-violet-200 text-indigo-900 border-indigo-300 shadow-indigo-200/60",
-    Convert: "from-emerald-200 to-teal-200 text-emerald-900 border-emerald-300 shadow-emerald-200/60",
-    Security: "from-rose-200 to-orange-200 text-rose-900 border-rose-300 shadow-rose-200/60",
-    Edit: "from-amber-200 to-yellow-200 text-amber-900 border-amber-300 shadow-amber-200/60",
-    Sign: "from-green-200 to-lime-200 text-green-900 border-green-300 shadow-green-200/60",
-  };
-  return (
-    colors[category] || "from-slate-200 to-slate-100 text-slate-800 border-slate-300 shadow-slate-200/60"
-  );
+function getCategoryColor(_category: string) {
+  // Monochrome treatment: every tool uses the same neutral slate styling for a
+  // professional black/white/gray look; the category name is the label, not
+  // the colour.
+  return "from-slate-100 to-slate-200 text-slate-800 border-slate-300 shadow-slate-200/60";
 }
 
 const ACCEPTED_TYPES = [
@@ -592,8 +585,8 @@ export default function Home() {
                 <div
                   className={`drop-icon-drag-scale inline-flex h-16 w-16 items-center justify-center rounded-2xl transition-all duration-300 ${
                     dragOver
-                      ? "scale-125 bg-gradient-to-br from-cyan-200 to-blue-200 text-cyan-600 shadow-lg shadow-cyan-200/50"
-                      : "drop-icon-bounce bg-gradient-to-br from-cyan-100 to-blue-200 text-cyan-500"
+                      ? "scale-125 bg-gradient-to-br from-slate-200 to-slate-300 text-slate-700 shadow-lg shadow-slate-300/50"
+                      : "drop-icon-bounce bg-gradient-to-br from-slate-100 to-slate-200 text-slate-500"
                   }`}
                 >
                   <svg
@@ -610,7 +603,7 @@ export default function Home() {
                     />
                   </svg>
                 </div>
-                <p className="font-display text-2xl font-semibold tracking-tight bg-gradient-to-r from-red-500 to-pink-500 bg-clip-text text-transparent md:text-3xl">
+                <p className="font-display text-2xl font-semibold tracking-tight text-slate-900 md:text-3xl">
                   Drop your file(s) here
                 </p>
                 <p className="text-sm text-slate-500 drop-zone-subtitle">
