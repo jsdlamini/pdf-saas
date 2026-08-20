@@ -5669,21 +5669,23 @@ export default function ToolWorkbench({ tool }: WorkbenchProps) {
         if (!firstFile) throw new Error("Missing PDF file.");
 
         if (tool.slug === "unlock-pdf") {
-          // Unlock: load with ignoreEncryption, save without encryption
-          try {
-            const source = await PDFDocument.load(await readAsArrayBuffer(firstFile), { ignoreEncryption: true });
-            const bytes = await source.save({ useObjectStreams: true });
-            stageOutput(
-              asPdfBlob(bytes),
-              `${normalizeFileName(firstFile.name)}-unlocked.pdf`,
-              "Encryption removed. Original quality preserved. Preview before downloading."
-            );
-            complete("PDF unlocked — password protection removed.");
-            return;
-          } catch {
-            logProcessing("Could not unlock with ignoreEncryption — PDF may have owner password. Try Protect tool instead.");
-            throw new Error("This PDF could not be unlocked. It may have an owner password that prevents modification. The Protect PDF tool can add a new password instead.");
+          // Unlock: decrypt server-side with qpdf (pdf-lib cannot decrypt).
+          const form = new FormData();
+          form.append("file", firstFile);
+          form.append("password", password);
+          const response = await fetch("/api/unlock-pdf", { method: "POST", body: form });
+          if (!response.ok) {
+            const data = (await response.json().catch(() => null)) as { error?: string } | null;
+            throw new Error(data?.error || "Could not unlock this PDF.");
           }
+          const bytes = new Uint8Array(await response.arrayBuffer());
+          stageOutput(
+            asPdfBlob(bytes),
+            `${normalizeFileName(firstFile.name)}-unlocked.pdf`,
+            "Password protection removed. Preview before downloading."
+          );
+          complete("PDF unlocked — password protection removed.");
+          return;
         }
 
         // Protect: require password and encrypt

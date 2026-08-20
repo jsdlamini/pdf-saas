@@ -141,10 +141,9 @@ export const TOOL_ITEMS: ToolItem[] = [
     name: "Unlock PDF",
     description: "Remove password restrictions from authorized files.",
     category: "Security",
-    processing: "local",
-    // Temporarily disabled: ignoreEncryption does not decrypt, so unlock-pdf
-    // returns still-locked (user-password) or corrupted (owner-only) files.
-    disabled: true,
+    // Decryption happens server-side (qpdf); the password-protected file is
+    // uploaded to /api/unlock-pdf.
+    processing: "server",
   },
   {
     slug: "redact-pdf",
