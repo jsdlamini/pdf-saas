@@ -98,6 +98,10 @@ function isValidAiPatchSnippet(raw: string) {
 
 const GUEST_PROJECT_LIMIT = 2;
 
+// Fixed width of the far-left Projects activity bar. Keep in sync with the
+// hardcoded 44px first column in the `.studio-panes` / `.studio-panes-code` grid rules in globals.css.
+const PROJECTS_RAIL_WIDTH = 44;
+
 const JOURNAL_PRESETS: { slug: string; name: string; abstractWords: number; totalWords: number; refs: number }[] = [
   { slug: "", name: "No target", abstractWords: 0, totalWords: 0, refs: 0 },
   { slug: "nature", name: "Nature", abstractWords: 150, totalWords: 3000, refs: 50 },
@@ -1068,7 +1072,17 @@ export default function ResearchStudioPage() {
   const [rightPaneWidth, setRightPaneWidth] = useState(300);
   const [leftPaneCollapsed, setLeftPaneCollapsed] = useState(false);
   const [rightPaneCollapsed, setRightPaneCollapsed] = useState(false);
+  const [projectsPaneOpen, setProjectsPaneOpen] = useState(() => {
+    if (typeof window === "undefined") return false;
+    try {
+      return localStorage.getItem("wiserfiles-studio-projects-pane") === "open";
+    } catch { return false; }
+  });
   const [isMobile, setIsMobile] = useState(false);
+
+  useEffect(() => {
+    try { localStorage.setItem("wiserfiles-studio-projects-pane", projectsPaneOpen ? "open" : "closed"); } catch {}
+  }, [projectsPaneOpen]);
   const [searchQuery, setSearchQuery] = useState("");
   const [openTabs, setOpenTabs] = useState<string[]>([]);
 
@@ -1499,6 +1513,18 @@ export default function ResearchStudioPage() {
         setPaletteOpen((prev) => !prev);
         setPaletteQuery("");
         setPaletteIndex(0);
+      }
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, []);
+
+  // Global Ctrl/Cmd+Shift+E to toggle the Projects pane
+  useEffect(() => {
+    const onKeyDown = (event: KeyboardEvent) => {
+      if ((event.ctrlKey || event.metaKey) && event.shiftKey && event.key.toLowerCase() === "e") {
+        event.preventDefault();
+        setProjectsPaneOpen((prev) => !prev);
       }
     };
     window.addEventListener("keydown", onKeyDown);
@@ -2027,7 +2053,9 @@ export default function ResearchStudioPage() {
       const rect = container.getBoundingClientRect();
 
       if (activeResizer === "left") {
-        const nextWidth = clamp(event.clientX - rect.left, 160, 380);
+        // The Projects activity bar occupies the first PROJECTS_RAIL_WIDTH px of the pane,
+        // so subtract it to measure from the file tree's left edge.
+        const nextWidth = clamp(event.clientX - rect.left - PROJECTS_RAIL_WIDTH, 160, 380);
         setLeftPaneWidth(nextWidth);
       } else {
         const nextWidth = clamp(rect.right - event.clientX, 220, 480);
@@ -4297,6 +4325,21 @@ export default function ResearchStudioPage() {
     );
   }, [savedProjects, searchQuery]);
 
+  // Group saved projects by language for the Projects pane
+  const projectsByLanguage = useMemo(() => {
+    const groups: { key: EditorMode; label: string; color: string; projects: SavedProjectMeta[] }[] = [
+      { key: "latex", label: "LaTeX", color: "#818cf8", projects: [] },
+      { key: "cpp", label: "C++", color: "#f97316", projects: [] },
+      { key: "python", label: "Python", color: "#4ade80", projects: [] },
+    ];
+    for (const project of savedProjects) {
+      const type: EditorMode = project.type || "latex";
+      const group = groups.find((g) => g.key === type);
+      if (group) group.projects.push(project);
+    }
+    return groups.filter((group) => group.projects.length > 0);
+  }, [savedProjects]);
+
   if (workspaceScreen === "projects") {
     return (
       <main className="studio-dark studio-shell">
@@ -4622,6 +4665,18 @@ export default function ResearchStudioPage() {
         <div className="studio-topbar-left">
           <button
             type="button"
+            onClick={() => setProjectsPaneOpen((prev) => !prev)}
+            className="studio-btn studio-btn-ghost"
+            aria-label="Toggle Projects pane"
+            title="Projects (Ctrl/Cmd+Shift+E)"
+            style={{ width: 32, padding: 0 }}
+          >
+            <svg viewBox="0 0 20 20" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="1.8">
+              <path d="M3 5.5A1.5 1.5 0 0 1 4.5 4h3L9 5.5h6.5A1.5 1.5 0 0 1 17 7v7.5a1.5 1.5 0 0 1-1.5 1.5h-11A1.5 1.5 0 0 1 3 14.5v-9z" strokeLinecap="round" strokeLinejoin="round" />
+            </svg>
+          </button>
+          <button
+            type="button"
             onClick={openProjectsBoard}
             className="studio-btn studio-btn-ghost"
             aria-label="Back to projects board"
@@ -4918,6 +4973,7 @@ export default function ResearchStudioPage() {
           {
             label: "View", key: "view", items: [
               { label: rightPaneCollapsed ? (isCodeMode ? "Show Output" : "Show PDF Preview") : (isCodeMode ? "Hide Output" : "Hide PDF Preview"), action: () => { setOpenMenu(""); setRightPaneCollapsed(!rightPaneCollapsed); } },
+              { label: projectsPaneOpen ? "Hide Projects" : "Show Projects", action: () => { setOpenMenu(""); setProjectsPaneOpen((prev) => !prev); } },
               { label: leftPaneCollapsed ? "Show File Tree" : "Hide File Tree", action: () => { setOpenMenu(""); setLeftPaneCollapsed(!leftPaneCollapsed); } },
               "-",
               { label: "Version History", action: () => { setOpenMenu(""); setHistoryOpen(true); } },
@@ -5001,6 +5057,108 @@ export default function ResearchStudioPage() {
           "--right-width": rightPaneCollapsed ? "40px" : `${rightPaneWidth}px`,
         } as React.CSSProperties}
       >
+        {/* Projects activity bar + auto-hiding pane */}
+        <div
+          className={`studio-projects-rail ${projectsPaneOpen ? "studio-projects-rail-open" : ""}`}
+          onMouseEnter={() => setProjectsPaneOpen(true)}
+          onMouseLeave={() => setProjectsPaneOpen(false)}
+        >
+          <button
+            type="button"
+            className="studio-activity-bar"
+            onClick={() => setProjectsPaneOpen((prev) => !prev)}
+            aria-label={projectsPaneOpen ? "Hide Projects pane" : "Show Projects pane"}
+            title="Projects (Ctrl/Cmd+Shift+E)"
+          >
+            <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.6">
+              <path d="M3 5.5A1.5 1.5 0 0 1 4.5 4h3L9 5.5h6.5A1.5 1.5 0 0 1 17 7v7.5a1.5 1.5 0 0 1-1.5 1.5h-11A1.5 1.5 0 0 1 3 14.5v-9z" strokeLinecap="round" strokeLinejoin="round" />
+            </svg>
+          </button>
+
+          {projectsPaneOpen ? (
+            <div className="studio-projects-panel">
+              <div className="studio-projects-panel-header">
+                <span className="studio-projects-panel-title">Projects</span>
+                <div className="studio-projects-panel-actions">
+                  <button
+                    type="button"
+                    onClick={() => void createNewProject()}
+                    className="studio-projects-panel-action"
+                    title="New project"
+                  >
+                    <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="2">
+                      <path d="M10 4v12M4 10h12" strokeLinecap="round" />
+                    </svg>
+                    New
+                  </button>
+                  <button
+                    type="button"
+                    onClick={openProjectsBoard}
+                    className="studio-projects-panel-action"
+                    title="View all projects"
+                  >
+                    <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.8">
+                      <rect x="3" y="3" width="6" height="6" rx="1" />
+                      <rect x="11" y="3" width="6" height="6" rx="1" />
+                      <rect x="3" y="11" width="6" height="6" rx="1" />
+                      <rect x="11" y="11" width="6" height="6" rx="1" />
+                    </svg>
+                    View all
+                  </button>
+                </div>
+              </div>
+
+              <div className="studio-projects-panel-body">
+                {savedProjects.length === 0 ? (
+                  <div className="studio-projects-empty">
+                    <p>No projects yet</p>
+                    <button
+                      type="button"
+                      onClick={() => void createNewProject()}
+                      className="studio-btn studio-btn-primary"
+                      style={{ height: 28, fontSize: 11 }}
+                    >
+                      New Project
+                    </button>
+                  </div>
+                ) : (
+                  projectsByLanguage.map((group) => (
+                    <div key={group.key} className="studio-projects-group">
+                      <div className="studio-projects-group-header">
+                        <span className="studio-projects-group-label">
+                          <span className="studio-projects-group-dot" style={{ background: group.color }} />
+                          {group.label}
+                        </span>
+                        <span className="studio-projects-group-count">{group.projects.length}</span>
+                      </div>
+                      {group.projects.map((project) => {
+                        const isActive = project.id === activeProjectId;
+                        return (
+                          <button
+                            key={project.id}
+                            type="button"
+                            className={`studio-projects-item ${isActive ? "studio-projects-item-active" : ""}`}
+                            onClick={() => {
+                              if (!isActive) saveCurrentProject();
+                              loadSavedProject(project.id);
+                            }}
+                            title={project.name}
+                          >
+                            <span className="studio-projects-item-name">{project.name}</span>
+                            {isActive ? (
+                              <span className="studio-projects-item-current" title="Current project" aria-label="Current project">●</span>
+                            ) : null}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  ))
+                )}
+              </div>
+            </div>
+          ) : null}
+        </div>
+
         {/* File tree sidebar */}
         <aside className="studio-filetree">
           {leftPaneCollapsed ? (
@@ -5470,6 +5628,7 @@ export default function ResearchStudioPage() {
                 { label: "Version History", action: () => { setPaletteOpen(false); setHistoryOpen(true); } },
                 { label: "Toggle PDF Preview", action: () => { setPaletteOpen(false); setRightPaneCollapsed(!rightPaneCollapsed); } },
                 { label: "Toggle File Tree", action: () => { setPaletteOpen(false); setLeftPaneCollapsed(!leftPaneCollapsed); } },
+                { label: "Toggle Projects Pane", action: () => { setPaletteOpen(false); setProjectsPaneOpen((prev) => !prev); } },
                 { label: "Back to Projects", action: () => { setPaletteOpen(false); openProjectsBoard(); } },
                 { label: "Keyboard Shortcuts", action: () => { setPaletteOpen(false); setShowShortcuts(true); } },
               ]}
