@@ -1993,7 +1993,21 @@ export default function ToolWorkbench({ tool }: WorkbenchProps) {
     return ["Standard transformation pipeline", `Tool: ${tool.name}`];
   }
 
-  async function persistRunReport(startedAtMs: number, completionMessage: string) {
+  function resolveActualProcessingMode(filesToProcess: File[]): "local" | "server" {
+    if (tool.processing !== "conditional") return tool.processing;
+    // Conditional tools (merge-pdf / convert-to-pdf) upload only non-PDF,
+    // non-image files (office/text) to /api/office-to-pdf; PDF and image
+    // input is processed locally.
+    const uploaded = filesToProcess.some((file) => {
+      const lower = file.name.toLowerCase();
+      const isPdf = file.type === "application/pdf" || lower.endsWith(".pdf");
+      const isImage = file.type.startsWith("image/") || /\.(png|jpe?g|webp|gif)$/i.test(lower);
+      return !isPdf && !isImage;
+    });
+    return uploaded ? "server" : "local";
+  }
+
+  async function persistRunReport(startedAtMs: number, completionMessage: string, mode: "local" | "server") {
     const confidence = summarizeRunConfidence(tool.slug);
     const finishedAt = new Date();
     const transforms = summarizeToolTransforms();
@@ -2019,7 +2033,7 @@ export default function ToolWorkbench({ tool }: WorkbenchProps) {
       runId: `${tool.slug}-${Date.now()}`,
       toolSlug: tool.slug,
       toolName: tool.name,
-      mode: tool.processing,
+      mode,
       startedAt: new Date(startedAtMs).toISOString(),
       finishedAt: finishedAt.toISOString(),
       durationMs: finishedAt.getTime() - startedAtMs,
@@ -4915,9 +4929,11 @@ export default function ToolWorkbench({ tool }: WorkbenchProps) {
       return;
     }
 
+    const actualMode = resolveActualProcessingMode(files);
+
     try {
       setBusy(true);
-      logProcessing(`Running ${tool.name} in ${tool.processing} mode.`);
+      logProcessing(`Running ${tool.name} in ${actualMode} mode.`);
       const firstFile = files[0];
 
       if (tool.slug === "merge-pdf" || tool.slug === "convert-to-pdf") {
@@ -6280,7 +6296,7 @@ export default function ToolWorkbench({ tool }: WorkbenchProps) {
     } finally {
       setProgress(null);
       if (completionMessage) {
-        await persistRunReport(runStartedAt, completionMessage);
+        await persistRunReport(runStartedAt, completionMessage, actualMode);
         setLastRunSummary({
           message: completionMessage,
           inputCount: files.length,
