@@ -963,9 +963,8 @@ html[data-theme="light"] .studio-projects-panel {
 }
 
 .studio-editor-with-gutter {
-  display: grid;
-  grid-template-columns: 48px minmax(0, 1fr);
-  grid-template-rows: minmax(0, 1fr);
+  display: flex;
+  flex-direction: row;
   flex: 1;
   min-height: 0;
   overflow: hidden;
@@ -1033,6 +1032,37 @@ html[data-theme="light"] .studio-projects-panel {
 
 .studio-editor-textarea:focus {
   outline: none;
+}
+
+.studio-editor-codemirror {
+  flex: 1;
+  height: 100%;
+  min-width: 0;
+  font-family: "Fira Code", "JetBrains Mono", "SF Mono", "Cascadia Code", monospace;
+  font-size: 13px;
+}
+.studio-editor-codemirror .cm-editor {
+  height: 100%;
+  background: transparent;
+}
+.studio-editor-codemirror .cm-scroller {
+  line-height: 21px;
+  font-family: inherit;
+}
+.studio-editor-codemirror .cm-content {
+  caret-color: #4ade80;
+}
+.studio-editor-codemirror .cm-gutters {
+  background: var(--bg-secondary, #131620);
+  border-right: 1px solid var(--border-color, #334155);
+  color: var(--text-muted, #64748b);
+}
+.studio-editor-codemirror .cm-activeLine,
+.studio-editor-codemirror .cm-activeLineGutter {
+  background: transparent;
+}
+.studio-editor-codemirror .cm-cursor {
+  border-left-color: #4ade80;
 }
 
 /* ── Syntax highlighting ───── */
@@ -1845,6 +1875,8 @@ html[data-theme="light"] .studio-dark .swal2-input {
 
 /* ── match gutter ───── */
 .studio-match-gutter {
+  width: 128px;
+  flex-shrink: 0;
   background: var(--bg-secondary, #131620);
   border-right: 1px solid var(--border-color, #334155);
   overflow-y: auto;

@@ -11,7 +11,33 @@ import { useCallback, useEffect, useEffectEvent, useMemo, useRef, useState } fro
 import { useSearchParams } from "next/navigation";
 import Swal from "sweetalert2";
 import { getTemplateBySlug, RESEARCH_TEMPLATES, type ResearchTemplate } from "@/lib/research-templates";
-import { highlightCodeSource, escapeHtml, type EditorMode } from "@/lib/highlighters";
+import { LatexEditor } from "../components/latex-editor";
+import type { EditorView } from "@codemirror/view";
+import type { EditorMode } from "@/lib/highlighters";
+
+type StudioEditorAdapter = {
+  selectionStart: number;
+  selectionEnd: number;
+  setSelectionRange: (anchor: number, head?: number) => void;
+  scrollTop: number;
+  scrollLeft: number;
+  focus: () => void;
+  getBoundingClientRect: () => DOMRect;
+};
+
+function createEditorAdapter(getView: () => EditorView | null): StudioEditorAdapter {
+  return {
+    get selectionStart() { const s = getView()?.state.selection.main; return s ? Math.min(s.anchor, s.head) : 0; },
+    get selectionEnd() { const s = getView()?.state.selection.main; return s ? Math.max(s.anchor, s.head) : 0; },
+    setSelectionRange(anchor, head = anchor) { getView()?.dispatch({ selection: { anchor, head } }); },
+    get scrollTop() { return getView()?.scrollDOM.scrollTop ?? 0; },
+    set scrollTop(v) { const view = getView(); if (view) view.scrollDOM.scrollTop = v; },
+    get scrollLeft() { return getView()?.scrollDOM.scrollLeft ?? 0; },
+    set scrollLeft(v) { const view = getView(); if (view) view.scrollDOM.scrollLeft = v; },
+    focus() { getView()?.focus(); },
+    getBoundingClientRect() { return getView()?.contentDOM.getBoundingClientRect() ?? new DOMRect(); },
+  };
+}
 
 type ProjectEntry = {
   path: string;
@@ -700,66 +726,14 @@ function buildProjectTree(entries: ProjectEntry[]): ProjectTreeNode[] {
   return root.children || [];
 }
 
-function getCaretViewportPosition(textarea: HTMLTextAreaElement, cursor: number) {
-  const computed = window.getComputedStyle(textarea);
-  const mirror = document.createElement("div");
-  const copyProps = [
-    "boxSizing",
-    "width",
-    "height",
-    "overflowX",
-    "overflowY",
-    "borderTopWidth",
-    "borderRightWidth",
-    "borderBottomWidth",
-    "borderLeftWidth",
-    "paddingTop",
-    "paddingRight",
-    "paddingBottom",
-    "paddingLeft",
-    "fontStyle",
-    "fontVariant",
-    "fontWeight",
-    "fontStretch",
-    "fontSize",
-    "fontFamily",
-    "lineHeight",
-    "letterSpacing",
-    "textTransform",
-    "textIndent",
-    "tabSize",
-  ];
-
-  mirror.style.position = "fixed";
-  mirror.style.left = "-9999px";
-  mirror.style.top = "0";
-  mirror.style.whiteSpace = "pre-wrap";
-  mirror.style.wordWrap = "break-word";
-
-  for (const prop of copyProps) {
-    mirror.style.setProperty(prop, computed.getPropertyValue(prop));
-  }
-
-  mirror.textContent = textarea.value.slice(0, cursor);
-  const marker = document.createElement("span");
-  marker.textContent = textarea.value.slice(cursor) || " ";
-  mirror.appendChild(marker);
-  document.body.appendChild(mirror);
-
-  const mirrorRect = mirror.getBoundingClientRect();
-  const markerRect = marker.getBoundingClientRect();
-  const areaRect = textarea.getBoundingClientRect();
-  const lineHeight = Number.parseFloat(computed.lineHeight);
-  const offsetY = Number.isFinite(lineHeight) ? lineHeight : 18;
-
-  const top = areaRect.top + (markerRect.top - mirrorRect.top) - textarea.scrollTop + offsetY;
-  const left = areaRect.left + (markerRect.left - mirrorRect.left) - textarea.scrollLeft;
-
-  document.body.removeChild(mirror);
-
+function getEditorCaretPosition(view: EditorView | null, cursor: number) {
+  if (!view) return { top: 0, left: 0 };
+  const coords = view.coordsAtPos(cursor);
+  if (!coords) return { top: 0, left: 0 };
+  const rect = view.dom.getBoundingClientRect();
   return {
-    top: Math.min(top, window.innerHeight - 32),
-    left: Math.min(left, window.innerWidth - 320),
+    top: Math.min(coords.bottom - rect.top, window.innerHeight - 32),
+    left: Math.min(coords.left - rect.left, window.innerWidth - 320),
   };
 }
 
@@ -1119,7 +1093,6 @@ export default function ResearchStudioPage() {
   const [treeContextMenu, setTreeContextMenu] = useState<TreeContextMenuState | null>(null);
   const [imagePreview, setImagePreview] = useState<{ name: string; dataUrl: string } | null>(null);
   const [treeContextActiveIndex, setTreeContextActiveIndex] = useState(0);
-  const [editorScroll, setEditorScroll] = useState({ top: 0, left: 0 });
   const [autoSaveStatus, setAutoSaveStatus] = useState<"saved" | "unsaved" | "saving">("saved");
   const [codeRunBusy, setCodeRunBusy] = useState(false);
   const [autoSaveTimestamp, setAutoSaveTimestamp] = useState<string | null>(null);
@@ -1184,7 +1157,8 @@ export default function ResearchStudioPage() {
   const wordCountTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const zipImportRef = useRef<HTMLInputElement | null>(null);
   const panesRef = useRef<HTMLElement | null>(null);
-  const editorRef = useRef<HTMLTextAreaElement | null>(null);
+  const editorRef = useRef<StudioEditorAdapter | null>(null);
+  const editorViewRef = useRef<EditorView | null>(null);
   const findInputRef = useRef<HTMLInputElement | null>(null);
   const treeContextMenuRef = useRef<HTMLDivElement | null>(null);
 
@@ -1206,13 +1180,6 @@ export default function ResearchStudioPage() {
 
   const preview = useMemo(() => buildPreview(activeSource), [activeSource]);
   const projectTree = useMemo(() => buildProjectTree(projectEntries), [projectEntries]);
-  const highlightedSource = useMemo(() => {
-    // Detect from file extension (belt-and-suspenders — avoids stale editorMode)
-    const detectedMode = selectedPath.endsWith(".py") ? "python"
-      : selectedPath.endsWith(".cpp") || selectedPath.endsWith(".h") ? "cpp"
-      : editorMode;
-    return highlightCodeSource(activeSource, detectedMode);
-  }, [activeSource, editorMode, selectedPath]);
   const citationKeys = useMemo(() => scanCitationKeys(projectEntries), [projectEntries]);
   const labelItems = useMemo(() => scanLabels(projectEntries), [projectEntries]);
   const autoExpandedFolders = useMemo(
@@ -1623,7 +1590,7 @@ export default function ResearchStudioPage() {
     setIntellisensePosition(null);
   }
 
-  function updateIntellisenseFromInput(source: string, cursor: number, textarea?: HTMLTextAreaElement) {
+  function updateIntellisenseFromInput(source: string, cursor: number) {
     // Check for \cite{ context
     const citePrefix = source.slice(0, Math.max(0, cursor)).match(/\\cite\{([^}]*)$/);
     if (citePrefix) {
@@ -1641,7 +1608,7 @@ export default function ResearchStudioPage() {
         );
         setIntellisenseStart(cursor - citePrefix[1].length);
         setIntellisenseIndex(0);
-        if (textarea) setIntellisensePosition(getCaretViewportPosition(textarea, cursor));
+        setIntellisensePosition(getEditorCaretPosition(editorViewRef.current, cursor));
         return;
       }
     }
@@ -1663,7 +1630,7 @@ export default function ResearchStudioPage() {
         );
         setIntellisenseStart(cursor - refPrefix[1].length);
         setIntellisenseIndex(0);
-        if (textarea) setIntellisensePosition(getCaretViewportPosition(textarea, cursor));
+        setIntellisensePosition(getEditorCaretPosition(editorViewRef.current, cursor));
         return;
       }
     }
@@ -1691,9 +1658,7 @@ export default function ResearchStudioPage() {
     setIntellisenseOptions(nextOptions);
     setIntellisenseStart(cursor - fullPrefix.length);
     setIntellisenseIndex(0);
-    if (textarea) {
-      setIntellisensePosition(getCaretViewportPosition(textarea, cursor));
-    }
+    setIntellisensePosition(getEditorCaretPosition(editorViewRef.current, cursor));
   }
 
   function applyIntellisenseSelection(index = intellisenseIndex) {
@@ -1714,20 +1679,17 @@ export default function ResearchStudioPage() {
     applyEditorUpdate(nextText, cursor, cursor);
   }
 
-  function onEditorChange(event: React.ChangeEvent<HTMLTextAreaElement>) {
-    const nextText = event.target.value;
-    const cursor = event.target.selectionStart;
+  function handleEditorChange(nextText: string) {
+    const cursor = editorRef.current?.selectionStart ?? nextText.length;
     updateActiveFile(nextText);
-    updateIntellisenseFromInput(nextText, cursor, event.target);
+    updateIntellisenseFromInput(nextText, cursor);
   }
 
-  function onEditorCursorEvent(event: React.SyntheticEvent<HTMLTextAreaElement>) {
-    const target = event.currentTarget;
-    setEditorScroll({ top: target.scrollTop, left: target.scrollLeft });
-    updateIntellisenseFromInput(target.value, target.selectionStart, target);
+  function handleEditorCursorChange(cursor: number) {
+    updateIntellisenseFromInput(activeSource, cursor);
   }
 
-  function onEditorMouseMove(event: React.MouseEvent<HTMLTextAreaElement>) {
+  function onEditorMouseMove(event: MouseEvent) {
     if (equationHoverRef.current) {
       clearTimeout(equationHoverRef.current);
       equationHoverRef.current = null;
@@ -1735,13 +1697,11 @@ export default function ResearchStudioPage() {
     if (equationTooltip) {
       setEquationTooltip(null);
     }
-    const textarea = event.currentTarget;
-    const cursorPos = textarea.selectionStart;
+    const cursorPos = editorRef.current?.selectionStart ?? 0;
     equationHoverRef.current = setTimeout(() => {
-      const eq = findEquationAtPosition(textarea.value, cursorPos);
+      const eq = findEquationAtPosition(activeSource, cursorPos);
       if (eq) {
         try {
-          const rect = textarea.getBoundingClientRect();
           setEquationTooltip({
             top: event.clientY + 12,
             left: event.clientX + 12,
@@ -1754,34 +1714,22 @@ export default function ResearchStudioPage() {
     }, 500);
   }
 
-  function onEditorDragOver(event: React.DragEvent<HTMLTextAreaElement>) {
+  function onEditorDragOver(event: DragEvent) {
+    if (!event.dataTransfer) return;
     event.preventDefault();
     event.dataTransfer.dropEffect = "copy";
   }
 
-  function computeDropCursor(event: React.DragEvent<HTMLTextAreaElement>): number {
-    const textarea = editorRef.current;
-    if (!textarea) return activeSource.length;
-    const rect = textarea.getBoundingClientRect();
-    const paddingLeft = 16;
-    const paddingTop = 12;
-    const lineHeight = 13 * 1.625;
-    const charWidth = 7.8;
-    const x = event.clientX - rect.left - paddingLeft;
-    const y = event.clientY - rect.top - paddingTop + textarea.scrollTop;
-    const line = Math.max(0, Math.floor(y / lineHeight));
-    const col = Math.max(0, Math.round(x / charWidth));
-    const lines = activeSource.split("\n");
-    let charIndex = 0;
-    const clampedLine = Math.min(line, lines.length - 1);
-    for (let i = 0; i < clampedLine; i += 1) {
-      charIndex += lines[i].length + 1;
-    }
-    return charIndex + Math.min(col, (lines[clampedLine] || "").length);
+  function computeDropCursor(event: DragEvent): number {
+    const view = editorViewRef.current;
+    if (!view) return activeSource.length;
+    const pos = view.posAtCoords({ x: event.clientX, y: event.clientY });
+    return pos ?? activeSource.length;
   }
 
-  function onEditorDrop(event: React.DragEvent<HTMLTextAreaElement>) {
+  function onEditorDrop(event: DragEvent) {
     event.preventDefault();
+    if (!event.dataTransfer) return;
 
     // Internal drop: image dragged from the file tree
     const internalPath = event.dataTransfer.getData("application/x-wiserfiles-image");
@@ -4019,7 +3967,6 @@ export default function ResearchStudioPage() {
       if (!textarea) return;
       textarea.focus();
       textarea.setSelectionRange(selectionStart, selectionEnd);
-      setEditorScroll({ top: textarea.scrollTop, left: textarea.scrollLeft });
     });
   }
 
@@ -4081,8 +4028,9 @@ export default function ResearchStudioPage() {
     applyEditorUpdate(nextText, 0, 0);
   }
 
-  function onEditorKeyDown(event: React.KeyboardEvent<HTMLTextAreaElement>) {
-    const textarea = event.currentTarget;
+  function onEditorKeyDown(event: KeyboardEvent) {
+    const textarea = editorRef.current;
+    if (!textarea) return;
     const text = activeSource;
     const isMod = event.ctrlKey || event.metaKey;
 
@@ -5411,36 +5359,32 @@ export default function ResearchStudioPage() {
               </div>
             ) : null}
 
-            {/* Line numbers gutter */}
-            <div className="studio-editor-gutter">
-              <div style={{ transform: `translateY(${-editorScroll.top}px)` }}>
-                {activeSource.split("\n").map((_, i) => (
-                  <div key={i} style={{ lineHeight: "21px" }}>{i + 1}</div>
-                ))}
-              </div>
-            </div>
-
-            <div className="studio-editor-area">
-              <pre
-                aria-hidden="true"
-                className="studio-editor-highlight"
-                style={{ transform: `translate(${-editorScroll.left}px, ${-editorScroll.top}px)` }}
-                dangerouslySetInnerHTML={{
-                  __html: highlightedSource.replace(/latex-token-/g, "studio-hl-"),
+            {/* Editor: CodeMirror provides its own line-number gutter + highlight. */}
+            <div className="studio-editor-area" onMouseLeave={() => { if (equationHoverRef.current) clearTimeout(equationHoverRef.current); setEquationTooltip(null); }}>
+              <LatexEditor
+                value={activeSource}
+                onChange={handleEditorChange}
+                onSelectionChange={handleEditorCursorChange}
+                onViewReady={(view) => {
+                  editorViewRef.current = view;
+                  editorRef.current = view ? createEditorAdapter(() => editorViewRef.current) : null;
                 }}
+                onKeyDown={onEditorKeyDown}
+                onMouseMove={onEditorMouseMove}
+                onDragOver={onEditorDragOver}
+                onDrop={onEditorDrop}
+                readOnly={!activeEntry || currentAccessLevel === "read"}
+                language={editorMode}
+                className="studio-editor-codemirror"
               />
               {collabCursors.length > 0 ? (
-                <div
-                  className="studio-collab-cursors"
-                  style={{ transform: `translate(${-editorScroll.left}px, ${-editorScroll.top}px)` }}
-                >
+                <div className="studio-collab-cursors">
                   {collabCursors.map((c) => {
-                    const before = activeSource.slice(0, Math.max(0, c.cursorPos));
-                    const line = before.split("\n").length - 1;
-                    const lineStart = before.lastIndexOf("\n") + 1;
-                    const col = c.cursorPos - lineStart;
-                    const top = 12 + line * 13 * 1.625;
-                    const left = 16 + col * 7.8;
+                    const clampedPos = Math.min(Math.max(0, c.cursorPos), activeSource.length);
+                    const coords = editorViewRef.current?.coordsAtPos(clampedPos);
+                    const rect = editorViewRef.current?.dom.getBoundingClientRect();
+                    const top = coords && rect ? coords.top - rect.top : 0;
+                    const left = coords && rect ? coords.left - rect.left : 0;
                     return (
                       <div key={c.userId} className="studio-collab-cursor" style={{ top, left, color: c.color }}>
                         <div className="studio-collab-cursor-label" style={{ background: c.color }}>{c.name}</div>
@@ -5450,23 +5394,6 @@ export default function ResearchStudioPage() {
                   })}
                 </div>
               ) : null}
-              <textarea
-                ref={editorRef}
-                value={activeSource}
-                onChange={onEditorChange}
-                onClick={onEditorCursorEvent}
-                onKeyUp={onEditorCursorEvent}
-                onScroll={onEditorCursorEvent}
-                onKeyDown={onEditorKeyDown}
-                onMouseMove={onEditorMouseMove}
-                onMouseLeave={() => { if (equationHoverRef.current) clearTimeout(equationHoverRef.current); setEquationTooltip(null); }}
-                onDragOver={onEditorDragOver}
-                onDrop={onEditorDrop}
-                disabled={!activeEntry || currentAccessLevel === "read"}
-                className="studio-editor-textarea"
-                spellCheck={false}
-                lang="en"
-              />
 
               {intellisenseOptions.length && intellisensePosition ? (
                 <div className="studio-intellisense" style={{ top: `${intellisensePosition.top}px`, left: `${intellisensePosition.left}px` }}>
