@@ -20,6 +20,7 @@ import { loadUploadedFiles, persistUploadedFiles, clearUploadedFiles, loadShared
 import { getNextRecipeStep, type WorkflowRecipe } from "@/lib/workflow-recipes";
 import ShareButton from "@/app/components/share-button";
 import { showToast } from "@/app/components/toast";
+import { ToolIcon } from "@/app/components/tool-icon";
 import { asPdfBlob, clamp, compactPageSequence, dataUrlToUint8Array, decodeXmlText, downloadBlob, formatBytes, getFileNameFromDisposition, hexToRgb, isFileCompatibleForTool, normalizeFileName, pagesToLatex, parseRanges, readAsArrayBuffer, readAsText, sortSlidePaths, splitLines } from "@/lib/transforms/helpers";
 import { A4_PAGE_SIZE_PORTRAIT, buildMixedFilePageNodes, clampPdfImageDimensions, convertMixedFilesToPdf, fileToPdfImage, htmlContentToPdfBlob, pdfFromLines, sanitizeLegacyWatermarks, type MergePageNode } from "@/lib/transforms/pdf-lib";
 import { configurePdfJsWorker, dataUrlToImage, extractPdfFormFields, loadPdfPagesText, processCompressionImage, renderComparePageWithDiffs, renderEditPagePreview, renderPdfPagePreview, renderPdfThumbnails, renderPdfToImages, samplePdfTextCoverage, type CompressionOptions, type EditFormField, type EditTextSpan, type PageThumbnail } from "@/lib/transforms/rasterize";
@@ -5365,7 +5366,10 @@ export default function ToolWorkbench({ tool }: WorkbenchProps) {
         ) : null}
 
         <div className="flex flex-wrap items-baseline gap-x-3 gap-y-0.5">
-          <h2 className="font-display text-2xl font-semibold text-slate-950">{tool.name}</h2>
+          <div className="flex items-center gap-2.5">
+            <ToolIcon category={tool.category} className="h-6 w-6 shrink-0 text-slate-500" />
+            <h2 className="font-display text-2xl font-semibold text-slate-950">{tool.name}</h2>
+          </div>
           {(() => {
             const hasAiIntake = smartIntake?.source === "ai";
             if (hasAiIntake && smartIntake) {

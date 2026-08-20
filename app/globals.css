@@ -15,6 +15,10 @@
   --warning: #f59e0b;
   --danger: #ef4444;
 
+  /* Unified card + surface tokens */
+  --radius-card: 16px;
+  --shadow-card: 0 1px 2px rgba(15, 23, 42, 0.05), 0 10px 28px -16px rgba(15, 23, 42, 0.18);
+
   /* Studio colors */
   --studio-sidebar: #1a1d2b;
   --studio-editor-bg: #0d0f17;
