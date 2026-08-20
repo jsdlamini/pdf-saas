@@ -9,5 +9,8 @@ export default defineConfig({
   },
   test: {
     environment: "node",
+    // Unit tests use *.test.ts; Playwright E2E tests use *.spec.ts and run
+    // under @playwright/test, so vitest must not pick them up.
+    include: ["**/*.test.ts"],
   },
 });

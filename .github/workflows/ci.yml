@@ -1,0 +1,63 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  unit-tests:
+    name: Unit tests (Vitest)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm test
+
+  baseline-pixels:
+    name: Baseline pixel renderer (Option B)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: node tests/baseline/render-check.mjs
+
+  redact-pixel:
+    name: Redact pixel test (Playwright)
+    runs-on: ubuntu-latest
+    env:
+      # Real Clerk test keys via repo secrets. The app's clerkMiddleware needs a
+      # reachable Clerk backend, so a fake key cannot run in CI. When the
+      # secrets are absent, the job skips (the test still runs locally against
+      # the .env keys). Add CLERK_PUBLISHABLE_KEY / CLERK_SECRET_KEY to run it.
+      NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY: ${{ secrets.CLERK_PUBLISHABLE_KEY }}
+      CLERK_SECRET_KEY: ${{ secrets.CLERK_SECRET_KEY }}
+      NEXT_PUBLIC_SITE_URL: http://127.0.0.1:3000
+      # Stop Next.js from prompting for telemetry consent on first run in CI.
+      NEXT_TELEMETRY_DISABLED: "1"
+      # Analytics is Postgres-backed; placeholder so the pool constructor does
+      # not throw. The analytics route degrades to a 500.
+      DATABASE_URL: postgresql://ci:ci@127.0.0.1:5432/ci
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npx playwright install --with-deps chromium
+      - name: Redact pixel test (skips without Clerk secrets)
+        run: |
+          if [ -z "$NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY" ] || [ -z "$CLERK_SECRET_KEY" ]; then
+            echo "Skipping redact pixel test: CLERK secrets are not configured."
+            exit 0
+          fi
+          npx playwright test tests/redact-pixel.spec.ts
