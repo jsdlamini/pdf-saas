@@ -1,7 +1,7 @@
 // Behavioural-baseline capture: drives each client-side tool in a real browser,
 // uploads fixed fixtures, sets fixed options, runs, and downloads the output.
 import { chromium } from "playwright";
-import { mkdirSync } from "node:fs";
+import { mkdirSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -39,7 +39,9 @@ const CASES = [
   { slug: "pdf-to-jpg", name: "default", files: ["fixture-a.pdf"] },
   // --- Security ---
   { slug: "protect-pdf", name: "password", files: ["fixture-a.pdf"], run: true, setup: (p) => p.fill("#password", "secret123") },
-  { slug: "unlock-pdf", name: "encrypted", files: ["fixture-encrypted.pdf"], run: true, setup: (p) => p.fill("#password", "secret123") },
+  { slug: "unlock-pdf", name: "correct", files: ["fixture-encrypted-user.pdf"], run: true, setup: (p) => p.fill("#password", "secret123") },
+  { slug: "unlock-pdf", name: "wrong", files: ["fixture-encrypted-user.pdf"], run: true, expectError: true, setup: (p) => p.fill("#password", "WRONG") },
+  { slug: "unlock-pdf", name: "owner", files: ["fixture-encrypted-owner.pdf"], run: true, setup: (p) => p.fill("#password", "") },
   { slug: "redact-pdf", name: "default", files: ["fixture-a.pdf"] },
   // --- Edit ---
   { slug: "page-numbers", name: "default", files: ["fixture-a.pdf"] },
@@ -86,6 +88,15 @@ async function captureOne(page, c) {
   if (c.run) {
     await runBtn.waitFor({ state: "visible", timeout: 15000 });
     await runBtn.click();
+  }
+
+  if (c.expectError) {
+    // Expected to fail: the download button must NOT appear.
+    await page.waitForTimeout(2500);
+    const hasDownload = await downloadBtn.isVisible().catch(() => false);
+    if (hasDownload) throw new Error("expected an error but an output appeared");
+    writeFileSync(outPath, "ERROR");
+    return outPath;
   }
 
   await downloadBtn.waitFor({ state: "visible", timeout: 180000 });

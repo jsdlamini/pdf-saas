@@ -1,8 +1,11 @@
 // Generates the fixed PDF fixtures for the behavioural baseline.
 // fixture-a: multi-page, mixed page sizes, one page with a non-zero /Rotate.
 // fixture-b: a distinct second PDF for multi-file tools (merge, compare).
+// fixture-encrypted-user: user-password encrypted (secret123), for unlock-pdf.
+// fixture-encrypted-owner: owner-password-only (empty user password), for unlock-pdf.
 import { PDFDocument, StandardFonts, degrees, rgb } from "pdf-lib";
-import { writeFileSync, mkdirSync, readFileSync } from "node:fs";
+import { jsPDF } from "jspdf";
+import { writeFileSync, mkdirSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -46,11 +49,19 @@ await makePdf(join(outDir, "fixture-b.pdf"), [
   { width: 612, height: 792, title: "Fixture B page 3", lines: 5 },
 ]);
 
-// fixture-encrypted: fixture-a encrypted with a known password, for unlock-pdf.
-{
-  const src = await PDFDocument.load(readFileSync(join(outDir, "fixture-a.pdf")));
-  src.encrypt({ userPassword: "secret123", ownerPassword: "secret123" });
-  writeFileSync(join(outDir, "fixture-encrypted.pdf"), await src.save());
+// Encrypted fixtures for unlock-pdf (jsPDF — pdf-lib cannot encrypt).
+function makeEncryptedPdf(path, userPassword, ownerPassword) {
+  const doc = new jsPDF({
+    unit: "pt",
+    format: [612, 792],
+    encryption: { userPassword, ownerPassword, userPermissions: ["print", "copy"] },
+  });
+  doc.text("UNLOCK-CANARY encrypted fixture text", 72, 72);
+  doc.text("more body text for extraction", 72, 96);
+  writeFileSync(path, Buffer.from(doc.output("arraybuffer")));
 }
+
+makeEncryptedPdf(join(outDir, "fixture-encrypted-user.pdf"), "secret123", "secret123");
+makeEncryptedPdf(join(outDir, "fixture-encrypted-owner.pdf"), "", "owner123");
 
 console.log("fixtures written to", outDir);
