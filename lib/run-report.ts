@@ -2,7 +2,7 @@ export type RunReport = {
   runId: string;
   toolSlug: string;
   toolName: string;
-  mode: "client" | "server";
+  mode: "local" | "server" | "conditional";
   startedAt: string;
   finishedAt: string;
   durationMs: number;

@@ -711,7 +711,7 @@ export default function Home() {
               <path d="M7.5 10l1.8 1.8 3.2-3.6" strokeLinecap="round" strokeLinejoin="round" />
             </svg>
             <span className="text-xs font-medium">
-              Files are encrypted in transit and deleted automatically after processing — never stored or shared.
+              Most tools run entirely in your browser. Files sent to our servers are deleted as soon as processing finishes.
             </span>
           </div>
         </div>
