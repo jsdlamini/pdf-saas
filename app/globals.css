@@ -2711,7 +2711,11 @@ html[data-theme="light"] .studio-dark ::-webkit-scrollbar-thumb {
   text-align: left !important;
 }
 .swal-center-container {
+  display: flex !important;
   align-items: center !important;
+  justify-content: center !important;
+  height: 100vh !important;
+  height: 100dvh !important;
   padding-top: 0 !important;
   overflow: visible !important;
 }
@@ -2766,23 +2770,15 @@ html[data-theme="light"] .studio-dark ::-webkit-scrollbar-thumb {
   transform: translateY(-1px);
   box-shadow: 0 4px 10px rgba(15, 23, 42, 0.08);
 }
-/* Category-based formal colors */
-.swal-tool-card[data-category="Organize"] { border-color: #a7f3d0; background: #ecfdf5; }
-.swal-tool-card[data-category="Optimize"] { border-color: #bae6fd; background: #f0f9ff; }
-.swal-tool-card[data-category="Convert"] { border-color: #ddd6fe; background: #f5f3ff; }
-.swal-tool-card[data-category="Security"] { border-color: #fde68a; background: #fffbeb; }
-.swal-tool-card[data-category="Edit"] { border-color: #fecdd3; background: #fff1f2; }
-.swal-tool-card[data-category="Sign"] { border-color: #c7d2fe; background: #eef2ff; }
-.swal-tool-card[data-category="Organize"]:hover { border-color: #10b981; }
-.swal-tool-card[data-category="Optimize"]:hover { border-color: #0ea5e9; }
-.swal-tool-card[data-category="Convert"]:hover { border-color: #8b5cf6; }
-.swal-tool-card[data-category="Security"]:hover { border-color: #f59e0b; }
-.swal-tool-card[data-category="Edit"]:hover { border-color: #f43f5e; }
-.swal-tool-card[data-category="Sign"]:hover { border-color: #6366f1; }
+/* Monochrome cards — category is a label, not a colour. */
+.swal-tool-card:hover {
+  border-color: #0f172a;
+  background: #f1f5f9;
+}
 .swal-tool-card-selected,
 .swal-tool-card-selected:hover {
-  background: #6366f1 !important;
-  border-color: #6366f1 !important;
+  background: #0f172a !important;
+  border-color: #0f172a !important;
 }
 .swal-tool-card-selected .swal-tool-card-name {
   color: #ffffff;

@@ -14,6 +14,7 @@ import { getTemplateBySlug, RESEARCH_TEMPLATES, type ResearchTemplate } from "@/
 import { LatexEditor } from "../components/latex-editor";
 import type { EditorView } from "@codemirror/view";
 import type { EditorMode } from "@/lib/highlighters";
+import { loadJson, persistJson, removeJson } from "@/lib/json-storage";
 
 type StudioEditorAdapter = {
   selectionStart: number;
@@ -931,6 +932,35 @@ export default function ResearchStudioPage() {
       return localStorage.getItem("wiserfiles-active-project") || initialState.activeProjectId;
     } catch { return initialState.activeProjectId; }
   });
+
+  // Load guest projects from IndexedDB (large payloads) — localStorage is only
+  // a small fallback and can't hold projects that carry base64 images.
+  useEffect(() => {
+    if (typeof window === "undefined" || userId) return;
+    void (async () => {
+      const raw = await loadJson("wiserfiles-guest-projects");
+      if (!raw) return;
+      try {
+        const data = JSON.parse(raw) as SavedProjectData[];
+        const valid = data
+          .filter((p) => p.id && p.name.trim() && p.entries.length)
+          .slice(0, GUEST_PROJECT_LIMIT);
+        if (!valid.length) return;
+        setSavedProjectSnapshots(valid);
+        setSavedProjects(valid.map((p) => ({
+          id: p.id,
+          name: p.name,
+          updatedAt: p.updatedAt,
+          type: p.editorMode || (p.entries.some((e) => e.path.endsWith(".py")) ? "python" : p.entries.some((e) => e.path.endsWith(".cpp")) ? "cpp" : "latex"),
+        })));
+        // IndexedDB is now the source of truth; drop the stale localStorage copy.
+        try { localStorage.removeItem("wiserfiles-guest-projects"); } catch {}
+      } catch {
+        // ignore malformed storage
+      }
+    })();
+  }, [userId]);
+
   const [projectName, setProjectName] = useState(initialState.projectName);
   const [projectEntries, setProjectEntries] = useState<ProjectEntry[]>(initialState.projectEntries);
   const searchParams = useSearchParams();
@@ -2043,10 +2073,14 @@ export default function ResearchStudioPage() {
     if (!snapshot.id || !snapshot.name.trim() || !snapshot.entries.length) return;
     setSavedProjectSnapshots((current) => {
       const next = [snapshot, ...current.filter((item) => item.id !== snapshot.id)].slice(0, 20);
-      // Guests persist projects locally in the browser (up to the guest limit)
+      // Guests persist projects locally in the browser (up to the guest limit).
+      // IndexedDB holds large payloads (base64 images); localStorage is kept as
+      // a small fallback and may fail silently for large projects.
       if (!userId) {
+        const guestProjects = next.slice(0, GUEST_PROJECT_LIMIT);
+        void persistJson("wiserfiles-guest-projects", JSON.stringify(guestProjects)).catch(() => {});
         try {
-          localStorage.setItem("wiserfiles-guest-projects", JSON.stringify(next.slice(0, GUEST_PROJECT_LIMIT)));
+          localStorage.setItem("wiserfiles-guest-projects", JSON.stringify(guestProjects));
         } catch {}
       }
       return next;
@@ -2181,11 +2215,16 @@ export default function ResearchStudioPage() {
 
     async function hydrateFromServer() {
       try {
-        // Auto-migrate guest projects from localStorage to the server on sign-in
+        // Auto-migrate guest projects to the server on sign-in (read from
+        // IndexedDB first, then the legacy localStorage copy).
         if (typeof window !== "undefined") {
-          try {
-            const raw = localStorage.getItem("wiserfiles-guest-projects");
-            if (raw) {
+          const guestRaw = await loadJson("wiserfiles-guest-projects");
+          const legacyRaw = (() => {
+            try { return localStorage.getItem("wiserfiles-guest-projects"); } catch { return null; }
+          })();
+          const raw = guestRaw ?? legacyRaw;
+          if (raw) {
+            try {
               const guestProjects = (JSON.parse(raw) as SavedProjectData[]).filter(
                 (p) => p.id && p.name.trim() && p.entries.length
               );
@@ -2196,10 +2235,11 @@ export default function ResearchStudioPage() {
                   // skip individual failures, continue migrating the rest
                 }
               }
-              localStorage.removeItem("wiserfiles-guest-projects");
+            } catch {
+              // ignore malformed guest storage
             }
-          } catch {
-            // ignore malformed guest storage
+            await removeJson("wiserfiles-guest-projects");
+            try { localStorage.removeItem("wiserfiles-guest-projects"); } catch {}
           }
         }
 
@@ -2771,8 +2811,10 @@ export default function ResearchStudioPage() {
     const nextSnapshots = savedProjectSnapshots.filter((project) => project.id !== projectId);
     setSavedProjectSnapshots(nextSnapshots);
     if (!userId) {
+      const guestProjects = nextSnapshots.slice(0, GUEST_PROJECT_LIMIT);
+      void persistJson("wiserfiles-guest-projects", JSON.stringify(guestProjects)).catch(() => {});
       try {
-        localStorage.setItem("wiserfiles-guest-projects", JSON.stringify(nextSnapshots.slice(0, GUEST_PROJECT_LIMIT)));
+        localStorage.setItem("wiserfiles-guest-projects", JSON.stringify(guestProjects));
       } catch {}
     }
 
