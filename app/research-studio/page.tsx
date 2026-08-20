@@ -3909,6 +3909,48 @@ export default function ResearchStudioPage() {
     downloadBlob(blob, "research-project.zip");
   }
 
+  function arrayBufferToBase64(buffer: ArrayBuffer): string {
+    const bytes = new Uint8Array(buffer);
+    let binary = "";
+    const chunk = 0x8000;
+    for (let i = 0; i < bytes.length; i += chunk) {
+      binary += String.fromCharCode(...bytes.subarray(i, Math.min(i + chunk, bytes.length)));
+    }
+    return btoa(binary);
+  }
+
+  // Downscale oversized images so large archives stay under the server request
+  // limits and compile fast. Small images are returned as raw base64 untouched.
+  async function downscaleImageForImport(bytes: ArrayBuffer, fileName: string): Promise<string> {
+    const ext = (fileName.split(".").pop() || "png").toLowerCase();
+    try {
+      const bitmap = await createImageBitmap(new Blob([bytes]));
+      const MAX = 1600;
+      const scale = Math.min(1, MAX / Math.max(bitmap.width, bitmap.height));
+      if (scale >= 1) {
+        bitmap.close();
+        return arrayBufferToBase64(bytes);
+      }
+      const width = Math.max(1, Math.round(bitmap.width * scale));
+      const height = Math.max(1, Math.round(bitmap.height * scale));
+      const canvas = document.createElement("canvas");
+      canvas.width = width;
+      canvas.height = height;
+      const ctx = canvas.getContext("2d");
+      if (!ctx) {
+        bitmap.close();
+        return arrayBufferToBase64(bytes);
+      }
+      ctx.drawImage(bitmap, 0, 0, width, height);
+      bitmap.close();
+      const outMime = /^(png|gif|webp)$/i.test(ext) ? "image/png" : "image/jpeg";
+      const dataUrl = canvas.toDataURL(outMime, 0.85);
+      return dataUrl.slice(dataUrl.indexOf(",") + 1);
+    } catch {
+      return arrayBufferToBase64(bytes);
+    }
+  }
+
   async function importProjectFromZip(file: File) {
     try {
       const zip = await JSZip.loadAsync(file);
@@ -3931,7 +3973,7 @@ export default function ResearchStudioPage() {
 
         let content: string;
         if (isRasterImage) {
-          content = await zipEntry.async("base64");
+          content = await downscaleImageForImport(await zipEntry.async("arraybuffer"), name);
         } else {
           content = await zipEntry.async("string");
         }
