@@ -28,7 +28,7 @@ const SITE_NAME = "WiserFiles";
 const DEFAULT_SITE_URL = "http://localhost:3000";
 
 function getSiteUrl() {
-  const raw = process.env.NEXT_PUBLIC_SITE_URL || DEFAULT_SITE_URL;
+  const raw = process.env.NEXT_PUBLIC_SITE_URL ?? DEFAULT_SITE_URL;
   try {
     return new URL(raw);
   } catch {

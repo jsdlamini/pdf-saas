@@ -23,11 +23,12 @@ export async function generateMetadata({ params }: LandingPageProps): Promise<Me
     };
   }
 
-  const title = `${landing.title} | WiserFiles`;
+  const pageTitle = `${landing.title}`;
+  const socialTitle = `${landing.title} | WiserFiles`;
   const description = `${landing.description} Use WiserFiles to process PDFs quickly online.`;
 
   return {
-    title,
+    title: pageTitle,
     description,
     alternates: {
       canonical: `/online/${landing.slug}`,
@@ -36,13 +37,13 @@ export async function generateMetadata({ params }: LandingPageProps): Promise<Me
     openGraph: {
       type: "website",
       url: `/online/${landing.slug}`,
-      title,
+      title: socialTitle,
       description,
       images: ["/opengraph-image"],
     },
     twitter: {
       card: "summary_large_image",
-      title,
+      title: socialTitle,
       description,
       images: ["/opengraph-image"],
     },
