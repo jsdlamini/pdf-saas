@@ -40,6 +40,9 @@ jobs:
       NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY: pk_test_Y2xlcmsuY2kuZXhhbXBsZS5jb20k
       CLERK_SECRET_KEY: sk_test_Y2xlcmsuY2kuZXhhbXBsZS5jb20k
       NEXT_PUBLIC_SITE_URL: http://localhost:3000
+      # Stop Next.js from prompting for telemetry consent on first run in CI
+      # (non-interactive shells otherwise hang before the dev server binds).
+      NEXT_TELEMETRY_DISABLED: "1"
       # Analytics is Postgres-backed; point it at a placeholder so the pool
       # constructor does not throw. The analytics route degrades to a 500.
       DATABASE_URL: postgresql://ci:ci@127.0.0.1:5432/ci
