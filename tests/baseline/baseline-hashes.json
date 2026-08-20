@@ -1,0 +1,188 @@
+{
+  "results": [
+    {
+      "tool": "compare-pdf",
+      "case": "two",
+      "hash": "61b4a0e9a859eae9e0f3f1b3603a49b354decc43d12e23cb411533e749ee8272",
+      "size": 249,
+      "pages": 0
+    },
+    {
+      "tool": "compress-pdf",
+      "case": "default",
+      "hash": "9d6dcaa8d2223efab5180589ca5fef8465271908fea613c21785acc6870d5db1",
+      "size": 132114,
+      "pages": 5
+    },
+    {
+      "tool": "compress-pdf",
+      "case": "grayscale",
+      "hash": "3d4aaad7fc1b828eabae1102729540a08e17d28be43ebe4bf673f5b282a6b933",
+      "size": 132114,
+      "pages": 5
+    },
+    {
+      "tool": "crop-pdf",
+      "case": "default",
+      "hash": "9c1603ca9ef7d6a6eba977fe5f7871593ede3420a5c88fcd3195535f29bba544",
+      "size": 2801,
+      "pages": 5
+    },
+    {
+      "tool": "crop-pdf",
+      "case": "margin30",
+      "hash": "616e5eaa59b0cebe31a0b9454200dee6fd12fe38289d61fc548a4ffbd22d556e",
+      "size": 2804,
+      "pages": 5
+    },
+    {
+      "tool": "edit-pdf",
+      "case": "default",
+      "hash": "1a3b8f673847938281ef5dc3919a156ddb078c620b523f92f8401d54d34eb662",
+      "size": 2783,
+      "pages": 5
+    },
+    {
+      "tool": "extract-pages",
+      "case": "default",
+      "hash": "fb0ece9267b5af998d5ab61c462038ec1de8329b91ba354e14e87688c7203d72",
+      "size": 583,
+      "pages": 1
+    },
+    {
+      "tool": "merge-pdf",
+      "case": "one",
+      "hash": "9c75d0ed536f88d307be1975e9cc28091296038b28f915b9cf1008193639290c",
+      "size": 5706,
+      "pages": 13
+    },
+    {
+      "tool": "merge-pdf",
+      "case": "two",
+      "hash": "d0c414f36508a4c8b66169ee7f22f7539b42949a47cbd24ae4d482bfe432f997",
+      "size": 3763,
+      "pages": 8
+    },
+    {
+      "tool": "organize-pdf",
+      "case": "default",
+      "hash": "1a3b8f673847938281ef5dc3919a156ddb078c620b523f92f8401d54d34eb662",
+      "size": 2771,
+      "pages": 5
+    },
+    {
+      "tool": "page-numbers",
+      "case": "default",
+      "hash": "297998c6a4c6993d5d1da4a2b58c002bd55a486fdb349f5cb29d2c5e43bbdee9",
+      "size": 3897,
+      "pages": 5
+    },
+    {
+      "tool": "pdf-to-excel",
+      "case": "default",
+      "hash": "8398cae8c8efc5860cc667f0a128a6fb4c3d9a7d1563fa483ba2598a551e4642",
+      "size": 18137,
+      "pages": 10
+    },
+    {
+      "tool": "pdf-to-jpg",
+      "case": "default",
+      "hash": "b81859fb9fa75b9fb7db3728de67c6b3e9cd6d3a7cfc8cf2e66d4f5037ca6fba",
+      "size": 326522,
+      "pages": 5
+    },
+    {
+      "tool": "pdf-to-latex",
+      "case": "default",
+      "hash": "a45c1a4ddd2d12f362bda7f13de8773676fdf2135430553b700decd38149808d",
+      "size": 2324,
+      "pages": 0
+    },
+    {
+      "tool": "pdf-to-pdfa",
+      "case": "default",
+      "hash": "9e41d702e71270c910453fa7247a936eb717d0b71be73f7c8242134f3eed0e90",
+      "size": 2883,
+      "pages": 5
+    },
+    {
+      "tool": "pdf-to-powerpoint",
+      "case": "default",
+      "hash": "ee76c4ccd18fe5da6629f4735760aa0ab8b5b7b159e35601ef6bc6e42e303f50",
+      "size": 69594,
+      "pages": 55
+    },
+    {
+      "tool": "redact-pdf",
+      "case": "default",
+      "hash": "d1740124c0278e9f586a47d257a9d2cc5083db877034547598b54caf9f8d4c79",
+      "size": 183912,
+      "pages": 5
+    },
+    {
+      "tool": "remove-pages",
+      "case": "default",
+      "hash": "1a3b8f673847938281ef5dc3919a156ddb078c620b523f92f8401d54d34eb662",
+      "size": 2771,
+      "pages": 5
+    },
+    {
+      "tool": "repair-pdf",
+      "case": "default",
+      "hash": "970f0037bd0d168692d78fbd3253990f5146f7ac66e4902a8d950ef16dae9798",
+      "size": 4650,
+      "pages": 5
+    },
+    {
+      "tool": "rotate-pdf",
+      "case": "default",
+      "hash": "2ba4466cf95f9451d988778b2a73273b1b4fb87ae43e3cc9dfca4c133087ed4c",
+      "size": 2775,
+      "pages": 5
+    },
+    {
+      "tool": "rotate-pdf",
+      "case": "deg180",
+      "hash": "62308db0b99c42c7c6c4c87d27d181cc3f1e03051e03587bcc29c7602f8d8025",
+      "size": 2775,
+      "pages": 5
+    },
+    {
+      "tool": "sign-pdf",
+      "case": "default",
+      "hash": "ca91b6f7785d4e0ec1afac0361d0cd76ebb4b7f50ae111d719d1d794175d3887",
+      "size": 4023,
+      "pages": 5
+    },
+    {
+      "tool": "split-pdf",
+      "case": "default",
+      "hash": "fb0ece9267b5af998d5ab61c462038ec1de8329b91ba354e14e87688c7203d72",
+      "size": 583,
+      "pages": 1
+    },
+    {
+      "tool": "split-pdf",
+      "case": "range",
+      "hash": "75b20d57f2e1d4c42aedeb6fa1267f63ff6aa7bf5e86e067a734d249119dfcbb",
+      "size": 1941,
+      "pages": 3
+    },
+    {
+      "tool": "unlock-pdf",
+      "case": "default",
+      "hash": "1a3b8f673847938281ef5dc3919a156ddb078c620b523f92f8401d54d34eb662",
+      "size": 2773,
+      "pages": 5
+    }
+  ],
+  "mismatches": [
+    "compress-pdf/default",
+    "compress-pdf/grayscale",
+    "pdf-to-powerpoint/default",
+    "redact-pdf/default"
+  ],
+  "non_normalizable": [
+    "protect-pdf/password"
+  ]
+}
