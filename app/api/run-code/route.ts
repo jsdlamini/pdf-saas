@@ -4,6 +4,7 @@ import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { promisify } from "node:util";
 import { auth } from "@clerk/nextjs/server";
+import { sandboxedEnv } from "@/lib/exec-sandbox";
 
 const execFileAsync = promisify(execFile);
 
@@ -82,13 +83,7 @@ async function runPython(mainPath: string, tempDir: string): Promise<RunCodeResp
       cwd: tempDir,
       timeout: TIMEOUT_MS,
       maxBuffer: MAX_OUTPUT_BYTES,
-      env: {
-        ...process.env,
-        HOME: tempDir,
-        TMPDIR: tempDir,
-        PATH: process.env.PATH || "/usr/bin:/bin",
-        PYTHONDONTWRITEBYTECODE: "1",
-      },
+      env: sandboxedEnv(tempDir, { PYTHONDONTWRITEBYTECODE: "1" }),
     });
 
     return {
@@ -129,6 +124,7 @@ async function runCpp(sourceFiles: string[], tempDir: string): Promise<RunCodeRe
     ], {
       timeout: 30_000,
       maxBuffer: MAX_OUTPUT_BYTES,
+      env: sandboxedEnv(tempDir),
     });
   } catch (err) {
     const error = err as { stdout?: string; stderr?: string; code?: number };
@@ -148,12 +144,7 @@ async function runCpp(sourceFiles: string[], tempDir: string): Promise<RunCodeRe
       cwd: tempDir,
       timeout: TIMEOUT_MS,
       maxBuffer: MAX_OUTPUT_BYTES,
-      env: {
-        ...process.env,
-        HOME: tempDir,
-        TMPDIR: tempDir,
-        PATH: process.env.PATH || "/usr/bin:/bin",
-      },
+      env: sandboxedEnv(tempDir),
     });
 
     return {

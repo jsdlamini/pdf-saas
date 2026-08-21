@@ -4,6 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { promisify } from "node:util";
 import { auth } from "@clerk/nextjs/server";
+import { sandboxedEnv } from "@/lib/exec-sandbox";
 
 const execFileAsync = promisify(execFile);
 
@@ -53,13 +54,7 @@ else:
       cwd: tempDir,
       timeout: TIMEOUT_MS,
       maxBuffer: 16 * 1024 * 1024,
-      env: {
-        ...process.env,
-        HOME: tempDir,
-        TMPDIR: tempDir,
-        MPLBACKEND: "Agg",
-        PATH: process.env.PATH || "/usr/bin:/bin",
-      },
+      env: sandboxedEnv(tempDir, { MPLBACKEND: "Agg" }),
     });
 
     const pngBytes = await readFile(join(tempDir, "figure_0.png"));

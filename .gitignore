@@ -27,6 +27,8 @@
 .DS_Store
 *.pem
 /data/postgres/
+/data/assets/
+/tmp-tests/
 
 # debug
 npm-debug.log*

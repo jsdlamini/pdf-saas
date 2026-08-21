@@ -27,13 +27,26 @@ services:
         # Compose substitutes this from the project .env file.
         NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY: ${NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY:-}
     container_name: pdf-saas
+    restart: unless-stopped
     # Non-root runtime; the Dockerfile sets USER app with scoped sudo for apt/tlmgr.
     user: "app"
     depends_on:
       db:
         condition: service_healthy
+    # Bound to loopback only: nginx-proxy reaches this container by name over
+    # webnet (TLS-terminated). Publishing on the host's public IP would expose
+    # the app without TLS.
     ports:
-      - "3000:3000"
+      - "127.0.0.1:3000:3000"
+    # Arbitrary user code (run-code, LaTeX) runs in this container, so cap it.
+    mem_limit: 3g
+    cpus: 2
+    healthcheck:
+      test: ["CMD-SHELL", "node -e \"fetch('http://localhost:3000/api/health').then(r=>{if(!r.ok)process.exit(1)}).catch(()=>process.exit(1))\""]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 20s
     volumes:
       # Persist uploaded project images (figures) outside the container.
       - ./data/assets:/app/data/assets

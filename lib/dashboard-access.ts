@@ -17,7 +17,14 @@ export async function requireDashboardAccess() {
   try {
     const client = await clerkClient();
     const user = await client.users.getUser(userId);
-    const email = user.emailAddresses[0]?.emailAddress || "";
+    // Prefer the verified primary address. Index zero is not guaranteed to be
+    // the primary, and an unverified address must not grant admin access.
+    const primary = user.primaryEmailAddress?.emailAddress || "";
+    const verifiedPrimary =
+      user.primaryEmailAddress && user.primaryEmailAddress.verification?.status === "verified"
+        ? primary
+        : "";
+    const email = verifiedPrimary || "";
 
     // Sync the local record and resolve the effective role. Allowlisted emails
     // are seeded as admin exactly once; everyone else keeps their stored role
