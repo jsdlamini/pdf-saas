@@ -2188,11 +2188,14 @@ export default function ResearchStudioPage() {
     if (current.length) batches.push(current);
 
     for (const batch of batches) {
-      await fetch("/api/project-assets", {
+      const res = await fetch("/api/project-assets", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ projectId, files: batch }),
       });
+      if (!res.ok) {
+        throw new Error("Could not upload project images.");
+      }
     }
   }
 
@@ -3625,6 +3628,17 @@ export default function ResearchStudioPage() {
         const repairedContent = entry.content.replace(/(^|\n)([ \t]*)itle\{/g, "$1$2\\title{");
         return { path: entry.path, content: repairedContent };
       });
+
+    // Ensure project images are on the server before compiling so the LaTeX
+    // compiler can resolve \includegraphics paths (idempotent; skips if none).
+    if (userId && activeProjectId && !accountSyncUnavailable) {
+      const imageFiles = editableFiles
+        .filter((e) => isImagePath(e.path) && e.content)
+        .map((e) => ({ path: e.path, content: e.content }));
+      if (imageFiles.length) {
+        await uploadProjectAssets(activeProjectId, imageFiles).catch(() => {});
+      }
+    }
 
     try {
       setCompileMainLog("");
