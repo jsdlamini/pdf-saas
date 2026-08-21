@@ -372,9 +372,35 @@ export default function DashboardPage() {
   );
 }
 
+type UserMetrics = {
+  userId: string;
+  country: string | null;
+  city: string | null;
+  pageviews: number;
+  totalEvents: number;
+  firstSeen: string | null;
+  lastSeen: string | null;
+  tools: Array<{ tool: string; count: number; last_used: string | null }>;
+  daily: Array<{ date: string; count: number }>;
+  referrers: Array<{ referrer: string; count: number }>;
+  recent: Array<{
+    event: string;
+    tool: string | null;
+    path: string | null;
+    detail: string | null;
+    country: string | null;
+    city: string | null;
+    created_at: string;
+  }>;
+};
+
 function UserManagement() {
   const [users, setUsers] = useState<Array<{ user_id: string; email: string; role: string; created_at: string }>>([]);
   const [loaded, setLoaded] = useState(false);
+  const [selected, setSelected] = useState<{ user_id: string; email: string } | null>(null);
+  const [metrics, setMetrics] = useState<UserMetrics | null>(null);
+  const [metricsLoading, setMetricsLoading] = useState(false);
+  const [metricsError, setMetricsError] = useState("");
 
   useEffect(() => {
     fetch("/api/admin-users")
@@ -398,6 +424,29 @@ function UserManagement() {
     }
   }
 
+  async function viewMetrics(userId: string, email: string) {
+    setSelected({ user_id: userId, email });
+    setMetrics(null);
+    setMetricsError("");
+    setMetricsLoading(true);
+    try {
+      const r = await fetch(`/api/admin-user-metrics?userId=${encodeURIComponent(userId)}`);
+      const d = await r.json();
+      if (!r.ok) throw new Error(d.error || "Could not load metrics.");
+      setMetrics(d.metrics);
+    } catch (e) {
+      setMetricsError(e instanceof Error ? e.message : "Could not load metrics.");
+    } finally {
+      setMetricsLoading(false);
+    }
+  }
+
+  function closeMetrics() {
+    setSelected(null);
+    setMetrics(null);
+    setMetricsError("");
+  }
+
   if (!loaded) return null;
 
   return (
@@ -405,7 +454,7 @@ function UserManagement() {
       <div className="flex items-center justify-between mb-1">
         <div>
           <h2 className="text-base font-semibold text-slate-900">User Management</h2>
-          <p className="text-xs text-slate-500 mt-0.5">Promote registered users to admin or demote them.</p>
+          <p className="text-xs text-slate-500 mt-0.5">Click a user to see their usage metrics. Promote or demote admins.</p>
         </div>
         <span className="rounded-full bg-purple-100 px-2.5 py-0.5 text-[10px] font-bold text-purple-800">
           {users.length} user{users.length !== 1 ? "s" : ""}
@@ -428,13 +477,21 @@ function UserManagement() {
                 <th className="py-2 pr-4 font-semibold">Email</th>
                 <th className="py-2 pr-4 font-semibold">Role</th>
                 <th className="py-2 pr-4 font-semibold">Joined</th>
-                <th className="py-2 font-semibold">Action</th>
+                <th className="py-2 font-semibold">Actions</th>
               </tr>
             </thead>
             <tbody>
               {users.map((u) => (
                 <tr key={u.user_id} className="border-b border-slate-100 hover:bg-slate-50 transition-colors">
-                  <td className="py-2.5 pr-4 text-slate-700">{u.email}</td>
+                  <td className="py-2.5 pr-4 text-slate-700">
+                    <button
+                      type="button"
+                      onClick={() => viewMetrics(u.user_id, u.email)}
+                      className="font-medium text-cyan-700 hover:text-cyan-900 hover:underline underline-offset-2 transition text-left"
+                    >
+                      {u.email}
+                    </button>
+                  </td>
                   <td className="py-2.5 pr-4">
                     <span
                       className={`inline-flex rounded-full px-2.5 py-0.5 text-xs font-semibold ${
@@ -450,13 +507,22 @@ function UserManagement() {
                     {new Date(u.created_at).toLocaleDateString()}
                   </td>
                   <td className="py-2.5">
-                    <button
-                      type="button"
-                      onClick={() => toggleRole(u.user_id, u.role)}
-                      className="text-xs font-semibold text-cyan-700 hover:text-cyan-900 underline underline-offset-2 transition"
-                    >
-                      {u.role === "admin" ? "Demote" : "Promote"}
-                    </button>
+                    <div className="flex items-center gap-3">
+                      <button
+                        type="button"
+                        onClick={() => viewMetrics(u.user_id, u.email)}
+                        className="text-xs font-semibold text-slate-600 hover:text-slate-900 underline underline-offset-2 transition"
+                      >
+                        Metrics
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => toggleRole(u.user_id, u.role)}
+                        className="text-xs font-semibold text-cyan-700 hover:text-cyan-900 underline underline-offset-2 transition"
+                      >
+                        {u.role === "admin" ? "Demote" : "Promote"}
+                      </button>
+                    </div>
                   </td>
                 </tr>
               ))}
@@ -464,6 +530,107 @@ function UserManagement() {
           </table>
         </div>
       )}
+
+      {selected ? (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 p-4" onClick={closeMetrics}>
+          <div
+            className="max-h-[85vh] w-full max-w-2xl overflow-y-auto rounded-2xl bg-white p-6 shadow-2xl"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-start justify-between gap-4">
+              <div>
+                <h3 className="text-lg font-semibold text-slate-900">{selected.email}</h3>
+                <p className="text-xs text-slate-500 mt-0.5">User activity &amp; demographics</p>
+              </div>
+              <button
+                type="button"
+                onClick={closeMetrics}
+                className="inline-flex h-8 w-8 items-center justify-center rounded-full text-slate-400 hover:bg-slate-100 hover:text-slate-700"
+                aria-label="Close"
+              >
+                <svg viewBox="0 0 20 20" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="1.8">
+                  <path d="M5 5l10 10M15 5L5 15" strokeLinecap="round" />
+                </svg>
+              </button>
+            </div>
+
+            {metricsLoading ? (
+              <div className="flex items-center justify-center py-12">
+                <div className="h-7 w-7 animate-spin rounded-full border-2 border-slate-200 border-t-slate-600" />
+              </div>
+            ) : metricsError ? (
+              <p className="mt-4 text-sm text-rose-600">{metricsError}</p>
+            ) : metrics ? (
+              <div className="mt-4 space-y-4">
+                <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+                  <MetricCard label="Country" value={metrics.country || "—"} />
+                  <MetricCard label="City" value={metrics.city || "—"} />
+                  <MetricCard label="Page views" value={String(metrics.pageviews)} />
+                  <MetricCard label="Events" value={String(metrics.totalEvents)} />
+                </div>
+
+                <div className="rounded-xl border border-slate-200 p-4">
+                  <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Activity window</p>
+                  <p className="mt-1 text-sm text-slate-700">
+                    First seen: {metrics.firstSeen ? new Date(metrics.firstSeen).toLocaleString() : "—"}
+                  </p>
+                  <p className="text-sm text-slate-700">
+                    Last seen: {metrics.lastSeen ? new Date(metrics.lastSeen).toLocaleString() : "—"}
+                  </p>
+                </div>
+
+                {metrics.tools.length ? (
+                  <div className="rounded-xl border border-slate-200 p-4">
+                    <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Tools / services used</p>
+                    <div className="mt-2 divide-y divide-slate-100">
+                      {metrics.tools.map((t) => (
+                        <div key={t.tool} className="flex items-center justify-between py-1.5">
+                          <span className="text-sm font-medium text-slate-700">{t.tool}</span>
+                          <span className="text-xs text-slate-500">
+                            {t.count} use{t.count !== 1 ? "s" : ""}
+                            {t.last_used ? ` · last ${new Date(t.last_used).toLocaleDateString()}` : ""}
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                ) : (
+                  <p className="text-sm text-slate-400">No tool activity recorded yet.</p>
+                )}
+
+                {metrics.recent.length ? (
+                  <div className="rounded-xl border border-slate-200 p-4">
+                    <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Recent activity</p>
+                    <div className="mt-2 max-h-56 space-y-1 overflow-y-auto">
+                      {metrics.recent.map((ev, i) => (
+                        <div key={i} className="flex items-center justify-between gap-3 text-xs">
+                          <span className="truncate text-slate-700">
+                            {ev.event}
+                            {ev.tool ? ` · ${ev.tool}` : ""}
+                            {ev.detail ? ` · ${ev.detail}` : ""}
+                          </span>
+                          <span className="shrink-0 text-slate-400">
+                            {new Date(ev.created_at).toLocaleString()}
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                ) : null}
+              </div>
+            ) : null}
+          </div>
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
+function MetricCard({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5">
+      <p className="text-[10px] font-semibold uppercase tracking-wide text-slate-400">{label}</p>
+      <p className="mt-0.5 truncate text-sm font-semibold text-slate-800">{value}</p>
     </div>
   );
 }

@@ -1,6 +1,9 @@
-// Dashboard access control. Access is gated by an email allowlist; the user
-// list itself is fetched from Clerk (the source of truth for registration).
+// Dashboard access control. Access is role-based ("admin" role in the local
+// wiserfiles_user_roles table). The email allowlist below only *bootstraps*
+// the first admins — once seeded, the role is the source of truth and admins
+// can promote/demote others through the dashboard.
 import { auth, clerkClient } from "@clerk/nextjs/server";
+import { ensureUserRecord, getUserRole, setUserRole } from "@/lib/user-roles";
 
 export const DASHBOARD_ALLOWED = [
   "johnsjdsd@gmail.com",
@@ -15,12 +18,27 @@ export async function requireDashboardAccess() {
     const client = await clerkClient();
     const user = await client.users.getUser(userId);
     const email = user.emailAddresses[0]?.emailAddress || "";
-    if (DASHBOARD_ALLOWED.includes(email)) {
-      return { userId, email, error: null, status: 200 } as const;
-    }
-  } catch {
-    // fall through to denied
-  }
 
-  return { error: "Dashboard access required.", status: 403 } as const;
+    // Sync the local record and resolve the effective role. Allowlisted emails
+    // are seeded as admin exactly once; everyone else keeps their stored role
+    // (defaulting to "user").
+    let role = await getUserRole(userId);
+    if (DASHBOARD_ALLOWED.includes(email) && role !== "admin") {
+      await setUserRole(userId, "admin", email);
+      role = "admin";
+    } else {
+      await ensureUserRecord(userId, email);
+    }
+
+    if (role !== "admin") {
+      return { error: "Admin access required.", status: 403 } as const;
+    }
+
+    return { userId, email, role, error: null, status: 200 } as const;
+  } catch (error) {
+    return {
+      error: error instanceof Error ? error.message : "Dashboard access failed.",
+      status: 500,
+    } as const;
+  }
 }
