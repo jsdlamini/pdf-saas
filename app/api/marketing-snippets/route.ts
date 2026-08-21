@@ -29,6 +29,7 @@ const ROTATING_TWEETS = [
   "Generate publication-ready figures straight from Python code, then embed them in your LaTeX paper. Reproducible research, one workspace. https://pdf.idealsoftwaresolutions.com/research-studio",
   "Import citations by DOI, export to Word or Markdown, and hit journal word limits with live tracking. https://pdf.idealsoftwaresolutions.com/research-studio",
   "Import your whole LaTeX or Overleaf project as a zip — chapters, figures, and appendices restored in one click. Multi-file C++/Python runs too. https://pdf.idealsoftwaresolutions.com/research-studio",
+  "No internet? No problem. 20 of WiserFiles' 25 tools run fully offline in your browser — merge, split, compress, sign, redact, and more. Install once, keep working anywhere. https://pdf.idealsoftwaresolutions.com",
 ];
 
 const MARKETING_DIR = path.join(process.cwd(), "public", "marketing");
@@ -76,6 +77,7 @@ export async function GET(request: Request) {
       "🎤 Speak your PDF tool into existence. Voice search finds the right one instantly. Free. #voicecontrol #productivityhack #pdftools",
       "Write papers with AI: summarize, rewrite, get a peer review, generate figures from code — all free. 🧠📄 #latex #ai #research #phdlife",
       "Live-collaborate on a paper with real-time cursors and edits. Free LaTeX editor. #collaboration #research #academia",
+      "20 PDF tools that work fully offline — no internet needed. Merge, compress, sign, redact, and more. 📴 #offline #pdftools #productivity #freetools",
     ];
     return Response.json({
       platform: "tiktok",
