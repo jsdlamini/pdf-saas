@@ -35,6 +35,8 @@ const POSTS = [
   "Redact sensitive information permanently. WiserFiles strips content under redaction areas — text cannot be recovered. Secure, private, free. https://pdf.idealsoftwaresolutions.com/tools/redact-pdf",
   
   "Import your existing LaTeX or Overleaf project as a zip — chapters, figures, and appendices restored in one click. Multi-file C++/Python runs too. https://pdf.idealsoftwaresolutions.com/research-studio",
+  
+  "No internet? No problem. 20 of WiserFiles' 25 tools run fully offline in your browser — merge, split, compress, sign, redact, and more. Install once, keep working anywhere. https://pdf.idealsoftwaresolutions.com",
 ];
 
 const STATE_FILE = "/home/johns/social-poster/state.json";
