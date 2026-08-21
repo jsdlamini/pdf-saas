@@ -15,6 +15,7 @@ import { LatexEditor, EDITOR_THEMES, type EditorThemeId, type EditorFindRange } 
 import { EditorView } from "@codemirror/view";
 import type { EditorMode } from "@/lib/highlighters";
 import { loadJson, persistJson, removeJson } from "@/lib/json-storage";
+import { mergeAssetContents, unrecoverableAssetPaths } from "@/lib/project-assets";
 
 type StudioEditorAdapter = {
   selectionStart: number;
@@ -2217,6 +2218,35 @@ export default function ResearchStudioPage() {
     }
   }
 
+  // Recover image bytes from the asset store so a reloaded project can render
+  // previews and re-upload figures for compilation. Images that are not in the
+  // store stay empty (they must be re-imported).
+  async function rehydrateProjectAssets(projectId: string, entries: ProjectEntry[]): Promise<ProjectEntry[]> {
+    if (!projectId) return entries;
+    try {
+      const response = await fetch(`/api/project-assets?projectId=${encodeURIComponent(projectId)}`, {
+        cache: "no-store",
+      });
+      if (!response.ok) return entries;
+      const payload = (await response.json().catch(() => null)) as {
+        files?: Array<{ path: string; content: string }>;
+      } | null;
+      return mergeAssetContents(entries, payload?.files ?? []);
+    } catch {
+      return entries;
+    }
+  }
+
+  function warnOnUnrecoverableAssets(entries: ProjectEntry[], prefix: string) {
+    const missing = unrecoverableAssetPaths(entries);
+    if (!missing.length) return;
+    const names = missing.slice(0, 3).join(", ") + (missing.length > 3 ? ` +${missing.length - 3} more` : "");
+    appendPreviewError(
+      `${prefix} Some figures are unrecoverable and were not uploaded with this project: ${names}. ` +
+      "Re-import the project (or re-add the missing images) so they compile."
+    );
+  }
+
   function queueServerProjectSync(snapshot: SavedProjectData) {
     if (!userId || accountSyncUnavailable) return;
     void upsertProjectSnapshotToServer(snapshot).catch((error) => {
@@ -2334,7 +2364,19 @@ export default function ResearchStudioPage() {
           return;
         }
 
-        applySyncedProjects(projects, "Projects synced from your account.");
+        // Rehydrate image bytes for the project that will become active, so
+        // previews render and a later compile can re-upload its figures.
+        const targetId = projects.find((p) => p.id === activeProjectId)?.id ?? projects[0].id;
+        const hydratedProjects = await Promise.all(
+          projects.map(async (p) =>
+            p.id === targetId ? { ...p, entries: await rehydrateProjectAssets(p.id, p.entries) } : p
+          )
+        );
+
+        applySyncedProjects(hydratedProjects, "Projects synced from your account.");
+
+        const active = hydratedProjects.find((p) => p.id === targetId);
+        if (active) warnOnUnrecoverableAssets(active.entries, "Synced project.");
       } catch (error) {
         const message = error instanceof Error ? error.message : "Could not sync your account projects.";
         if (isAccountSyncUnavailableMessage(message)) {
@@ -2841,7 +2883,7 @@ export default function ResearchStudioPage() {
     }
   }
 
-  function loadSavedProject(projectId: string) {
+  async function loadSavedProject(projectId: string) {
     const saved = savedProjectSnapshots.find((project) => project.id === projectId) || null;
     if (!saved) {
       setCompileNotice("Could not load this project. It may be corrupted or removed.");
@@ -2852,9 +2894,19 @@ export default function ResearchStudioPage() {
 
     if (compiledPdfUrl) URL.revokeObjectURL(compiledPdfUrl);
 
+    // Recover image bytes so previews render and a compile can re-upload them.
+    let entries = saved.entries;
+    if (userId && !accountSyncUnavailable) {
+      entries = await rehydrateProjectAssets(saved.id, saved.entries);
+      setSavedProjectSnapshots((prev) =>
+        prev.map((p) => (p.id === saved.id ? { ...p, entries } : p))
+      );
+    }
+
     setActiveProjectId(saved.id);
     setProjectName(saved.name);
-    setProjectEntries(saved.entries);
+    setProjectEntries(entries);
+    warnOnUnrecoverableAssets(entries, "Loaded project.");
     setSelectedPath(saved.selectedPath || "main.tex");
     setAddFileError("");
     setCompileBusy(false);
@@ -3625,14 +3677,29 @@ export default function ResearchStudioPage() {
       return;
     }
 
-    const allFiles = editableFiles.map((entry) => {
-      if (entry.path !== "main.tex") {
-        return { path: entry.path, content: entry.content };
-      }
+    const unrecoverableImages = unrecoverableAssetPaths(editableFiles);
+    const allFiles = editableFiles
+      // Never send an image with no data inline: it would be written as an
+      // empty file and surface as a raw pdfTeX "reading image file failed".
+      // The server reports it as a missing figure instead, and we name it here.
+      .filter((entry) => !(isBinaryAssetPath(entry.path) && !entry.content))
+      .map((entry) => {
+        if (entry.path !== "main.tex") {
+          return { path: entry.path, content: entry.content };
+        }
 
-      const repairedContent = entry.content.replace(/(^|\n)([ \t]*)itle\{/g, "$1$2\\title{");
-      return { path: entry.path, content: repairedContent };
-    });
+        const repairedContent = entry.content.replace(/(^|\n)([ \t]*)itle\{/g, "$1$2\\title{");
+        return { path: entry.path, content: repairedContent };
+      });
+
+    if (unrecoverableImages.length) {
+      const names =
+        unrecoverableImages.slice(0, 3).join(", ") +
+        (unrecoverableImages.length > 3 ? ` +${unrecoverableImages.length - 3} more` : "");
+      setCompileNotice(
+        `Some figures have no image data and can't be compiled: ${names}. Re-import the project to restore them.`
+      );
+    }
 
     const imageFiles = editableFiles
       .filter((e) => isBinaryAssetPath(e.path) && e.content)
