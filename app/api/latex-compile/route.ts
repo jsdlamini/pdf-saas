@@ -4,7 +4,7 @@ import { tmpdir } from "node:os";
 import { dirname, join, normalize } from "node:path";
 import { promisify } from "node:util";
 import { auth } from "@clerk/nextjs/server";
-import { diagnoseMissingFigures, isBinaryAssetName, looksLikeBase64, stripDataUrlPrefix, validMagicBytes } from "@/lib/latex-diagnostics";
+import { diagnoseLatexErrors, diagnoseMissingFigures, isBinaryAssetName, looksLikeBase64, stripDataUrlPrefix, validMagicBytes } from "@/lib/latex-diagnostics";
 
 const execFileAsync = promisify(execFile);
 
@@ -461,16 +461,35 @@ async function tryAutoInstallMissingSty(sty: string): Promise<AutoInstallResult>
   };
 }
 
-async function compileWithEngine(tempDir: string, rootFile: string, engine: LatexEngine) {
-  await execFileAsync(engine.binary, engine.buildArgs(rootFile), {
-    cwd: tempDir,
-    timeout: 300_000,
-    maxBuffer: 32 * 1024 * 1024,
-  });
-
+async function compileWithEngine(
+  tempDir: string,
+  rootFile: string,
+  engine: LatexEngine
+): Promise<{ pdfBytes: Buffer; warnings: string[] }> {
   const pdfPath = join(tempDir, buildPdfOutputPath(rootFile));
+  try {
+    await execFileAsync(engine.binary, engine.buildArgs(rootFile), {
+      cwd: tempDir,
+      timeout: 300_000,
+      maxBuffer: 32 * 1024 * 1024,
+    });
+  } catch (error) {
+    // -interaction=nonstopmode continues past document errors and still writes
+    // a PDF. If one was produced, return it with the real errors surfaced as
+    // warnings instead of failing the whole compile on a missing icon or an
+    // undefined environment (the misleading "Missing input file .nav" noise).
+    try {
+      const pdfBytes = await readFile(pdfPath);
+      const logData = await readMainLogIfAvailable(tempDir, rootFile);
+      const warnings = logData ? diagnoseLatexErrors(logData.text) : [];
+      return { pdfBytes, warnings };
+    } catch {
+      throw error;
+    }
+  }
+
   const pdfBytes = await readFile(pdfPath);
-  return pdfBytes;
+  return { pdfBytes, warnings: [] };
 }
 
 // Writes the project into a fresh temp dir (text files, inline images, .bib
@@ -530,6 +549,25 @@ async function prepareCompileDir(
     }
   }
 
+  // Beamer writes .nav/.toc/.snm/.out/.vrb at \end{document} and reads them on
+  // the next pass. Pre-create empty stubs so latexmk's first pass never sees
+  // "No file X.nav." and reports a misleading "Missing input file" when the
+  // document also has an unrelated error (e.g. an undefined environment).
+  const usesBeamer = [...fileMap.values()].some((c) =>
+    /\\documentclass(?:\[[^\]]*\])?\{beamer\}/.test(c)
+  );
+  if (usesBeamer) {
+    const rootBase = rootFile.replace(/\.tex$/i, "");
+    for (const ext of ["nav", "toc", "snm", "out", "vrb"]) {
+      const stubPath = `${rootBase}.${ext}`;
+      if (!fileMap.has(stubPath)) {
+        const targetPath = join(tempDir, stubPath);
+        await mkdir(dirname(targetPath), { recursive: true });
+        await writeFile(targetPath, "", "utf8");
+      }
+    }
+  }
+
   // Copy stored project figures into the compile dir.
   if (projectId && userId) {
     await copyAssetsRecursive(
@@ -584,18 +622,20 @@ export async function POST(request: Request) {
     let tempDir: string | null = null;
     try {
       tempDir = await prepareCompileDir(files, rootFile, userId, payload.projectId, corruptFigures);
-      const pdfBytes = await compileWithEngine(tempDir, rootFile, engine);
+      const { pdfBytes, warnings } = await compileWithEngine(tempDir, rootFile, engine);
       const outputName = sanitizeFileName(buildPdfOutputPath(rootFile));
 
-      return new Response(pdfBytes, {
-        status: 200,
-        headers: {
-          "Content-Type": "application/pdf",
-          "Content-Disposition": `attachment; filename="${outputName}"`,
-          "Cache-Control": "no-store",
-          "X-Latex-Engine": engine.name,
-        },
-      });
+      const headers: Record<string, string> = {
+        "Content-Type": "application/pdf",
+        "Content-Disposition": `attachment; filename="${outputName}"`,
+        "Cache-Control": "no-store",
+        "X-Latex-Engine": engine.name,
+      };
+      if (warnings.length) {
+        headers["X-Latex-Warnings"] = warnings.join(" | ");
+      }
+
+      return new Response(new Uint8Array(pdfBytes), { status: 200, headers });
     } catch (error) {
       if (tempDir && !lastLogData) {
         lastLogData = await readMainLogIfAvailable(tempDir, rootFile);
@@ -619,22 +659,24 @@ export async function POST(request: Request) {
           let retryDir: string | null = null;
           try {
             retryDir = await prepareCompileDir(files, rootFile, userId, payload.projectId, corruptFigures);
-            const pdfBytes = await compileWithEngine(retryDir, rootFile, engine);
+            const { pdfBytes, warnings } = await compileWithEngine(retryDir, rootFile, engine);
             const outputName = sanitizeFileName(buildPdfOutputPath(rootFile));
 
-            return new Response(pdfBytes, {
-              status: 200,
-              headers: {
-                "Content-Type": "application/pdf",
-                "Content-Disposition": `attachment; filename="${outputName}"`,
-                "Cache-Control": "no-store",
-                "X-Latex-Engine": engine.name,
-                "X-Latex-Autoinstall":
-                  installResult.manager === "tlmgr"
-                    ? `tlmgr:${installResult.mode}:${installResult.packageName}`
-                    : `apt:${installResult.packageName}`,
-              },
-            });
+            const retryHeaders: Record<string, string> = {
+              "Content-Type": "application/pdf",
+              "Content-Disposition": `attachment; filename="${outputName}"`,
+              "Cache-Control": "no-store",
+              "X-Latex-Engine": engine.name,
+              "X-Latex-Autoinstall":
+                installResult.manager === "tlmgr"
+                  ? `tlmgr:${installResult.mode}:${installResult.packageName}`
+                  : `apt:${installResult.packageName}`,
+            };
+            if (warnings.length) {
+              retryHeaders["X-Latex-Warnings"] = warnings.join(" | ");
+            }
+
+            return new Response(new Uint8Array(pdfBytes), { status: 200, headers: retryHeaders });
           } catch (retryError) {
             const retryDetail = extractErrorDetail(retryError);
             const retryHint = getMissingStyPackageHint(retryDetail);

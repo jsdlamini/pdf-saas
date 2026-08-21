@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   decodeAssetContent,
+  diagnoseLatexErrors,
   diagnoseMissingFigures,
   isBinaryAssetName,
   looksLikeBase64,
@@ -39,6 +40,24 @@ describe("looksLikeBase64", () => {
 
   it("treats empty content as text", () => {
     expect(looksLikeBase64("")).toBe(false);
+  });
+});
+
+describe("diagnoseLatexErrors", () => {
+  it("extracts file:line and bang-form errors, deduped and capped", () => {
+    const log = [
+      "No file CH1.nav.",
+      "./CH1.tex:187: Package fontawesome5 Error: The requested icon shield was not found.",
+      "! Package fontawesome5 Error: The requested icon shield was not found.",
+      "./CH1.tex:389: LaTeX Error: Environment timeline undefined.",
+      "LaTeX Font Info: Trying to load font information",
+    ].join("\n");
+    const errors = diagnoseLatexErrors(log);
+    expect(errors).toContain("Package fontawesome5 Error: The requested icon shield was not found.");
+    expect(errors).toContain("LaTeX Error: Environment timeline undefined.");
+    // The bang form and file:line form of the same error collapse to one entry.
+    expect(errors.filter((e) => e.includes("shield")).length).toBe(1);
+    expect(errors.some((e) => e.includes("nav"))).toBe(false);
   });
 });
 

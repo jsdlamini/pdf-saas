@@ -3785,7 +3785,12 @@ export default function ResearchStudioPage() {
       setAiFixSuggestions([]);
 
       const engine = response.headers.get("X-Latex-Engine") || "server engine";
-      setCompileNotice(`Compiled ${rootPath} using ${engine}.`);
+      const warningsHeader = response.headers.get("X-Latex-Warnings");
+      setCompileNotice(
+        warningsHeader
+          ? `Compiled ${rootPath} with warnings: ${warningsHeader}`
+          : `Compiled ${rootPath} using ${engine}.`
+      );
       trackStudioEvent("compile", "latex");
 
       // Increment guest compile counter (10 per hour window)
