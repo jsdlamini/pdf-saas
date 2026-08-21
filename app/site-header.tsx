@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { useEffect, useState } from "react";
 import AccountControls from "./account-controls";
 import ThemeToggle from "./theme-toggle";
 
@@ -9,6 +10,21 @@ import ThemeToggle from "./theme-toggle";
 // editor gets maximum vertical space.
 export default function SiteHeader({ userId }: { userId: string | null }) {
   const pathname = usePathname();
+  const [isAdmin, setIsAdmin] = useState(false);
+
+  useEffect(() => {
+    if (!userId) {
+      setIsAdmin(false);
+      return;
+    }
+    let cancelled = false;
+    fetch("/api/admin-status")
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => { if (!cancelled) setIsAdmin(Boolean(d?.isAdmin)); })
+      .catch(() => { if (!cancelled) setIsAdmin(false); });
+    return () => { cancelled = true; };
+  }, [userId]);
+
   if (pathname.startsWith("/research-studio")) return null;
 
   return (
@@ -36,6 +52,15 @@ export default function SiteHeader({ userId }: { userId: string | null }) {
                 className="neo-pill hidden px-3 py-1.5 text-xs font-semibold text-slate-800 sm:inline-flex md:px-4 md:py-2 md:text-sm"
               >
                 Research Studio
+              </Link>
+            ) : null}
+            {isAdmin ? (
+              <Link
+                href="/dashboard"
+                className="neo-pill hidden px-3 py-1.5 text-xs font-semibold text-slate-800 sm:inline-flex md:px-4 md:py-2 md:text-sm"
+                style={{ background: "#0f172a", color: "#ffffff" }}
+              >
+                Dashboard
               </Link>
             ) : null}
             <AccountControls />

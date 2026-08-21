@@ -1068,6 +1068,11 @@ html[data-theme="light"] .studio-projects-panel {
 .studio-editor-codemirror .cm-cursor {
   border-left-color: #4ade80;
 }
+.studio-editor-codemirror .cm-find-match {
+  background: rgba(250, 204, 21, 0.28);
+  outline: 1px solid rgba(234, 179, 8, 0.55);
+  border-radius: 2px;
+}
 
 /* ── Syntax highlighting ───── */
 .studio-hl-cmd { color: #67e8f9; }

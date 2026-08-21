@@ -11,8 +11,8 @@ import { useCallback, useEffect, useEffectEvent, useMemo, useRef, useState } fro
 import { useSearchParams } from "next/navigation";
 import Swal from "sweetalert2";
 import { getTemplateBySlug, RESEARCH_TEMPLATES, type ResearchTemplate } from "@/lib/research-templates";
-import { LatexEditor } from "../components/latex-editor";
-import type { EditorView } from "@codemirror/view";
+import { LatexEditor, EDITOR_THEMES, type EditorThemeId, type EditorFindRange } from "../components/latex-editor";
+import { EditorView } from "@codemirror/view";
 import type { EditorMode } from "@/lib/highlighters";
 import { loadJson, persistJson, removeJson } from "@/lib/json-storage";
 
@@ -30,7 +30,14 @@ function createEditorAdapter(getView: () => EditorView | null): StudioEditorAdap
   return {
     get selectionStart() { const s = getView()?.state.selection.main; return s ? Math.min(s.anchor, s.head) : 0; },
     get selectionEnd() { const s = getView()?.state.selection.main; return s ? Math.max(s.anchor, s.head) : 0; },
-    setSelectionRange(anchor, head = anchor) { getView()?.dispatch({ selection: { anchor, head } }); },
+    setSelectionRange(anchor, head = anchor) {
+      const view = getView();
+      if (!view) return;
+      view.dispatch({
+        selection: { anchor, head },
+        effects: EditorView.scrollIntoView(anchor, { y: "center" }),
+      });
+    },
     get scrollTop() { return getView()?.scrollDOM.scrollTop ?? 0; },
     set scrollTop(v) { const view = getView(); if (view) view.scrollDOM.scrollTop = v; },
     get scrollLeft() { return getView()?.scrollDOM.scrollLeft ?? 0; },
@@ -1026,6 +1033,17 @@ export default function ResearchStudioPage() {
 
   const [codeOutput, setCodeOutput] = useState<{ stdout: string; stderr: string; exitCode: number } | null>(null);
   const [codeOutputCollapsed, setCodeOutputCollapsed] = useState(false);
+
+  const [editorTheme, setEditorTheme] = useState<EditorThemeId>(() => {
+    if (typeof window === "undefined") return "dark";
+    try {
+      const saved = localStorage.getItem("wiserfiles-editor-theme") as EditorThemeId | null;
+      return saved && EDITOR_THEMES[saved] ? saved : "dark";
+    } catch { return "dark"; }
+  });
+  useEffect(() => {
+    try { localStorage.setItem("wiserfiles-editor-theme", editorTheme); } catch {}
+  }, [editorTheme]);
   // Persist workspace + active project to localStorage
   useEffect(() => {
     try { localStorage.setItem("wiserfiles-workspace", JSON.stringify(workspaceScreen)); } catch {}
@@ -1282,6 +1300,13 @@ export default function ResearchStudioPage() {
       firstMatchIndex: detail.firstMatchIndex,
     }));
   }, [findMatches]);
+
+  const currentFileFindRanges = useMemo(() => {
+    if (!findQuery || !selectedPath) return [] as EditorFindRange[];
+    return findMatches
+      .filter((m) => m.filePath === selectedPath)
+      .map((m) => ({ from: m.start, to: m.end }));
+  }, [findMatches, selectedPath, findQuery]);
 
   useEffect(() => {
     if (!findPanelOpen) return;
@@ -5490,6 +5515,8 @@ export default function ResearchStudioPage() {
                 onDrop={onEditorDrop}
                 readOnly={!activeEntry || currentAccessLevel === "read"}
                 language={editorMode}
+                theme={editorTheme}
+                highlightRanges={currentFileFindRanges}
                 className="studio-editor-codemirror"
               />
               {collabCursors.length > 0 ? (
@@ -5616,6 +5643,18 @@ export default function ResearchStudioPage() {
               <span>UTF-8 · {isCodeMode ? (editorMode === "python" ? "Python" : "C++") : "LaTeX"}</span>
             </div>
             <div className="studio-statusbar-right">
+              <label style={{ fontSize: 11, color: "var(--text-muted, #64748b)", display: "flex", alignItems: "center", gap: 4 }} title="Editor color theme">
+                Theme
+                <select
+                  value={editorTheme}
+                  onChange={(e) => setEditorTheme(e.target.value as EditorThemeId)}
+                  style={{ background: "var(--studio-surface, #131620)", color: "var(--text-primary, #e2e8f0)", border: "1px solid var(--border-color, #334155)", borderRadius: 4, fontSize: 11, padding: "1px 2px" }}
+                >
+                  {Object.entries(EDITOR_THEMES).map(([id, t]) => (
+                    <option key={id} value={id}>{t.label}</option>
+                  ))}
+                </select>
+              </label>
               <span>Compiled: {lastCompileAt}</span>
               <span className={autoSaveStatus === "saved" ? "studio-status-saved" : autoSaveStatus === "unsaved" ? "studio-status-unsaved" : ""}>
                 {autoSaveStatus === "saved" ? `Saved ${autoSaveTimestamp || ""}` : autoSaveStatus === "saving" ? "Saving..." : "Unsaved"}
