@@ -1,11 +1,43 @@
 import { execFile } from "node:child_process";
-import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { copyFile, mkdir, mkdtemp, readFile, readdir, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { dirname, join, normalize } from "node:path";
 import { promisify } from "node:util";
 import { auth } from "@clerk/nextjs/server";
 
 const execFileAsync = promisify(execFile);
+
+const ASSETS_ROOT = process.env.PROJECT_ASSETS_DIR || "/app/data/assets";
+
+function sanitizeAssetPath(value: string): string {
+  const parts = normalize(value)
+    .replace(/\\/g, "/")
+    .split("/")
+    .filter((p) => p && p !== "." && p !== "..");
+  return parts.join("/");
+}
+
+// Recursively copy a project's stored images (figures) into the compile temp
+// dir so \includegraphics resolves without shipping base64 in the POST body.
+async function copyAssetsRecursive(srcDir: string, destDir: string): Promise<void> {
+  let entries;
+  try {
+    entries = await readdir(srcDir, { withFileTypes: true });
+  } catch {
+    return; // no stored assets for this project
+  }
+  for (const entry of entries) {
+    const src = join(srcDir, entry.name);
+    const dest = join(destDir, entry.name);
+    if (entry.isDirectory()) {
+      await mkdir(dest, { recursive: true });
+      await copyAssetsRecursive(src, dest);
+    } else {
+      await mkdir(dirname(dest), { recursive: true });
+      await copyFile(src, dest);
+    }
+  }
+}
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -33,6 +65,7 @@ type CompileInputFile = {
 type CompileRequestPayload = {
   rootFile?: string;
   files?: CompileInputFile[];
+  projectId?: string;
 };
 
 type LatexEngine = {
@@ -502,6 +535,15 @@ export async function POST(request: Request) {
           }
         }
       }
+    }
+
+    // Copy stored project images (figures) into the compile dir so
+    // \includegraphics resolves without shipping base64 in the POST body.
+    if (payload.projectId && userId) {
+      await copyAssetsRecursive(
+        join(ASSETS_ROOT, userId, sanitizeAssetPath(payload.projectId)),
+        tempDir
+      );
     }
 
     let hasMissingEngine = false;
