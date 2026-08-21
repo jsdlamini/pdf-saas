@@ -40,6 +40,7 @@ COPY --from=builder /app/.next ./.next
 COPY --from=builder /app/public ./public
 COPY --from=builder /app/next.config.ts ./next.config.ts
 COPY scripts/pdf2word-convert.py ./scripts/pdf2word-convert.py
+COPY scripts/pdf2word-structured.py ./scripts/pdf2word-structured.py
 COPY scripts/log-binary-versions.sh ./scripts/log-binary-versions.sh
 
 # Give the runtime user ownership of the app directory (Next.js writes .next/cache),

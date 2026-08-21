@@ -1,0 +1,74 @@
+{
+  "files": [
+    {
+      "name": "report-title-headings.pdf",
+      "has_heading": true,
+      "has_list": true,
+      "has_table": true
+    },
+    {
+      "name": "academic-two-column.pdf",
+      "has_heading": true,
+      "has_list": false,
+      "has_table": true
+    },
+    {
+      "name": "footnotes.pdf",
+      "has_heading": true,
+      "has_list": false,
+      "has_table": false
+    },
+    {
+      "name": "spreadsheet-table.pdf",
+      "has_heading": true,
+      "has_list": false,
+      "has_table": true
+    },
+    {
+      "name": "slide-deck.pdf",
+      "has_heading": true,
+      "has_list": true,
+      "has_table": false
+    },
+    {
+      "name": "running-header.pdf",
+      "has_heading": true,
+      "has_list": false,
+      "has_table": false
+    },
+    {
+      "name": "nested-lists.pdf",
+      "has_heading": true,
+      "has_list": true,
+      "has_table": false
+    },
+    {
+      "name": "form.pdf",
+      "has_heading": false,
+      "has_list": false,
+      "has_table": false
+    },
+    {
+      "name": "scanned.pdf",
+      "expect_exit_3": true
+    },
+    {
+      "name": "plain-text.pdf",
+      "has_heading": false,
+      "has_list": false,
+      "has_table": false
+    },
+    {
+      "name": "rtl-hebrew.pdf",
+      "has_heading": false,
+      "has_list": false,
+      "has_table": false
+    },
+    {
+      "name": "bold-italic.pdf",
+      "has_heading": true,
+      "has_list": false,
+      "has_table": false
+    }
+  ]
+}
