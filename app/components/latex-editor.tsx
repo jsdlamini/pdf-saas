@@ -127,7 +127,7 @@ function buildTheme(c: ThemeColors): Extension {
   ];
 }
 
-export type EditorThemeId = "dark" | "light" | "one-dark" | "monokai";
+export type EditorThemeId = "dark" | "light" | "one-dark" | "monokai" | "solarized-dark" | "nord" | "dracula" | "github";
 
 export const EDITOR_THEMES: Record<
   EditorThemeId,
@@ -183,6 +183,58 @@ export const EDITOR_THEMES: Record<
       number: "#ae81ff", func: "#a6e22e", type: "#66d9ef",
       operator: "#f92672", bracket: "#f8f8f2", property: "#66d9ef",
       atom: "#ae81ff", meta: "#fd971f",
+    }),
+  },
+  "solarized-dark": {
+    label: "Solarized Dark",
+    dark: true,
+    extension: buildTheme({
+      background: "#002b36", foreground: "#839496", caret: "#268bd2",
+      selection: "rgba(38,139,210,0.3)", gutterBackground: "#073642",
+      gutterForeground: "#586e75", activeLine: "rgba(255,255,255,0.02)",
+      comment: "#586e75", keyword: "#859900", string: "#2aa198",
+      number: "#d33682", func: "#268bd2", type: "#b58900",
+      operator: "#839496", bracket: "#93a1a1", property: "#2aa198",
+      atom: "#6c71c4", meta: "#b58900",
+    }),
+  },
+  nord: {
+    label: "Nord",
+    dark: true,
+    extension: buildTheme({
+      background: "#2e3440", foreground: "#d8dee9", caret: "#88c0d0",
+      selection: "rgba(136,192,208,0.25)", gutterBackground: "#272c36",
+      gutterForeground: "#4c566a", activeLine: "rgba(255,255,255,0.03)",
+      comment: "#616e88", keyword: "#81a1c1", string: "#a3be8c",
+      number: "#b48ead", func: "#88c0d0", type: "#8fbcbb",
+      operator: "#81a1c1", bracket: "#d8dee9", property: "#d08770",
+      atom: "#b48ead", meta: "#ebcb8b",
+    }),
+  },
+  dracula: {
+    label: "Dracula",
+    dark: true,
+    extension: buildTheme({
+      background: "#282a36", foreground: "#f8f8f2", caret: "#f8f8f2",
+      selection: "rgba(68,71,90,0.9)", gutterBackground: "#21222c",
+      gutterForeground: "#6272a4", activeLine: "rgba(255,255,255,0.05)",
+      comment: "#6272a4", keyword: "#ff79c6", string: "#f1fa8c",
+      number: "#bd93f9", func: "#50fa7b", type: "#8be9fd",
+      operator: "#ff79c6", bracket: "#f8f8f2", property: "#8be9fd",
+      atom: "#bd93f9", meta: "#ffb86c",
+    }),
+  },
+  github: {
+    label: "GitHub Light",
+    dark: false,
+    extension: buildTheme({
+      background: "#ffffff", foreground: "#24292f", caret: "#0969da",
+      selection: "rgba(9,105,218,0.15)", gutterBackground: "#f6f8fa",
+      gutterForeground: "#57606a", activeLine: "rgba(0,0,0,0.03)",
+      comment: "#6e7781", keyword: "#cf222e", string: "#0a3069",
+      number: "#0550ae", func: "#8250df", type: "#953800",
+      operator: "#24292f", bracket: "#24292f", property: "#0550ae",
+      atom: "#0a3069", meta: "#116329",
     }),
   },
 };
