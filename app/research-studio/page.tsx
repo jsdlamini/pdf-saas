@@ -5643,15 +5643,35 @@ export default function ResearchStudioPage() {
               <span>UTF-8 · {isCodeMode ? (editorMode === "python" ? "Python" : "C++") : "LaTeX"}</span>
             </div>
             <div className="studio-statusbar-right">
-              <label style={{ fontSize: 11, color: "var(--text-muted, #64748b)", display: "flex", alignItems: "center", gap: 4 }} title="Editor color theme">
+              <label style={{ fontSize: 11, color: "#94a3b8", display: "flex", alignItems: "center", gap: 6 }} title="Editor color theme">
+                <span
+                  style={{
+                    display: "inline-block",
+                    width: 10,
+                    height: 10,
+                    borderRadius: "50%",
+                    background: EDITOR_THEMES[editorTheme]?.dark ? "#0f172a" : "#f8fafc",
+                    border: "1px solid #64748b",
+                  }}
+                  aria-hidden="true"
+                />
                 Theme
                 <select
                   value={editorTheme}
                   onChange={(e) => setEditorTheme(e.target.value as EditorThemeId)}
-                  style={{ background: "var(--studio-surface, #131620)", color: "var(--text-primary, #e2e8f0)", border: "1px solid var(--border-color, #334155)", borderRadius: 4, fontSize: 11, padding: "1px 2px" }}
+                  style={{
+                    background: "#1e293b",
+                    color: "#f8fafc",
+                    border: "1px solid #64748b",
+                    borderRadius: 4,
+                    fontSize: 11,
+                    padding: "2px 4px",
+                    cursor: "pointer",
+                    colorScheme: "dark",
+                  }}
                 >
                   {Object.entries(EDITOR_THEMES).map(([id, t]) => (
-                    <option key={id} value={id}>{t.label}</option>
+                    <option key={id} value={id} style={{ background: "#1e293b", color: "#f8fafc" }}>{t.label}</option>
                   ))}
                 </select>
               </label>
