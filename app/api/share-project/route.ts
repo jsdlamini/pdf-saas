@@ -1,5 +1,5 @@
-import { Pool } from "pg";
 import { auth } from "@clerk/nextjs/server";
+import { db, ensureMigrated } from "@/lib/db";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -23,28 +23,15 @@ export async function POST(request: Request) {
 
     const access = accessLevel === "write" || accessLevel === "admin" ? accessLevel : "read";
 
-    const pool = new Pool({
-      connectionString: process.env.DATABASE_URL,
-      max: 1,
-      idleTimeoutMillis: 3000,
-    });
-
-    await pool.query(`
-      CREATE TABLE IF NOT EXISTS wiserfiles_shared_projects (
-        id TEXT PRIMARY KEY,
-        data JSONB NOT NULL,
-        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-      )
-    `);
+    await ensureMigrated();
 
     // Full UUID: 122 bits of entropy. An 8-char slice is only 32 bits —
     // enumerable by scanning, and collides on the primary key under load.
     const shareId = crypto.randomUUID();
-    await pool.query(
+    await db.query(
       `INSERT INTO wiserfiles_shared_projects (id, data) VALUES ($1, $2)`,
       [shareId, JSON.stringify({ ...projectData, accessLevel: access })]
     );
-    await pool.end();
 
     return Response.json({ shareId });
   } catch (e) {
@@ -58,25 +45,11 @@ export async function GET(request: Request) {
   if (!id) return Response.json({ error: "Missing share id" }, { status: 400 });
 
   try {
-    const pool = new Pool({
-      connectionString: process.env.DATABASE_URL,
-      max: 1,
-      idleTimeoutMillis: 3000,
-    });
-
-    await pool.query(`
-      CREATE TABLE IF NOT EXISTS wiserfiles_shared_projects (
-        id TEXT PRIMARY KEY,
-        data JSONB NOT NULL,
-        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-      )
-    `);
-
-    const result = await pool.query(
+    await ensureMigrated();
+    const result = await db.query(
       `SELECT data FROM wiserfiles_shared_projects WHERE id = $1`,
       [id]
     );
-    await pool.end();
 
     if (!result.rows.length) {
       return Response.json({ error: "Shared project not found" }, { status: 404 });

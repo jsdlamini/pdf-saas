@@ -16,6 +16,7 @@ import { EditorView } from "@codemirror/view";
 import type { EditorMode } from "@/lib/highlighters";
 import { loadJson, persistJson, removeJson } from "@/lib/json-storage";
 import { mergeAssetContents, unrecoverableAssetPaths } from "@/lib/project-assets";
+import { classifyUpload, joinUploadPath } from "@/lib/project-upload";
 
 type StudioEditorAdapter = {
   selectionStart: number;
@@ -4410,14 +4411,12 @@ export default function ResearchStudioPage() {
     try {
       const nextEntries: ProjectEntry[] = [];
       for (const file of files) {
-        const safeName = file.name.replace(/[^a-zA-Z0-9._-]/g, "_");
-        const path = `${folder}${safeName}`;
-        const isImage = /\.(png|jpe?g|gif|bmp|webp|ico)$/i.test(file.name);
-        const isPdf = /\.pdf$/i.test(file.name);
+        const path = joinUploadPath(folder, file.name);
+        const kind = classifyUpload(file.name);
         let content: string;
-        if (isImage) {
+        if (kind === "image") {
           content = await downscaleImageForImport(await file.arrayBuffer(), file.name);
-        } else if (isPdf) {
+        } else if (kind === "pdf") {
           // Binary: base64 so the bytes survive (file.text() would corrupt them).
           const bytes = new Uint8Array(await file.arrayBuffer());
           let binary = "";

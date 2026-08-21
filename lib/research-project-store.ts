@@ -1,4 +1,4 @@
-import { Pool } from "pg";
+import { db, ensureMigrated } from "@/lib/db";
 
 type ProjectEntry = {
   path: string;
@@ -24,52 +24,12 @@ export type StoredResearchProject = {
 
 const MAX_REVISIONS = 20;
 
-declare global {
-  var __wiserfilesPgPool: Pool | undefined;
-  var __wiserfilesResearchSchemaReady: Promise<void> | undefined;
-}
-
 function getPool() {
-  const connectionString = process.env.DATABASE_URL;
-  if (!connectionString) {
-    throw new Error("DATABASE_URL is not configured.");
-  }
-
-  if (!global.__wiserfilesPgPool) {
-    global.__wiserfilesPgPool = new Pool({ connectionString });
-  }
-
-  return global.__wiserfilesPgPool;
+  return db;
 }
 
 async function ensureSchema() {
-  if (!global.__wiserfilesResearchSchemaReady) {
-    const pool = getPool();
-    global.__wiserfilesResearchSchemaReady = pool
-      .query(`
-        CREATE TABLE IF NOT EXISTS wiserfiles_research_projects (
-          user_id TEXT NOT NULL,
-          id TEXT NOT NULL,
-          name TEXT NOT NULL,
-          entries JSONB NOT NULL,
-          selected_path TEXT NOT NULL,
-          last_compile_at TEXT NOT NULL DEFAULT 'Not compiled yet',
-          revisions JSONB NOT NULL DEFAULT '[]'::jsonb,
-          created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-          updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-          PRIMARY KEY (user_id, id)
-        );
-
-        CREATE INDEX IF NOT EXISTS wiserfiles_research_projects_user_updated_idx
-        ON wiserfiles_research_projects (user_id, updated_at DESC);
-
-        ALTER TABLE wiserfiles_research_projects
-        ADD COLUMN IF NOT EXISTS revisions JSONB NOT NULL DEFAULT '[]'::jsonb;
-      `)
-      .then(() => undefined);
-  }
-
-  await global.__wiserfilesResearchSchemaReady;
+  await ensureMigrated();
 }
 
 function isProjectEntry(value: unknown): value is ProjectEntry {

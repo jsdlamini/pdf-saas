@@ -1,4 +1,4 @@
-import { Pool } from "pg";
+import { db } from "@/lib/db";
 import { requireDashboardAccess } from "@/lib/dashboard-access";
 
 export const runtime = "nodejs";
@@ -12,11 +12,7 @@ export async function GET() {
   const access = await requireDashboardAccess();
   if (access.error) return jsonError(access.error, access.status);
 
-  const pool = new Pool({
-    connectionString: process.env.DATABASE_URL,
-    max: 1,
-    idleTimeoutMillis: 3000,
-  });
+  const pool = db;
 
   try {
     const [pageviews, tools, daily, referrers, totalUsers, countries, cities, events, recent, homePageviews] = await Promise.all([
@@ -48,8 +44,6 @@ export async function GET() {
       ),
     ]);
 
-    await pool.end();
-
     return Response.json({
       totalPageviews: parseInt(pageviews.rows[0]?.total || "0"),
       tools: tools.rows,
@@ -63,7 +57,6 @@ export async function GET() {
       homePageviews: parseInt(homePageviews.rows[0]?.total || "0"),
     });
   } catch (e) {
-    await pool.end().catch(() => {});
     return jsonError("Failed to load analytics.", 500);
   }
 }

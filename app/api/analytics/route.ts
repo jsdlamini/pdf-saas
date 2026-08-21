@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createRateLimiter } from "@/lib/rate-limit";
+import { db, ensureMigrated } from "@/lib/db";
 
 // Analytics is public telemetry, but it must not be an unbounded write path.
 // Cap field sizes and throttle per-IP so a scanner can't fill the table.
@@ -35,34 +36,9 @@ export async function POST(request: NextRequest) {
     const boundedUserId = bounded(userId, 200);
     const boundedDetail = bounded(detail, 2000);
 
-    // Simple Postgres-backed analytics via research-project-store pattern
-    const { Pool } = await import("pg");
-    const pool = new Pool({
-      connectionString: process.env.DATABASE_URL,
-      max: 1,
-      idleTimeoutMillis: 3000,
-    });
-
-    await pool.query(
-      `CREATE TABLE IF NOT EXISTS wiserfiles_analytics (
-        id SERIAL PRIMARY KEY,
-        event TEXT NOT NULL,
-        path TEXT,
-        referrer TEXT,
-        tool TEXT,
-        user_agent TEXT,
-        ip_hash TEXT,
-        country TEXT,
-        city TEXT,
-        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-      )`
-    );
-
-    // Add country/city columns if they don't exist (migration for existing tables)
-    await pool.query(`ALTER TABLE wiserfiles_analytics ADD COLUMN IF NOT EXISTS country TEXT`);
-    await pool.query(`ALTER TABLE wiserfiles_analytics ADD COLUMN IF NOT EXISTS city TEXT`);
-    await pool.query(`ALTER TABLE wiserfiles_analytics ADD COLUMN IF NOT EXISTS user_id TEXT`);
-    await pool.query(`ALTER TABLE wiserfiles_analytics ADD COLUMN IF NOT EXISTS detail TEXT`);
+    // Simple Postgres-backed analytics via the shared pool.
+    await ensureMigrated();
+    const pool = db;
 
     const ipHash = ip;
 
@@ -76,7 +52,6 @@ export async function POST(request: NextRequest) {
         [ipHash, boundedPath]
       );
       if (existing.rows.length > 0) {
-        await pool.end();
         return NextResponse.json({ ok: true, deduped: true });
       }
     }
@@ -112,7 +87,6 @@ export async function POST(request: NextRequest) {
       ]
     );
 
-    await pool.end();
     return NextResponse.json({ ok: true });
   } catch (e) {
     console.error("Analytics error:", e);

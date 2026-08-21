@@ -1,31 +1,11 @@
 import { auth } from "@clerk/nextjs/server";
-import { Pool } from "pg";
+import { db, ensureMigrated } from "@/lib/db";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-const PRESENCE_TTL_MS = 15_000;
-
 function jsonError(msg: string, status: number) {
   return Response.json({ error: msg }, { status });
-}
-
-async function ensureSchema(pool: Pool) {
-  await pool.query(`
-    CREATE TABLE IF NOT EXISTS wiserfiles_collab_presence (
-      user_id TEXT NOT NULL,
-      project_id TEXT NOT NULL,
-      name TEXT NOT NULL DEFAULT '',
-      color TEXT NOT NULL DEFAULT '#4ade80',
-      cursor_pos INTEGER NOT NULL DEFAULT 0,
-      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-      PRIMARY KEY (user_id, project_id)
-    )
-  `);
-}
-
-function getRequesterId(userId: string): string {
-  return userId;
 }
 
 // GET active collaborators' cursors for a project (updated within TTL)
@@ -37,21 +17,16 @@ export async function GET(request: Request) {
   const projectId = url.searchParams.get("projectId");
   if (!projectId) return jsonError("Missing projectId", 400);
 
-  const requesterId = getRequesterId(userId);
-
-  const pool = new Pool({ connectionString: process.env.DATABASE_URL, max: 1 });
-  await ensureSchema(pool);
-
-  const result = await pool.query(
+  await ensureMigrated();
+  const result = await db.query(
     `SELECT user_id, name, color, cursor_pos, updated_at
      FROM wiserfiles_collab_presence
      WHERE project_id = $1
        AND updated_at > NOW() - INTERVAL '15 seconds'
        AND user_id <> $2
      ORDER BY updated_at DESC`,
-    [projectId, requesterId]
+    [projectId, userId]
   );
-  await pool.end();
 
   const cursors = result.rows.map((r) => ({
     userId: r.user_id,
@@ -79,23 +54,18 @@ export async function POST(request: Request) {
   const projectId = body?.projectId;
   if (!projectId) return jsonError("Missing projectId", 400);
 
-  const requesterId = getRequesterId(userId);
-
-  const pool = new Pool({ connectionString: process.env.DATABASE_URL, max: 1 });
-  await ensureSchema(pool);
-
+  await ensureMigrated();
   const cursorPos = typeof body?.cursorPos === "number" && body.cursorPos >= 0 ? body.cursorPos : 0;
   const name = (body?.name || "Collaborator").slice(0, 60);
   const color = (body?.color || "#4ade80").slice(0, 20);
 
-  await pool.query(
+  await db.query(
     `INSERT INTO wiserfiles_collab_presence (user_id, project_id, name, color, cursor_pos, updated_at)
      VALUES ($1, $2, $3, $4, $5, NOW())
      ON CONFLICT (user_id, project_id)
      DO UPDATE SET name = EXCLUDED.name, color = EXCLUDED.color, cursor_pos = EXCLUDED.cursor_pos, updated_at = NOW()`,
-    [requesterId, projectId, name, color, cursorPos]
+    [userId, projectId, name, color, cursorPos]
   );
-  await pool.end();
 
   return Response.json({ ok: true });
 }

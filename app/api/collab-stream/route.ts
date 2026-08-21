@@ -1,5 +1,5 @@
-import { Pool } from "pg";
 import { auth } from "@clerk/nextjs/server";
+import { db } from "@/lib/db";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -19,8 +19,7 @@ export async function GET(request: Request) {
     return Response.json({ error: "Missing or invalid projectId" }, { status: 400 });
   }
 
-  const pool = new Pool({ connectionString: process.env.DATABASE_URL, max: 1 });
-  const client = await pool.connect();
+  const client = await db.connect();
   const channel = `collab_${projectId}`;
   // Quote the channel: project IDs contain hyphens, which PostgreSQL would
   // otherwise parse as an operator ("syntax error at or near '-'")
@@ -36,7 +35,6 @@ export async function GET(request: Request) {
     try {
       client.release();
     } catch { /* ignore */ }
-    void pool.end().catch(() => {});
   };
 
   const stream = new ReadableStream({
