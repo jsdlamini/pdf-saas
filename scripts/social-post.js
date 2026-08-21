@@ -10,11 +10,11 @@
  */
 
 const POSTS = [
-  "30 free PDF tools. No upload limits. No account needed. Merge, split, OCR, sign, compress — all in your browser. 🔒 Files auto-deleted. 📱 Works offline. Try it: https://pdf.idealsoftwaresolutions.com",
+  "25 free PDF tools. No upload limits. No account needed. Merge, split, OCR, sign, compress — all in your browser. 🔒 Files auto-deleted. 📱 Works offline. Try it: https://pdf.idealsoftwaresolutions.com",
   
   "Need to OCR a scanned PDF? WiserFiles does it in your browser — no upload stored, no account required. Free, private, instant. https://pdf.idealsoftwaresolutions.com/tools/ocr-pdf",
   
-  "Students: stop paying for PDF tools. WiserFiles has 30 tools — merge, compress, sign, convert — all free, all private. Your files are encrypted and auto-deleted. https://pdf.idealsoftwaresolutions.com",
+  "Students: stop paying for PDF tools. WiserFiles has 25 tools — merge, compress, sign, convert — all free, all private. Your files are encrypted and auto-deleted. https://pdf.idealsoftwaresolutions.com",
   
   "TIL you can merge PDFs without uploading them to a sketchy website. WiserFiles processes everything in your browser. Nothing is stored. Nothing is read. https://pdf.idealsoftwaresolutions.com/tools/merge-pdf",
   
@@ -22,7 +22,7 @@ const POSTS = [
   
   "PDF to Word, Excel, or PowerPoint — real formatting, not text dumps. WiserFiles converts documents server-side with LibreOffice. Free, private, no account needed. https://pdf.idealsoftwaresolutions.com/tools/pdf-to-word",
   
-  "Your PDF tool should not watermark your documents. Your PDF tool should not limit you to 2 files a day. Your PDF tool should not store your data. WiserFiles doesn't. 30 tools, zero catches. https://pdf.idealsoftwaresolutions.com",
+  "Your PDF tool should not watermark your documents. Your PDF tool should not limit you to 2 files a day. Your PDF tool should not store your data. WiserFiles doesn't. 25 tools, zero catches. https://pdf.idealsoftwaresolutions.com",
   
   "Compare PDFs side by side — visual diff with color-coded changes. See exactly what was added, removed, and modified. Free, in your browser. https://pdf.idealsoftwaresolutions.com/tools/compare-pdf",
   
@@ -30,9 +30,11 @@ const POSTS = [
   
   "Compress PDFs without destroying quality. WiserFiles compresses in your browser — your file never leaves your computer. Free, unlimited. https://pdf.idealsoftwaresolutions.com/tools/compress-pdf",
   
-  "🎤 Speak your tool: 'compress my PDF' — WiserFiles finds the right tool instantly. Voice search, 30 tools, all free. https://pdf.idealsoftwaresolutions.com",
+  "🎤 Speak your tool: 'compress my PDF' — WiserFiles finds the right tool instantly. Voice search, 25 tools, all free. https://pdf.idealsoftwaresolutions.com",
   
   "Redact sensitive information permanently. WiserFiles strips content under redaction areas — text cannot be recovered. Secure, private, free. https://pdf.idealsoftwaresolutions.com/tools/redact-pdf",
+  
+  "Import your existing LaTeX or Overleaf project as a zip — chapters, figures, and appendices restored in one click. Multi-file C++/Python runs too. https://pdf.idealsoftwaresolutions.com/research-studio",
 ];
 
 const STATE_FILE = "/home/johns/social-poster/state.json";
