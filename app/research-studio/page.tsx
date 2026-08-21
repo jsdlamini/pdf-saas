@@ -1249,63 +1249,39 @@ export default function ResearchStudioPage() {
   }, [findUseRegex, findQuery, findWholeWord, findCaseSensitive]);
 
   const findMatches = useMemo(() => {
-    if (!findQuery || !findRegex) return [] as Array<{ start: number; end: number }>;
-    const matches: Array<{ start: number; end: number }> = [];
-    let result = findRegex.exec(activeSource);
-    while (result) {
-      const start = result.index;
-      const end = start + result[0].length;
-      matches.push({ start, end });
-      result = findRegex.exec(activeSource);
+    if (!findQuery || !findRegex) return [] as Array<{ filePath: string; start: number; end: number }>;
+    const matches: Array<{ filePath: string; start: number; end: number }> = [];
+    for (const entry of projectEntries) {
+      if (entry.kind !== "file" || isImagePath(entry.path)) continue;
+      findRegex.lastIndex = 0;
+      let result = findRegex.exec(entry.content);
+      while (result) {
+        const start = result.index;
+        const end = start + result[0].length;
+        matches.push({ filePath: entry.path, start, end });
+        result = findRegex.exec(entry.content);
+      }
     }
     return matches;
-  }, [activeSource, findQuery, findRegex]);
+  }, [projectEntries, findQuery, findRegex]);
 
   const matchLines = useMemo(() => {
-    if (!findMatches.length) return [] as Array<{ lineNumber: number; count: number; firstMatchIndex: number; preview: string }>;
-
-    const lines = activeSource.split("\n");
-    const lineOffsets: number[] = [];
-    let cursor = 0;
-    for (const line of lines) {
-      lineOffsets.push(cursor);
-      cursor += line.length + 1;
-    }
-
-    const getLineIndex = (position: number) => {
-      let low = 0;
-      let high = lineOffsets.length - 1;
-      while (low <= high) {
-        const mid = Math.floor((low + high) / 2);
-        if (lineOffsets[mid] <= position) {
-          low = mid + 1;
-        } else {
-          high = mid - 1;
-        }
-      }
-      return Math.max(0, high);
-    };
-
-    const byLine = new Map<number, { count: number; firstMatchIndex: number }>();
+    if (!findMatches.length) return [] as Array<{ filePath: string; count: number; firstMatchIndex: number }>;
+    const byFile = new Map<string, { count: number; firstMatchIndex: number }>();
     findMatches.forEach((match, index) => {
-      const lineIndex = getLineIndex(match.start);
-      const current = byLine.get(lineIndex);
+      const current = byFile.get(match.filePath);
       if (!current) {
-        byLine.set(lineIndex, { count: 1, firstMatchIndex: index });
+        byFile.set(match.filePath, { count: 1, firstMatchIndex: index });
       } else {
         current.count += 1;
       }
     });
-
-    return Array.from(byLine.entries())
-      .sort((a, b) => a[0] - b[0])
-      .map(([lineIndex, detail]) => ({
-        lineNumber: lineIndex + 1,
-        count: detail.count,
-        firstMatchIndex: detail.firstMatchIndex,
-        preview: lines[lineIndex]?.trim() || "(blank line)",
-      }));
-  }, [activeSource, findMatches]);
+    return Array.from(byFile.entries()).map(([filePath, detail]) => ({
+      filePath,
+      count: detail.count,
+      firstMatchIndex: detail.firstMatchIndex,
+    }));
+  }, [findMatches]);
 
   useEffect(() => {
     if (!findPanelOpen) return;
@@ -4092,12 +4068,20 @@ export default function ResearchStudioPage() {
     const match = findMatches[index];
     if (!match) return;
     setActiveMatchIndex(index);
-    window.requestAnimationFrame(() => {
+    const needsSwitch = match.filePath !== selectedPath;
+    if (needsSwitch) setSelectedPath(match.filePath);
+    const applySelection = () => {
       const textarea = editorRef.current;
       if (!textarea) return;
       textarea.focus();
       textarea.setSelectionRange(match.start, match.end);
-    });
+    };
+    if (needsSwitch) {
+      // Let the editor swap to the new file's content before selecting.
+      setTimeout(applySelection, 60);
+    } else {
+      window.requestAnimationFrame(applySelection);
+    }
   }
 
   function jumpToNextMatch(direction: 1 | -1) {
@@ -4109,20 +4093,41 @@ export default function ResearchStudioPage() {
   function replaceCurrentMatch() {
     const current = findMatches[boundedActiveMatchIndex];
     if (!current) return;
+    const entry = projectEntries.find((e) => e.path === current.filePath);
+    if (!entry) return;
     const nextText =
-      activeSource.slice(0, current.start) + replaceQuery + activeSource.slice(current.end);
-    const cursor = current.start + replaceQuery.length;
-    applyEditorUpdate(nextText, cursor, cursor);
+      entry.content.slice(0, current.start) + replaceQuery + entry.content.slice(current.end);
+    if (current.filePath === selectedPath) {
+      const cursor = current.start + replaceQuery.length;
+      applyEditorUpdate(nextText, cursor, cursor);
+    } else {
+      setProjectEntries((cur) =>
+        cur.map((e) => (e.path === current.filePath ? { ...e, content: nextText } : e))
+      );
+      setAutoSaveStatus("unsaved");
+    }
   }
 
   function replaceAllMatches() {
     if (!findMatches.length) return;
-    let nextText = activeSource;
-    for (let i = findMatches.length - 1; i >= 0; i -= 1) {
-      const match = findMatches[i];
-      nextText = nextText.slice(0, match.start) + replaceQuery + nextText.slice(match.end);
+    const byFile = new Map<string, Array<{ start: number; end: number }>>();
+    for (const match of findMatches) {
+      const list = byFile.get(match.filePath) || [];
+      list.push(match);
+      byFile.set(match.filePath, list);
     }
-    applyEditorUpdate(nextText, 0, 0);
+    setProjectEntries((currentEntries) =>
+      currentEntries.map((entry) => {
+        const matches = byFile.get(entry.path);
+        if (!matches || entry.kind !== "file") return entry;
+        let nextText = entry.content;
+        for (let i = matches.length - 1; i >= 0; i -= 1) {
+          nextText = nextText.slice(0, matches[i].start) + replaceQuery + nextText.slice(matches[i].end);
+        }
+        return { ...entry, content: nextText };
+      })
+    );
+    setAutoSaveStatus("unsaved");
   }
 
   function onEditorKeyDown(event: KeyboardEvent) {
@@ -4245,7 +4250,9 @@ export default function ResearchStudioPage() {
       return;
     }
 
-    if (isMod && event.key.toLowerCase() === "d") {
+    // Ctrl+Shift+D: duplicate line/selection (Ctrl+D is reserved for the
+    // VSCode-style select-next-occurrence multi-cursor in the editor).
+    if (isMod && event.shiftKey && event.key.toLowerCase() === "d") {
       event.preventDefault();
       if (textarea.selectionStart !== textarea.selectionEnd) {
         const start = textarea.selectionStart;
@@ -5459,9 +5466,9 @@ export default function ResearchStudioPage() {
             {showMatchGutter ? (
               <div className="studio-match-gutter">
                 <p style={{ fontSize: 10, fontWeight: 600, color: "var(--text-muted, #64748b)", marginBottom: 4 }}>Matches</p>
-                {matchLines.length ? matchLines.map((line) => (
-                  <button key={`match-line-${line.lineNumber}`} type="button" onClick={() => focusMatch(line.firstMatchIndex)} style={{ display: "block", width: "100%", textAlign: "left", padding: "2px 4px", fontSize: 10, color: "var(--text-secondary, #94a3b8)", background: "none", border: "none", cursor: "pointer", borderRadius: 2 }}>
-                    L{line.lineNumber} ({line.count})
+                {matchLines.length ? matchLines.map((group) => (
+                  <button key={`match-file-${group.filePath}`} type="button" onClick={() => focusMatch(group.firstMatchIndex)} title={`${group.filePath} (${group.count})`} style={{ display: "block", width: "100%", textAlign: "left", padding: "2px 4px", fontSize: 10, color: "var(--text-secondary, #94a3b8)", background: "none", border: "none", cursor: "pointer", borderRadius: 2, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                    {group.filePath} ({group.count})
                   </button>
                 )) : <p style={{ fontSize: 11, color: "var(--text-muted, #64748b)" }}>None</p>}
               </div>

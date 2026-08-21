@@ -34,6 +34,7 @@ import { stex } from "@codemirror/legacy-modes/mode/stex";
 import { python } from "@codemirror/legacy-modes/mode/python";
 import { cpp } from "@codemirror/legacy-modes/mode/clike";
 import { tags } from "@lezer/highlight";
+import { selectNextOccurrence, selectSelectionMatches } from "@codemirror/search";
 
 export type EditorLanguage = "latex" | "python" | "cpp";
 
@@ -135,6 +136,12 @@ export function LatexEditor({
         drawSelection(),
         history(),
         keymap.of([...defaultKeymap, ...historyKeymap, indentWithTab]),
+        // VSCode-style multi-cursor: Ctrl/Cmd+D selects the next occurrence,
+        // Ctrl/Cmd+Shift+L selects all matches.
+        keymap.of([
+          { key: "Mod-d", run: selectNextOccurrence },
+          { key: "Mod-Shift-l", run: selectSelectionMatches },
+        ]),
         bracketMatching(),
         indentOnInput(),
         EditorView.lineWrapping,
