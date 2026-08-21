@@ -48,6 +48,31 @@ export function looksLikeBase64(content: string): boolean {
   return /^[A-Za-z0-9+/=\r\n]+$/.test(trimmed);
 }
 
+// Extracts actionable LaTeX errors from a compiler log (e.g. the beamer
+// "Environment timeline undefined" or a fontawesome missing-icon error) so the
+// user sees the real problem instead of a raw log dump or latexmk's misleading
+// "Missing input file .nav" noise. Handles both "! LaTeX Error: …" and
+// "-file-line-error"'s "./file.tex:123: …" forms, deduped and capped.
+export function diagnoseLatexErrors(logText: string): string[] {
+  const errors = new Set<string>();
+  for (const raw of logText.split("\n")) {
+    const line = raw.trim();
+    if (!line) continue;
+    // ./CH1.tex:389: LaTeX Error: Environment timeline undefined.
+    const fileLine = line.match(/^\.?\/?[^\s:]+:\d+:\s*(.+Error:.*)$/);
+    if (fileLine) {
+      errors.add(fileLine[1].trim());
+      continue;
+    }
+    // ! LaTeX Error: …  /  ! Package fontawesome5 Error: …
+    const bang = line.match(/^!\s*(.+Error:.*)$/);
+    if (bang) {
+      errors.add(bang[1].trim());
+    }
+  }
+  return [...errors].slice(0, 10);
+}
+
 // Extracts missing *figure* paths from latexmk/pdflatex output, e.g.
 //   "Missing input file 'images/ch1/foo.png'" or "File `...' not found".
 // Only image/PDF extensions are reported — generated aux files (.nav, .aux,
