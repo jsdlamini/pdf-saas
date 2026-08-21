@@ -2,23 +2,24 @@
 
 ## Primary post (r/InternetIsBeautiful)
 
-**Title:** I built 30 free PDF tools plus a full research studio — AI peer review, live collaboration, computed figures — all in your browser
+**Title:** I built 25 free PDF tools plus a full research studio — AI peer review, live collaboration, computed figures — all in your browser
 
 **Body:**
 
 After getting frustrated with PDF tools that watermark your documents, cap you at 2 files per day, or make you sign up just to download, I built the tool I wanted to use myself.
 
-[WiserFiles](https://pdf.idealsoftwaresolutions.com) — 30 PDF tools, all free, plus a Research Studio that I'm genuinely proud of:
+[WiserFiles](https://pdf.idealsoftwaresolutions.com) — 25 PDF tools, all free, plus a Research Studio that I'm genuinely proud of:
 
 **PDF tools:**
-• Merge, split, compress, OCR, sign, redact, convert, compare, rotate, and 21 more
+• Merge, split, compress, OCR, sign, redact, convert, compare, rotate, and 16 more
 • Voice search — just say "compress my PDF" and it finds the tool
 • Works offline (installable as a PWA)
 • Files encrypted in transit and auto-deleted after processing
 
 **Research Studio (for students & researchers):**
-• Full LaTeX editor with syntax highlighting, BibTeX autocomplete, and journal templates
-• **Python and C++ editing with live code execution** — write a paper and its analysis code in one place
+• A real code editor (CodeMirror 6) for LaTeX, Python, and C++ — fast, line numbers, proper highlighting
+• **Import a full LaTeX project as a zip** — chapters, figures, and appendices all come along
+• **Multi-file C++ and Python projects** compile and run — headers and multiple source files just work
 • **AI writing assistant** — summarize, rewrite, expand, or improve any selection
 • **AI peer review** — get a simulated reviewer's critique (strengths, weaknesses, score) before you submit
 • **Live collaboration** — invite co-authors, see their cursors and edits in real time
@@ -35,7 +36,7 @@ After getting frustrated with PDF tools that watermark your documents, cap you a
 • Show ads
 • Cost anything
 
-Built with Next.js, pdf-lib, jspdf, and DeepSeek for the AI features. The Research Studio started as a LaTeX editor for my own thesis and grew into a full reproducible-research workspace.
+Built with Next.js, CodeMirror, pdf-lib, jspdf, PostgreSQL, and DeepSeek for the AI features. The Research Studio started as a LaTeX editor for my own thesis and grew into a full reproducible-research workspace.
 
 Happy to answer questions. Would love feedback from anyone who writes papers or processes documents regularly.
 
@@ -48,9 +49,11 @@ Happy to answer questions. Would love feedback from anyone who writes papers or 
 
 **Body:**
 
-[WiserFiles](https://pdf.idealsoftwaresolutions.com) is a free toolkit I built. It has 30 PDF tools (merge, split, OCR, sign, compress, convert) plus a research studio with:
+[WiserFiles](https://pdf.idealsoftwaresolutions.com) is a free toolkit I built. It has 25 PDF tools (merge, split, OCR, sign, compress, convert) plus a research studio with:
 
 • LaTeX + Python + C++ editing with live code execution
+• Import your existing LaTeX project as a zip
+• Multi-file C++/Python projects compile and run
 • AI writing help (summarize, rewrite, improve grammar)
 • AI peer review before you submit your paper
 • Live collaboration with co-authors
@@ -65,7 +68,7 @@ No account needed for the PDF tools. Files auto-delete. Everything's free.
 
 I built a free research studio because Overleaf's free tier is limiting and I wanted my analysis code next to my paper.
 
-Features: LaTeX + Python + C++ in one workspace, AI writing assistant, simulated peer review, real-time collaboration (cursors + live edits), version history with diffs, computed matplotlib figures embedded in the paper, DOI citation import, and Word/Markdown export.
+Features: LaTeX + Python + C++ in one workspace, a real CodeMirror editor, one-click import of an existing Overleaf/LaTeX project, multi-file C++/Python, AI writing assistant, simulated peer review, real-time collaboration (cursors + live edits), version history with diffs, computed matplotlib figures embedded in the paper, DOI citation import, and Word/Markdown export.
 
 [Try it](https://pdf.idealsoftwaresolutions.com/research-studio) — no credit card, no watermarks.
 
@@ -78,7 +81,7 @@ Sharing my project [WiserFiles](https://pdf.idealsoftwaresolutions.com) — a Ne
 
 • Client-side PDF processing (pdf-lib/jspdf) for privacy
 • Server-side OCR (Tesseract) and conversions (LibreOffice)
-• A research studio with LaTeX/Python/C++ editing, AI writing (DeepSeek), real-time collaboration (PostgreSQL LISTEN/NOTIFY + SSE), and computed figures
+• A research studio with a CodeMirror editor for LaTeX/Python/C++, zip import, multi-file code execution, AI writing (DeepSeek), real-time collaboration (PostgreSQL LISTEN/NOTIFY + SSE), and computed figures
 • Clerk auth with guest quotas
 
 All free, all open to feedback.

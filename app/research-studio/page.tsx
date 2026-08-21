@@ -1976,10 +1976,11 @@ export default function ResearchStudioPage() {
   }
 
   async function addProjectEntryAt(parentFolderPath = "", kind: "file" | "folder") {
+    const fileExt = editorMode === "python" ? "py" : editorMode === "cpp" ? "cpp" : "tex";
     const value = await promptModal(
       kind === "folder" ? "New subfolder" : "New file",
       kind === "folder" ? "Folder name" : "File name",
-      kind === "folder" ? "" : "new.tex",
+      kind === "folder" ? "" : `new.${fileExt}`,
       "Create"
     );
     if (!value) return;
