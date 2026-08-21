@@ -1,5 +1,6 @@
 import { auth } from "@clerk/nextjs/server";
 import { db, ensureMigrated } from "@/lib/db";
+import { encryptSecret } from "@/lib/crypto";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -31,7 +32,7 @@ export async function POST(request: Request) {
     `INSERT INTO wiserfiles_user_secrets (user_id, github_token, updated_at)
      VALUES ($1, $2, NOW())
      ON CONFLICT (user_id) DO UPDATE SET github_token = EXCLUDED.github_token, updated_at = NOW()`,
-    [userId, token]
+    [userId, encryptSecret(token)]
   );
 
   return Response.json({ ok: true });

@@ -1,5 +1,6 @@
 import { auth } from "@clerk/nextjs/server";
 import { db, ensureMigrated } from "@/lib/db";
+import { decryptSecret } from "@/lib/crypto";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -25,7 +26,7 @@ async function getStoredGithubToken(userId: string): Promise<string> {
     `SELECT github_token FROM wiserfiles_user_secrets WHERE user_id = $1`,
     [userId]
   );
-  return res.rows.length ? res.rows[0].github_token : "";
+  return res.rows.length ? decryptSecret(res.rows[0].github_token) : "";
 }
 
 async function githubRequest(token: string, path: string, options: RequestInit = {}) {
