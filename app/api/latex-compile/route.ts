@@ -4,7 +4,7 @@ import { tmpdir } from "node:os";
 import { dirname, join, normalize } from "node:path";
 import { promisify } from "node:util";
 import { auth } from "@clerk/nextjs/server";
-import { diagnoseMissingFigures, isBinaryAssetName, looksLikeBase64, stripDataUrlPrefix } from "@/lib/latex-diagnostics";
+import { diagnoseMissingFigures, isBinaryAssetName, looksLikeBase64, stripDataUrlPrefix, validMagicBytes } from "@/lib/latex-diagnostics";
 
 const execFileAsync = promisify(execFile);
 
@@ -20,7 +20,14 @@ function sanitizeAssetPath(value: string): string {
 
 // Recursively copy a project's stored images (figures) into the compile temp
 // dir so \includegraphics resolves without shipping base64 in the POST body.
-async function copyAssetsRecursive(srcDir: string, destDir: string): Promise<void> {
+// Corrupt binary files (bad magic bytes) are skipped and recorded by name so
+// the user gets a clear message instead of a raw pdflatex parse failure.
+async function copyAssetsRecursive(
+  srcDir: string,
+  destDir: string,
+  corrupt: string[] = [],
+  prefix = ""
+): Promise<void> {
   let entries;
   try {
     entries = await readdir(srcDir, { withFileTypes: true });
@@ -30,10 +37,18 @@ async function copyAssetsRecursive(srcDir: string, destDir: string): Promise<voi
   for (const entry of entries) {
     const src = join(srcDir, entry.name);
     const dest = join(destDir, entry.name);
+    const rel = prefix ? `${prefix}/${entry.name}` : entry.name;
     if (entry.isDirectory()) {
       await mkdir(dest, { recursive: true });
-      await copyAssetsRecursive(src, dest);
+      await copyAssetsRecursive(src, dest, corrupt, rel);
     } else {
+      if (isBinaryAssetName(rel)) {
+        const bytes = await readFile(src);
+        if (!validMagicBytes(rel, bytes)) {
+          corrupt.push(rel);
+          continue;
+        }
+      }
       await mkdir(dirname(dest), { recursive: true });
       await copyFile(src, dest);
     }
@@ -466,7 +481,8 @@ async function prepareCompileDir(
   files: CompileInputFile[],
   rootFile: string,
   userId: string | null,
-  projectId: string | undefined
+  projectId: string | undefined,
+  corruptFigures: string[] = []
 ): Promise<string> {
   const tempDir = await mkdtemp(join(tmpdir(), "wiserfiles-latex-"));
 
@@ -518,7 +534,8 @@ async function prepareCompileDir(
   if (projectId && userId) {
     await copyAssetsRecursive(
       join(ASSETS_ROOT, userId, sanitizeAssetPath(projectId)),
-      tempDir
+      tempDir,
+      corruptFigures
     );
   }
 
@@ -560,12 +577,13 @@ export async function POST(request: Request) {
   let hasMissingEngine = false;
   const engineErrors: string[] = [];
   const autoInstallAttempts = new Set<string>();
+  const corruptFigures: string[] = [];
   let lastLogData: { text?: string; fileName?: string } | null = null;
 
   for (const engine of ENGINES) {
     let tempDir: string | null = null;
     try {
-      tempDir = await prepareCompileDir(files, rootFile, userId, payload.projectId);
+      tempDir = await prepareCompileDir(files, rootFile, userId, payload.projectId, corruptFigures);
       const pdfBytes = await compileWithEngine(tempDir, rootFile, engine);
       const outputName = sanitizeFileName(buildPdfOutputPath(rootFile));
 
@@ -600,7 +618,7 @@ export async function POST(request: Request) {
         if (installResult.ok) {
           let retryDir: string | null = null;
           try {
-            retryDir = await prepareCompileDir(files, rootFile, userId, payload.projectId);
+            retryDir = await prepareCompileDir(files, rootFile, userId, payload.projectId, corruptFigures);
             const pdfBytes = await compileWithEngine(retryDir, rootFile, engine);
             const outputName = sanitizeFileName(buildPdfOutputPath(rootFile));
 
@@ -652,7 +670,13 @@ export async function POST(request: Request) {
 
   if (engineErrors.length) {
     const missing = diagnoseMissingFigures(engineErrors);
+    const corrupt = [...new Set(corruptFigures)];
     let message = `LaTeX compile failed.\n${engineErrors.join("\n\n")}`;
+    if (corrupt.length) {
+      message +=
+        `\n\nCorrupt figures: ${corrupt.join(", ")}. ` +
+        "These files failed image validation on the server and were not compiled — re-import the project to repair them.";
+    }
     if (missing.length) {
       message += `\n\nMissing figures: ${missing.join(", ")}.`;
       message +=

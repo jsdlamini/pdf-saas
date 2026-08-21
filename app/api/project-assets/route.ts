@@ -1,5 +1,5 @@
 import { auth } from "@clerk/nextjs/server";
-import { mkdir, writeFile, rm } from "node:fs/promises";
+import { mkdir, readFile, readdir, rm, writeFile } from "node:fs/promises";
 import { dirname, join, normalize } from "node:path";
 import { decodeAssetContent } from "@/lib/latex-diagnostics";
 
@@ -18,6 +18,50 @@ function sanitizeRelPath(value: string): string {
 
 function jsonError(message: string, status: number) {
   return Response.json({ error: message }, { status });
+}
+
+// Recursively list every file under a project's asset directory as a
+// project-relative path plus its absolute path.
+async function listAssetFiles(dir: string, prefix = ""): Promise<Array<{ rel: string; full: string }>> {
+  let entries;
+  try {
+    entries = await readdir(dir, { withFileTypes: true });
+  } catch {
+    return [];
+  }
+  const result: Array<{ rel: string; full: string }> = [];
+  for (const entry of entries) {
+    const full = join(dir, entry.name);
+    const rel = prefix ? `${prefix}/${entry.name}` : entry.name;
+    if (entry.isDirectory()) {
+      result.push(...(await listAssetFiles(full, rel)));
+    } else if (entry.isFile()) {
+      result.push({ rel, full });
+    }
+  }
+  return result;
+}
+
+// Rehydration: a saved project's JSON stores image entries with empty content
+// (the bytes live only in the asset store). This returns the stored bytes so a
+// reloaded project can recover previews and re-upload for compilation.
+export async function GET(request: Request) {
+  const { userId } = await auth();
+  if (!userId) return jsonError("Sign in required.", 401);
+
+  const url = new URL(request.url);
+  const projectId = url.searchParams.get("projectId");
+  if (!projectId) return jsonError("projectId is required.", 400);
+
+  const projectDir = join(ASSETS_ROOT, userId, sanitizeRelPath(projectId));
+  const files = await listAssetFiles(projectDir);
+
+  const out = [];
+  for (const file of files) {
+    const bytes = await readFile(file.full);
+    out.push({ path: file.rel, size: bytes.length, content: bytes.toString("base64") });
+  }
+  return Response.json({ files: out });
 }
 
 // Stores uploaded project images (figures) on the server filesystem so the
