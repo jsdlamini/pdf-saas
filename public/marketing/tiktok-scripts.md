@@ -8,7 +8,7 @@
 - Show a watermark-covered PDF from a competitor
 - Cut to WiserFiles: clean, no watermark
 - "WiserFiles processes your PDFs *in your browser* — nothing is uploaded, nothing is stored."
-- "30 tools. Merge, split, OCR, sign, compress. All free. No account."
+- "25 tools. Merge, split, OCR, sign, compress. All free. No account."
 
 **Caption:** Your documents should stay on your device. 🔒 #privacy #pdftools #freetools #productivity
 
@@ -24,7 +24,19 @@
 
 **Caption:** Your secret weapon before submission. 🧠📄 #latex #research #phdlife #ai
 
-## Script 3 — Live collaboration (Research Studio)
+## Script 3 — Import your whole project (Research Studio)
+
+**Hook:** "Switching tools shouldn't mean rebuilding your paper from scratch."
+
+**Body:**
+- Show a .zip of a full LaTeX thesis (chapters + figures + appendices)
+- Drop it into the Research Studio
+- "Boom — chapters, figures, appendices, all imported."
+- "Import your Overleaf project and keep writing."
+
+**Caption:** Take your thesis with you, anywhere. 📦 #latex #overleaf #research #phdlife
+
+## Script 4 — Live collaboration (Research Studio)
 
 **Hook:** "Two people, one paper, in real time."
 
@@ -35,7 +47,7 @@
 
 **Caption:** Real-time collaboration without the Overleaf paywall. 👥 #collaboration #academia
 
-## Script 4 — Computed figures (Research Studio)
+## Script 5 — Computed figures (Research Studio)
 
 **Hook:** "Generate a scientific figure from code, straight into your paper."
 
@@ -47,7 +59,7 @@
 
 **Caption:** Reproducible research, actually made easy. 📊 #python #latex #datascience
 
-## Script 5 — Voice search (PDF tools)
+## Script 6 — Voice search (PDF tools)
 
 **Hook:** "Just *say* what you want to do with your PDF."
 

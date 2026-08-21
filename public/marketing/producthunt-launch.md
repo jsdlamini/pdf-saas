@@ -1,17 +1,19 @@
 # Product Hunt Launch
 
 ## Tagline
-30 free PDF tools + an AI research studio for writing papers, running code, and collaborating — all in your browser.
+25 free PDF tools + an AI research studio for writing papers, running code, and collaborating — all in your browser.
 
 ## Description
 
 WiserFiles is a privacy-first PDF toolkit and research studio.
 
-**PDF tools (30, all free):**
+**PDF tools (25, all free):**
 Merge, split, compress, OCR, sign, redact, convert, compare, rotate — plus voice search to find any tool instantly. Files are encrypted in transit and auto-deleted after processing. No account, no watermarks, no daily limits.
 
 **Research Studio (for students & researchers):**
-- LaTeX + Python + C++ editing with live code execution
+- A real code editor (CodeMirror 6) for LaTeX, Python, and C++ — fast and caret-accurate
+- Import a full LaTeX/Overleaf project as a zip — chapters, figures, and appendices come along
+- Multi-file C++ and Python projects compile and run in the browser
 - AI writing assistant — summarize, rewrite, expand, improve
 - AI peer review — a simulated reviewer's critique before you submit
 - Live collaboration — real-time cursors and edits with co-authors
@@ -21,7 +23,7 @@ Merge, split, compress, OCR, sign, redact, convert, compare, rotate — plus voi
 - Export to Word or Markdown
 
 **Why it's different:**
-Most PDF tools upload your files to a server. WiserFiles processes most conversions entirely in your browser, so your documents never leave your device. And the Research Studio combines writing, code, and AI in one reproducible-research workspace — something Overleaf and CoCalc don't do together.
+Most PDF tools upload your files to a server. WiserFiles processes most conversions entirely in your browser, so your documents never leave your device. The Research Studio combines writing, code, and AI in one reproducible-research workspace — and you can import an existing project and keep going in one click.
 
 ## First comment
 
@@ -31,4 +33,4 @@ Free plan: everything above. AI features have a fair daily quota (higher for reg
 
 ## Maker's note
 
-The AI features run on DeepSeek, collaboration uses PostgreSQL LISTEN/NOTIFY + Server-Sent Events (no WebSocket server needed), and PDF processing uses pdf-lib/jspdf client-side. Ask me anything about the stack.
+The editor runs on CodeMirror 6, AI features run on DeepSeek, collaboration uses PostgreSQL LISTEN/NOTIFY + Server-Sent Events (no WebSocket server needed), and PDF processing uses pdf-lib/jspdf client-side. Multi-file C++ and Python projects compile server-side in an isolated sandbox. Ask me anything about the stack.
