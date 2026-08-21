@@ -86,7 +86,9 @@ export async function checkAndIncrementAiQuota(
 
   await pool.query(
     `INSERT INTO wiserfiles_ai_usage (user_key, usage_date, count) VALUES ($1, CURRENT_DATE, 1)
-     ON CONFLICT (user_key) DO UPDATE SET usage_date = CURRENT_DATE, count = wiserfiles_ai_usage.count + 1`,
+     ON CONFLICT (user_key) DO UPDATE SET
+       usage_date = CURRENT_DATE,
+       count = CASE WHEN wiserfiles_ai_usage.usage_date = CURRENT_DATE THEN wiserfiles_ai_usage.count + 1 ELSE 1 END`,
     [userKey]
   );
   await pool.end();

@@ -2,6 +2,7 @@ export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 import { auth } from "@clerk/nextjs/server";
+import { checkAndIncrementAiQuota } from "@/lib/ai-quota";
 
 type CompileInputFile = {
   path: string;
@@ -149,6 +150,16 @@ export async function POST(request: Request) {
   const { userId } = await auth();
   if (!userId) {
     return jsonError("Sign in required.", 401);
+  }
+
+  const forwarded = request.headers.get("x-forwarded-for");
+  const ip = forwarded?.split(",")[0]?.trim() || "anonymous";
+  const quota = await checkAndIncrementAiQuota(userId, ip);
+  if (!quota.allowed) {
+    return jsonError(
+      `Daily AI limit reached (${quota.used}/${quota.limit}). Try again tomorrow.`,
+      429
+    );
   }
 
   const apiKey = process.env.DEEPSEEK_API_KEY;

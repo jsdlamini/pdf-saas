@@ -1,5 +1,7 @@
 import { TOOL_ITEMS } from "@/lib/tools";
 import { WORKFLOW_RECIPES } from "@/lib/workflow-recipes";
+import { auth } from "@clerk/nextjs/server";
+import { checkAndIncrementAiQuota } from "@/lib/ai-quota";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -210,6 +212,17 @@ function buildPrompt(payload: Required<Pick<IntakeRequestPayload, "files" | "est
 }
 
 export async function POST(request: Request) {
+  const { userId } = await auth();
+  const forwarded = request.headers.get("x-forwarded-for");
+  const ip = forwarded?.split(",")[0]?.trim() || "anonymous";
+  const quota = await checkAndIncrementAiQuota(userId, ip);
+  if (!quota.allowed) {
+    return jsonError(
+      `Daily AI limit reached (${quota.used}/${quota.limit}). Sign in for a higher limit, or try again tomorrow.`,
+      429
+    );
+  }
+
   let payload: IntakeRequestPayload;
   try {
     payload = (await request.json()) as IntakeRequestPayload;
