@@ -1845,7 +1845,12 @@ export default function ResearchStudioPage() {
   }
 
   function isImagePath(path: string) {
-    return /\.(png|jpg|jpeg|gif|webp|svg)$/i.test(path);
+    return /\.(png|jpg|jpeg|gif|bmp|webp|ico|svg)$/i.test(path);
+  }
+
+  // Binary assets stored as base64 (figures): raster images + PDF figures.
+  function isBinaryAssetPath(path: string) {
+    return /\.(png|jpe?g|gif|bmp|webp|ico|pdf)$/i.test(path);
   }
 
   function imageMimeType(path: string): string {
@@ -2145,14 +2150,14 @@ export default function ResearchStudioPage() {
 
   async function upsertProjectSnapshotToServer(snapshot: SavedProjectData) {
     const imageFiles = snapshot.entries
-      .filter((e) => e.kind === "file" && isImagePath(e.path) && e.content)
+      .filter((e) => e.kind === "file" && isBinaryAssetPath(e.path) && e.content)
       .map((e) => ({ path: e.path, content: e.content }));
     // Strip base64 image contents from the JSON payload so projects with many
     // figures stay under the request-body limit.
     const serverSnapshot: SavedProjectData = {
       ...snapshot,
       entries: snapshot.entries.map((e) =>
-        e.kind === "file" && isImagePath(e.path) ? { ...e, content: "" } : e
+        e.kind === "file" && isBinaryAssetPath(e.path) ? { ...e, content: "" } : e
       ),
     };
     const response = await fetch("/api/research-projects", {
@@ -3618,25 +3623,29 @@ export default function ResearchStudioPage() {
       return;
     }
 
-    const normalizedFiles = editableFiles
-      .filter((entry) => !isImagePath(entry.path))
-      .map((entry) => {
-        if (entry.path !== "main.tex") {
-          return { path: entry.path, content: entry.content };
-        }
+    const allFiles = editableFiles.map((entry) => {
+      if (entry.path !== "main.tex") {
+        return { path: entry.path, content: entry.content };
+      }
 
-        const repairedContent = entry.content.replace(/(^|\n)([ \t]*)itle\{/g, "$1$2\\title{");
-        return { path: entry.path, content: repairedContent };
-      });
+      const repairedContent = entry.content.replace(/(^|\n)([ \t]*)itle\{/g, "$1$2\\title{");
+      return { path: entry.path, content: repairedContent };
+    });
 
-    // Ensure project images are on the server before compiling so the LaTeX
-    // compiler can resolve \includegraphics paths (idempotent; skips if none).
-    if (userId && activeProjectId && !accountSyncUnavailable) {
-      const imageFiles = editableFiles
-        .filter((e) => isImagePath(e.path) && e.content)
-        .map((e) => ({ path: e.path, content: e.content }));
-      if (imageFiles.length) {
-        await uploadProjectAssets(activeProjectId, imageFiles).catch(() => {});
+    const imageFiles = editableFiles
+      .filter((e) => isBinaryAssetPath(e.path) && e.content)
+      .map((e) => ({ path: e.path, content: e.content }));
+
+    // Prefer the server asset store (keeps the compile body small). Fall back
+    // to sending images inline when the upload fails, or when there is no
+    // per-user store at all (guests).
+    let compileFiles = allFiles;
+    if (userId && activeProjectId && !accountSyncUnavailable && imageFiles.length) {
+      try {
+        await uploadProjectAssets(activeProjectId, imageFiles);
+        compileFiles = allFiles.filter((e) => !isBinaryAssetPath(e.path));
+      } catch {
+        // Keep images inline so the compile still has figures.
       }
     }
 
@@ -3660,8 +3669,8 @@ export default function ResearchStudioPage() {
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
             rootFile: rootPath,
-            files: normalizedFiles,
-            projectId: activeProjectId,
+            files: compileFiles,
+            projectId: activeProjectId || undefined,
           }),
           signal: controller.signal,
         });
@@ -4078,14 +4087,17 @@ export default function ResearchStudioPage() {
         if (!zipPath || zipPath.startsWith("__MACOSX/")) continue;
         const name = zipPath.split("/").pop() || zipPath;
         if (name.startsWith(".")) continue;
-        // Skip non-editable build artifacts and office docs. Raster images are
-        // imported as base64 so figure folders (Figures/, Pictures/) survive.
+        // Skip non-editable build artifacts and office docs. Raster images and
+        // PDF figures are imported as base64 so figure folders survive.
         const isRasterImage = /\.(png|jpe?g|gif|bmp|webp|ico)$/i.test(name);
-        if (/\.(pdf|tiff?|zip|gz|tgz|tar|docx?|xlsx?|pptx?|odt|ods|odp|woff2?|ttf|otf|eot)$/i.test(name)) continue;
+        const isPdfFigure = /\.pdf$/i.test(name);
+        if (/\.(tiff?|zip|gz|tgz|tar|docx?|xlsx?|pptx?|odt|ods|odp|woff2?|ttf|otf|eot)$/i.test(name)) continue;
 
         let content: string;
         if (isRasterImage) {
           content = await downscaleImageForImport(await zipEntry.async("arraybuffer"), name);
+        } else if (isPdfFigure) {
+          content = await zipEntry.async("base64");
         } else {
           content = await zipEntry.async("string");
         }

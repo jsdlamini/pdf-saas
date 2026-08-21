@@ -36,15 +36,21 @@ export async function POST(request: Request) {
   }
 
   const projectDir = join(ASSETS_ROOT, userId, sanitizeRelPath(body.projectId));
-  await mkdir(projectDir, { recursive: true });
 
-  for (const file of body.files) {
-    if (!file || typeof file.path !== "string" || typeof file.content !== "string") continue;
-    const safe = sanitizeRelPath(file.path);
-    if (!safe) continue;
-    const target = join(projectDir, safe);
-    await mkdir(dirname(target), { recursive: true });
-    await writeFile(target, Buffer.from(file.content, "base64"));
+  try {
+    await mkdir(projectDir, { recursive: true });
+
+    for (const file of body.files) {
+      if (!file || typeof file.path !== "string" || typeof file.content !== "string") continue;
+      const safe = sanitizeRelPath(file.path);
+      if (!safe) continue;
+      const target = join(projectDir, safe);
+      await mkdir(dirname(target), { recursive: true });
+      await writeFile(target, Buffer.from(file.content, "base64"));
+    }
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Could not store project assets.";
+    return jsonError(`Could not store project assets: ${message}`, 500);
   }
 
   return Response.json({ ok: true });

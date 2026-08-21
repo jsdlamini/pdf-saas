@@ -45,6 +45,12 @@ if ! docker network inspect "$WEB_EXTERNAL_NETWORK" >/dev/null 2>&1; then
   docker network create "$WEB_EXTERNAL_NETWORK"
 fi
 
+# Ensure the project-assets directory exists and is writable by the container's
+# non-root app user (uid 1001). Docker creates bind-mount source directories as
+# root, which would otherwise cause EACCES on image uploads.
+ASSETS_DIR="$APP_DIR/data/assets"
+docker run --rm -v "$ASSETS_DIR:/assets" alpine sh -c 'mkdir -p /assets && chown -R 1001:1001 /assets'
+
 DEPLOY_MODE="${DEPLOY_MODE:-$DEPLOY_MODE_DEFAULT}"
 DEPLOY_GIT_REMOTE="${DEPLOY_GIT_REMOTE:-$DEPLOY_GIT_REMOTE_DEFAULT}"
 DEPLOY_GIT_REF="${DEPLOY_GIT_REF:-$DEPLOY_GIT_REF_DEFAULT}"

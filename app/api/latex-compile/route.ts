@@ -4,6 +4,7 @@ import { tmpdir } from "node:os";
 import { dirname, join, normalize } from "node:path";
 import { promisify } from "node:util";
 import { auth } from "@clerk/nextjs/server";
+import { diagnoseMissingFigures, isBinaryAssetName, looksLikeBase64 } from "@/lib/latex-diagnostics";
 
 const execFileAsync = promisify(execFile);
 
@@ -36,6 +37,20 @@ async function copyAssetsRecursive(srcDir: string, destDir: string): Promise<voi
       await mkdir(dirname(dest), { recursive: true });
       await copyFile(src, dest);
     }
+  }
+}
+
+async function writeProjectFile(targetPath: string, path: string, content: string): Promise<void> {
+  const isEncoded =
+    isBinaryAssetName(path) || (/\.(eps|svg)$/i.test(path) && looksLikeBase64(content));
+  if (isEncoded) {
+    const raw =
+      content.includes(",") && content.startsWith("data:")
+        ? content.slice(content.indexOf(",") + 1)
+        : content;
+    await writeFile(targetPath, Buffer.from(raw, "base64"));
+  } else {
+    await writeFile(targetPath, content, "utf8");
   }
 }
 
@@ -503,16 +518,7 @@ export async function POST(request: Request) {
     for (const [path, content] of fileMap.entries()) {
       const targetPath = join(tempDir, path);
       await mkdir(dirname(targetPath), { recursive: true });
-      // Binary assets (figures, images, PDFs) are stored as base64 strings;
-      // decode them so LaTeX can actually use them.
-      if (/\.(png|jpg|jpeg|gif|pdf|eps|svg)$/i.test(path)) {
-        const raw = content.includes(",") && content.startsWith("data:")
-          ? content.slice(content.indexOf(",") + 1)
-          : content;
-        await writeFile(targetPath, Buffer.from(raw, "base64"));
-      } else {
-        await writeFile(targetPath, content, "utf8");
-      }
+      await writeProjectFile(targetPath, path, content);
     }
 
     // Create empty .bib files for any \bibliography{} references that have no matching file
@@ -630,12 +636,15 @@ export async function POST(request: Request) {
 
     if (engineErrors.length) {
       const logData = await readMainLogIfAvailable(tempDir, rootFile);
-      return jsonError(
-        `LaTeX compile failed.\n${engineErrors.join("\n\n")}`,
-        500,
-        logData?.text,
-        logData?.fileName
-      );
+      const missing = diagnoseMissingFigures(engineErrors);
+      let message = `LaTeX compile failed.\n${engineErrors.join("\n\n")}`;
+      if (missing.length) {
+        message += `\n\nMissing figures: ${missing.join(", ")}.`;
+        message +=
+          " These are usually image files that did not reach the compiler — " +
+          "re-compile to re-upload them, or re-import the project.";
+      }
+      return jsonError(message, 500, logData?.text, logData?.fileName);
     }
 
     const logData = await readMainLogIfAvailable(tempDir, rootFile);
