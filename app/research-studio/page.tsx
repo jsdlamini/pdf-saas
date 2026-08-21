@@ -640,7 +640,7 @@ type TreeContextMenuState = {
   implicitFolder: boolean;
 };
 
-type TreeContextAction = "open" | "new-file" | "new-folder" | "upload-file" | "rename" | "delete" | "insert-image" | "download-image";
+type TreeContextAction = "open" | "new-file" | "new-folder" | "upload-file" | "rename" | "delete" | "insert-image" | "insert-input" | "insert-bibresource" | "download-image" | "duplicate";
 
 type TreeContextActionItem = {
   action: TreeContextAction;
@@ -785,6 +785,8 @@ function buildActiveAncestorExpansion(selectedFilePath: string, entries: Project
 
 function getTreeContextMenuItems(menu: TreeContextMenuState): TreeContextActionItem[] {
   const isImage = /\.(png|jpg|jpeg|gif|webp|svg)$/i.test(menu.nodePath);
+  const isTex = /\.tex$/i.test(menu.nodePath);
+  const isBib = /\.bib$/i.test(menu.nodePath);
   const items: TreeContextActionItem[] = [
     {
       action: "open",
@@ -797,10 +799,23 @@ function getTreeContextMenuItems(menu: TreeContextMenuState): TreeContextActionI
     items.push({ action: "download-image", label: "Download" });
   }
 
+  if (menu.nodeKind === "file" && isTex) {
+    items.push({ action: "insert-input", label: "Insert \\input{}" });
+  }
+
+  if (menu.nodeKind === "file" && isBib) {
+    items.push({ action: "insert-bibresource", label: "Insert \\addbibresource{}" });
+  }
+
+  if (menu.nodeKind === "file" && !isImage) {
+    items.push({ action: "duplicate", label: "Duplicate" });
+  }
+
   if (menu.nodeKind === "folder") {
     items.push({ action: "new-file", label: "New file" });
     items.push({ action: "new-folder", label: "New subfolder" });
     items.push({ action: "upload-file", label: "Upload file" });
+    items.push({ action: "duplicate", label: "Duplicate folder" });
   }
 
   if (!menu.implicitFolder) {
@@ -839,7 +854,7 @@ function renderTreeContextIcon(action: TreeContextAction) {
   if (action === "upload-file") {
     return (
       <svg viewBox="0 0 20 20" className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth="1.8">
-        <path d="M12 4v8m0 0l-3-3m3 3l3-3M4 14v1.5A1.5 1.5 0 0 0 5.5 17h9a1.5 1.5 0 0 0 1.5-1.5V14" strokeLinecap="round" strokeLinejoin="round" />
+        <path d="M12 14v-8m0 0l-3 3m3-3l3 3M4 14v1.5A1.5 1.5 0 0 0 5.5 17h9a1.5 1.5 0 0 0 1.5-1.5V14" strokeLinecap="round" strokeLinejoin="round" />
       </svg>
     );
   }
@@ -866,6 +881,24 @@ function renderTreeContextIcon(action: TreeContextAction) {
     return (
       <svg viewBox="0 0 20 20" className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth="1.8">
         <path d="M10 3v9m0 0l-3-3m3 3l3-3M4 14v2h12v-2" strokeLinecap="round" strokeLinejoin="round" />
+      </svg>
+    );
+  }
+
+  if (action === "insert-input" || action === "insert-bibresource") {
+    return (
+      <svg viewBox="0 0 20 20" className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth="1.8">
+        <path d="M8 5H5a1.5 1.5 0 0 0-1.5 1.5v9A1.5 1.5 0 0 0 5 17h9a1.5 1.5 0 0 0 1.5-1.5V6.5L8 5z" strokeLinecap="round" strokeLinejoin="round" />
+        <path d="M8 5v4h4.5M10 12v3M8.5 13.5h3" strokeLinecap="round" strokeLinejoin="round" />
+      </svg>
+    );
+  }
+
+  if (action === "duplicate") {
+    return (
+      <svg viewBox="0 0 20 20" className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth="1.8">
+        <rect x="6.5" y="6.5" width="9" height="9" rx="1.2" />
+        <path d="M13.5 6.5V5a1 1 0 0 0-1-1H5a1 1 0 0 0-1 1v7.5a1 1 0 0 0 1 1h1.5" strokeLinecap="round" strokeLinejoin="round" />
       </svg>
     );
   }
@@ -1902,6 +1935,42 @@ export default function ResearchStudioPage() {
     setCompileNotice(`Inserted \\includegraphics{${path}} at cursor.`);
   }
 
+  function insertSnippetIntoDocument(snippet: string) {
+    const textarea = editorRef.current;
+    const cursor = textarea?.selectionStart ?? activeSource.length;
+    const nextText = activeSource.slice(0, cursor) + snippet + activeSource.slice(cursor);
+    updateActiveFile(nextText);
+    setCompileNotice(`Inserted ${snippet} at cursor.`);
+  }
+
+  async function duplicateProjectEntry(path: string, kind: "file" | "folder") {
+    const entry = projectEntries.find((e) => e.path === path);
+    if (!entry) return;
+    const ext = entry.path.includes(".") ? entry.path.split(".").pop() : "";
+    const base = entry.path.slice(0, entry.path.length - (ext ? ext.length + 1 : 0));
+    const copyPath = `${base}-copy${ext ? `.${ext}` : ""}`;
+
+    if (entry.kind === "file") {
+      setProjectEntries((current) => {
+        if (current.some((e) => e.path === copyPath)) return current;
+        return [...current, { ...entry, path: copyPath }];
+      });
+    } else {
+      // Duplicate a folder and everything under it.
+      const children = projectEntries.filter((e) => e.path.startsWith(path + "/"));
+      const newEntries = [
+        { ...entry, path: copyPath },
+        ...children.map((c) => ({ ...c, path: c.path.replace(path, copyPath) })),
+      ];
+      setProjectEntries((current) => {
+        const without = current.filter((e) => e.path !== path && !e.path.startsWith(path + "/"));
+        return [...without, ...newEntries];
+      });
+    }
+    setAutoSaveStatus("unsaved");
+    setCompileNotice(`Duplicated ${path}.`);
+  }
+
   function openTreeContextMenu(
     event: React.MouseEvent,
     node: ProjectTreeNode,
@@ -1923,15 +1992,15 @@ export default function ResearchStudioPage() {
     setTreeContextActiveIndex(0);
   }
 
-  function openEditorContextMenu(event: React.MouseEvent) {
+  function openRootContextMenu(event: React.MouseEvent) {
     event.preventDefault();
     event.stopPropagation();
     const menuWidth = 196;
     const menuHeight = 220;
     const x = clamp(event.clientX, 8, window.innerWidth - menuWidth);
     const y = clamp(event.clientY, 8, window.innerHeight - menuHeight);
-    // The editor has no node of its own, so its context menu is the project
-    // ROOT folder: upload an image/file or create a file at the top level.
+    // The editor / empty tree background has no node of its own, so its context
+    // menu is the project ROOT folder: upload a file or create one at the top.
     setTreeContextMenu({
       x,
       y,
@@ -1946,6 +2015,16 @@ export default function ResearchStudioPage() {
     if (!treeContextMenu) return;
 
     const { nodeKind, nodePath } = treeContextMenu;
+
+    // The file picker must be triggered synchronously while the click's user
+    // activation is still valid — do NOT close the menu (unmounting the clicked
+    // button) before calling .click().
+    if (action === "upload-file" && nodeKind === "folder") {
+      uploadFilesToFolder(nodePath);
+      setTreeContextMenu(null);
+      return;
+    }
+
     setTreeContextMenu(null);
 
     if (action === "open") {
@@ -1972,6 +2051,21 @@ export default function ResearchStudioPage() {
       return;
     }
 
+    if (action === "insert-input") {
+      insertSnippetIntoDocument(`\\input{${nodePath.replace(/\.tex$/i, "")}}`);
+      return;
+    }
+
+    if (action === "insert-bibresource") {
+      insertSnippetIntoDocument(`\\addbibresource{${nodePath}}`);
+      return;
+    }
+
+    if (action === "duplicate") {
+      await duplicateProjectEntry(nodePath, nodeKind);
+      return;
+    }
+
     if (action === "new-file" && nodeKind === "folder") {
       await addProjectEntryAt(nodePath, "file");
       return;
@@ -1979,11 +2073,6 @@ export default function ResearchStudioPage() {
 
     if (action === "new-folder" && nodeKind === "folder") {
       await addProjectEntryAt(nodePath, "folder");
-      return;
-    }
-
-    if (action === "upload-file" && nodeKind === "folder") {
-      uploadFilesToFolder(nodePath);
       return;
     }
 
@@ -3579,7 +3668,16 @@ export default function ResearchStudioPage() {
     const target = projectEntries.find((entry) => entry.path === targetPath);
     if (!target) return;
 
-    const confirmed = await confirmModal("Delete file or folder?", `Delete ${target.path}?`, "Delete", true);
+    const childCount =
+      target.kind === "folder"
+        ? projectEntries.filter((e) => e.path !== target.path && e.path.startsWith(target.path + "/")).length
+        : 0;
+    const description =
+      target.kind === "folder" && childCount > 0
+        ? `Delete folder "${target.path}" and its ${childCount} item${childCount === 1 ? "" : "s"}? This cannot be undone.`
+        : `Delete "${target.path}"? This cannot be undone.`;
+
+    const confirmed = await confirmModal("Delete file or folder?", description, "Delete", true);
     if (!confirmed) return;
 
     const nextEntries = projectEntries.filter((entry) => {
@@ -4308,26 +4406,45 @@ export default function ResearchStudioPage() {
     event.currentTarget.value = "";
     if (!folder || !files.length) return;
 
-    const nextEntries: ProjectEntry[] = [];
-    for (const file of files) {
-      const safeName = file.name.replace(/[^a-zA-Z0-9._-]/g, "_");
-      const path = `${folder}${safeName}`;
-      const isImage = /\.(png|jpe?g|gif|bmp|webp|ico)$/i.test(file.name);
-      let content: string;
-      if (isImage) {
-        content = await downscaleImageForImport(await file.arrayBuffer(), file.name);
-      } else {
-        content = await file.text();
+    const targetLabel = folder === "" ? "project root" : folder;
+    try {
+      const nextEntries: ProjectEntry[] = [];
+      for (const file of files) {
+        const safeName = file.name.replace(/[^a-zA-Z0-9._-]/g, "_");
+        const path = `${folder}${safeName}`;
+        const isImage = /\.(png|jpe?g|gif|bmp|webp|ico)$/i.test(file.name);
+        const isPdf = /\.pdf$/i.test(file.name);
+        let content: string;
+        if (isImage) {
+          content = await downscaleImageForImport(await file.arrayBuffer(), file.name);
+        } else if (isPdf) {
+          // Binary: base64 so the bytes survive (file.text() would corrupt them).
+          const bytes = new Uint8Array(await file.arrayBuffer());
+          let binary = "";
+          const chunk = 0x8000;
+          for (let i = 0; i < bytes.length; i += chunk) {
+            binary += String.fromCharCode(...Array.from(bytes.subarray(i, i + chunk)));
+          }
+          content = btoa(binary);
+        } else {
+          content = await file.text();
+        }
+        nextEntries.push({ path, kind: "file", content });
       }
-      nextEntries.push({ path, kind: "file", content });
-    }
 
-    setProjectEntries((current) => {
-      const without = current.filter((e) => !nextEntries.some((n) => n.path === e.path));
-      return [...without, ...nextEntries];
-    });
-    setAutoSaveStatus("unsaved");
-    setCompileNotice(`Added ${files.length} file(s) to ${folder}.`);
+      setProjectEntries((current) => {
+        const without = current.filter((e) => !nextEntries.some((n) => n.path === e.path));
+        return [...without, ...nextEntries];
+      });
+      setAutoSaveStatus("unsaved");
+      setCompileNotice(`Added ${files.length} file(s) to ${targetLabel}.`);
+      showToast(`Uploaded ${files.length} file(s) to ${targetLabel}`, "success");
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Upload failed.";
+      setCompileNotice(`Upload failed: ${message}`);
+      appendPreviewError(`Upload to ${targetLabel} failed: ${message}`);
+      showToast("Upload failed", "error");
+    }
   }
 
   function applyEditorUpdate(nextText: string, selectionStart: number, selectionEnd: number) {
@@ -4833,7 +4950,9 @@ export default function ResearchStudioPage() {
                 type="file"
                 multiple
                 accept="image/*,.png,.jpg,.jpeg,.gif,.webp,.svg,.bmp,.ico,.pdf,.tex,.md,.txt,.bib,.csv,.json"
-                className="hidden"
+                style={{ position: "absolute", left: -9999, top: 0, width: 1, height: 1, opacity: 0 }}
+                aria-hidden="true"
+                tabIndex={-1}
                 onChange={handleFolderUpload}
               />
               <button
@@ -5665,7 +5784,7 @@ export default function ResearchStudioPage() {
                 </button>
               </div>
               {addFileError ? <p style={{ padding: "4px 12px", fontSize: 11, color: "#ef4444" }}>{addFileError}</p> : null}
-              <div className="studio-filetree-body">
+              <div className="studio-filetree-body" onContextMenu={openRootContextMenu}>
                 {renderProjectTree(projectTree)}
               </div>
               {!isCodeMode && documentOutline.length > 0 ? (
@@ -5813,7 +5932,7 @@ export default function ResearchStudioPage() {
             ) : null}
 
             {/* Editor: CodeMirror provides its own line-number gutter + highlight. */}
-            <div className="studio-editor-area" onMouseLeave={() => { if (equationHoverRef.current) clearTimeout(equationHoverRef.current); setEquationTooltip(null); }} onContextMenu={openEditorContextMenu}>
+            <div className="studio-editor-area" onMouseLeave={() => { if (equationHoverRef.current) clearTimeout(equationHoverRef.current); setEquationTooltip(null); }} onContextMenu={openRootContextMenu}>
               <LatexEditor
                 value={activeSource}
                 onChange={handleEditorChange}
