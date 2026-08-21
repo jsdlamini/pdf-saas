@@ -7,14 +7,13 @@
 
 import { Pool } from "pg";
 
+// NOTE: do not throw at import time. `next build` imports every route that
+// imports this module, and the builder stage has no DATABASE_URL — a top-level
+// throw breaks the build. Fail loudly in ensureMigrated() instead.
 const connectionString = process.env.DATABASE_URL;
-if (!connectionString) {
-  // Routes that touch the DB fail loudly rather than half-working without one.
-  throw new Error("DATABASE_URL is not configured.");
-}
 
 export const db = new Pool({
-  connectionString,
+  connectionString: connectionString || "postgresql://localhost:5432/__missing__",
   max: 10,
   idleTimeoutMillis: 30_000,
   connectionTimeoutMillis: 5_000,
@@ -118,6 +117,9 @@ const MIGRATIONS: string[] = [
 let migrationPromise: Promise<void> | null = null;
 
 export function ensureMigrated(): Promise<void> {
+  if (!connectionString) {
+    return Promise.reject(new Error("DATABASE_URL is not configured."));
+  }
   if (!migrationPromise) {
     migrationPromise = (async () => {
       for (const sql of MIGRATIONS) {
