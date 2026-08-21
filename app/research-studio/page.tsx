@@ -1092,6 +1092,7 @@ export default function ResearchStudioPage() {
   const [addFileError, setAddFileError] = useState("");
   const [compileNotice, setCompileNotice] = useState("Ready.");
   const [compileBusy, setCompileBusy] = useState(false);
+  const compileAbortRef = useRef<AbortController | null>(null);
   const [compiledPdfBlob, setCompiledPdfBlob] = useState<Blob | null>(null);
   const [compiledPdfUrl, setCompiledPdfUrl] = useState("");
   const [compiledPdfFileName, setCompiledPdfFileName] = useState("compiled-main.pdf");
@@ -2127,10 +2128,19 @@ export default function ResearchStudioPage() {
   }
 
   async function upsertProjectSnapshotToServer(snapshot: SavedProjectData) {
+    // Strip base64 image contents from the server payload so projects with many
+    // figures stay under the request-body limit. Images remain in local
+    // IndexedDB for the current device.
+    const serverSnapshot: SavedProjectData = {
+      ...snapshot,
+      entries: snapshot.entries.map((e) =>
+        e.kind === "file" && isImagePath(e.path) ? { ...e, content: "" } : e
+      ),
+    };
     const response = await fetch("/api/research-projects", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(snapshot),
+      body: JSON.stringify(serverSnapshot),
     });
 
     if (!response.ok) {
@@ -3558,14 +3568,16 @@ export default function ResearchStudioPage() {
       return;
     }
 
-    const normalizedFiles = editableFiles.map((entry) => {
-      if (entry.path !== "main.tex") {
-        return { path: entry.path, content: entry.content };
-      }
+    const normalizedFiles = editableFiles
+      .filter((entry) => !isImagePath(entry.path))
+      .map((entry) => {
+        if (entry.path !== "main.tex") {
+          return { path: entry.path, content: entry.content };
+        }
 
-      const repairedContent = entry.content.replace(/(^|\n)([ \t]*)itle\{/g, "$1$2\\title{");
-      return { path: entry.path, content: repairedContent };
-    });
+        const repairedContent = entry.content.replace(/(^|\n)([ \t]*)itle\{/g, "$1$2\\title{");
+        return { path: entry.path, content: repairedContent };
+      });
 
     try {
       setCompileMainLog("");
@@ -3576,14 +3588,28 @@ export default function ResearchStudioPage() {
       setAiFixSuggestions([]);
       setCompileBusy(true);
       setCompileNotice("Compiling project on server...");
-      const response = await fetch("/api/latex-compile", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          rootFile: rootPath,
-          files: normalizedFiles,
-        }),
-      });
+      compileAbortRef.current?.abort();
+      const controller = new AbortController();
+      compileAbortRef.current = controller;
+      const timeoutId = setTimeout(() => controller.abort(), 300_000);
+      let response: Response;
+      try {
+        response = await fetch("/api/latex-compile", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            rootFile: rootPath,
+            files: normalizedFiles,
+          }),
+          signal: controller.signal,
+        });
+      } catch (fetchError) {
+        if (controller.signal.aborted) throw new Error("Compile stopped.");
+        throw fetchError;
+      } finally {
+        clearTimeout(timeoutId);
+        compileAbortRef.current = null;
+      }
 
       if (!response.ok) {
         const payload = (await response.json().catch(() => null)) as
@@ -3672,7 +3698,10 @@ export default function ResearchStudioPage() {
       });
     } catch (compileError) {
       const message = compileError instanceof Error ? compileError.message : "Compile failed.";
-      if (message.includes("No LaTeX engine available")) {
+      if (message === "Compile stopped.") {
+        setCompileNotice("Ready.");
+        appendPreviewError("Compile stopped.");
+      } else if (message.includes("No LaTeX engine available")) {
         const detailed = `${message} For local dev, install latexmk + texlive packages. For Docker, rebuild the image after updating dependencies.`;
         setCompileNotice("Ready.");
         appendPreviewError(`Compile failed: ${detailed}`);
@@ -4921,6 +4950,20 @@ export default function ResearchStudioPage() {
             </>
           ) : (
             <>
+              {compileBusy ? (
+                <button
+                  type="button"
+                  onClick={() => compileAbortRef.current?.abort()}
+                  className="studio-btn studio-btn-secondary"
+                  aria-label="Stop compile"
+                  title="Stop compile"
+                >
+                  <svg viewBox="0 0 20 20" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="2">
+                    <rect x="6" y="6" width="8" height="8" rx="1" />
+                  </svg>
+                  <span className="hidden sm:inline">Stop</span>
+                </button>
+              ) : null}
               <button
                 type="button"
                 onClick={() => void compileProject()}
