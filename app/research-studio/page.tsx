@@ -639,7 +639,7 @@ type TreeContextMenuState = {
   implicitFolder: boolean;
 };
 
-type TreeContextAction = "open" | "new-file" | "new-folder" | "rename" | "delete" | "insert-image" | "download-image";
+type TreeContextAction = "open" | "new-file" | "new-folder" | "upload-file" | "rename" | "delete" | "insert-image" | "download-image";
 
 type TreeContextActionItem = {
   action: TreeContextAction;
@@ -799,6 +799,7 @@ function getTreeContextMenuItems(menu: TreeContextMenuState): TreeContextActionI
   if (menu.nodeKind === "folder") {
     items.push({ action: "new-file", label: "New file" });
     items.push({ action: "new-folder", label: "New subfolder" });
+    items.push({ action: "upload-file", label: "Upload file" });
   }
 
   if (!menu.implicitFolder) {
@@ -830,6 +831,14 @@ function renderTreeContextIcon(action: TreeContextAction) {
     return (
       <svg viewBox="0 0 20 20" className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth="1.8">
         <path d="M3 6h5l1.2 1.5H17v7.5H3V6z" strokeLinecap="round" strokeLinejoin="round" />
+      </svg>
+    );
+  }
+
+  if (action === "upload-file") {
+    return (
+      <svg viewBox="0 0 20 20" className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth="1.8">
+        <path d="M12 4v8m0 0l-3-3m3 3l3-3M4 14v1.5A1.5 1.5 0 0 0 5.5 17h9a1.5 1.5 0 0 0 1.5-1.5V14" strokeLinecap="round" strokeLinejoin="round" />
       </svg>
     );
   }
@@ -1218,6 +1227,8 @@ export default function ResearchStudioPage() {
   const equationHoverRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const wordCountTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const zipImportRef = useRef<HTMLInputElement | null>(null);
+  const folderUploadRef = useRef<HTMLInputElement | null>(null);
+  const folderUploadTargetRef = useRef<string>("");
   const panesRef = useRef<HTMLElement | null>(null);
   const editorRef = useRef<StudioEditorAdapter | null>(null);
   const editorViewRef = useRef<EditorView | null>(null);
@@ -1946,6 +1957,11 @@ export default function ResearchStudioPage() {
       return;
     }
 
+    if (action === "upload-file" && nodeKind === "folder") {
+      uploadFilesToFolder(nodePath);
+      return;
+    }
+
     if (action === "rename") {
       await renameProjectEntry(nodePath);
       return;
@@ -2128,9 +2144,11 @@ export default function ResearchStudioPage() {
   }
 
   async function upsertProjectSnapshotToServer(snapshot: SavedProjectData) {
-    // Strip base64 image contents from the server payload so projects with many
-    // figures stay under the request-body limit. Images remain in local
-    // IndexedDB for the current device.
+    const imageFiles = snapshot.entries
+      .filter((e) => e.kind === "file" && isImagePath(e.path) && e.content)
+      .map((e) => ({ path: e.path, content: e.content }));
+    // Strip base64 image contents from the JSON payload so projects with many
+    // figures stay under the request-body limit.
     const serverSnapshot: SavedProjectData = {
       ...snapshot,
       entries: snapshot.entries.map((e) =>
@@ -2146,6 +2164,35 @@ export default function ResearchStudioPage() {
     if (!response.ok) {
       const payload = (await response.json().catch(() => null)) as { error?: string } | null;
       throw new Error(payload?.error || "Could not save the project to your account.");
+    }
+
+    // Upload images separately so the server-side compiler can resolve figures.
+    await uploadProjectAssets(snapshot.id, imageFiles);
+  }
+
+  async function uploadProjectAssets(projectId: string, files: Array<{ path: string; content: string }>) {
+    if (!files.length) return;
+    // Split into batches under ~8MB of base64 each to stay under request limits.
+    const batches: Array<Array<{ path: string; content: string }>> = [];
+    let current: Array<{ path: string; content: string }> = [];
+    let size = 0;
+    for (const f of files) {
+      if (size + f.content.length > 8_000_000 && current.length) {
+        batches.push(current);
+        current = [];
+        size = 0;
+      }
+      current.push(f);
+      size += f.content.length;
+    }
+    if (current.length) batches.push(current);
+
+    for (const batch of batches) {
+      await fetch("/api/project-assets", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ projectId, files: batch }),
+      });
     }
   }
 
@@ -3600,6 +3647,7 @@ export default function ResearchStudioPage() {
           body: JSON.stringify({
             rootFile: rootPath,
             files: normalizedFiles,
+            projectId: activeProjectId,
           }),
           signal: controller.signal,
         });
@@ -4113,6 +4161,39 @@ export default function ResearchStudioPage() {
     }
   }
 
+  function uploadFilesToFolder(folderPath: string) {
+    folderUploadTargetRef.current = folderPath;
+    folderUploadRef.current?.click();
+  }
+
+  async function handleFolderUpload(event: React.ChangeEvent<HTMLInputElement>) {
+    const folder = folderUploadTargetRef.current;
+    const files = Array.from(event.target.files || []);
+    event.currentTarget.value = "";
+    if (!folder || !files.length) return;
+
+    const nextEntries: ProjectEntry[] = [];
+    for (const file of files) {
+      const safeName = file.name.replace(/[^a-zA-Z0-9._-]/g, "_");
+      const path = `${folder}${safeName}`;
+      const isImage = /\.(png|jpe?g|gif|bmp|webp|ico)$/i.test(file.name);
+      let content: string;
+      if (isImage) {
+        content = await downscaleImageForImport(await file.arrayBuffer(), file.name);
+      } else {
+        content = await file.text();
+      }
+      nextEntries.push({ path, kind: "file", content });
+    }
+
+    setProjectEntries((current) => {
+      const without = current.filter((e) => !nextEntries.some((n) => n.path === e.path));
+      return [...without, ...nextEntries];
+    });
+    setAutoSaveStatus("unsaved");
+    setCompileNotice(`Added ${files.length} file(s) to ${folder}.`);
+  }
+
   function applyEditorUpdate(nextText: string, selectionStart: number, selectionEnd: number) {
     updateActiveFile(nextText);
     window.requestAnimationFrame(() => {
@@ -4610,6 +4691,13 @@ export default function ResearchStudioPage() {
                   if (f) importProjectFromZip(f);
                   e.currentTarget.value = "";
                 }}
+              />
+              <input
+                ref={folderUploadRef}
+                type="file"
+                multiple
+                className="hidden"
+                onChange={handleFolderUpload}
               />
               <button
                 type="button"
