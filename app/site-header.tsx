@@ -57,9 +57,16 @@ export default function SiteHeader({ userId }: { userId: string | null }) {
             {isAdmin ? (
               <Link
                 href="/dashboard"
-                className="neo-pill hidden px-3 py-1.5 text-xs font-semibold text-slate-800 sm:inline-flex md:px-4 md:py-2 md:text-sm"
-                style={{ background: "#0f172a", color: "#ffffff" }}
+                className="hidden items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-semibold text-white sm:inline-flex md:px-4 md:py-2 md:text-sm"
+                style={{
+                  backgroundImage: "linear-gradient(135deg, #6366f1, #a855f7)",
+                  boxShadow: "0 8px 20px -8px rgba(139, 92, 246, 0.85)",
+                }}
               >
+                <svg viewBox="0 0 20 20" className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth="1.8">
+                  <path d="M3 3v14h14" strokeLinecap="round" strokeLinejoin="round" />
+                  <path d="M7 13l3-4 2 2 4-6" strokeLinecap="round" strokeLinejoin="round" />
+                </svg>
                 Dashboard
               </Link>
             ) : null}
