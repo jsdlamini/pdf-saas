@@ -5,6 +5,7 @@ import { dirname, join, normalize } from "node:path";
 import { promisify } from "node:util";
 import { auth } from "@clerk/nextjs/server";
 import { diagnoseLatexErrors, diagnoseMissingFigures, isBinaryAssetName, looksLikeBase64, stripDataUrlPrefix, validMagicBytes } from "@/lib/latex-diagnostics";
+import { createRateLimiter } from "@/lib/rate-limit";
 
 const execFileAsync = promisify(execFile);
 
@@ -72,16 +73,8 @@ const RATE_WINDOW_MS = 60_000;
 const RATE_MAX_REQUESTS = 15;
 const GUEST_RATE_WINDOW_MS = 60 * 60 * 1000;
 const GUEST_RATE_MAX_REQUESTS = 10;
-const rateLimitMap = new Map<string, number[]>();
-
-function checkRateLimit(key: string, windowMs = RATE_WINDOW_MS, maxRequests = RATE_MAX_REQUESTS): boolean {
-  const now = Date.now();
-  const times = (rateLimitMap.get(key) || []).filter((t) => now - t < windowMs);
-  if (times.length >= maxRequests) return false;
-  times.push(now);
-  rateLimitMap.set(key, times);
-  return true;
-}
+const checkRateLimit = createRateLimiter(RATE_WINDOW_MS, RATE_MAX_REQUESTS);
+const checkGuestRateLimit = createRateLimiter(GUEST_RATE_WINDOW_MS, GUEST_RATE_MAX_REQUESTS);
 
 type CompileInputFile = {
   path: string;
@@ -590,7 +583,7 @@ export async function POST(request: Request) {
   const rateKey = userId ? `latex-compile:${userId}` : `latex-compile:guest:${ip}`;
   const limited = userId
     ? !checkRateLimit(rateKey)
-    : !checkRateLimit(rateKey, GUEST_RATE_WINDOW_MS, GUEST_RATE_MAX_REQUESTS);
+    : !checkGuestRateLimit(rateKey);
   if (limited) {
     return jsonError("Compile limit reached. Sign in for unlimited compiling.", 429);
   }

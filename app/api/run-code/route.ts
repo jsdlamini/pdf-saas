@@ -5,6 +5,7 @@ import { dirname, join } from "node:path";
 import { promisify } from "node:util";
 import { auth } from "@clerk/nextjs/server";
 import { sandboxedEnv } from "@/lib/exec-sandbox";
+import { createRateLimiter } from "@/lib/rate-limit";
 
 const execFileAsync = promisify(execFile);
 
@@ -13,16 +14,7 @@ export const dynamic = "force-dynamic";
 
 const RATE_WINDOW_MS = 60_000;
 const RATE_MAX_REQUESTS = 30;
-const rateLimitMap = new Map<string, number[]>();
-
-function checkRateLimit(key: string): boolean {
-  const now = Date.now();
-  const times = (rateLimitMap.get(key) || []).filter((t) => now - t < RATE_WINDOW_MS);
-  if (times.length >= RATE_MAX_REQUESTS) return false;
-  times.push(now);
-  rateLimitMap.set(key, times);
-  return true;
-}
+const checkRateLimit = createRateLimiter(RATE_WINDOW_MS, RATE_MAX_REQUESTS);
 
 type ProjectFile = { path: string; content: string };
 

@@ -1923,6 +1923,25 @@ export default function ResearchStudioPage() {
     setTreeContextActiveIndex(0);
   }
 
+  function openEditorContextMenu(event: React.MouseEvent) {
+    event.preventDefault();
+    event.stopPropagation();
+    const menuWidth = 196;
+    const menuHeight = 220;
+    const x = clamp(event.clientX, 8, window.innerWidth - menuWidth);
+    const y = clamp(event.clientY, 8, window.innerHeight - menuHeight);
+    // The editor has no node of its own, so its context menu is the project
+    // ROOT folder: upload an image/file or create a file at the top level.
+    setTreeContextMenu({
+      x,
+      y,
+      nodePath: "",
+      nodeKind: "folder",
+      implicitFolder: true,
+    });
+    setTreeContextActiveIndex(0);
+  }
+
   async function runTreeContextAction(action: TreeContextAction) {
     if (!treeContextMenu) return;
 
@@ -4813,6 +4832,7 @@ export default function ResearchStudioPage() {
                 ref={folderUploadRef}
                 type="file"
                 multiple
+                accept="image/*,.png,.jpg,.jpeg,.gif,.webp,.svg,.bmp,.ico,.pdf,.tex,.md,.txt,.bib,.csv,.json"
                 className="hidden"
                 onChange={handleFolderUpload}
               />
@@ -5793,7 +5813,7 @@ export default function ResearchStudioPage() {
             ) : null}
 
             {/* Editor: CodeMirror provides its own line-number gutter + highlight. */}
-            <div className="studio-editor-area" onMouseLeave={() => { if (equationHoverRef.current) clearTimeout(equationHoverRef.current); setEquationTooltip(null); }}>
+            <div className="studio-editor-area" onMouseLeave={() => { if (equationHoverRef.current) clearTimeout(equationHoverRef.current); setEquationTooltip(null); }} onContextMenu={openEditorContextMenu}>
               <LatexEditor
                 value={activeSource}
                 onChange={handleEditorChange}
