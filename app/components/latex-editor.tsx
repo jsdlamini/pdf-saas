@@ -1,21 +1,24 @@
 "use client";
 
-// CodeMirror 6 editor for Research Studio. Supports LaTeX, Python, and C++.
-// Replaces the textarea + highlight-overlay approach with a real editor:
-// proper highlighting, line numbers, history, bracket matching, and (later)
-// inline lint. The parent reaches the EditorView through onViewReady.
+// CodeMirror 6 editor for Research Studio. Supports LaTeX, Python, and C++,
+// selectable color themes, and find-match highlighting. The parent reaches the
+// EditorView through onViewReady.
 import { useEffect, useRef, type Ref } from "react";
 import {
   EditorState,
   Compartment,
+  StateEffect,
+  StateField,
   type Extension,
 } from "@codemirror/state";
 import {
   EditorView,
+  Decoration,
   keymap,
   lineNumbers,
   highlightActiveLine,
   drawSelection,
+  type DecorationSet,
 } from "@codemirror/view";
 import {
   defaultKeymap,
@@ -34,8 +37,11 @@ import { stex } from "@codemirror/legacy-modes/mode/stex";
 import { python } from "@codemirror/legacy-modes/mode/python";
 import { cpp } from "@codemirror/legacy-modes/mode/clike";
 import { tags } from "@lezer/highlight";
+import { selectNextOccurrence, selectSelectionMatches } from "@codemirror/search";
 
 export type EditorLanguage = "latex" | "python" | "cpp";
+
+export type EditorFindRange = { from: number; to: number };
 
 export type LatexEditorProps = {
   value: string;
@@ -43,6 +49,8 @@ export type LatexEditorProps = {
   readOnly?: boolean;
   className?: string;
   language?: EditorLanguage;
+  theme?: EditorThemeId;
+  highlightRanges?: EditorFindRange[];
   extensions?: Extension[];
   onViewReady?: (view: EditorView | null) => void;
   onKeyDown?: (event: KeyboardEvent) => void;
@@ -58,39 +66,152 @@ const languages: Record<EditorLanguage, Extension> = {
   cpp: StreamLanguage.define(cpp),
 };
 
-// LaTeX: commands cyan, math pink, braces amber, options green.
-const latexHighlight = HighlightStyle.define([
-  { tag: tags.comment, class: "studio-hl-cmt" },
-  { tag: tags.keyword, class: "studio-hl-cmd" },
-  { tag: tags.function(tags.variableName), class: "studio-hl-cmd" },
-  { tag: tags.string, class: "studio-hl-mth" },
-  { tag: tags.atom, class: "studio-hl-mth" },
-  { tag: tags.bracket, class: "studio-hl-brc" },
-  { tag: tags.brace, class: "studio-hl-brc" },
-  { tag: tags.squareBracket, class: "studio-hl-opt" },
-  { tag: tags.propertyName, class: "studio-hl-opt" },
-  { tag: tags.number, class: "studio-hl-num" },
-  { tag: tags.operator, class: "studio-hl-brc" },
-  { tag: tags.contentSeparator, class: "studio-hl-brc" },
-  { tag: tags.meta, class: "studio-hl-cmd" },
-]);
+// ── Selectable color themes (VSCode-style) ────────────────────────────────
+type ThemeColors = {
+  background: string;
+  foreground: string;
+  caret: string;
+  selection: string;
+  gutterBackground: string;
+  gutterForeground: string;
+  activeLine: string;
+  comment: string;
+  keyword: string;
+  string: string;
+  number: string;
+  func: string;
+  type: string;
+  operator: string;
+  bracket: string;
+  property: string;
+  atom: string;
+  meta: string;
+};
 
-// Python/C++: reuse the existing code token classes.
-const codeHighlight = HighlightStyle.define([
-  { tag: tags.comment, class: "studio-hl-cmt" },
-  { tag: tags.keyword, class: "studio-hl-kw" },
-  { tag: tags.string, class: "studio-hl-str" },
-  { tag: tags.number, class: "studio-hl-num" },
-  { tag: tags.function(tags.variableName), class: "studio-hl-fn" },
-  { tag: tags.typeName, class: "studio-hl-kw" },
-  { tag: tags.definition(tags.variableName), class: "studio-hl-dec" },
-  { tag: tags.operator, class: "studio-hl-brc" },
-  { tag: tags.bracket, class: "studio-hl-brc" },
-  { tag: tags.paren, class: "studio-hl-brc" },
-]);
+function buildTheme(c: ThemeColors): Extension {
+  return [
+    EditorView.theme({
+      "&": { backgroundColor: c.background, color: c.foreground, height: "100%" },
+      ".cm-content": { caretColor: c.caret },
+      ".cm-cursor, .cm-dropCursor": { borderLeftColor: c.caret },
+      "&.cm-focused .cm-selectionBackground, .cm-selectionBackground, .cm-content ::selection":
+        { backgroundColor: c.selection },
+      ".cm-gutters": {
+        backgroundColor: c.gutterBackground,
+        color: c.gutterForeground,
+        border: "none",
+      },
+      ".cm-activeLine": { backgroundColor: c.activeLine },
+      ".cm-activeLineGutter": { backgroundColor: c.activeLine },
+    }),
+    syntaxHighlighting(
+      HighlightStyle.define([
+        { tag: tags.comment, color: c.comment },
+        { tag: tags.keyword, color: c.keyword },
+        { tag: tags.string, color: c.string },
+        { tag: tags.number, color: c.number },
+        { tag: tags.function(tags.variableName), color: c.func },
+        { tag: tags.typeName, color: c.type },
+        { tag: tags.definition(tags.variableName), color: c.func },
+        { tag: tags.operator, color: c.operator },
+        { tag: tags.bracket, color: c.bracket },
+        { tag: tags.brace, color: c.bracket },
+        { tag: tags.squareBracket, color: c.bracket },
+        { tag: tags.paren, color: c.bracket },
+        { tag: tags.propertyName, color: c.property },
+        { tag: tags.atom, color: c.atom },
+        { tag: tags.meta, color: c.meta },
+        { tag: tags.contentSeparator, color: c.bracket },
+      ])
+    ),
+  ];
+}
+
+export type EditorThemeId = "dark" | "light" | "one-dark" | "monokai";
+
+export const EDITOR_THEMES: Record<
+  EditorThemeId,
+  { label: string; dark: boolean; extension: Extension }
+> = {
+  dark: {
+    label: "Dark",
+    dark: true,
+    extension: buildTheme({
+      background: "#0d0f17", foreground: "#e2e8f0", caret: "#4ade80",
+      selection: "rgba(74,222,128,0.22)", gutterBackground: "#131620",
+      gutterForeground: "#64748b", activeLine: "rgba(255,255,255,0.03)",
+      comment: "#64748b", keyword: "#67e8f9", string: "#f472b6",
+      number: "#b5cea8", func: "#67e8f9", type: "#67e8f9",
+      operator: "#fbbf24", bracket: "#fbbf24", property: "#4ade80",
+      atom: "#f472b6", meta: "#67e8f9",
+    }),
+  },
+  light: {
+    label: "Light",
+    dark: false,
+    extension: buildTheme({
+      background: "#ffffff", foreground: "#1a1a1a", caret: "#0f766e",
+      selection: "rgba(15,118,110,0.18)", gutterBackground: "#f1f5f9",
+      gutterForeground: "#64748b", activeLine: "rgba(0,0,0,0.03)",
+      comment: "#6a9955", keyword: "#0000ff", string: "#a31515",
+      number: "#098658", func: "#795e26", type: "#267f99",
+      operator: "#000000", bracket: "#000000", property: "#0451a5",
+      atom: "#a31515", meta: "#008080",
+    }),
+  },
+  "one-dark": {
+    label: "One Dark",
+    dark: true,
+    extension: buildTheme({
+      background: "#282c34", foreground: "#abb2bf", caret: "#528bff",
+      selection: "rgba(96,175,255,0.3)", gutterBackground: "#21252b",
+      gutterForeground: "#636d83", activeLine: "rgba(255,255,255,0.05)",
+      comment: "#7f848e", keyword: "#c678dd", string: "#98c379",
+      number: "#d19a66", func: "#61afef", type: "#e5c07b",
+      operator: "#56b6c2", bracket: "#abb2bf", property: "#e06c75",
+      atom: "#56b6c2", meta: "#e5c07b",
+    }),
+  },
+  monokai: {
+    label: "Monokai",
+    dark: true,
+    extension: buildTheme({
+      background: "#272822", foreground: "#f8f8f2", caret: "#f8f8f0",
+      selection: "rgba(73,72,62,0.9)", gutterBackground: "#1e1f1c",
+      gutterForeground: "#75715e", activeLine: "rgba(255,255,255,0.05)",
+      comment: "#75715e", keyword: "#f92672", string: "#e6db74",
+      number: "#ae81ff", func: "#a6e22e", type: "#66d9ef",
+      operator: "#f92672", bracket: "#f8f8f2", property: "#66d9ef",
+      atom: "#ae81ff", meta: "#fd971f",
+    }),
+  },
+};
+
+// ── Find-match highlighting (all occurrences in the current file) ──────────
+const setFindHighlights = StateEffect.define<EditorFindRange[]>();
+const findHighlightField = StateField.define<DecorationSet>({
+  create() {
+    return Decoration.none;
+  },
+  update(deco, tr) {
+    deco = deco.map(tr.changes);
+    for (const effect of tr.effects) {
+      if (effect.is(setFindHighlights)) {
+        deco = Decoration.set(
+          effect.value.map((r) =>
+            Decoration.mark({ class: "cm-find-match" }).range(r.from, r.to)
+          )
+        );
+      }
+    }
+    return deco;
+  },
+  provide: (f) => EditorView.decorations.from(f),
+});
 
 const readOnlyCompartment = new Compartment();
 const languageCompartment = new Compartment();
+const themeCompartment = new Compartment();
 
 export function LatexEditor({
   value,
@@ -98,6 +219,8 @@ export function LatexEditor({
   readOnly = false,
   className,
   language = "latex",
+  theme = "dark",
+  highlightRanges = [],
   extensions = [],
   onViewReady,
   onKeyDown,
@@ -125,16 +248,25 @@ export function LatexEditor({
   onDropRef.current = onDrop;
 
   useEffect(() => {
+    const themeExtension =
+      EDITOR_THEMES[theme]?.extension ?? EDITOR_THEMES.dark.extension;
     const state = EditorState.create({
       doc: value,
       extensions: [
         languageCompartment.of(languages[language]),
-        syntaxHighlighting(language === "latex" ? latexHighlight : codeHighlight),
+        themeCompartment.of(themeExtension),
+        findHighlightField,
         lineNumbers(),
         highlightActiveLine(),
         drawSelection(),
         history(),
         keymap.of([...defaultKeymap, ...historyKeymap, indentWithTab]),
+        // VSCode-style multi-cursor: Ctrl/Cmd+D selects the next occurrence,
+        // Ctrl/Cmd+Shift+L selects all matches.
+        keymap.of([
+          { key: "Mod-d", run: selectNextOccurrence },
+          { key: "Mod-Shift-l", run: selectSelectionMatches },
+        ]),
         bracketMatching(),
         indentOnInput(),
         EditorView.lineWrapping,
@@ -210,6 +342,24 @@ export function LatexEditor({
       effects: languageCompartment.reconfigure(languages[language]),
     });
   }, [language]);
+
+  // Swap color theme.
+  useEffect(() => {
+    const view = viewRef.current;
+    if (!view) return;
+    const themeExtension =
+      EDITOR_THEMES[theme]?.extension ?? EDITOR_THEMES.dark.extension;
+    view.dispatch({
+      effects: themeCompartment.reconfigure(themeExtension),
+    });
+  }, [theme]);
+
+  // Update find-match highlights.
+  useEffect(() => {
+    const view = viewRef.current;
+    if (!view) return;
+    view.dispatch({ effects: setFindHighlights.of(highlightRanges) });
+  }, [highlightRanges]);
 
   return <div ref={containerRef} className={className} />;
 }
