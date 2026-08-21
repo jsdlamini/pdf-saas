@@ -24,7 +24,7 @@ import { ToolIcon } from "@/app/components/tool-icon";
 import { asPdfBlob, clamp, compactPageSequence, dataUrlToUint8Array, decodeXmlText, downloadBlob, formatBytes, getFileNameFromDisposition, hexToRgb, isFileCompatibleForTool, normalizeFileName, pagesToLatex, parseRanges, readAsArrayBuffer, readAsText, sortSlidePaths, splitLines } from "@/lib/transforms/helpers";
 import { A4_PAGE_SIZE_PORTRAIT, buildMixedFilePageNodes, clampPdfImageDimensions, convertMixedFilesToPdf, fileToPdfImage, htmlContentToPdfBlob, pdfFromLines, sanitizeLegacyWatermarks, type MergePageNode } from "@/lib/transforms/pdf-lib";
 import { configurePdfJsWorker, dataUrlToImage, extractPdfFormFields, loadPdfPagesText, processCompressionImage, renderComparePageWithDiffs, renderEditPagePreview, renderPdfPagePreview, renderPdfThumbnails, renderPdfToImages, samplePdfTextCoverage, type CompressionOptions, type EditFormField, type EditTextSpan, type PageThumbnail } from "@/lib/transforms/rasterize";
-import { buildOfficePreviewText } from "@/lib/transforms/text-extract";
+import { buildOfficePreviewHtml, buildOfficePreviewText } from "@/lib/transforms/text-extract";
 
 type WorkbenchProps = {
   tool: ToolItem;
@@ -666,6 +666,7 @@ export default function ToolWorkbench({ tool }: WorkbenchProps) {
   const [dragOverFileIndex, setDragOverFileIndex] = useState<number | null>(null);
   const [outputPreview, setOutputPreview] = useState<OutputPreview | null>(null);
   const [previewText, setPreviewText] = useState<string>("");
+  const [previewHtml, setPreviewHtml] = useState<string>("");
   const [downloadingOutput, setDownloadingOutput] = useState(false);
   const [pdfPreviewPage, setPdfPreviewPage] = useState(1);
   const [pdfPreviewPageCount, setPdfPreviewPageCount] = useState(1);
@@ -1364,15 +1365,32 @@ export default function ToolWorkbench({ tool }: WorkbenchProps) {
       }
 
       if (OFFICE_PREVIEW_MIME_PATTERN.test(preparedBlob.type)) {
-        buildOfficePreviewText(preparedBlob, preparedBlob.type)
-        .then((text) => {
-          if (previewJobRef.current !== previewJob) return;
-          setPreviewText(text);
-        })
-        .catch(() => {
-          if (previewJobRef.current !== previewJob) return;
-          setPreviewText("Could not build an in-browser structured preview for this output.");
-        });
+        if (preparedBlob.type.toLowerCase().includes("wordprocessingml")) {
+          // DOCX: render semantic HTML (headings/lists/paragraphs) so the
+          // preview actually shows the conversion worked.
+          buildOfficePreviewHtml(preparedBlob, preparedBlob.type)
+            .then((html) => {
+              if (previewJobRef.current !== previewJob) return;
+              setPreviewHtml(html || "");
+              setPreviewText("");
+            })
+            .catch(() => {
+              if (previewJobRef.current !== previewJob) return;
+              setPreviewHtml("");
+              setPreviewText("Could not build an in-browser structured preview for this output.");
+            });
+        } else {
+          setPreviewHtml("");
+          buildOfficePreviewText(preparedBlob, preparedBlob.type)
+            .then((text) => {
+              if (previewJobRef.current !== previewJob) return;
+              setPreviewText(text);
+            })
+            .catch(() => {
+              if (previewJobRef.current !== previewJob) return;
+              setPreviewText("Could not build an in-browser structured preview for this output.");
+            });
+        }
       }
 
       if (preparedBlob.type.includes("pdf")) {
@@ -1601,7 +1619,12 @@ export default function ToolWorkbench({ tool }: WorkbenchProps) {
         />
       ) : null}
 
-      {outputPreview.mime.startsWith("text/") || OFFICE_PREVIEW_MIME_PATTERN.test(outputPreview.mime) ? (
+      {previewHtml ? (
+        <div
+          className="office-preview-html max-h-96 overflow-auto rounded-lg border border-slate-300 bg-white p-4 text-sm text-slate-800"
+          dangerouslySetInnerHTML={{ __html: previewHtml }}
+        />
+      ) : outputPreview.mime.startsWith("text/") || OFFICE_PREVIEW_MIME_PATTERN.test(outputPreview.mime) ? (
         <pre className="max-h-72 overflow-auto whitespace-pre-wrap rounded-lg border border-slate-300 bg-white p-3 text-xs text-slate-800">
           {previewText || "Loading preview..."}
         </pre>

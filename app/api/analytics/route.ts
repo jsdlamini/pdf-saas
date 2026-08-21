@@ -1,19 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
+import { createRateLimiter } from "@/lib/rate-limit";
 
 // Analytics is public telemetry, but it must not be an unbounded write path.
 // Cap field sizes and throttle per-IP so a scanner can't fill the table.
-const RATE_WINDOW_MS = 60_000;
-const RATE_MAX_EVENTS = 120;
-const rateLimitMap = new Map<string, number[]>();
-
-function checkRateLimit(key: string): boolean {
-  const now = Date.now();
-  const times = (rateLimitMap.get(key) || []).filter((t) => now - t < RATE_WINDOW_MS);
-  if (times.length >= RATE_MAX_EVENTS) return false;
-  times.push(now);
-  rateLimitMap.set(key, times);
-  return true;
-}
+const checkRateLimit = createRateLimiter(60_000, 120);
 
 function bounded(value: unknown, max: number): string | null {
   return typeof value === "string" && value.trim() ? value.trim().slice(0, max) : null;
