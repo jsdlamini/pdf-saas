@@ -113,11 +113,11 @@ async function runPython(mainPath: string, tempDir: string): Promise<RunCodeResp
   }
 }
 
-async function runCpp(mainPath: string, tempDir: string): Promise<RunCodeResponse> {
-  const sourcePath = join(tempDir, mainPath);
+async function runCpp(sourceFiles: string[], tempDir: string): Promise<RunCodeResponse> {
   const binaryPath = join(tempDir, "program");
 
-  // Compile
+  // Compile every C++ source file so multi-file projects (main.cpp +
+  // samples.cpp) link correctly instead of failing with undefined references.
   try {
     await execFileAsync("g++", [
       "-std=c++17",
@@ -125,7 +125,7 @@ async function runCpp(mainPath: string, tempDir: string): Promise<RunCodeRespons
       "-Wall",
       "-o",
       binaryPath,
-      sourcePath,
+      ...sourceFiles.map((f) => join(tempDir, f)),
     ], {
       timeout: 30_000,
       maxBuffer: MAX_OUTPUT_BYTES,
@@ -271,7 +271,14 @@ export async function POST(request: Request) {
     if (payload.language === "python") {
       result = await runPython(mainPath, tempDir);
     } else {
-      result = await runCpp(mainPath, tempDir);
+      // Compile all C/C++ sources so multi-file projects link.
+      const sourceFiles = files
+        .map((f) => sanitizeRelPath(f.path))
+        .filter((p) => /\.(cpp|cc|cxx|c)$/i.test(p));
+      const sources = sourceFiles.includes(mainPath)
+        ? sourceFiles
+        : [mainPath, ...sourceFiles];
+      result = await runCpp(sources, tempDir);
     }
 
     return Response.json(result);
