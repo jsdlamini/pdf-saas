@@ -1,4 +1,5 @@
 import { Pool } from "pg";
+import { auth } from "@clerk/nextjs/server";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -7,6 +8,11 @@ export const dynamic = "force-dynamic";
 // Uses PostgreSQL LISTEN/NOTIFY so every connected collaborator is pushed
 // the moment someone else saves a change (no polling delay).
 export async function GET(request: Request) {
+  const { userId } = await auth();
+  if (!userId) {
+    return Response.json({ error: "Sign in required." }, { status: 401 });
+  }
+
   const url = new URL(request.url);
   const projectId = url.searchParams.get("projectId");
   if (!projectId || !/^[a-zA-Z0-9_-]{1,100}$/.test(projectId)) {

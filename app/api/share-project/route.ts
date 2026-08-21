@@ -1,9 +1,15 @@
 import { Pool } from "pg";
+import { auth } from "@clerk/nextjs/server";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 export async function POST(request: Request) {
+  const { userId } = await auth();
+  if (!userId) {
+    return Response.json({ error: "Sign in required." }, { status: 401 });
+  }
+
   try {
     const body = await request.json();
     const { projectData, accessLevel } = body as {
@@ -31,7 +37,9 @@ export async function POST(request: Request) {
       )
     `);
 
-    const shareId = crypto.randomUUID().slice(0, 8);
+    // Full UUID: 122 bits of entropy. An 8-char slice is only 32 bits —
+    // enumerable by scanning, and collides on the primary key under load.
+    const shareId = crypto.randomUUID();
     await pool.query(
       `INSERT INTO wiserfiles_shared_projects (id, data) VALUES ($1, $2)`,
       [shareId, JSON.stringify({ ...projectData, accessLevel: access })]

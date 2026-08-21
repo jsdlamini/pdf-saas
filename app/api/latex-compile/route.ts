@@ -142,7 +142,7 @@ const ENGINES: LatexEngine[] = [
   {
     name: "latexmk",
     binary: "latexmk",
-    buildArgs: (rootFile) => ["-pdf", "-shell-escape", "-interaction=nonstopmode", "-file-line-error", rootFile],
+    buildArgs: (rootFile) => ["-pdf", "-interaction=nonstopmode", "-file-line-error", rootFile],
   },
   {
     name: "texliveonfly",
@@ -151,7 +151,7 @@ const ENGINES: LatexEngine[] = [
       "--compiler",
       "latexmk",
       "--arguments",
-      "-pdf -shell-escape -interaction=nonstopmode -file-line-error",
+      "-pdf -interaction=nonstopmode -file-line-error",
       rootFile,
     ],
   },
@@ -275,9 +275,10 @@ function isCrossReleaseTlmgrError(detail: string) {
 }
 
 function canUseAptGet() {
-  // Runtime now runs as a non-root user with passwordless sudo scoped to
-  // apt-get/tlmgr via /etc/sudoers.d/app.
-  return true;
+  // The runtime user no longer has passwordless sudo (it was a privilege-
+  // escalation path for user-submitted code). apt-get auto-install is disabled;
+  // missing .sty packages install into the user's own texmf tree via tlmgr.
+  return false;
 }
 
 async function detectLocalTeXLiveYear() {

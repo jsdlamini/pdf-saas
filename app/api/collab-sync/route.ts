@@ -1,7 +1,10 @@
 import { Pool } from "pg";
+import { auth } from "@clerk/nextjs/server";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
+
+const MAX_CONTENT_BYTES = 2 * 1024 * 1024;
 
 function jsonError(msg: string, status: number) {
   return Response.json({ error: msg }, { status });
@@ -22,6 +25,9 @@ async function ensureSchema(pool: Pool) {
 
 // GET the shared document content + revision for a specific file in a project
 export async function GET(request: Request) {
+  const { userId } = await auth();
+  if (!userId) return jsonError("Sign in required.", 401);
+
   const url = new URL(request.url);
   const projectId = url.searchParams.get("projectId");
   const filePath = url.searchParams.get("filePath") || "main.tex";
@@ -44,6 +50,9 @@ export async function GET(request: Request) {
 
 // POST my file content with optimistic concurrency (baseRevision)
 export async function POST(request: Request) {
+  const { userId } = await auth();
+  if (!userId) return jsonError("Sign in required.", 401);
+
   const body = await request.json().catch(() => null) as {
     projectId?: string;
     filePath?: string;
@@ -55,6 +64,9 @@ export async function POST(request: Request) {
   if (!projectId) return jsonError("Missing projectId", 400);
   const filePath = body?.filePath || "main.tex";
   const content = typeof body?.content === "string" ? body.content : "";
+  if (Buffer.byteLength(content, "utf8") > MAX_CONTENT_BYTES) {
+    return jsonError("Document content exceeds the 2MB limit.", 413);
+  }
   const baseRevision = typeof body?.baseRevision === "number" ? body.baseRevision : 0;
 
   const pool = new Pool({ connectionString: process.env.DATABASE_URL, max: 1 });
