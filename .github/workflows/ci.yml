@@ -27,7 +27,7 @@ jobs:
       - name: TypeScript check
         run: npx tsc --noEmit
       - name: ESLint (backend surface)
-        run: npx eslint lib app api --quiet
+        run: npx eslint lib app/api --quiet
       - name: Next.js build
         run: npx next build
 
