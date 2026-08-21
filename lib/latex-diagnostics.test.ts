@@ -1,8 +1,11 @@
 import { describe, expect, it } from "vitest";
 import {
+  decodeAssetContent,
   diagnoseMissingFigures,
   isBinaryAssetName,
   looksLikeBase64,
+  stripDataUrlPrefix,
+  validMagicBytes,
 } from "./latex-diagnostics";
 
 describe("isBinaryAssetName", () => {
@@ -50,6 +53,19 @@ describe("diagnoseMissingFigures", () => {
     expect(missing).toContain("images/ch1/cs_overview.png");
   });
 
+  it("never reports generated aux files (.nav, .aux, .toc, .out, .snm, .bbl)", () => {
+    const details = [
+      "No file CH1.nav.",
+      "No file CH1.toc.",
+      "Missing input file 'CH1.aux'",
+      "Missing input file 'CH1.out'",
+      "Missing input file 'CH1.snm'",
+      "Missing input file 'CH1.bbl'",
+      "Missing input file 'images/ch1/foo.png'",
+    ];
+    expect(diagnoseMissingFigures(details)).toEqual(["images/ch1/foo.png"]);
+  });
+
   it("deduplicates repeated refs", () => {
     const details = [
       "Missing input file 'a.png'",
@@ -71,5 +87,51 @@ describe("diagnoseMissingFigures", () => {
   it("handles paths with spaces", () => {
     const details = ["Missing input file 'images/ch1/my figure.png'"];
     expect(diagnoseMissingFigures(details)).toEqual(["images/ch1/my figure.png"]);
+  });
+});
+
+describe("stripDataUrlPrefix", () => {
+  it("strips a data: URL prefix", () => {
+    expect(stripDataUrlPrefix("data:image/png;base64,iVBORw0KGgo=")).toBe("iVBORw0KGgo=");
+  });
+
+  it("passes plain base64 through untouched", () => {
+    expect(stripDataUrlPrefix("iVBORw0KGgo=")).toBe("iVBORw0KGgo=");
+  });
+});
+
+describe("decodeAssetContent (byte-identity)", () => {
+  // A minimal but valid PNG (1x1 transparent).
+  const PNG_BYTES = Buffer.from(
+    "89504e470d0a1a0a0000000d49484452000000010000000108060000001f15c4890000000d49444154789c6260000000010000030000050001ab85a3fc0000000049454e44ae426082",
+    "hex"
+  );
+
+  it("round-trips base64 back to the original bytes", () => {
+    const decoded = decodeAssetContent("a.png", PNG_BYTES.toString("base64"));
+    expect(decoded.equals(PNG_BYTES)).toBe(true);
+  });
+
+  it("round-trips a data: URL back to the original bytes", () => {
+    const decoded = decodeAssetContent("a.png", `data:image/png;base64,${PNG_BYTES.toString("base64")}`);
+    expect(decoded.equals(PNG_BYTES)).toBe(true);
+  });
+
+  it("rejects a corrupt image (wrong magic)", () => {
+    const junk = Buffer.from("not a png at all, just ascii text padding", "utf8").toString("base64");
+    expect(() => decodeAssetContent("a.png", junk)).toThrow(/Corrupt image/);
+  });
+});
+
+describe("validMagicBytes", () => {
+  it("accepts PNG/JPEG/GIF/PDF signatures", () => {
+    expect(validMagicBytes("a.png", Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0, 0, 0]))).toBe(true);
+    expect(validMagicBytes("a.jpg", Buffer.from([0xff, 0xd8, 0xff, 0xe0, 0, 0]))).toBe(true);
+    expect(validMagicBytes("a.gif", Buffer.from("GIF89a..."))).toBe(true);
+    expect(validMagicBytes("a.pdf", Buffer.from("%PDF-1.7"))).toBe(true);
+  });
+
+  it("rejects a wrong PNG signature", () => {
+    expect(validMagicBytes("a.png", Buffer.from("data:image/png"))).toBe(false);
   });
 });

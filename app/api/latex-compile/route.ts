@@ -4,7 +4,7 @@ import { tmpdir } from "node:os";
 import { dirname, join, normalize } from "node:path";
 import { promisify } from "node:util";
 import { auth } from "@clerk/nextjs/server";
-import { diagnoseMissingFigures, isBinaryAssetName, looksLikeBase64 } from "@/lib/latex-diagnostics";
+import { diagnoseMissingFigures, isBinaryAssetName, looksLikeBase64, stripDataUrlPrefix } from "@/lib/latex-diagnostics";
 
 const execFileAsync = promisify(execFile);
 
@@ -44,11 +44,7 @@ async function writeProjectFile(targetPath: string, path: string, content: strin
   const isEncoded =
     isBinaryAssetName(path) || (/\.(eps|svg)$/i.test(path) && looksLikeBase64(content));
   if (isEncoded) {
-    const raw =
-      content.includes(",") && content.startsWith("data:")
-        ? content.slice(content.indexOf(",") + 1)
-        : content;
-    await writeFile(targetPath, Buffer.from(raw, "base64"));
+    await writeFile(targetPath, Buffer.from(stripDataUrlPrefix(content), "base64"));
   } else {
     await writeFile(targetPath, content, "utf8");
   }
@@ -462,6 +458,73 @@ async function compileWithEngine(tempDir: string, rootFile: string, engine: Late
   return pdfBytes;
 }
 
+// Writes the project into a fresh temp dir (text files, inline images, .bib
+// stubs, and stored figures). Each engine gets its own fresh dir so a previous
+// engine's generated files (.fdb_latexmk, .aux, .nav) can't make the next one
+// a no-op.
+async function prepareCompileDir(
+  files: CompileInputFile[],
+  rootFile: string,
+  userId: string | null,
+  projectId: string | undefined
+): Promise<string> {
+  const tempDir = await mkdtemp(join(tmpdir(), "wiserfiles-latex-"));
+
+  const fileMap = new Map<string, string>();
+  for (const file of files) {
+    if (!file || typeof file.path !== "string" || typeof file.content !== "string") {
+      throw new Error("Each file must include string path and content.");
+    }
+    const path = file.path.trim();
+    if (!isSafeProjectPath(path)) {
+      throw new Error(`Unsafe file path: ${path}`);
+    }
+    fileMap.set(path, file.content);
+  }
+
+  if (!fileMap.has(rootFile)) {
+    throw new Error(`Root file not found in project: ${rootFile}`);
+  }
+
+  for (const [path, content] of fileMap.entries()) {
+    const targetPath = join(tempDir, path);
+    await mkdir(dirname(targetPath), { recursive: true });
+    await writeProjectFile(targetPath, path, content);
+  }
+
+  // Create empty .bib files for any \bibliography{} references that have no
+  // matching file, so bibtex/biber doesn't fail.
+  for (const [path, content] of fileMap.entries()) {
+    if (!path.endsWith(".tex")) continue;
+    const bibMatches = content.matchAll(/\\bibliography\{([^}]+)\}/g);
+    for (const match of bibMatches) {
+      const bibFiles = match[1].split(",").map((s) => s.trim());
+      for (const bibFile of bibFiles) {
+        const bibPath = bibFile.endsWith(".bib") ? bibFile : `${bibFile}.bib`;
+        const relPath = bibPath.startsWith("/") ? bibPath.slice(1) : bibPath;
+        const targetPath = join(tempDir, relPath);
+        if (!fileMap.has(relPath)) {
+          await mkdir(dirname(targetPath), { recursive: true });
+          await writeFile(targetPath, "% Auto-generated empty bibliography\n", "utf8");
+        } else if (!content || !content.trim()) {
+          await mkdir(dirname(targetPath), { recursive: true });
+          await writeFile(targetPath, "% Auto-generated empty bibliography\n", "utf8");
+        }
+      }
+    }
+  }
+
+  // Copy stored project figures into the compile dir.
+  if (projectId && userId) {
+    await copyAssetsRecursive(
+      join(ASSETS_ROOT, userId, sanitizeAssetPath(projectId)),
+      tempDir
+    );
+  }
+
+  return tempDir;
+}
+
 export async function POST(request: Request) {
   const { userId } = await auth();
   // Guests may compile a limited number of times (gated client-side too);
@@ -494,162 +557,115 @@ export async function POST(request: Request) {
     return jsonError("Invalid root LaTeX file path.", 400);
   }
 
-  const tempDir = await mkdtemp(join(tmpdir(), "wiserfiles-latex-"));
+  let hasMissingEngine = false;
+  const engineErrors: string[] = [];
+  const autoInstallAttempts = new Set<string>();
+  let lastLogData: { text?: string; fileName?: string } | null = null;
 
-  try {
-    const fileMap = new Map<string, string>();
-    for (const file of files) {
-      if (!file || typeof file.path !== "string" || typeof file.content !== "string") {
-        return jsonError("Each file must include string path and content.", 400);
+  for (const engine of ENGINES) {
+    let tempDir: string | null = null;
+    try {
+      tempDir = await prepareCompileDir(files, rootFile, userId, payload.projectId);
+      const pdfBytes = await compileWithEngine(tempDir, rootFile, engine);
+      const outputName = sanitizeFileName(buildPdfOutputPath(rootFile));
+
+      return new Response(pdfBytes, {
+        status: 200,
+        headers: {
+          "Content-Type": "application/pdf",
+          "Content-Disposition": `attachment; filename="${outputName}"`,
+          "Cache-Control": "no-store",
+          "X-Latex-Engine": engine.name,
+        },
+      });
+    } catch (error) {
+      if (tempDir && !lastLogData) {
+        lastLogData = await readMainLogIfAvailable(tempDir, rootFile);
+      }
+      const maybeCode = error as { code?: string };
+      const detail = extractErrorDetail(error);
+      const missingBinary =
+        maybeCode.code === "ENOENT" || detail.toLowerCase().includes("command not found");
+
+      if (missingBinary) {
+        hasMissingEngine = true;
+        continue;
       }
 
-      const path = file.path.trim();
-      if (!isSafeProjectPath(path)) {
-        return jsonError(`Unsafe file path: ${path}`, 400);
-      }
+      const missingSty = extractMissingStyName(detail);
+      if (missingSty && !autoInstallAttempts.has(missingSty)) {
+        autoInstallAttempts.add(missingSty);
+        const installResult = await tryAutoInstallMissingSty(missingSty);
 
-      fileMap.set(path, file.content);
-    }
+        if (installResult.ok) {
+          let retryDir: string | null = null;
+          try {
+            retryDir = await prepareCompileDir(files, rootFile, userId, payload.projectId);
+            const pdfBytes = await compileWithEngine(retryDir, rootFile, engine);
+            const outputName = sanitizeFileName(buildPdfOutputPath(rootFile));
 
-    if (!fileMap.has(rootFile)) {
-      return jsonError(`Root file not found in project: ${rootFile}`, 400);
-    }
-
-    for (const [path, content] of fileMap.entries()) {
-      const targetPath = join(tempDir, path);
-      await mkdir(dirname(targetPath), { recursive: true });
-      await writeProjectFile(targetPath, path, content);
-    }
-
-    // Create empty .bib files for any \bibliography{} references that have no matching file
-    // Also ensure existing .bib files have at least minimal content so bibtex doesn't fail
-    for (const [path, content] of fileMap.entries()) {
-      if (!path.endsWith(".tex")) continue;
-      const bibMatches = content.matchAll(/\\bibliography\{([^}]+)\}/g);
-      for (const match of bibMatches) {
-        const bibFiles = match[1].split(",").map((s) => s.trim());
-        for (const bibFile of bibFiles) {
-          const bibPath = bibFile.endsWith(".bib") ? bibFile : `${bibFile}.bib`;
-          const relPath = bibPath.startsWith("/") ? bibPath.slice(1) : bibPath;
-          const targetPath = join(tempDir, relPath);
-          if (!fileMap.has(relPath)) {
-            await mkdir(dirname(targetPath), { recursive: true });
-            await writeFile(targetPath, "% Auto-generated empty bibliography\n", "utf8");
-          } else if (!content || !content.trim()) {
-            await mkdir(dirname(targetPath), { recursive: true });
-            await writeFile(targetPath, "% Auto-generated empty bibliography\n", "utf8");
+            return new Response(pdfBytes, {
+              status: 200,
+              headers: {
+                "Content-Type": "application/pdf",
+                "Content-Disposition": `attachment; filename="${outputName}"`,
+                "Cache-Control": "no-store",
+                "X-Latex-Engine": engine.name,
+                "X-Latex-Autoinstall":
+                  installResult.manager === "tlmgr"
+                    ? `tlmgr:${installResult.mode}:${installResult.packageName}`
+                    : `apt:${installResult.packageName}`,
+              },
+            });
+          } catch (retryError) {
+            const retryDetail = extractErrorDetail(retryError);
+            const retryHint = getMissingStyPackageHint(retryDetail);
+            engineErrors.push(
+              `${engine.name} (after auto-install): ${retryDetail}${retryHint ? `\nHint: ${retryHint}` : ""}`
+            );
+            continue;
+          } finally {
+            if (retryDir) await rm(retryDir, { recursive: true, force: true });
           }
         }
+
+        engineErrors.push(
+          `${engine.name} (auto-install failed for ${missingSty}.sty): ${installResult.detail}`
+        );
       }
+
+      const hint = getMissingStyPackageHint(detail);
+      engineErrors.push(`${engine.name}: ${detail}${hint ? `\nHint: ${hint}` : ""}`);
+    } finally {
+      if (tempDir) await rm(tempDir, { recursive: true, force: true });
     }
-
-    // Copy stored project images (figures) into the compile dir so
-    // \includegraphics resolves without shipping base64 in the POST body.
-    if (payload.projectId && userId) {
-      await copyAssetsRecursive(
-        join(ASSETS_ROOT, userId, sanitizeAssetPath(payload.projectId)),
-        tempDir
-      );
-    }
-
-    let hasMissingEngine = false;
-    const engineErrors: string[] = [];
-    const autoInstallAttempts = new Set<string>();
-
-    for (const engine of ENGINES) {
-      try {
-        const pdfBytes = await compileWithEngine(tempDir, rootFile, engine);
-        const outputName = sanitizeFileName(buildPdfOutputPath(rootFile));
-
-        return new Response(pdfBytes, {
-          status: 200,
-          headers: {
-            "Content-Type": "application/pdf",
-            "Content-Disposition": `attachment; filename="${outputName}"`,
-            "Cache-Control": "no-store",
-            "X-Latex-Engine": engine.name,
-          },
-        });
-      } catch (error) {
-        const maybeCode = error as { code?: string };
-        const detail = extractErrorDetail(error);
-        const missingBinary =
-          maybeCode.code === "ENOENT" || detail.toLowerCase().includes("command not found");
-
-        if (missingBinary) {
-          hasMissingEngine = true;
-          continue;
-        }
-
-        const missingSty = extractMissingStyName(detail);
-        if (missingSty && !autoInstallAttempts.has(missingSty)) {
-          autoInstallAttempts.add(missingSty);
-          const installResult = await tryAutoInstallMissingSty(missingSty);
-
-          if (installResult.ok) {
-            try {
-              const pdfBytes = await compileWithEngine(tempDir, rootFile, engine);
-              const outputName = sanitizeFileName(buildPdfOutputPath(rootFile));
-
-              return new Response(pdfBytes, {
-                status: 200,
-                headers: {
-                  "Content-Type": "application/pdf",
-                  "Content-Disposition": `attachment; filename="${outputName}"`,
-                  "Cache-Control": "no-store",
-                  "X-Latex-Engine": engine.name,
-                  "X-Latex-Autoinstall":
-                    installResult.manager === "tlmgr"
-                      ? `tlmgr:${installResult.mode}:${installResult.packageName}`
-                      : `apt:${installResult.packageName}`,
-                },
-              });
-            } catch (retryError) {
-              const retryDetail = extractErrorDetail(retryError);
-              const retryHint = getMissingStyPackageHint(retryDetail);
-              engineErrors.push(
-                `${engine.name} (after auto-install): ${retryDetail}${retryHint ? `\nHint: ${retryHint}` : ""}`
-              );
-              continue;
-            }
-          }
-
-          engineErrors.push(
-            `${engine.name} (auto-install failed for ${missingSty}.sty): ${installResult.detail}`
-          );
-        }
-
-        const hint = getMissingStyPackageHint(detail);
-        engineErrors.push(`${engine.name}: ${detail}${hint ? `\nHint: ${hint}` : ""}`);
-      }
-    }
-
-    if (hasMissingEngine && !engineErrors.length) {
-      const logData = await readMainLogIfAvailable(tempDir, rootFile);
-      return jsonError(
-        "No LaTeX engine available. Install texliveonfly, tectonic, or latexmk on the server host.",
-        503,
-        logData?.text,
-        logData?.fileName
-      );
-    }
-
-    if (engineErrors.length) {
-      const logData = await readMainLogIfAvailable(tempDir, rootFile);
-      const missing = diagnoseMissingFigures(engineErrors);
-      let message = `LaTeX compile failed.\n${engineErrors.join("\n\n")}`;
-      if (missing.length) {
-        message += `\n\nMissing figures: ${missing.join(", ")}.`;
-        message +=
-          " These are usually image files that did not reach the compiler — " +
-          "re-compile to re-upload them, or re-import the project.";
-      }
-      return jsonError(message, 500, logData?.text, logData?.fileName);
-    }
-
-    const logData = await readMainLogIfAvailable(tempDir, rootFile);
-    return jsonError("Unable to compile LaTeX project.", 500, logData?.text, logData?.fileName);
-  } finally {
-    await rm(tempDir, { recursive: true, force: true });
   }
+
+  if (hasMissingEngine && !engineErrors.length) {
+    return jsonError(
+      "No LaTeX engine available. Install texliveonfly, tectonic, or latexmk on the server host.",
+      503,
+      lastLogData?.text,
+      lastLogData?.fileName
+    );
+  }
+
+  if (engineErrors.length) {
+    const missing = diagnoseMissingFigures(engineErrors);
+    let message = `LaTeX compile failed.\n${engineErrors.join("\n\n")}`;
+    if (missing.length) {
+      message += `\n\nMissing figures: ${missing.join(", ")}.`;
+      message +=
+        " These are usually image files that did not reach the compiler — " +
+        "re-compile to re-upload them, or re-import the project.";
+    }
+    return jsonError(message, 500, lastLogData?.text, lastLogData?.fileName);
+  }
+
+  return jsonError(
+    "Unable to compile LaTeX project.",
+    500,
+    lastLogData?.text,
+    lastLogData?.fileName
+  );
 }

@@ -2149,11 +2149,9 @@ export default function ResearchStudioPage() {
   }
 
   async function upsertProjectSnapshotToServer(snapshot: SavedProjectData) {
-    const imageFiles = snapshot.entries
-      .filter((e) => e.kind === "file" && isBinaryAssetPath(e.path) && e.content)
-      .map((e) => ({ path: e.path, content: e.content }));
     // Strip base64 image contents from the JSON payload so projects with many
-    // figures stay under the request-body limit.
+    // figures stay under the request-body limit. Images are uploaded separately
+    // (on import/compile) so the server-side compiler can resolve them.
     const serverSnapshot: SavedProjectData = {
       ...snapshot,
       entries: snapshot.entries.map((e) =>
@@ -2170,13 +2168,16 @@ export default function ResearchStudioPage() {
       const payload = (await response.json().catch(() => null)) as { error?: string } | null;
       throw new Error(payload?.error || "Could not save the project to your account.");
     }
-
-    // Upload images separately so the server-side compiler can resolve figures.
-    await uploadProjectAssets(snapshot.id, imageFiles);
   }
 
   async function uploadProjectAssets(projectId: string, files: Array<{ path: string; content: string }>) {
     if (!files.length) return;
+    // Clear previously stored assets first so a corrupt upload can never stick.
+    await fetch("/api/project-assets", {
+      method: "DELETE",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ projectId }),
+    }).catch(() => {});
     // Split into batches under ~8MB of base64 each to stay under request limits.
     const batches: Array<Array<{ path: string; content: string }>> = [];
     let current: Array<{ path: string; content: string }> = [];
@@ -2199,7 +2200,8 @@ export default function ResearchStudioPage() {
         body: JSON.stringify({ projectId, files: batch }),
       });
       if (!res.ok) {
-        throw new Error("Could not upload project images.");
+        const payload = (await res.json().catch(() => null)) as { error?: string } | null;
+        throw new Error(payload?.error || "Could not upload project images.");
       }
     }
   }
@@ -4163,6 +4165,11 @@ export default function ResearchStudioPage() {
       if (userId && !accountSyncUnavailable) {
         try {
           await upsertProjectSnapshotToServer(snapshot);
+          // Upload figures so the server-side compiler can resolve them.
+          const assets = entries
+            .filter((e) => e.kind === "file" && isBinaryAssetPath(e.path) && e.content)
+            .map((e) => ({ path: e.path, content: e.content }));
+          await uploadProjectAssets(projectId, assets);
         } catch (error) {
           const message = error instanceof Error ? error.message : "Could not sync this project.";
           if (isAccountSyncUnavailableMessage(message)) {
