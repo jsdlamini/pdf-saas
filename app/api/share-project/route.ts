@@ -6,7 +6,10 @@ export const dynamic = "force-dynamic";
 export async function POST(request: Request) {
   try {
     const body = await request.json();
-    const { projectData, accessLevel } = body as { projectData?: any; accessLevel?: string };
+    const { projectData, accessLevel } = body as {
+      projectData?: { name?: string; entries?: unknown[] };
+      accessLevel?: string;
+    };
 
     if (!projectData || !projectData.name || !projectData.entries) {
       return Response.json({ error: "Invalid project data" }, { status: 400 });

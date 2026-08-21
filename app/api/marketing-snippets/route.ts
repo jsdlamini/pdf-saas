@@ -48,8 +48,8 @@ async function checkAccess() {
 export async function GET(request: Request) {
   try {
     await checkAccess();
-  } catch (e: any) {
-    if (e.message === "signin") return jsonError("Sign in required.", 401);
+  } catch (e) {
+    if (e instanceof Error && e.message === "signin") return jsonError("Sign in required.", 401);
     return jsonError("Access denied.", 403);
   }
 

@@ -6,6 +6,31 @@ on:
   pull_request:
 
 jobs:
+  typecheck-lint-build:
+    name: Typecheck, lint, and build
+    runs-on: ubuntu-latest
+    env:
+      # Placeholder keys are enough for `next build` (routes are dynamic; no
+      # Clerk backend is contacted during static generation).
+      NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY: pk_test_ci_placeholder
+      CLERK_SECRET_KEY: sk_test_ci_placeholder
+      NEXT_PUBLIC_SITE_URL: http://127.0.0.1:3000
+      DATABASE_URL: postgresql://ci:ci@127.0.0.1:5432/ci
+      NEXT_TELEMETRY_DISABLED: "1"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: TypeScript check
+        run: npx tsc --noEmit
+      - name: ESLint (backend surface)
+        run: npx eslint lib app api --quiet
+      - name: Next.js build
+        run: npx next build
+
   unit-tests:
     name: Unit tests (Vitest)
     runs-on: ubuntu-latest

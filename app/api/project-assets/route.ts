@@ -1,6 +1,7 @@
 import { auth } from "@clerk/nextjs/server";
 import { mkdir, writeFile, rm } from "node:fs/promises";
 import { dirname, join, normalize } from "node:path";
+import { decodeAssetContent } from "@/lib/latex-diagnostics";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -44,9 +45,19 @@ export async function POST(request: Request) {
       if (!file || typeof file.path !== "string" || typeof file.content !== "string") continue;
       const safe = sanitizeRelPath(file.path);
       if (!safe) continue;
+      let bytes: Buffer;
+      try {
+        // Strips any data: URL prefix, decodes base64, and validates magic bytes.
+        bytes = decodeAssetContent(safe, file.content);
+      } catch (decodeError) {
+        return jsonError(
+          decodeError instanceof Error ? decodeError.message : `Corrupt image uploaded: ${safe}.`,
+          400
+        );
+      }
       const target = join(projectDir, safe);
       await mkdir(dirname(target), { recursive: true });
-      await writeFile(target, Buffer.from(file.content, "base64"));
+      await writeFile(target, bytes);
     }
   } catch (error) {
     const message = error instanceof Error ? error.message : "Could not store project assets.";
