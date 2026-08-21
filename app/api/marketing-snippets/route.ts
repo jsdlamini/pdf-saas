@@ -1,4 +1,4 @@
-import { auth } from "@clerk/nextjs/server";
+import { requireDashboardAccess } from "@/lib/dashboard-access";
 import fs from "fs";
 import path from "path";
 
@@ -38,8 +38,10 @@ function jsonError(msg: string, status: number) {
 }
 
 async function checkAccess() {
-  const { userId } = await auth();
-  if (!userId) throw new Error("signin");
+  const access = await requireDashboardAccess();
+  if (access.error) {
+    throw new Error(access.status === 401 ? "signin" : "denied");
+  }
 }
 
 export async function GET(request: Request) {

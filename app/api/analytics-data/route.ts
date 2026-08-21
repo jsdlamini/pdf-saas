@@ -1,6 +1,5 @@
-import { auth } from "@clerk/nextjs/server";
 import { Pool } from "pg";
-import { DASHBOARD_ALLOWED } from "@/lib/dashboard-access";
+import { requireDashboardAccess } from "@/lib/dashboard-access";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -10,8 +9,8 @@ function jsonError(message: string, status: number) {
 }
 
 export async function GET() {
-  const { userId } = await auth();
-  if (!userId) return jsonError("Sign in required.", 401);
+  const access = await requireDashboardAccess();
+  if (access.error) return jsonError(access.error, access.status);
 
   const pool = new Pool({
     connectionString: process.env.DATABASE_URL,

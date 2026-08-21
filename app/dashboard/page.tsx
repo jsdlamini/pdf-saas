@@ -792,19 +792,25 @@ function UserActivity({ data }: { data: AnalyticsData | null }) {
 
 function MarketingSection() {
   const [snippets, setSnippets] = useState<Array<{ platform: string; text: string; id: number }>>([]);
+  const [content, setContent] = useState("");
   const [platform, setPlatform] = useState("twitter");
   const [copied, setCopied] = useState<number | null>(null);
+  const [copiedAll, setCopiedAll] = useState(false);
   const [loading, setLoading] = useState(false);
 
   async function fetchSnippets(p: string, rotate = false) {
     setLoading(true);
+    setContent("");
+    setSnippets([]);
     try {
       const r = await fetch(`/api/marketing-snippets?platform=${p}${rotate ? "&rotate=1" : ""}`);
       if (!r.ok) throw new Error("Failed");
       const d = await r.json();
-      if (d.snippets) setSnippets(d.snippets.map((s: any) => ({ ...s, platform: p })));
+      if (typeof d.content === "string") setContent(d.content);
+      else if (d.snippets) setSnippets(d.snippets.map((s: any) => ({ ...s, platform: p })));
     } catch {
       setSnippets([]);
+      setContent("");
     } finally {
       setLoading(false);
     }
@@ -822,6 +828,12 @@ function MarketingSection() {
     setTimeout(() => setCopied(null), 2000);
   }
 
+  async function copyAll() {
+    await navigator.clipboard.writeText(content);
+    setCopiedAll(true);
+    setTimeout(() => setCopiedAll(false), 2000);
+  }
+
   return (
     <div className="rounded-2xl border border-slate-200/60 bg-white p-6 shadow-sm">
       <div className="flex items-center justify-between mb-1">
@@ -835,7 +847,9 @@ function MarketingSection() {
         {[
           { key: "twitter", label: "Twitter/X", color: "bg-sky-100 text-sky-800 border-sky-200" },
           { key: "linkedin", label: "LinkedIn", color: "bg-blue-100 text-blue-800 border-blue-200" },
-          { key: "tiktok", label: "TikTok Captions", color: "bg-pink-100 text-pink-800 border-pink-200" },
+          { key: "tiktok", label: "TikTok", color: "bg-pink-100 text-pink-800 border-pink-200" },
+          { key: "reddit", label: "Reddit", color: "bg-orange-100 text-orange-800 border-orange-200" },
+          { key: "producthunt", label: "Product Hunt", color: "bg-amber-100 text-amber-800 border-amber-200" },
         ].map(({ key, label, color }) => (
           <button
             key={key}
@@ -855,6 +869,17 @@ function MarketingSection() {
       {loading ? (
         <div className="flex items-center justify-center py-10">
           <div className="h-6 w-6 animate-spin rounded-full border-2 border-cyan-200 border-t-cyan-600" />
+        </div>
+      ) : content ? (
+        <div className="relative mt-4 rounded-xl border border-slate-200 bg-slate-50 p-4">
+          <pre className="max-h-[28rem] overflow-y-auto whitespace-pre-wrap font-mono text-xs leading-relaxed text-slate-700">{content}</pre>
+          <button
+            type="button"
+            onClick={copyAll}
+            className="absolute right-3 top-3 rounded-full bg-slate-900 px-3 py-1 text-[10px] font-bold text-white transition hover:bg-slate-700"
+          >
+            {copiedAll ? "✓ Copied" : "Copy all"}
+          </button>
         </div>
       ) : snippets.length > 0 ? (
         <div className="mt-4 space-y-3">
