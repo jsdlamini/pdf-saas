@@ -5369,6 +5369,20 @@ export default function ToolWorkbench({ tool }: WorkbenchProps) {
           <div className="flex items-center gap-2.5">
             <ToolIcon category={tool.category} className="h-6 w-6 shrink-0 text-slate-500" />
             <h2 className="font-display text-2xl font-semibold text-slate-950">{tool.name}</h2>
+            {tool.processing === "local" ? (
+              <span className="inline-flex items-center gap-1 rounded-full border border-emerald-200 bg-emerald-50 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-emerald-700">
+                <svg viewBox="0 0 20 20" className="h-3 w-3" fill="none" stroke="currentColor" strokeWidth="2"><path d="M10 2a8 8 0 1 0 0 16 8 8 0 0 0 0-16z"/><path d="M7 10l2 2 4-4" strokeLinecap="round" strokeLinejoin="round"/></svg>
+                Works offline
+              </span>
+            ) : tool.processing === "conditional" ? (
+              <span className="inline-flex items-center gap-1 rounded-full border border-emerald-200 bg-emerald-50 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-emerald-700">
+                Offline for PDFs
+              </span>
+            ) : (
+              <span className="inline-flex items-center gap-1 rounded-full border border-slate-200 bg-slate-50 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-slate-500">
+                Requires internet
+              </span>
+            )}
           </div>
           {(() => {
             const hasAiIntake = smartIntake?.source === "ai";
