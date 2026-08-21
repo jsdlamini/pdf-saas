@@ -1,5 +1,5 @@
 import { auth } from "@clerk/nextjs/server";
-import { Pool } from "pg";
+import { db, ensureMigrated } from "@/lib/db";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -20,12 +20,11 @@ function jsonError(msg: string, status: number) {
 }
 
 async function getStoredGithubToken(userId: string): Promise<string> {
-  const pool = new Pool({ connectionString: process.env.DATABASE_URL, max: 1 });
-  const res = await pool.query(
+  await ensureMigrated();
+  const res = await db.query(
     `SELECT github_token FROM wiserfiles_user_secrets WHERE user_id = $1`,
     [userId]
   );
-  await pool.end();
   return res.rows.length ? res.rows[0].github_token : "";
 }
 

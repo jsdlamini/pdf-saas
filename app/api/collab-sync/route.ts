@@ -1,5 +1,5 @@
-import { Pool } from "pg";
 import { auth } from "@clerk/nextjs/server";
+import { db, ensureMigrated } from "@/lib/db";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -8,19 +8,6 @@ const MAX_CONTENT_BYTES = 2 * 1024 * 1024;
 
 function jsonError(msg: string, status: number) {
   return Response.json({ error: msg }, { status });
-}
-
-async function ensureSchema(pool: Pool) {
-  await pool.query(`
-    CREATE TABLE IF NOT EXISTS wiserfiles_collab_docs (
-      project_id TEXT NOT NULL,
-      file_path TEXT NOT NULL,
-      content TEXT NOT NULL DEFAULT '',
-      revision INTEGER NOT NULL DEFAULT 0,
-      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-      PRIMARY KEY (project_id, file_path)
-    )
-  `);
 }
 
 // GET the shared document content + revision for a specific file in a project
@@ -33,14 +20,11 @@ export async function GET(request: Request) {
   const filePath = url.searchParams.get("filePath") || "main.tex";
   if (!projectId) return jsonError("Missing projectId", 400);
 
-  const pool = new Pool({ connectionString: process.env.DATABASE_URL, max: 1 });
-  await ensureSchema(pool);
-
-  const result = await pool.query(
+  await ensureMigrated();
+  const result = await db.query(
     `SELECT content, revision FROM wiserfiles_collab_docs WHERE project_id = $1 AND file_path = $2`,
     [projectId, filePath]
   );
-  await pool.end();
 
   if (!result.rows.length) {
     return Response.json({ content: null, revision: 0 });
@@ -69,16 +53,13 @@ export async function POST(request: Request) {
   }
   const baseRevision = typeof body?.baseRevision === "number" ? body.baseRevision : 0;
 
-  const pool = new Pool({ connectionString: process.env.DATABASE_URL, max: 1 });
-  await ensureSchema(pool);
-
-  const current = await pool.query(
+  await ensureMigrated();
+  const current = await db.query(
     `SELECT content, revision FROM wiserfiles_collab_docs WHERE project_id = $1 AND file_path = $2`,
     [projectId, filePath]
   );
 
   if (current.rows.length && current.rows[0].revision > baseRevision) {
-    await pool.end();
     return Response.json({
       conflict: true,
       content: current.rows[0].content,
@@ -87,7 +68,7 @@ export async function POST(request: Request) {
   }
 
   const nextRevision = (current.rows.length ? current.rows[0].revision : 0) + 1;
-  await pool.query(
+  await db.query(
     `INSERT INTO wiserfiles_collab_docs (project_id, file_path, content, revision, updated_at)
      VALUES ($1, $2, $3, $4, NOW())
      ON CONFLICT (project_id, file_path)
@@ -97,14 +78,13 @@ export async function POST(request: Request) {
 
   // Notify connected collaborators (SSE) of the new revision
   try {
-    await pool.query(
+    await db.query(
       `SELECT pg_notify($1, $2)`,
       [`collab_${projectId}`, JSON.stringify({ filePath, revision: nextRevision })]
     );
   } catch {
     // notify is best-effort
   }
-  await pool.end();
 
   return Response.json({ content, revision: nextRevision });
 }

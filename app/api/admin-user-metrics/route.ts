@@ -1,4 +1,4 @@
-import { Pool } from "pg";
+import { db } from "@/lib/db";
 import { requireDashboardAccess } from "@/lib/dashboard-access";
 
 export const runtime = "nodejs";
@@ -16,11 +16,7 @@ export async function GET(request: Request) {
   const userId = url.searchParams.get("userId")?.trim();
   if (!userId) return jsonError("userId is required.", 400);
 
-  const pool = new Pool({
-    connectionString: process.env.DATABASE_URL,
-    max: 1,
-    idleTimeoutMillis: 3000,
-  });
+  const pool = db;
 
   try {
     const [
@@ -107,7 +103,5 @@ export async function GET(request: Request) {
     return Response.json({ metrics });
   } catch (error) {
     return jsonError(error instanceof Error ? error.message : "Could not load user metrics.", 500);
-  } finally {
-    await pool.end().catch(() => {});
   }
 }
