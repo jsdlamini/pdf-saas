@@ -2173,12 +2173,16 @@ export default function ResearchStudioPage() {
 
   async function uploadProjectAssets(projectId: string, files: Array<{ path: string; content: string }>) {
     if (!files.length) return;
+    const fetchWithTimeout = (url: string, init: RequestInit, timeoutMs = 120_000) => {
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), timeoutMs);
+      return fetch(url, { ...init, signal: controller.signal }).finally(() => clearTimeout(timeout));
+    };
     // Clear previously stored assets first so a corrupt upload can never stick.
-    await fetch("/api/project-assets", {
-      method: "DELETE",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ projectId }),
-    }).catch(() => {});
+    await fetchWithTimeout(
+      "/api/project-assets",
+      { method: "DELETE", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ projectId }) }
+    ).catch(() => {});
     // Split into batches under ~8MB of base64 each to stay under request limits.
     const batches: Array<Array<{ path: string; content: string }>> = [];
     let current: Array<{ path: string; content: string }> = [];
@@ -2195,7 +2199,7 @@ export default function ResearchStudioPage() {
     if (current.length) batches.push(current);
 
     for (const batch of batches) {
-      const res = await fetch("/api/project-assets", {
+      const res = await fetchWithTimeout("/api/project-assets", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ projectId, files: batch }),
@@ -4138,6 +4142,7 @@ export default function ResearchStudioPage() {
   async function importProjectFromZip(file: File) {
     setImportBusy(true);
     setImportProgress({ current: 0, total: 0 });
+    let snapshotToSync: SavedProjectData | null = null;
     try {
       const zip = await JSZip.loadAsync(file);
       const entries: ProjectEntry[] = [];
@@ -4228,36 +4233,43 @@ export default function ResearchStudioPage() {
       };
 
       persistProjectSnapshot(snapshot);
-      let importNotice = `Imported ${fileEntries.length} files from ${file.name}.`;
-      if (userId && !accountSyncUnavailable) {
-        try {
-          await upsertProjectSnapshotToServer(snapshot);
-          // Upload figures so the server-side compiler can resolve them.
-          const assets = entries
-            .filter((e) => e.kind === "file" && isBinaryAssetPath(e.path) && e.content)
-            .map((e) => ({ path: e.path, content: e.content }));
-          await uploadProjectAssets(projectId, assets);
-        } catch (error) {
-          const message = error instanceof Error ? error.message : "Could not sync this project.";
-          if (isAccountSyncUnavailableMessage(message)) {
-            setAccountSyncUnavailable(true);
-          } else {
-            importNotice = `Imported locally, but save failed: ${message}`;
-          }
-        }
-      }
+      snapshotToSync = snapshot;
       setActiveProjectId(projectId);
       setProjectName(projectName);
       setProjectEntries(entries);
       setSelectedPath(mainTexPath);
       setEditorMode(editorMode);
-      setCompileNotice(importNotice);
+      setCompileNotice(`Imported ${fileEntries.length} files from ${file.name}.`);
       setWorkspaceScreen("editor");
     } catch (e) {
       setCompileNotice("Import failed. Make sure the file is a valid .zip archive.");
     } finally {
       setImportBusy(false);
       setImportProgress({ current: 0, total: 0 });
+    }
+
+    // Sync to the account in the background so the import dialog closes as
+    // soon as local parsing finishes instead of waiting on a slow upload. The
+    // compiler re-uploads figures on its own, so this is a belt-and-suspenders
+    // copy, not a gate on the dialog.
+    if (snapshotToSync && userId && !accountSyncUnavailable) {
+      const snapshot = snapshotToSync;
+      const assets = snapshot.entries
+        .filter((e) => e.kind === "file" && isBinaryAssetPath(e.path) && e.content)
+        .map((e) => ({ path: e.path, content: e.content }));
+      void (async () => {
+        try {
+          await upsertProjectSnapshotToServer(snapshot);
+          if (assets.length) await uploadProjectAssets(snapshot.id, assets);
+        } catch (error) {
+          const message = error instanceof Error ? error.message : "Could not sync this project.";
+          if (isAccountSyncUnavailableMessage(message)) {
+            setAccountSyncUnavailable(true);
+          } else {
+            appendPreviewError(`Imported locally, but save failed: ${message}`);
+          }
+        }
+      })();
     }
   }
 
