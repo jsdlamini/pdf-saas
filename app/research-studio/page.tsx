@@ -1044,6 +1044,9 @@ export default function ResearchStudioPage() {
   useEffect(() => {
     try { localStorage.setItem("wiserfiles-editor-theme", editorTheme); } catch {}
   }, [editorTheme]);
+
+  const [importBusy, setImportBusy] = useState(false);
+  const [importProgress, setImportProgress] = useState({ current: 0, total: 0 });
   // Persist workspace + active project to localStorage
   useEffect(() => {
     try { localStorage.setItem("wiserfiles-workspace", JSON.stringify(workspaceScreen)); } catch {}
@@ -3964,13 +3967,19 @@ export default function ResearchStudioPage() {
   }
 
   async function importProjectFromZip(file: File) {
+    setImportBusy(true);
+    setImportProgress({ current: 0, total: 0 });
     try {
       const zip = await JSZip.loadAsync(file);
       const entries: ProjectEntry[] = [];
       const folderSet = new Set<string>();
       let mainTexPath = "";
 
-      for (const [rawPath, zipEntry] of Object.entries(zip.files)) {
+      const zipFiles = Object.entries(zip.files);
+      const totalFiles = zipFiles.filter(([, entry]) => !entry.dir).length;
+      let processed = 0;
+
+      for (const [rawPath, zipEntry] of zipFiles) {
         if (zipEntry.dir) continue;
         // Normalize "./" prefixes and Windows backslashes so valid files are
         // not mistaken for hidden entries.
@@ -3990,6 +3999,10 @@ export default function ResearchStudioPage() {
           content = await zipEntry.async("string");
         }
         entries.push({ path: zipPath, kind: "file", content });
+        processed += 1;
+        if (processed % 3 === 0 || processed === totalFiles) {
+          setImportProgress({ current: processed, total: totalFiles });
+        }
 
         // Add implicit parent folders
         const parts = zipPath.split("/");
@@ -4065,6 +4078,9 @@ export default function ResearchStudioPage() {
       setWorkspaceScreen("editor");
     } catch (e) {
       setCompileNotice("Import failed. Make sure the file is a valid .zip archive.");
+    } finally {
+      setImportBusy(false);
+      setImportProgress({ current: 0, total: 0 });
     }
   }
 
@@ -4455,6 +4471,25 @@ export default function ResearchStudioPage() {
     return (
       <main className="studio-dark studio-shell">
         <div className="studio-dashboard studio-scrollbar" style={{ overflowY: "auto" }}>
+        {importBusy ? (
+          <div className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-900/60 backdrop-blur-sm">
+            <div className="w-full max-w-sm rounded-2xl border border-slate-700 bg-slate-900 p-6 shadow-2xl">
+              <div className="flex items-center justify-between">
+                <p className="text-sm font-semibold text-slate-100">Importing project…</p>
+                <span className="text-xs text-slate-400">
+                  {importProgress.total ? `${importProgress.current}/${importProgress.total}` : "Preparing…"}
+                </span>
+              </div>
+              <div className="mt-3 h-2 w-full overflow-hidden rounded-full bg-slate-800">
+                <div
+                  className="h-full rounded-full bg-gradient-to-r from-emerald-400 to-teal-400 transition-all duration-200"
+                  style={{ width: importProgress.total ? `${Math.round((importProgress.current / importProgress.total) * 100)}%` : "100%" }}
+                />
+              </div>
+              <p className="mt-2 text-xs text-slate-400">Parsing files and optimising images. Large archives can take a moment.</p>
+            </div>
+          </div>
+        ) : null}
         {/* Shared project banner */}
         {shareLoading ? (
           <div className="mb-4 rounded-xl border border-emerald-500/30 bg-emerald-500/10 p-4 text-center">
