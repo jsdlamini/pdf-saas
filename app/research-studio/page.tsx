@@ -1049,6 +1049,16 @@ export default function ResearchStudioPage() {
     try { localStorage.setItem("wiserfiles-workspace", JSON.stringify(workspaceScreen)); } catch {}
   }, [workspaceScreen]);
 
+  // Hide the global site footer while the editor is open to maximise space.
+  useEffect(() => {
+    if (workspaceScreen === "editor") {
+      document.body.setAttribute("data-studio-editor", "true");
+    } else {
+      document.body.removeAttribute("data-studio-editor");
+    }
+    return () => document.body.removeAttribute("data-studio-editor");
+  }, [workspaceScreen]);
+
   useEffect(() => {
     try { localStorage.setItem("wiserfiles-active-project", activeProjectId); } catch {}
   }, [activeProjectId]);

@@ -1074,6 +1074,11 @@ html[data-theme="light"] .studio-projects-panel {
   border-radius: 2px;
 }
 
+/* Hide the global site footer while the Research Studio editor is open. */
+body[data-studio-editor="true"] footer {
+  display: none;
+}
+
 /* ── Syntax highlighting ───── */
 .studio-hl-cmd { color: #67e8f9; }
 .studio-hl-brc { color: #fbbf24; }
