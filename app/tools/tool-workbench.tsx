@@ -1456,7 +1456,7 @@ export default function ToolWorkbench({ tool }: WorkbenchProps) {
       showCancelButton: true,
       confirmButtonText: "Continue",
       cancelButtonText: "Cancel",
-      confirmButtonColor: "#6366f1",
+      confirmButtonColor: "#1e40af",
       cancelButtonColor: "#94a3b8",
       background: "#ffffff",
       color: "#0f172a",
@@ -1543,7 +1543,7 @@ export default function ToolWorkbench({ tool }: WorkbenchProps) {
             type="button"
             onClick={() => void pipeOutputToTool()}
             className="rounded-full px-4 py-2 text-xs font-bold uppercase tracking-wide text-white shadow-lg transition hover:scale-[1.02] hover:shadow-xl"
-            style={{ background: "#6366f1", boxShadow: "0 4px 14px rgba(99,102,241,0.4)" }}
+            style={{ background: "#1e40af", boxShadow: "0 4px 14px rgba(30,64,175,0.3)" }}
           >
             Send to another tool
           </button>
@@ -5518,7 +5518,7 @@ export default function ToolWorkbench({ tool }: WorkbenchProps) {
               disabled={busy}
               aria-busy={busy}
               className="rounded-full px-5 py-2.5 text-sm font-bold text-white shadow-lg transition hover:scale-[1.02] hover:shadow-xl disabled:cursor-not-allowed disabled:opacity-50"
-              style={{ background: "linear-gradient(to right, #8b5cf6, #6366f1)", boxShadow: "0 4px 16px rgba(99,102,241,0.4)" }}
+              style={{ background: "#1e40af", boxShadow: "0 4px 16px rgba(30,64,175,0.3)" }}
             >
               {busy ? "Processing..." : outputPreview ? `Re-run ${tool.name}` : `Run ${tool.name}`}
             </button>
@@ -5542,7 +5542,7 @@ export default function ToolWorkbench({ tool }: WorkbenchProps) {
               </div>
               <div className="h-2 w-full overflow-hidden rounded-full bg-slate-200">
                 <div
-                  className="h-full rounded-full bg-gradient-to-r from-cyan-500 to-blue-500 transition-all duration-300"
+                  className="h-full rounded-full bg-[#1e40af] transition-all duration-300"
                   style={{ width: `${Math.round((progress.current / Math.max(1, progress.total)) * 100)}%` }}
                 />
               </div>
@@ -6471,7 +6471,7 @@ export default function ToolWorkbench({ tool }: WorkbenchProps) {
                   type="button"
                   onClick={addSignatureToDocument}
                   className="rounded-md px-3 py-1 text-xs font-bold text-white"
-                  style={{ background: "#6366f1" }}
+                  style={{ background: "#1e40af" }}
                 >
                   Add signature
                 </button>
