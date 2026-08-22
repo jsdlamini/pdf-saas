@@ -3,7 +3,7 @@
 :root {
   /* Self-hosted type families (see @fontsource imports in layout.tsx). */
   --font-body: "DM Sans", system-ui, -apple-system, sans-serif;
-  --font-display: "Space Grotesk", system-ui, sans-serif;
+  --font-display: "Source Serif 4", "DM Sans", serif;
   --font-mono: "JetBrains Mono", ui-monospace, "SF Mono", Menlo, monospace;
 
   --background: #f8fafc;
@@ -11,14 +11,15 @@
   --surface: #ffffff;
   --surface-soft: #f1f5f9;
   --border: #cbd5e1;
+  --line-strong: #475569;
   --muted: #64748b;
   --headline: #0f172a;
-  --accent: #4ade80;
-  --accent-strong: #22c55e;
-  --accent-deep: #16a34a;
-  --success: #22c55e;
-  --warning: #f59e0b;
-  --danger: #ef4444;
+  --accent: #1e40af;
+  --accent-strong: #1e3a8a;
+  --accent-deep: #172554;
+  --success: #166534;
+  --warning: #b45309;
+  --danger: #dc2626;
 
   /* Unified card + surface tokens */
   --radius-card: 16px;
@@ -31,8 +32,8 @@
   --studio-text: #e2e8f0;
   --studio-muted: #64748b;
   --studio-border: #334155;
-  --studio-accent: #4ade80;
-  --studio-accent-hover: #22c55e;
+  --studio-accent: #1e40af;
+  --studio-accent-hover: #1e3a8a;
 }
 
 /* ── Research Studio Dark Theme (default) ───── */
@@ -45,9 +46,9 @@
   --text-secondary: #94a3b8;
   --text-muted: #64748b;
   --border-color: #334155;
-  --accent-color: #4ade80;
-  --accent-hover: #22c55e;
-  --accent-dim: rgba(74, 222, 128, 0.15);
+  --accent-color: #1e40af;
+  --accent-hover: #1e3a8a;
+  --accent-dim: rgba(30, 64, 175, 0.12);
   --danger-color: #ef4444;
   --warning-color: #f59e0b;
 }
@@ -62,20 +63,20 @@ html[data-theme="light"] .studio-dark {
   --text-secondary: #475569;
   --text-muted: #94a3b8;
   --border-color: #e2e8f0;
-  --accent-color: #059669;
-  --accent-hover: #047857;
-  --accent-dim: rgba(5, 150, 105, 0.1);
+  --accent-color: #1e40af;
+  --accent-hover: #1e3a8a;
+  --accent-dim: rgba(30, 64, 175, 0.08);
   --danger-color: #dc2626;
-  --warning-color: #d97706;
+  --warning-color: #b45309;
 }
 
 /* Button styling for light mode studio */
 html[data-theme="light"] .studio-dark .studio-btn-primary {
-  background: #059669;
+  background: #1e40af;
   color: #fff;
 }
 html[data-theme="light"] .studio-dark .studio-btn-primary:hover {
-  background: #047857;
+  background: #1e3a8a;
 }
 html[data-theme="light"] .studio-dark .studio-btn-secondary {
   background: #f1f5f9;
@@ -92,12 +93,15 @@ html[data-theme="dark"] {
   --surface: #131620;
   --surface-soft: #1a1d2b;
   --border: #334155;
-  --muted: #64748b;
+  --line-strong: #64748b;
+  --muted: #94a3b8;
   --headline: #f8fafc;
-  --accent: #4ade80;
-  --accent-strong: #22c55e;
+  --accent: #60a5fa;
+  --accent-strong: #3b82f6;
+  --accent-deep: #1e40af;
   --success: #4ade80;
   --warning: #fbbf24;
+  --danger: #f87171;
 }
 
 @theme inline {
