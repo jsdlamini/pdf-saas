@@ -409,9 +409,9 @@ export default function Home() {
 
   return (
     <div className="ai-home-bg relative isolate flex w-full flex-1 flex-col">
-      <div className="pointer-events-none absolute -left-16 top-12 -z-10 h-64 w-64 rounded-full bg-cyan-300/25 blur-3xl" />
-      <div className="pointer-events-none absolute right-0 top-24 -z-10 h-72 w-72 rounded-full bg-sky-400/20 blur-3xl" />
-      <div className="pointer-events-none absolute bottom-0 left-1/3 -z-10 h-64 w-64 rounded-full bg-amber-300/20 blur-3xl" />
+      <div className="pointer-events-none absolute -left-16 top-12 -z-10 h-64 w-64 rounded-full bg-[#1e40af]/10 blur-3xl" />
+      <div className="pointer-events-none absolute right-0 top-24 -z-10 h-72 w-72 rounded-full bg-[#1e40af]/8 blur-3xl" />
+      <div className="pointer-events-none absolute bottom-0 left-1/3 -z-10 h-64 w-64 rounded-full bg-slate-300/25 blur-3xl" />
 
       <main className="relative z-10 mx-auto flex w-full max-w-7xl flex-col gap-4 px-6 py-6 md:gap-5 md:px-10 md:py-8">
         {/* ── Server status banner ──────────────────────────────── */}
@@ -450,8 +450,8 @@ export default function Home() {
             }}
             className={`drop-zone-hover-ring relative cursor-pointer rounded-2xl border-2 border-dashed p-8 text-center transition-all duration-300 md:p-12 focus:outline-none focus:ring-2 focus:ring-cyan-500 ${
               dragOver
-                ? "border-cyan-400 bg-gradient-to-br from-cyan-50 to-blue-50 drop-zone-active-glow"
-                : "border-slate-200 bg-gradient-to-br from-white to-blue-50/60 hover:border-cyan-400 hover:from-cyan-50/80 hover:to-blue-50/80 hover:shadow-[0_0_36px_-10px_rgba(34,211,238,0.3)]"
+                ? "border-[#1e40af] bg-gradient-to-br from-[#1e40af]/5 to-slate-50 drop-zone-active-glow"
+                : "border-slate-200 bg-gradient-to-br from-white to-slate-50 hover:border-[#1e40af]/60 hover:from-[#1e40af]/5 hover:shadow-[0_0_36px_-10px_rgba(30,64,175,0.25)]"
             }`}
           >
             <input
@@ -562,7 +562,7 @@ export default function Home() {
                 <button
                   type="button"
                   onClick={(e) => { e.stopPropagation(); openAllToolsDialog(); }}
-                  className="inline-flex items-center gap-1.5 rounded-full border bg-gradient-to-r px-4 py-2 text-sm font-semibold transition-all hover:scale-105 hover:shadow-lg from-slate-100 to-slate-200 text-slate-700 hover:from-cyan-100 hover:to-blue-100 hover:text-cyan-800"
+                  className="inline-flex items-center gap-1.5 rounded-full border bg-gradient-to-r px-4 py-2 text-sm font-semibold transition-all hover:scale-105 hover:shadow-lg from-slate-100 to-slate-200 text-slate-700 hover:from-[#1e40af]/10 hover:to-[#1e40af]/5 hover:text-[#1e40af]"
                 >
                   More tools
                   <svg viewBox="0 0 20 20" className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth="1.8">
