@@ -1089,6 +1089,18 @@ export default function ResearchStudioPage() {
     try { localStorage.setItem("wiserfiles-editor-theme", editorTheme); } catch {}
   }, [editorTheme]);
 
+  // UI theme (dark/light) follows document.documentElement[data-theme], which the
+  // home ThemeToggle and this studio selector both set, so they stay in sync.
+  const [uiTheme, setUiTheme] = useState<"dark" | "light">("dark");
+  useEffect(() => {
+    const apply = () =>
+      setUiTheme(document.documentElement.dataset.theme === "light" ? "light" : "dark");
+    apply();
+    const observer = new MutationObserver(apply);
+    observer.observe(document.documentElement, { attributes: true, attributeFilter: ["data-theme"] });
+    return () => observer.disconnect();
+  }, []);
+
   const [importBusy, setImportBusy] = useState(false);
   const [importProgress, setImportProgress] = useState({ current: 0, total: 0 });
   // Persist workspace + active project to localStorage
@@ -5431,25 +5443,33 @@ export default function ResearchStudioPage() {
               <path d="M3 9l7-6 7 6v8a1 1 0 0 1-1 1h-4v-5H8v5H4a1 1 0 0 1-1-1V9z" strokeLinecap="round" strokeLinejoin="round" />
             </svg>
           </a>
-          <button
-            type="button"
-            onClick={() => {
-              const current = document.documentElement.dataset.theme === "dark" ? "dark" : "light";
-              const next = current === "dark" ? "light" : "dark";
-              document.documentElement.dataset.theme = next;
-              document.documentElement.style.colorScheme = next;
-              try { localStorage.setItem("wiserfiles-theme", next); } catch {}
-            }}
+          <label
             className="studio-btn studio-btn-ghost"
-            aria-label="Toggle dark/light mode"
-            title="Toggle dark/light mode"
-            style={{ width: 32, padding: 0 }}
+            title="Studio color theme"
+            style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "0 8px", height: 32 }}
           >
             <svg viewBox="0 0 20 20" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="1.8">
-              <circle cx="10" cy="10" r="3.5" />
-              <path d="M10 2v2M10 16v2M2 10h2M16 10h2M4.9 4.9l1.4 1.4M13.7 13.7l1.4 1.4M15.1 4.9l-1.4 1.4M6.3 13.7l-1.4 1.4" strokeLinecap="round" />
+              <path d="M10 2a8 8 0 1 0 0 16c1.5 0 2.5-.8 2.5-2 0-.5-.2-1-.5-1.4-.4-.4-.6-.9-.6-1.5 0-1.1.9-2 2-2h1.2A4.8 4.8 0 0 0 18 10 8 8 0 0 0 10 2z" strokeLinecap="round" strokeLinejoin="round"/>
+              <circle cx="6.5" cy="10" r="0.5" fill="currentColor"/>
+              <circle cx="10.5" cy="6.5" r="0.5" fill="currentColor"/>
+              <circle cx="10.5" cy="13.5" r="0.5" fill="currentColor"/>
             </svg>
-          </button>
+            <select
+              value={uiTheme}
+              onChange={(e) => {
+                const next = e.target.value as "dark" | "light";
+                document.documentElement.dataset.theme = next;
+                document.documentElement.style.colorScheme = next;
+                try { localStorage.setItem("wiserfiles-theme", next); } catch {}
+                setUiTheme(next);
+              }}
+              aria-label="Studio theme"
+              style={{ background: "transparent", border: "none", color: "inherit", fontSize: 12, fontWeight: 600, cursor: "pointer", outline: "none" }}
+            >
+              <option value="dark" style={{ background: "#0f172a", color: "#e2e8f0" }}>Dark</option>
+              <option value="light" style={{ background: "#ffffff", color: "#0f172a" }}>Light</option>
+            </select>
+          </label>
           <button
             type="button"
             onClick={() => setShowShortcuts((c) => !c)}
