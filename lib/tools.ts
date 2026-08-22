@@ -3,11 +3,39 @@ export type ToolProcessing =
   | "server" // the file is always uploaded to a route handler
   | "conditional"; // uploads only for specific input types (see the tool's comment)
 
+export type ToolCategory =
+  | "Organize"
+  | "Optimize"
+  | "Convert"
+  | "Security"
+  | "Edit"
+  | "Sign";
+
+// Distinct-but-professional colour per tool category (the iLovePDF/Overleaf
+// look: colourful tool icons over a clean neutral surface).
+export const CATEGORY_COLORS: Record<ToolCategory, string> = {
+  Organize: "#3B82F6",
+  Optimize: "#F59E0B",
+  Convert: "#10B981",
+  Security: "#EF4444",
+  Edit: "#8B5CF6",
+  Sign: "#EC4899",
+};
+
+export const CATEGORY_SOFT_BG: Record<ToolCategory, string> = {
+  Organize: "#EFF6FF",
+  Optimize: "#FFF7ED",
+  Convert: "#ECFDF5",
+  Security: "#FEF2F2",
+  Edit: "#F5F3FF",
+  Sign: "#FDF2F8",
+};
+
 export type ToolItem = {
   slug: string;
   name: string;
   description: string;
-  category: "Organize" | "Optimize" | "Convert" | "Security" | "Edit" | "Sign";
+  category: ToolCategory;
   // Where the file is actually processed. "server" means the file is uploaded to
   // a route handler; "local" means it never leaves the browser; "conditional"
   // means only some accepted input types are uploaded. Source of truth for

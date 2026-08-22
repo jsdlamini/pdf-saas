@@ -26,11 +26,17 @@ function getWorkflowCreatedAt() {
   return Date.now();
 }
 
-function getCategoryColor(_category: string) {
-  // Monochrome treatment: every tool uses the same neutral slate styling for a
-  // professional black/white/gray look; the category name is the label, not
-  // the colour.
-  return "from-slate-100 to-slate-200 text-slate-800 border-slate-300 shadow-slate-200/60";
+function getCategoryColor(category: string) {
+  // Colourful tool pills: each category gets a distinct accent (iLovePDF-style).
+  const map: Record<string, string> = {
+    Organize: "from-blue-100 to-sky-100 text-blue-800 border-blue-300 shadow-blue-200/60",
+    Optimize: "from-amber-100 to-orange-100 text-amber-800 border-amber-300 shadow-amber-200/60",
+    Convert: "from-emerald-100 to-teal-100 text-emerald-800 border-emerald-300 shadow-emerald-200/60",
+    Security: "from-rose-100 to-red-100 text-rose-800 border-rose-300 shadow-rose-200/60",
+    Edit: "from-violet-100 to-purple-100 text-violet-800 border-violet-300 shadow-violet-200/60",
+    Sign: "from-pink-100 to-fuchsia-100 text-pink-800 border-pink-300 shadow-pink-200/60",
+  };
+  return map[category] ?? "from-slate-100 to-slate-200 text-slate-800 border-slate-300 shadow-slate-200/60";
 }
 
 const ACCEPTED_TYPES = [

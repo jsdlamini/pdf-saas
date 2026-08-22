@@ -1,5 +1,8 @@
+import { CATEGORY_COLORS } from "@/lib/tools";
+
 // Category-based tool icons. One consistent 24×24 stroke icon per tool
-// category, rendered with currentColor so it inherits text color in light/dark.
+// category, coloured by category (currentColor inherits unless a colour is
+// applied via the category map).
 const PATHS: Record<string, React.ReactNode> = {
   Organize: (
     <>
@@ -56,6 +59,7 @@ export function ToolIcon({
     <svg
       viewBox="0 0 24 24"
       className={className}
+      style={CATEGORY_COLORS[category as keyof typeof CATEGORY_COLORS] ? { color: CATEGORY_COLORS[category as keyof typeof CATEGORY_COLORS] } : undefined}
       fill="none"
       stroke="currentColor"
       strokeWidth="1.7"
