@@ -1149,6 +1149,7 @@ export default function ResearchStudioPage() {
   const [compileNotice, setCompileNotice] = useState("Ready.");
   const [compileBusy, setCompileBusy] = useState(false);
   const compileAbortRef = useRef<AbortController | null>(null);
+  const cleanBuildNextRef = useRef(false);
   const [compiledPdfBlob, setCompiledPdfBlob] = useState<Blob | null>(null);
   const [compiledPdfUrl, setCompiledPdfUrl] = useState("");
   const [compiledPdfFileName, setCompiledPdfFileName] = useState("compiled-main.pdf");
@@ -3898,6 +3899,7 @@ export default function ResearchStudioPage() {
             rootFile: rootPath,
             files: compileFiles,
             projectId: activeProjectId || undefined,
+            clean: cleanBuildNextRef.current,
           }),
           signal: controller.signal,
         });
@@ -3907,6 +3909,7 @@ export default function ResearchStudioPage() {
       } finally {
         clearTimeout(timeoutId);
         compileAbortRef.current = null;
+        cleanBuildNextRef.current = false;
       }
 
       if (!response.ok) {
@@ -5384,6 +5387,20 @@ export default function ResearchStudioPage() {
               </button>
               <button
                 type="button"
+                onClick={() => { cleanBuildNextRef.current = true; void compileProject(); }}
+                disabled={compileBusy}
+                className="studio-btn studio-btn-ghost"
+                aria-label="Clean build (discard cached compilation)"
+                title="Clean build — discard cached compilation state"
+                style={{ height: 32, padding: "0 10px" }}
+              >
+                <svg viewBox="0 0 20 20" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="1.8">
+                  <path d="M4 7h12M9 3h2l1 4M6 7l1 9h6l1-9M8.5 11h3" strokeLinecap="round" strokeLinejoin="round" />
+                </svg>
+                <span className="hidden sm:inline">Clean</span>
+              </button>
+              <button
+                type="button"
                 onClick={() => void runAiReview()}
                 disabled={aiReviewBusy}
                 className="studio-btn studio-btn-secondary"
@@ -5468,6 +5485,35 @@ export default function ResearchStudioPage() {
             >
               <option value="dark" style={{ background: "#0f172a", color: "#e2e8f0" }}>Dark</option>
               <option value="light" style={{ background: "#ffffff", color: "#0f172a" }}>Light</option>
+            </select>
+          </label>
+          <label
+            className="studio-btn studio-btn-ghost"
+            title="Editor color theme (syntax highlighting)"
+            style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "0 8px", height: 32 }}
+          >
+            <span
+              style={{
+                display: "inline-block",
+                width: 10,
+                height: 10,
+                borderRadius: "50%",
+                background: EDITOR_THEMES[editorTheme]?.dark ? "#0f172a" : "#f8fafc",
+                border: "1px solid currentColor",
+              }}
+              aria-hidden="true"
+            />
+            <select
+              value={editorTheme}
+              onChange={(e) => setEditorTheme(e.target.value as EditorThemeId)}
+              aria-label="Editor theme"
+              style={{ background: "transparent", border: "none", color: "inherit", fontSize: 12, fontWeight: 600, cursor: "pointer", outline: "none" }}
+            >
+              {Object.entries(EDITOR_THEMES).map(([id, t]) => (
+                <option key={id} value={id} style={{ background: t.dark ? "#0f172a" : "#ffffff", color: t.dark ? "#e2e8f0" : "#0f172a" }}>
+                  {t.label}
+                </option>
+              ))}
             </select>
           </label>
           <button

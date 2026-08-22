@@ -1,5 +1,5 @@
 import { execFile } from "node:child_process";
-import { copyFile, mkdir, mkdtemp, readFile, readdir, rm, writeFile } from "node:fs/promises";
+import { copyFile, mkdir, mkdtemp, readFile, readdir, rm, stat, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { dirname, join, normalize } from "node:path";
 import { promisify } from "node:util";
@@ -10,6 +10,9 @@ import { createRateLimiter } from "@/lib/rate-limit";
 const execFileAsync = promisify(execFile);
 
 const ASSETS_ROOT = process.env.PROJECT_ASSETS_DIR || "/app/data/assets";
+const BUILD_ROOT = process.env.PROJECT_BUILD_DIR || "/app/data/build";
+// Per-project build dirs are evicted when they exceed this (in bytes).
+const BUILD_DIR_MAX_BYTES = 300 * 1024 * 1024;
 
 function sanitizeAssetPath(value: string): string {
   const parts = normalize(value)
@@ -17,6 +20,35 @@ function sanitizeAssetPath(value: string): string {
     .split("/")
     .filter((p) => p && p !== "." && p !== "..");
   return parts.join("/");
+}
+
+// Persistent per-project build dir so latexmk can reuse .aux/.fdb_latexmk and
+// skip unchanged work (fast recompiles).
+function buildDirPath(userId: string, projectId: string): string {
+  return join(BUILD_ROOT, userId, sanitizeAssetPath(projectId));
+}
+
+async function dirSizeRecursive(dir: string): Promise<number> {
+  let total = 0;
+  let entries;
+  try {
+    entries = await readdir(dir, { withFileTypes: true });
+  } catch {
+    return 0;
+  }
+  for (const entry of entries) {
+    const full = join(dir, entry.name);
+    if (entry.isDirectory()) {
+      total += await dirSizeRecursive(full);
+    } else {
+      try {
+        total += (await stat(full)).size;
+      } catch {
+        /* ignore */
+      }
+    }
+  }
+  return total;
 }
 
 // Recursively copy a project's stored images (figures) into the compile temp
@@ -66,6 +98,24 @@ async function writeProjectFile(targetPath: string, path: string, content: strin
   }
 }
 
+// The exact bytes writeProjectFile would produce for a path/content pair.
+function projectFileBytes(path: string, content: string): Buffer {
+  const isEncoded =
+    isBinaryAssetName(path) || (/\.(eps|svg)$/i.test(path) && looksLikeBase64(content));
+  return isEncoded
+    ? Buffer.from(stripDataUrlPrefix(content), "base64")
+    : Buffer.from(content, "utf8");
+}
+
+async function fileBytesEqual(targetPath: string, expected: Buffer): Promise<boolean> {
+  try {
+    const existing = await readFile(targetPath);
+    return existing.equals(expected);
+  } catch {
+    return false;
+  }
+}
+
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
@@ -85,6 +135,7 @@ type CompileRequestPayload = {
   rootFile?: string;
   files?: CompileInputFile[];
   projectId?: string;
+  clean?: boolean;
 };
 
 type LatexEngine = {
@@ -495,9 +546,16 @@ async function prepareCompileDir(
   rootFile: string,
   userId: string | null,
   projectId: string | undefined,
-  corruptFigures: string[] = []
+  corruptFigures: string[] = [],
+  persistent = false
 ): Promise<string> {
-  const tempDir = await mkdtemp(join(tmpdir(), "wiserfiles-latex-"));
+  let tempDir: string;
+  if (persistent && userId && projectId) {
+    tempDir = buildDirPath(userId, projectId);
+    await mkdir(tempDir, { recursive: true });
+  } else {
+    tempDir = await mkdtemp(join(tmpdir(), "wiserfiles-latex-"));
+  }
 
   const fileMap = new Map<string, string>();
   for (const file of files) {
@@ -518,6 +576,13 @@ async function prepareCompileDir(
   for (const [path, content] of fileMap.entries()) {
     const targetPath = join(tempDir, path);
     await mkdir(dirname(targetPath), { recursive: true });
+    // When reusing a persistent build dir, only rewrite files whose bytes
+    // actually changed so latexmk's .fdb_latexmk keeps them as up-to-date and
+    // skips the work (fast recompiles).
+    if (persistent && userId && projectId) {
+      const unchanged = await fileBytesEqual(targetPath, projectFileBytes(path, content));
+      if (unchanged) continue;
+    }
     await writeProjectFile(targetPath, path, content);
   }
 
@@ -612,10 +677,29 @@ export async function POST(request: Request) {
   const corruptFigures: string[] = [];
   let lastLogData: { text?: string; fileName?: string } | null = null;
 
+  // Incremental builds: reuse a per-project build dir so latexmk can skip
+  // unchanged work via its .fdb_latexmk dependency tracking. A "clean" request
+  // (or an oversized dir) resets it.
+  const usePersistentBuild = Boolean(userId && payload.projectId);
+  if (usePersistentBuild) {
+    const buildDir = buildDirPath(userId!, payload.projectId!);
+    if (payload.clean) {
+      await rm(buildDir, { recursive: true, force: true });
+    } else {
+      const size = await dirSizeRecursive(buildDir);
+      if (size > BUILD_DIR_MAX_BYTES) {
+        await rm(buildDir, { recursive: true, force: true });
+      }
+    }
+  }
+
   for (const engine of ENGINES) {
     let tempDir: string | null = null;
+    let tempDirPersistent = false;
     try {
-      tempDir = await prepareCompileDir(files, rootFile, userId, payload.projectId, corruptFigures);
+      const persistent = engine.name === "latexmk" && usePersistentBuild;
+      tempDir = await prepareCompileDir(files, rootFile, userId, payload.projectId, corruptFigures, persistent);
+      tempDirPersistent = persistent;
       const { pdfBytes, warnings } = await compileWithEngine(tempDir, rootFile, engine);
       const outputName = sanitizeFileName(buildPdfOutputPath(rootFile));
 
@@ -691,7 +775,9 @@ export async function POST(request: Request) {
       const hint = getMissingStyPackageHint(detail);
       engineErrors.push(`${engine.name}: ${detail}${hint ? `\nHint: ${hint}` : ""}`);
     } finally {
-      if (tempDir) await rm(tempDir, { recursive: true, force: true });
+      if (tempDir && !tempDirPersistent) {
+        await rm(tempDir, { recursive: true, force: true });
+      }
     }
   }
 
