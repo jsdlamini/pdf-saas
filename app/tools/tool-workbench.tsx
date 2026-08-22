@@ -5516,6 +5516,7 @@ export default function ToolWorkbench({ tool }: WorkbenchProps) {
               type="button"
               onClick={runTool}
               disabled={busy}
+              aria-busy={busy}
               className="rounded-full px-5 py-2.5 text-sm font-bold text-white shadow-lg transition hover:scale-[1.02] hover:shadow-xl disabled:cursor-not-allowed disabled:opacity-50"
               style={{ background: "linear-gradient(to right, #8b5cf6, #6366f1)", boxShadow: "0 4px 16px rgba(99,102,241,0.4)" }}
             >
@@ -5556,7 +5557,7 @@ export default function ToolWorkbench({ tool }: WorkbenchProps) {
             </div>
           ) : null}
           {error ? (
-            <div className="mt-2 rounded-xl border border-rose-200 bg-rose-50 p-3">
+            <div role="alert" className="mt-2 rounded-xl border border-rose-200 bg-rose-50 p-3">
               <p className="text-sm font-medium text-rose-700">{error}</p>
               <button
                 type="button"

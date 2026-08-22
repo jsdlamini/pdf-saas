@@ -2532,10 +2532,12 @@ export default function ResearchStudioPage() {
           ? "Project saved to your account."
           : "Save queued — retrying against account storage."
       );
+      showToast("Project saved", "success");
     } catch (saveError) {
       const message = saveError instanceof Error ? saveError.message : "Project save failed.";
       setCompileNotice(message);
       appendPreviewError(`Save failed: ${message}`);
+      showToast("Save failed", "error");
     }
   }
 
@@ -4410,6 +4412,7 @@ export default function ResearchStudioPage() {
     if (!files.length) return;
 
     const targetLabel = folder === "" ? "project root" : folder;
+    setCompileNotice(`Uploading ${files.length} file${files.length !== 1 ? "s" : ""} to ${targetLabel}…`);
     try {
       const nextEntries: ProjectEntry[] = [];
       for (const file of files) {
