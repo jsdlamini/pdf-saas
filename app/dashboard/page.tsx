@@ -406,7 +406,7 @@ function UserManagement() {
     fetch("/api/admin-users")
       .then((r) => r.json())
       .then((d) => setUsers(d.users || []))
-      .catch(() => {})
+      .catch(() => { /* deliberately silent: best-effort */ })
       .finally(() => setLoaded(true));
   }, []);
 
@@ -652,7 +652,7 @@ function AiQuotaSettings() {
           setRegisteredInput(String(d.limits.registeredDailyLimit));
         }
       })
-      .catch(() => {});
+      .catch(() => { /* deliberately silent: best-effort */ });
   }, []);
 
   async function save() {

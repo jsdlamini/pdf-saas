@@ -91,6 +91,6 @@ export async function POST(request: Request) {
     const message = error instanceof Error ? error.message : "Export failed.";
     return jsonError(`Export failed: ${message}`, 502);
   } finally {
-    await rm(tempDir, { recursive: true, force: true }).catch(() => {});
+    await rm(tempDir, { recursive: true, force: true }).catch(() => { /* best-effort cleanup */ });
   }
 }

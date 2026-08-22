@@ -18,7 +18,7 @@ function track(event: string, data?: Record<string, string>) {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ event, ...data }),
       keepalive: true,
-    }).catch(() => {});
+    }).catch(() => { /* deliberately silent: best-effort */ });
   }
 }
 

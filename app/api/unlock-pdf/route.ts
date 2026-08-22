@@ -120,7 +120,7 @@ export async function handleUnlockPdfPost(
     });
   } finally {
     // Always remove the temp dir (input AND decrypted output), even on error.
-    await dependencies.rm(tempDir, { recursive: true, force: true }).catch(() => {});
+    await dependencies.rm(tempDir, { recursive: true, force: true }).catch(() => { /* best-effort cleanup */ });
   }
 }
 
