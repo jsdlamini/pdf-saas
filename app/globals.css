@@ -3,7 +3,7 @@
 :root {
   /* Self-hosted type families (see @fontsource imports in layout.tsx). */
   --font-body: "DM Sans", system-ui, -apple-system, sans-serif;
-  --font-display: "Source Serif 4", "DM Sans", serif;
+  --font-display: "Space Grotesk", system-ui, sans-serif;
   --font-mono: "JetBrains Mono", ui-monospace, "SF Mono", Menlo, monospace;
 
   --background: #f8fafc;
