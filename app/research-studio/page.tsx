@@ -5083,7 +5083,7 @@ export default function ResearchStudioPage() {
           <div className="studio-project-grid" style={{
             gridTemplateColumns: `repeat(auto-fill, minmax(${filteredProjects.length > 8 ? 220 : filteredProjects.length > 4 ? 260 : 280}px, 1fr))`,
           }}>
-            {filteredProjects.map((item) => {
+            {filteredProjects.map((item, index) => {
               const isActive = item.id === activeProjectId;
               const templateSlugs = RESEARCH_TEMPLATES.map((t) => t.slug);
               const snapshot = savedProjectSnapshots.find((s) => s.id === item.id);
@@ -5107,7 +5107,8 @@ export default function ResearchStudioPage() {
                   className="studio-project-card"
                   data-mode={mode}
                   style={{
-                    ...(isActive ? { borderColor: "rgba(74,222,128,0.35)" } : {}),
+                    animationDelay: `${Math.min(index, 15) * 55}ms`,
+                    ...(isActive ? { borderColor: "rgba(30, 64, 175, 0.4)" } : {}),
                   }}
                 >
                   <p className="studio-project-card-name">{item.name}</p>

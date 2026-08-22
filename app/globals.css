@@ -1288,6 +1288,7 @@ body[data-studio-editor="true"] footer {
   padding: 16px;
   transition: border-color 0.15s, background 0.15s;
   cursor: default;
+  animation: studio-card-enter 0.4s cubic-bezier(0.22, 1, 0.36, 1) both;
 }
 
 .studio-project-card[data-mode="latex"] {
@@ -1312,7 +1313,9 @@ body[data-studio-editor="true"] footer {
 }
 
 .studio-project-card:hover {
-  border-color: rgba(74, 222, 128, 0.25);
+  border-color: rgba(30, 64, 175, 0.28);
+  transform: translateY(-2px);
+  box-shadow: 0 10px 24px -12px rgba(15, 23, 42, 0.45);
 }
 
 .studio-project-card-name {
@@ -2842,4 +2845,27 @@ html[data-theme="light"] .studio-dark ::-webkit-scrollbar-thumb {
 }
 @media (prefers-reduced-motion: reduce) {
   .studio-spinner { animation: none; }
+}
+
+/* Project-card entrance: staggered fade + rise (stagger via inline
+   animation-delay in the component). Honours prefers-reduced-motion. */
+@keyframes studio-card-enter {
+  from { opacity: 0; transform: translateY(10px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .studio-project-card { animation: none; }
+}
+
+/* Dashboard header enters gently ahead of the staggered cards. */
+.studio-dashboard-title,
+.studio-dashboard-subtitle {
+  animation: studio-card-enter 0.4s ease both;
+}
+.studio-dashboard-subtitle {
+  animation-delay: 50ms;
+}
+@media (prefers-reduced-motion: reduce) {
+  .studio-dashboard-title,
+  .studio-dashboard-subtitle { animation: none; }
 }
