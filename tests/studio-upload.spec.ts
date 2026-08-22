@@ -1,32 +1,60 @@
 import { expect, test } from "@playwright/test";
+import { clerkSetup, clerk } from "@clerk/testing/playwright";
+import { createClerkClient } from "@clerk/backend";
+import { join } from "node:path";
 
-// ---------------------------------------------------------------------------
-// SKIPPED — needs a real signed-in Clerk session, which is not available
-// overnight (no staging, no Cloudflare bypass, no test account).
-//
-// To unskip in the morning, provision:
-//   - a Clerk test-mode instance (or test user) with E2E credentials, and
-//   - either a Cloudflare bypass for the deployed app, or run against the local
-//     dev server with `CLERK_SECRET_KEY` + `NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY`.
-// Then replace the sign-in step below with the real Clerk login (or a test
-// session token) and drop the `test.skip`.
-// ---------------------------------------------------------------------------
+// Signed-in folder-upload test. Requires:
+//   - .env.local with CLERK_SECRET_KEY + NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY
+//     (a Clerk DEVELOPMENT instance — test mode)
+//   - a local Postgres (DATABASE_URL) and PROJECT_ASSETS_DIR pointing at a
+//     writable dir (both set in .env.local)
+//   - `npm run dev` running (playwright's webServer starts it)
+// The test creates a throwaway user in the dev instance and signs in via a
+// Clerk test ticket — no password, no real account.
 
-test.skip("folder context menu: Upload file lands a PNG at the correct path", async ({ page }) => {
-  // 1. Sign in (Clerk) — needs E2E test credentials.
-  //    await page.goto("/research-studio");
-  //    await page.getByRole("button", { name: "Sign in" }).click();
-  //    ... complete Clerk login ...
+const TEST_EMAIL = "wiserfiles-e2e@example.com";
 
-  // 2. Open an existing project (or import one).
-  //    await page.getByRole("button", { name: "CSC111" }).click();
+test.beforeAll(async () => {
+  await clerkSetup();
+  const client = createClerkClient({ secretKey: process.env.CLERK_SECRET_KEY! });
+  const existing = await client.users.getUserList({ emailAddress: [TEST_EMAIL] });
+  if (!existing.data?.length) {
+    // The dev instance requires a password on user creation.
+    await client.users.createUser({
+      emailAddress: [TEST_EMAIL],
+      password: "WiserfilesE2E123!",
+    });
+  }
+});
 
-  // 3. Right-click a folder, choose "Upload file", pick a PNG.
-  //    await page.getByText("images", { exact: true }).click({ button: "right" });
-  //    await page.getByRole("menuitem", { name: "Upload file" }).click();
-  //    await page.locator('input[type="file"]').setInputFiles("tests/baseline/fixtures/logo.png");
+test("right-click upload lands a PNG at the correct path", async ({ page }) => {
+  // Skip the onboarding overlay so it doesn't intercept clicks.
+  await page.addInitScript(() => {
+    localStorage.setItem("wiserfiles-onboarding-seen", "1");
+  });
 
-  // 4. Assert the file landed in the tree at the joined path.
-  //    await expect(page.getByText("images/ch1/logo.png")).toBeVisible();
-  expect(true).toBe(true);
+  // Sign in via a Clerk test ticket (email-based, no password).
+  await page.goto("/");
+  await clerk.signIn({ page, emailAddress: TEST_EMAIL });
+  await page.goto("/research-studio", { waitUntil: "networkidle" });
+
+  // Create a blank project so there is an editor and a tree.
+  await page.getByRole("button", { name: /New Project/i }).first().click();
+  const nameInput = page.locator("#swal-project-name");
+  if (await nameInput.count()) await nameInput.fill("Upload E2E");
+  await page.getByRole("button", { name: "Create" }).click();
+  await page.locator(".cm-content").first().waitFor({ state: "visible", timeout: 30_000 });
+
+  // Right-click the editor surface → the project-root context menu.
+  await page.locator(".studio-editor-area").click({ button: "right" });
+
+  // Choose "Upload file"; the native file picker opens.
+  const [chooser] = await Promise.all([
+    page.waitForEvent("filechooser"),
+    page.getByRole("menuitem", { name: "Upload file" }).click(),
+  ]);
+  await chooser.setFiles(join(process.cwd(), "tests/fixtures/upload-logo.png"));
+
+  // The file lands at the project root (the empty folder = bare filename).
+  await expect(page.getByText("upload-logo.png", { exact: true })).toBeVisible();
 });
