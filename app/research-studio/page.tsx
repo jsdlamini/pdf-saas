@@ -5004,10 +5004,14 @@ export default function ResearchStudioPage() {
             </div>
           ) : null}
 
-          {/* Storage indicator */}
+          {/* Storage indicator: keep the sync state and the count as separate,
+              self-explanatory lines instead of one run-on string. */}
           <p style={{ marginTop: 6, fontSize: 10, color: "var(--text-muted, #64748b)" }}>
-            {usesAccountStorage ? "Synced to account" : `Offline (${savedProjects.length}/${GUEST_PROJECT_LIMIT} projects)`}
-            {searchQuery.trim() ? ` · ${filteredProjects.length} of ${savedProjects.length} projects` : ` · ${savedProjects.length} project${savedProjects.length !== 1 ? "s" : ""}`}
+            {savedProjects.length} project{savedProjects.length !== 1 ? "s" : ""}
+            {searchQuery.trim() ? ` · ${filteredProjects.length} match${filteredProjects.length !== 1 ? "es" : ""}` : ""}
+          </p>
+          <p style={{ fontSize: 10, color: "var(--text-muted, #64748b)" }}>
+            {usesAccountStorage ? "Synced to your account" : "Offline — saved in this browser"}
           </p>
         </div>
 
@@ -5329,10 +5333,15 @@ export default function ResearchStudioPage() {
                 disabled={compileBusy}
                 className="studio-btn studio-btn-primary"
                 aria-label={compileBusy ? "Compiling project" : "Compile project"}
+                aria-busy={compileBusy}
               >
-                <svg viewBox="0 0 20 20" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="2">
-                  <path d="M7 6l7 4-7 4V6z" strokeLinecap="round" strokeLinejoin="round" />
-                </svg>
+                {compileBusy ? (
+                  <span className="studio-spinner" aria-hidden="true" />
+                ) : (
+                  <svg viewBox="0 0 20 20" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="2">
+                    <path d="M7 6l7 4-7 4V6z" strokeLinecap="round" strokeLinejoin="round" />
+                  </svg>
+                )}
                 <span className="hidden sm:inline">{compileBusy ? "Compiling..." : "Compile"}</span>
               </button>
               <button
@@ -6423,8 +6432,13 @@ export default function ResearchStudioPage() {
                 </div>
               </div>
               <div className="studio-preview-body">
-                <p style={{ padding: "4px 12px", fontSize: 10, color: "var(--text-muted, #64748b)" }}>
-                  {compileBusy ? "Compiling..." : compileNotice}
+                <p role="status" aria-live="polite" style={{ padding: "4px 12px", fontSize: 10, color: "var(--text-muted, #64748b)" }}>
+                  {compileBusy ? (
+                    <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
+                      <span className="studio-spinner" aria-hidden="true" style={{ width: 10, height: 10 }} />
+                      Compiling…
+                    </span>
+                  ) : compileNotice}
                 </p>
                 {synctexNotice ? <p style={{ padding: "0 12px 4px", fontSize: 10, color: "#f59e0b" }}>{synctexNotice}</p> : null}
 

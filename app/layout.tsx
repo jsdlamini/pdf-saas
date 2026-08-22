@@ -1,8 +1,16 @@
 import { ClerkProvider } from "@clerk/nextjs";
 import { auth } from "@clerk/nextjs/server";
 import type { Metadata } from "next";
-import { DM_Sans, Space_Grotesk } from "next/font/google";
 import Link from "next/link";
+// Self-hosted fonts (no build-time Google Fonts fetch). Families are
+// referenced via CSS variables set in globals.css.
+import "@fontsource/dm-sans/400.css";
+import "@fontsource/dm-sans/500.css";
+import "@fontsource/dm-sans/600.css";
+import "@fontsource/space-grotesk/600.css";
+import "@fontsource/space-grotesk/700.css";
+import "@fontsource/jetbrains-mono/400.css";
+import "@fontsource/jetbrains-mono/500.css";
 import AccountControls from "./account-controls";
 import MobileToolNav from "./mobile-tool-nav";
 import FooterShareLink from "./components/footer-share-link";
@@ -13,16 +21,6 @@ import ThemeToggle from "./theme-toggle";
 import SiteHeader from "./site-header";
 import ToastContainer from "./components/toast";
 import "./globals.css";
-
-const bodyFont = DM_Sans({
-  variable: "--font-body",
-  subsets: ["latin"],
-});
-
-const displayFont = Space_Grotesk({
-  variable: "--font-display",
-  subsets: ["latin"],
-});
 
 const SITE_NAME = "WiserFiles";
 const DEFAULT_SITE_URL = "http://localhost:3000";
@@ -122,13 +120,13 @@ export default async function RootLayout({
       lang="en"
       data-theme="light"
       suppressHydrationWarning
-      className={`${bodyFont.variable} ${displayFont.variable} h-full antialiased`}
+      className="h-full antialiased"
     >
       <body className="min-h-full flex flex-col bg-[#f0f4ff] text-slate-900 depth-stage">
         {/* Skip-to-content link for keyboard users */}
         <a
           href="#main-content"
-          className="sr-only focus:not-sr-only focus:fixed focus:left-4 focus:top-4 focus:z-[100] focus:rounded-xl focus:bg-cyan-600 focus:px-4 focus:py-2 focus:text-sm focus:font-semibold focus:text-white focus:shadow-lg focus:outline-none"
+          className="sr-only focus:not-sr-only focus:fixed focus:left-4 focus:top-4 focus:z-[100] focus:rounded-xl focus:bg-[#059669] focus:px-4 focus:py-2 focus:text-sm focus:font-semibold focus:text-white focus:shadow-lg focus:outline-none"
         >
           Skip to content
         </a>
@@ -179,7 +177,7 @@ export default async function RootLayout({
                 </p>
                 <Link
                   href="/research-studio"
-                  className="inline-flex items-center gap-2 rounded-full bg-gradient-to-r from-purple-500 to-pink-500 px-4 py-2 text-sm font-bold text-white shadow-lg shadow-purple-300/40 transition-all hover:scale-105 hover:shadow-xl hover:shadow-purple-400/50"
+                  className="inline-flex items-center gap-2 rounded-full bg-[#059669] px-4 py-2 text-sm font-bold text-white shadow-sm transition-colors hover:bg-[#047857]"
                 >
                   <svg viewBox="0 0 20 20" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="2">
                     <path d="M6 3h6l3 3v11H6V3z" strokeLinecap="round" strokeLinejoin="round" />
