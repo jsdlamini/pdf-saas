@@ -25,7 +25,7 @@ function makeDeps(decryptImpl: (input: string, output: string, password: string)
 
 describe("Unlock PDF route", () => {
   it("decrypts with the correct password and returns PDF bytes", async () => {
-    const deps = makeDeps(async () => {});
+    const deps = makeDeps(async () => { /* no-op decrypt stub */ });
     const res = await handleUnlockPdfPost(buildRequest("secret123"), deps);
 
     expect(res.status).toBe(200);
@@ -53,7 +53,7 @@ describe("Unlock PDF route", () => {
   });
 
   it("owner-password-only file decrypts with an empty user password", async () => {
-    const deps = makeDeps(async () => {});
+    const deps = makeDeps(async () => { /* no-op decrypt stub */ });
     const res = await handleUnlockPdfPost(buildRequest(""), deps);
 
     expect(res.status).toBe(200);

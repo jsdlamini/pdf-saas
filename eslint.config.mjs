@@ -5,12 +5,13 @@ import nextTs from "eslint-config-next/typescript";
 const eslintConfig = defineConfig([
   ...nextVitals,
   ...nextTs,
-  // Empty catch blocks silently swallow errors — the pattern that let the
-  // figure bug survive four rounds. A catch with a comment is exempt; a bare
-  // `catch {}` or `catch (e) {}` must either surface or explain itself.
+  // Empty catch blocks and empty .catch(() => {}) handlers silently swallow
+  // errors — the pattern that hid the figure bug for four rounds. A handler
+  // with a comment explaining itself is exempt; a truly empty one is not.
   {
     rules: {
       "no-empty": ["error", { allowEmptyCatch: false }],
+      "no-empty-function": "error",
     },
   },
   // Override default ignores of eslint-config-next.

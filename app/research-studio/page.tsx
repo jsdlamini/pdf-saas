@@ -2225,7 +2225,7 @@ export default function ResearchStudioPage() {
       // a small fallback and may fail silently for large projects.
       if (!userId) {
         const guestProjects = next.slice(0, GUEST_PROJECT_LIMIT);
-        void persistJson("wiserfiles-guest-projects", JSON.stringify(guestProjects)).catch(() => {});
+        void persistJson("wiserfiles-guest-projects", JSON.stringify(guestProjects)).catch(() => { /* deliberately silent: best-effort */ });
         try {
           localStorage.setItem("wiserfiles-guest-projects", JSON.stringify(guestProjects));
         } catch {}
@@ -2291,7 +2291,7 @@ export default function ResearchStudioPage() {
     await fetchWithTimeout(
       "/api/project-assets",
       { method: "DELETE", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ projectId }) }
-    ).catch(() => {});
+    ).catch(() => { /* deliberately silent: best-effort */ });
     // Split into batches under ~8MB of base64 each to stay under request limits.
     const batches: Array<Array<{ path: string; content: string }>> = [];
     let current: Array<{ path: string; content: string }> = [];
@@ -3061,7 +3061,7 @@ export default function ResearchStudioPage() {
     setSavedProjectSnapshots(nextSnapshots);
     if (!userId) {
       const guestProjects = nextSnapshots.slice(0, GUEST_PROJECT_LIMIT);
-      void persistJson("wiserfiles-guest-projects", JSON.stringify(guestProjects)).catch(() => {});
+      void persistJson("wiserfiles-guest-projects", JSON.stringify(guestProjects)).catch(() => { /* deliberately silent: best-effort */ });
       try {
         localStorage.setItem("wiserfiles-guest-projects", JSON.stringify(guestProjects));
       } catch {}
