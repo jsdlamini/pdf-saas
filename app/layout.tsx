@@ -7,8 +7,8 @@ import Link from "next/link";
 import "@fontsource/dm-sans/400.css";
 import "@fontsource/dm-sans/500.css";
 import "@fontsource/dm-sans/600.css";
-import "@fontsource/space-grotesk/600.css";
-import "@fontsource/space-grotesk/700.css";
+import "@fontsource/source-serif-4/600.css";
+import "@fontsource/source-serif-4/700.css";
 import "@fontsource/jetbrains-mono/400.css";
 import "@fontsource/jetbrains-mono/500.css";
 import AccountControls from "./account-controls";
@@ -126,7 +126,7 @@ export default async function RootLayout({
         {/* Skip-to-content link for keyboard users */}
         <a
           href="#main-content"
-          className="sr-only focus:not-sr-only focus:fixed focus:left-4 focus:top-4 focus:z-[100] focus:rounded-xl focus:bg-[#059669] focus:px-4 focus:py-2 focus:text-sm focus:font-semibold focus:text-white focus:shadow-lg focus:outline-none"
+          className="sr-only focus:not-sr-only focus:fixed focus:left-4 focus:top-4 focus:z-[100] focus:rounded-xl focus:bg-[#1e40af] focus:px-4 focus:py-2 focus:text-sm focus:font-semibold focus:text-white focus:shadow-lg focus:outline-none"
         >
           Skip to content
         </a>
@@ -177,7 +177,7 @@ export default async function RootLayout({
                 </p>
                 <Link
                   href="/research-studio"
-                  className="inline-flex items-center gap-2 rounded-full bg-[#059669] px-4 py-2 text-sm font-bold text-white shadow-sm transition-colors hover:bg-[#047857]"
+                  className="inline-flex items-center gap-2 rounded-full bg-[#1e40af] px-4 py-2 text-sm font-bold text-white shadow-sm transition-colors hover:bg-[#1e3a8a]"
                 >
                   <svg viewBox="0 0 20 20" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="2">
                     <path d="M6 3h6l3 3v11H6V3z" strokeLinecap="round" strokeLinejoin="round" />
