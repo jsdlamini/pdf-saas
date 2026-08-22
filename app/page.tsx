@@ -671,7 +671,7 @@ export default function Home() {
 
               {/* Inline search results: cards */}
               {intentQuery.trim() && searchResults !== null ? (
-                <div className="absolute left-0 right-0 top-[calc(100%+6px)] z-30 max-h-96 overflow-y-auto rounded-2xl border border-slate-200/80 bg-white/95 p-3 shadow-[0_16px_40px_-20px_rgba(15,23,42,0.32)] backdrop-blur-md dark:border-slate-700/80 dark:bg-slate-950/95">
+                <div className="absolute left-0 right-0 top-[calc(100%+6px)] z-30 max-h-96 overflow-y-auto rounded-2xl border border-slate-200/80 bg-white/95 p-3 shadow-[0_16px_40px_-20px_rgba(15,23,42,0.32)] -md dark:border-slate-700/80 dark:bg-slate-950/95">
                   {searchResults.length === 0 ? (
                     <div className="flex flex-col items-center gap-1.5 px-4 py-8 text-center">
                       <svg viewBox="0 0 24 24" className="h-8 w-8 text-slate-300" fill="none" stroke="currentColor" strokeWidth="1.6">

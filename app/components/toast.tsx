@@ -89,7 +89,7 @@ export default function ToastContainer() {
       {toasts.map((toast) => (
         <div
           key={toast.id}
-          className={`pointer-events-auto flex items-center gap-2 rounded-xl border px-4 py-3 text-sm font-semibold shadow-lg backdrop-blur-sm ${toast.exiting ? "toast-exit" : "toast-enter"} ${variantStyles[toast.variant]}`}
+          className={`pointer-events-auto flex items-center gap-2 rounded-xl border px-4 py-3 text-sm font-semibold shadow-lg  ${toast.exiting ? "toast-exit" : "toast-enter"} ${variantStyles[toast.variant]}`}
         >
           <span
             className="inline-flex h-5 w-5 shrink-0 items-center justify-center"

@@ -164,7 +164,7 @@ export default async function ToolPage({ params }: ToolPageProps) {
       </Suspense>
 
       {relatedTools.length ? (
-        <section className="space-y-3 rounded-2xl border border-slate-200 bg-white/85 p-4 shadow-sm">
+        <section className="space-y-3 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
           <h2 className="font-display text-xl font-semibold tracking-tight text-slate-950">
             Related {tool.category} PDF tools
           </h2>
@@ -185,7 +185,7 @@ export default async function ToolPage({ params }: ToolPageProps) {
         </section>
       ) : null}
 
-      <section className="space-y-3 rounded-2xl border border-slate-200 bg-white/85 p-4 shadow-sm">
+      <section className="space-y-3 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
         <h2 className="font-display text-xl font-semibold tracking-tight text-slate-950">
           {tool.name} FAQ
         </h2>

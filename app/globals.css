@@ -112,7 +112,10 @@ html[data-theme="dark"] {
 }
 
 body {
-  background: var(--background);
+  background:
+    radial-gradient(120% 70% at 100% 0%, color-mix(in srgb, var(--accent) 7%, transparent), transparent 55%),
+    radial-gradient(120% 70% at 0% 100%, color-mix(in srgb, var(--accent) 5%, transparent), transparent 50%),
+    var(--background);
   color: var(--foreground);
   font-family: var(--font-body), "DM Sans", sans-serif;
 }
@@ -1913,18 +1916,13 @@ html[data-theme="light"] .studio-dark .swal2-input {
 
 /* ── Keep legacy styles for non-studio pages ───── */
 .depth-stage {
-  perspective: 1300px;
-  perspective-origin: 50% 10%;
+  /* perspective removed — the glass/3D look is gone. */
 }
 
 .glass-3d {
-  border: 1px solid color-mix(in srgb, var(--border) 80%, white 20%);
-  background:
-    radial-gradient(140% 120% at 0% 0%, rgba(34, 211, 238, 0.12), transparent 42%),
-    linear-gradient(160deg, color-mix(in srgb, var(--surface) 92%, white 8%) 0%, color-mix(in srgb, var(--surface-soft) 92%, black 8%) 100%);
-  box-shadow:
-    0 1px 0 rgba(255, 255, 255, 0.55) inset,
-    0 30px 80px -50px rgba(2, 6, 23, 0.6);
+  border: 1px solid var(--border);
+  background: linear-gradient(180deg, var(--surface) 0%, var(--surface-soft) 100%);
+  box-shadow: 0 2px 10px -6px rgba(15, 23, 42, 0.18);
 }
 
 .font-display {
@@ -1939,15 +1937,10 @@ html[data-theme="light"] .studio-dark .swal2-input {
 }
 
 .neo-navbar {
-  border-radius: 1.5rem;
-  border: 1px solid color-mix(in srgb, var(--border) 72%, white 28%);
-  background:
-    radial-gradient(140% 110% at 0% 0%, color-mix(in srgb, var(--accent) 14%, transparent), transparent 42%),
-    linear-gradient(165deg, color-mix(in srgb, var(--surface) 95%, white 5%), color-mix(in srgb, var(--surface-soft) 95%, black 5%));
-  box-shadow:
-    10px 12px 28px -20px rgba(15, 23, 42, 0.44),
-    -8px -8px 20px -16px rgba(255, 255, 255, 0.95),
-    inset 0 1px 0 rgba(255, 255, 255, 0.72);
+  border-radius: 1rem;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  box-shadow: 0 2px 10px -6px rgba(15, 23, 42, 0.14);
   padding-top: 0.72rem;
   padding-bottom: 0.72rem;
 }
@@ -1967,15 +1960,16 @@ html[data-theme="light"] .studio-dark .swal2-input {
 }
 
 .card-3d {
-  border: 1px solid color-mix(in srgb, var(--border) 75%, white 25%);
-  background: linear-gradient(170deg, color-mix(in srgb, var(--surface) 95%, white 5%) 0%, color-mix(in srgb, var(--surface-soft) 95%, black 5%) 100%);
-  box-shadow: 0 1px 0 rgba(255, 255, 255, 0.52) inset, 0 22px 60px -40px rgba(15, 23, 42, 0.62);
-  transition: transform 260ms cubic-bezier(0.22, 1, 0.36, 1), box-shadow 260ms ease;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  box-shadow: 0 2px 10px -6px rgba(15, 23, 42, 0.16);
+  transition: transform 200ms cubic-bezier(0.22, 1, 0.36, 1), box-shadow 200ms ease, border-color 200ms ease;
 }
 
 .card-3d:hover {
-  transform: translateY(-4px) translateZ(12px) rotateX(1deg) rotateY(-1.6deg);
-  box-shadow: 0 1px 0 rgba(255, 255, 255, 0.58) inset, 0 40px 85px -45px rgba(15, 23, 42, 0.7);
+  transform: translateY(-3px);
+  border-color: var(--line-strong);
+  box-shadow: 0 14px 30px -16px rgba(15, 23, 42, 0.32);
 }
 
 @media (max-width: 767px) {
@@ -1988,7 +1982,7 @@ html[data-theme="light"] .studio-dark .swal2-input {
 
 html[data-theme="dark"] .glass-3d,
 html[data-theme="dark"] .card-3d {
-  box-shadow: 0 1px 0 rgba(255, 255, 255, 0.06) inset, 0 32px 90px -55px rgba(0, 0, 0, 0.9);
+  box-shadow: 0 2px 12px -6px rgba(0, 0, 0, 0.6);
 }
 
 html[data-theme="dark"] .bg-white,
