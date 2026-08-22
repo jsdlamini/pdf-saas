@@ -37,6 +37,7 @@
     "xlsx": "^0.18.5"
   },
   "devDependencies": {
+    "@clerk/testing": "^2.2.28",
     "@napi-rs/canvas": "^1.0.0",
     "@playwright/test": "^1.62.1",
     "@tailwindcss/postcss": "^4",

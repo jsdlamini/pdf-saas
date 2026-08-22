@@ -4405,7 +4405,9 @@ export default function ResearchStudioPage() {
     const folder = folderUploadTargetRef.current;
     const files = Array.from(event.target.files || []);
     event.currentTarget.value = "";
-    if (!folder || !files.length) return;
+    // An empty string is a valid target — it means the project root. The old
+    // `!folder` guard treated it as falsy, so root uploads silently did nothing.
+    if (!files.length) return;
 
     const targetLabel = folder === "" ? "project root" : folder;
     try {
@@ -5189,6 +5191,20 @@ export default function ResearchStudioPage() {
 
   return (
     <main className="studio-dark studio-shell">
+      {/* Hidden file input for the tree/editor context-menu "Upload file" action.
+          Rendered here too (not only on the projects screen) so the file picker
+          can be triggered from the editor — previously folderUploadRef was null
+          here and right-click upload silently did nothing. */}
+      <input
+        ref={folderUploadRef}
+        type="file"
+        multiple
+        accept="image/*,.png,.jpg,.jpeg,.gif,.webp,.svg,.bmp,.ico,.pdf,.tex,.md,.txt,.bib,.csv,.json"
+        style={{ position: "absolute", left: -9999, top: 0, width: 1, height: 1, opacity: 0 }}
+        aria-hidden="true"
+        tabIndex={-1}
+        onChange={handleFolderUpload}
+      />
       {/* Top bar */}
       <header className="studio-topbar">
         <div className="studio-topbar-left">
