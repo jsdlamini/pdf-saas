@@ -1579,7 +1579,7 @@ export default function ToolWorkbench({ tool }: WorkbenchProps) {
                     if (tool.slug === "sign-pdf") void loadSignPage(next);
                   }}
                   disabled={pdfPreviewLoading || pdfPreviewPage <= 1}
-                  className="pointer-events-auto rounded-full border border-slate-400/45 bg-slate-900/20 px-2 py-1 text-[11px] font-semibold text-slate-100 shadow-sm backdrop-blur-[1px] transition hover:bg-slate-900/30 disabled:cursor-not-allowed disabled:opacity-35"
+                  className="pointer-events-auto rounded-full border border-slate-400/45 bg-slate-900/20 px-2 py-1 text-[11px] font-semibold text-slate-100 shadow-sm  transition hover:bg-slate-900/30 disabled:cursor-not-allowed disabled:opacity-35"
                 >
                   Prev
                 </button>
@@ -1591,7 +1591,7 @@ export default function ToolWorkbench({ tool }: WorkbenchProps) {
                     if (tool.slug === "sign-pdf") void loadSignPage(next);
                   }}
                   disabled={pdfPreviewLoading || pdfPreviewPage >= pdfPreviewPageCount}
-                  className="pointer-events-auto rounded-full border border-slate-400/45 bg-slate-900/20 px-2 py-1 text-[11px] font-semibold text-slate-100 shadow-sm backdrop-blur-[1px] transition hover:bg-slate-900/30 disabled:cursor-not-allowed disabled:opacity-35"
+                  className="pointer-events-auto rounded-full border border-slate-400/45 bg-slate-900/20 px-2 py-1 text-[11px] font-semibold text-slate-100 shadow-sm  transition hover:bg-slate-900/30 disabled:cursor-not-allowed disabled:opacity-35"
                 >
                   Next
                 </button>
@@ -6574,7 +6574,7 @@ export default function ToolWorkbench({ tool }: WorkbenchProps) {
                       >
                         {sig.kind === "draw" && sig.dataUrl ? (
                           // eslint-disable-next-line @next/next/no-img-element
-                          <img src={sig.dataUrl} alt="Placed signature" className="max-h-14 max-w-28 rounded-sm border border-cyan-400/70 bg-white/85 shadow-sm" />
+                          <img src={sig.dataUrl} alt="Placed signature" className="max-h-14 max-w-28 rounded-sm border border-cyan-400/70 bg-white shadow-sm" />
                         ) : (
                           <span className="whitespace-nowrap text-sm italic text-indigo-900 drop-shadow-sm" style={{ fontFamily: 'Georgia, "Times New Roman", serif' }}>{sig.text}</span>
                         )}

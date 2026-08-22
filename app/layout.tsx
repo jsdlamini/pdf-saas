@@ -122,7 +122,7 @@ export default async function RootLayout({
       suppressHydrationWarning
       className="h-full antialiased"
     >
-      <body className="min-h-full flex flex-col bg-[#f0f4ff] text-slate-900 depth-stage">
+      <body className="min-h-full flex flex-col text-slate-900">
         {/* Skip-to-content link for keyboard users */}
         <a
           href="#main-content"

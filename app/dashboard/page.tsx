@@ -49,7 +49,7 @@ export default function DashboardPage() {
     return (
       <main className="mx-auto max-w-2xl px-6 py-20 text-center">
         <div className="rounded-3xl bg-gradient-to-br from-slate-900 via-slate-800 to-cyan-900 p-12 shadow-2xl">
-          <div className="inline-flex h-16 w-16 items-center justify-center rounded-2xl bg-white/10 backdrop-blur">
+          <div className="inline-flex h-16 w-16 items-center justify-center rounded-2xl bg-white/10 ">
             <svg viewBox="0 0 24 24" className="h-8 w-8 text-cyan-400" fill="none" stroke="currentColor" strokeWidth="1.5">
               <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" />
               <polyline points="9 22 9 12 15 12 15 22" />
@@ -95,7 +95,7 @@ export default function DashboardPage() {
       <div className="bg-gradient-to-br from-slate-900 via-slate-800 to-cyan-900 pb-16 pt-10">
         <div className="mx-auto max-w-5xl px-6 md:px-10">
           <div className="flex items-center gap-3">
-            <div className="inline-flex h-10 w-10 items-center justify-center rounded-xl bg-white/10 backdrop-blur">
+            <div className="inline-flex h-10 w-10 items-center justify-center rounded-xl bg-white/10 ">
               <svg viewBox="0 0 24 24" className="h-5 w-5 text-cyan-400" fill="none" stroke="currentColor" strokeWidth="1.8">
                 <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" />
                 <polyline points="9 22 9 12 15 12 15 22" />
@@ -112,7 +112,7 @@ export default function DashboardPage() {
       {/* KPI cards — overlap the header */}
       <div className="mx-auto max-w-5xl px-6 md:px-10 -mt-10">
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-          <div className="group rounded-2xl border border-slate-200/60 bg-white/90 backdrop-blur p-5 shadow-lg shadow-slate-200/50 transition hover:shadow-xl hover:-translate-y-0.5">
+          <div className="group rounded-2xl border border-slate-200/60 bg-white  p-5 shadow-lg shadow-slate-200/50 transition hover:shadow-xl hover:-translate-y-0.5">
             <div className="flex items-center gap-3">
               <div className="inline-flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-br from-cyan-100 to-sky-100">
                 <svg viewBox="0 0 20 20" className="h-5 w-5 text-cyan-600" fill="none" stroke="currentColor" strokeWidth="1.6">
@@ -125,7 +125,7 @@ export default function DashboardPage() {
               </div>
             </div>
           </div>
-          <div className="group rounded-2xl border border-slate-200/60 bg-white/90 backdrop-blur p-5 shadow-lg shadow-slate-200/50 transition hover:shadow-xl hover:-translate-y-0.5">
+          <div className="group rounded-2xl border border-slate-200/60 bg-white  p-5 shadow-lg shadow-slate-200/50 transition hover:shadow-xl hover:-translate-y-0.5">
             <div className="flex items-center gap-3">
               <div className="inline-flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-br from-purple-100 to-pink-100">
                 <svg viewBox="0 0 20 20" className="h-5 w-5 text-purple-600" fill="none" stroke="currentColor" strokeWidth="1.6">
@@ -139,7 +139,7 @@ export default function DashboardPage() {
               </div>
             </div>
           </div>
-          <div className="group rounded-2xl border border-slate-200/60 bg-white/90 backdrop-blur p-5 shadow-lg shadow-slate-200/50 transition hover:shadow-xl hover:-translate-y-0.5">
+          <div className="group rounded-2xl border border-slate-200/60 bg-white  p-5 shadow-lg shadow-slate-200/50 transition hover:shadow-xl hover:-translate-y-0.5">
             <div className="flex items-center gap-3">
               <div className="inline-flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-br from-emerald-100 to-teal-100">
                 <svg viewBox="0 0 20 20" className="h-5 w-5 text-emerald-600" fill="none" stroke="currentColor" strokeWidth="1.6">
@@ -153,7 +153,7 @@ export default function DashboardPage() {
               </div>
             </div>
           </div>
-          <div className="group rounded-2xl border border-slate-200/60 bg-white/90 backdrop-blur p-5 shadow-lg shadow-slate-200/50 transition hover:shadow-xl hover:-translate-y-0.5">
+          <div className="group rounded-2xl border border-slate-200/60 bg-white  p-5 shadow-lg shadow-slate-200/50 transition hover:shadow-xl hover:-translate-y-0.5">
             <div className="flex items-center gap-3">
               <div className="inline-flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-br from-amber-100 to-orange-100">
                 <svg viewBox="0 0 20 20" className="h-5 w-5 text-amber-600" fill="none" stroke="currentColor" strokeWidth="1.6">

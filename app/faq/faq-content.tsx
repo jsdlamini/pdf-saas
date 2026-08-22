@@ -74,7 +74,7 @@ export default function FaqContent() {
         return (
           <div
             key={index}
-            className="rounded-2xl border border-slate-200 bg-white/85 transition hover:border-cyan-200 dark:border-slate-700 dark:bg-slate-900/85"
+            className="rounded-2xl border border-slate-200 bg-white transition hover:border-cyan-200 dark:border-slate-700 dark:bg-slate-900/85"
           >
             <button
               type="button"

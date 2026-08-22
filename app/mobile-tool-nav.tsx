@@ -35,14 +35,14 @@ export default function MobileToolNav() {
         <>
           {/* Backdrop */}
           <div
-            className="fixed inset-0 top-14 z-[78] bg-slate-900/20 backdrop-blur-sm"
+            className="fixed inset-0 top-14 z-[78] bg-slate-900/20 "
             onClick={() => setOpen(false)}
             aria-hidden="true"
           />
 
           <div
             id="mobile-tool-navbar"
-            className="fixed left-0 top-14 z-[79] flex max-h-[calc(100dvh-3.5rem)] w-screen flex-col overflow-hidden border-t border-slate-200/80 bg-white/95 shadow-[0_20px_40px_-24px_rgba(15,23,42,0.5)] backdrop-blur-xl dark:bg-slate-950/95 dark:border-slate-700/80"
+            className="fixed left-0 top-14 z-[79] flex max-h-[calc(100dvh-3.5rem)] w-screen flex-col overflow-hidden border-t border-slate-200/80 bg-white/95 shadow-[0_20px_40px_-24px_rgba(15,23,42,0.5)] -xl dark:bg-slate-950/95 dark:border-slate-700/80"
           >
             <div className="overflow-y-auto overscroll-contain p-3 pb-safe space-y-2">
               <ToolNavSearch className="max-w-none" onNavigate={() => setOpen(false)} />

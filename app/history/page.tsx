@@ -64,7 +64,7 @@ export default function HistoryPage() {
           <p className="text-sm text-slate-500">Loading…</p>
         </div>
       ) : entries.length === 0 ? (
-        <div className="flex flex-col items-center justify-center gap-3 rounded-2xl border border-slate-200 bg-white/85 py-20">
+        <div className="flex flex-col items-center justify-center gap-3 rounded-2xl border border-slate-200 bg-white py-20">
           <svg
             viewBox="0 0 24 24"
             className="h-10 w-10 text-slate-300"
@@ -90,7 +90,7 @@ export default function HistoryPage() {
             return (
               <div
                 key={entry.id}
-                className="flex items-center justify-between gap-4 rounded-xl border border-slate-200 bg-white/85 p-4"
+                className="flex items-center justify-between gap-4 rounded-xl border border-slate-200 bg-white p-4"
               >
                 <div className="min-w-0 flex-1">
                   <p className="truncate text-sm font-semibold text-slate-800">
