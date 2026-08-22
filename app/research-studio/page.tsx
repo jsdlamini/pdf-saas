@@ -2855,8 +2855,8 @@ export default function ResearchStudioPage() {
           <p style="font-size:12px;color:#94a3b8;margin:0">
             ${hasToken ? "A token is currently saved. You can replace or clear it." : "No token saved yet. Paste your GitHub personal access token below."}
           </p>
-          <input id="swal-gh-token" type="password" class="swal2-input" placeholder="ghp_..." style="background:#0f172a;color:#e2e8f0;border-color:#334155">
-          <p style="font-size:11px;color:#64748b;margin:0">Create a token at github.com → Settings → Developer settings → Personal access tokens → Tokens (classic), with <code>repo</code> scope.</p>
+          <input id="swal-gh-token" type="password" class="swal2-input" placeholder="github_pat_… or ghp_…" style="background:#0f172a;color:#e2e8f0;border-color:#334155">
+          <p style="font-size:11px;color:#64748b;margin:0">Create a token at github.com → Settings → Developer settings → Personal access tokens. A classic token needs <code>repo</code> scope; a fine-grained token needs <code>Contents</code> read/write on the target repositories.</p>
         </div>
       `,
       showCancelButton: true,
