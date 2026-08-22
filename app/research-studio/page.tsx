@@ -2438,6 +2438,8 @@ export default function ResearchStudioPage() {
     hasHydratedServerProjectsRef.current = true;
 
     let cancelled = false;
+    let retryTimer: ReturnType<typeof setTimeout> | null = null;
+    let retryAttempts = 0;
 
     async function hydrateFromServer() {
       try {
@@ -2499,6 +2501,15 @@ export default function ResearchStudioPage() {
           return;
         }
         appendPreviewError(`Account sync failed: ${message}`);
+
+        // Retry a few times with backoff so a transient DB/auth blip (e.g. a
+        // brief post-deploy password mismatch) recovers without a manual reload.
+        if (!cancelled && retryAttempts < 3) {
+          retryAttempts += 1;
+          retryTimer = setTimeout(() => {
+            if (!cancelled) void hydrateFromServer();
+          }, 2000 * retryAttempts);
+        }
       }
     }
 
@@ -2506,6 +2517,7 @@ export default function ResearchStudioPage() {
 
     return () => {
       cancelled = true;
+      if (retryTimer) clearTimeout(retryTimer);
     };
   }, [authLoaded, userId]);
 
