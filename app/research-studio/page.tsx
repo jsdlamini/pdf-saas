@@ -1264,6 +1264,7 @@ export default function ResearchStudioPage() {
   const zipImportRef = useRef<HTMLInputElement | null>(null);
   const folderUploadRef = useRef<HTMLInputElement | null>(null);
   const folderUploadTargetRef = useRef<string>("");
+  const loadProjectEpochRef = useRef(0);
   const panesRef = useRef<HTMLElement | null>(null);
   const editorRef = useRef<StudioEditorAdapter | null>(null);
   const editorViewRef = useRef<EditorView | null>(null);
@@ -3009,19 +3010,13 @@ export default function ResearchStudioPage() {
 
     if (compiledPdfUrl) URL.revokeObjectURL(compiledPdfUrl);
 
-    // Recover image bytes so previews render and a compile can re-upload them.
-    let entries = saved.entries;
-    if (userId && !accountSyncUnavailable) {
-      entries = await rehydrateProjectAssets(saved.id, saved.entries);
-      setSavedProjectSnapshots((prev) =>
-        prev.map((p) => (p.id === saved.id ? { ...p, entries } : p))
-      );
-    }
+    const epoch = ++loadProjectEpochRef.current;
 
+    // Open the editor immediately with the snapshot's entries; recover image
+    // bytes in the background so a slow asset store never delays the editor.
     setActiveProjectId(saved.id);
     setProjectName(saved.name);
-    setProjectEntries(entries);
-    warnOnUnrecoverableAssets(entries, "Loaded project.");
+    setProjectEntries(saved.entries);
     setSelectedPath(saved.selectedPath || "main.tex");
     setAddFileError("");
     setCompileBusy(false);
@@ -3042,6 +3037,21 @@ export default function ResearchStudioPage() {
     setCodeRunBusy(false);
     setCompileNotice(`Loaded project: ${saved.name}`);
     setWorkspaceScreen("editor");
+
+    // Background rehydration of image bytes (so previews render and a compile
+    // can re-upload). Guarded so a fast project-switch can't cross-apply.
+    if (userId && !accountSyncUnavailable) {
+      void rehydrateProjectAssets(saved.id, saved.entries).then((entries) => {
+        if (loadProjectEpochRef.current !== epoch) return;
+        setProjectEntries(entries);
+        setSavedProjectSnapshots((prev) =>
+          prev.map((p) => (p.id === saved.id ? { ...p, entries } : p))
+        );
+        warnOnUnrecoverableAssets(entries, "Loaded project.");
+      }).catch(() => {
+        // rehydration is best-effort; the snapshot's entries are already shown
+      });
+    }
   }
 
   async function deleteSavedProject(projectId: string) {
