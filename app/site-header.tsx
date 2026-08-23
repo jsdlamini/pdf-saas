@@ -45,7 +45,6 @@ export default function SiteHeader({ userId }: { userId: string | null }) {
 
             <nav className="ml-2 hidden items-center gap-1 md:flex" aria-label="Primary">
               <Link href="/#tools" className="nav-link">Tools</Link>
-              <Link href="/research-studio" className="nav-link">Templates</Link>
               <Link href="/research-studio" className="nav-link">Research Studio</Link>
               <Link href="/docs" className="nav-link">Docs</Link>
             </nav>
@@ -53,14 +52,6 @@ export default function SiteHeader({ userId }: { userId: string | null }) {
 
           <div className="flex items-center justify-end gap-1.5 md:gap-2">
             <ThemeToggle />
-            {userId ? (
-              <Link
-                href="/research-studio"
-                className="neo-pill hidden px-3 py-1.5 text-xs font-semibold text-slate-800 sm:inline-flex md:px-4 md:py-2 md:text-sm"
-              >
-                Research Studio
-              </Link>
-            ) : null}
             {isAdmin ? (
               <Link
                 href="/dashboard"

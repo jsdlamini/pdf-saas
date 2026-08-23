@@ -27,6 +27,6 @@ export function vscodeFolderIcon(name: string, open: boolean): string {
   const key = name.toLowerCase();
   const override = FOLDER_OVERRIDES[key];
   if (override) return open ? `${override}_opened.svg` : `${override}.svg`;
-  const icon = open ? getIconForOpenFolder(name) : getIconForFolder(name);
+  const icon = open ? getIconForOpenFolder(key) : getIconForFolder(key);
   return icon || (open ? "default_folder_opened.svg" : "default_folder.svg");
 }
