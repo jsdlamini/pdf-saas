@@ -17,6 +17,17 @@ import type { EditorMode } from "@/lib/highlighters";
 import { loadJson, persistJson, removeJson } from "@/lib/json-storage";
 import { mergeAssetContents, unrecoverableAssetPaths } from "@/lib/project-assets";
 import { classifyUpload, joinUploadPath } from "@/lib/project-upload";
+import { Button } from "@/components/ui/button";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 
 type StudioEditorAdapter = {
   selectionStart: number;
@@ -2867,59 +2878,57 @@ export default function ResearchStudioPage() {
     setFigureName("");
   }
 
+  const [githubDialogOpen, setGithubDialogOpen] = useState(false);
+  const [githubTokenInput, setGithubTokenInput] = useState("");
+  const [githubHasToken, setGithubHasToken] = useState(false);
+
   async function githubSettings() {
     if (!userId) return;
-    let hasToken = false;
+    setGithubTokenInput("");
     try {
       const res = await fetch("/api/github-secret");
       const data = (await res.json()) as { hasToken?: boolean };
-      hasToken = Boolean(data.hasToken);
-    } catch {}
+      setGithubHasToken(Boolean(data.hasToken));
+    } catch {
+      setGithubHasToken(false);
+    }
+    setGithubDialogOpen(true);
+  }
 
-    const { value } = await Swal.fire({
-      title: "GitHub Settings",
-      html: `
-        <div style="text-align:left;display:flex;flex-direction:column;gap:10px">
-          <p style="font-size:12px;color:#94a3b8;margin:0">
-            ${hasToken ? "A token is currently saved. You can replace or clear it." : "No token saved yet. Paste your GitHub personal access token below."}
-          </p>
-          <input id="swal-gh-token" type="password" class="swal2-input" placeholder="github_pat_… or ghp_…" style="background:#0f172a;color:#e2e8f0;border-color:#334155">
-          <p style="font-size:11px;color:#64748b;margin:0">Create a token at github.com → Settings → Developer settings → Personal access tokens. A classic token needs <code>repo</code> scope; a fine-grained token needs <code>Contents</code> read/write on the target repositories.</p>
-        </div>
-      `,
-      showCancelButton: true,
-      confirmButtonText: "Save token",
-      cancelButtonText: "Close",
-      confirmButtonColor: "#4ade80",
-      cancelButtonColor: "#334155",
-      background: "#1a1d2b",
-      color: "#e2e8f0",
-      position: "top",
-      showDenyButton: hasToken,
-      denyButtonText: "Clear token",
-      denyButtonColor: "#dc2626",
-      preConfirm: () => {
-        const token = (document.getElementById("swal-gh-token") as HTMLInputElement)?.value?.trim();
-        if (!token) { Swal.showValidationMessage("Paste a token to save it"); return false; }
-        return { token };
-      },
-    });
+  async function saveGithubToken() {
+    const token = githubTokenInput.trim();
+    if (!token) {
+      setCompileNotice("Paste a token to save it.");
+      return;
+    }
+    try {
+      const res = await fetch("/api/github-secret", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ token }),
+      });
+      if (res.ok) {
+        showToast("GitHub token saved", "success");
+        setGithubHasToken(true);
+        setGithubDialogOpen(false);
+      } else {
+        setCompileNotice("Could not save GitHub token.");
+      }
+    } catch {
+      setCompileNotice("Could not save GitHub token.");
+    }
+  }
 
-    if (value?.token) {
-      try {
-        const res = await fetch("/api/github-secret", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ token: value.token }),
-        });
-        if (res.ok) showToast("GitHub token saved", "success");
-        else setCompileNotice("Could not save GitHub token.");
-      } catch { setCompileNotice("Could not save GitHub token."); }
-    } else if (value?.dismiss === "deny") {
-      try {
-        const res = await fetch("/api/github-secret", { method: "DELETE" });
-        if (res.ok) showToast("GitHub token cleared", "success");
-      } catch {}
+  async function clearGithubToken() {
+    try {
+      const res = await fetch("/api/github-secret", { method: "DELETE" });
+      if (res.ok) {
+        showToast("GitHub token cleared", "success");
+        setGithubHasToken(false);
+        setGithubTokenInput("");
+      }
+    } catch {
+      setCompileNotice("Could not clear GitHub token.");
     }
   }
 
@@ -5236,6 +5245,39 @@ export default function ResearchStudioPage() {
 
   return (
     <main className="studio-dark studio-shell">
+      <Dialog open={githubDialogOpen} onOpenChange={setGithubDialogOpen}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>GitHub settings</DialogTitle>
+            <DialogDescription>
+              {githubHasToken
+                ? "A token is currently saved. You can replace or clear it."
+                : "Connect GitHub so you can push projects from the studio."}
+            </DialogDescription>
+          </DialogHeader>
+          <div className="grid gap-2">
+            <Label htmlFor="gh-token">Personal access token</Label>
+            <Input
+              id="gh-token"
+              type="password"
+              placeholder="github_pat_… or ghp_…"
+              value={githubTokenInput}
+              onChange={(e) => setGithubTokenInput(e.target.value)}
+            />
+            <p className="text-xs text-muted-foreground">
+              Create a token at github.com → Settings → Developer settings → Personal access tokens.
+              A classic token needs <code>repo</code> scope; a fine-grained token needs <code>Contents</code> read/write.
+            </p>
+          </div>
+          <DialogFooter>
+            {githubHasToken ? (
+              <Button variant="destructive" onClick={() => void clearGithubToken()}>Clear token</Button>
+            ) : null}
+            <Button onClick={() => void saveGithubToken()}>Save token</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
       {/* Hidden file input for the tree/editor context-menu "Upload file" action.
           Rendered here too (not only on the projects screen) so the file picker
           can be triggered from the editor — previously folderUploadRef was null
