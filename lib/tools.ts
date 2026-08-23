@@ -14,21 +14,21 @@ export type ToolCategory =
 // Distinct-but-professional colour per tool category (the iLovePDF/Overleaf
 // look: colourful tool icons over a clean neutral surface).
 export const CATEGORY_COLORS: Record<ToolCategory, string> = {
-  Organize: "#3B82F6",
-  Optimize: "#F59E0B",
-  Convert: "#10B981",
-  Security: "#EF4444",
-  Edit: "#8B5CF6",
-  Sign: "#EC4899",
+  Organize: "var(--tool-organise)",
+  Optimize: "var(--tool-optimise)",
+  Convert: "var(--tool-convert)",
+  Security: "var(--tool-secure)",
+  Edit: "var(--tool-edit)",
+  Sign: "var(--tool-secure)", // sign lives under the Secure amber hue
 };
 
 export const CATEGORY_SOFT_BG: Record<ToolCategory, string> = {
-  Organize: "#EFF6FF",
-  Optimize: "#FFF7ED",
-  Convert: "#ECFDF5",
-  Security: "#FEF2F2",
-  Edit: "#F5F3FF",
-  Sign: "#FDF2F8",
+  Organize: "var(--tool-organise-tint)",
+  Optimize: "var(--tool-optimise-tint)",
+  Convert: "var(--tool-convert-tint)",
+  Security: "var(--tool-secure-tint)",
+  Edit: "var(--tool-edit-tint)",
+  Sign: "var(--tool-secure-tint)",
 };
 
 export type ToolItem = {
@@ -176,7 +176,7 @@ export const TOOL_ITEMS: ToolItem[] = [
   {
     slug: "redact-pdf",
     name: "Redact PDF",
-    description: "Permanently remove sensitive text and regions.",
+    description: "Flatten pages and black out a fixed band (region selection coming soon).",
     category: "Security",
     processing: "local",
   },
