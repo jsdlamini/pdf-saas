@@ -5,6 +5,7 @@ import { notFound } from "next/navigation";
 import ProjectSessionCta from "@/app/project-session-cta";
 import ToolWorkbench from "../tool-workbench";
 import { getToolBySlug, TOOL_ITEMS } from "@/lib/tools";
+import { getToolFaqs } from "@/lib/tool-faqs";
 import { redirect } from "next/navigation";
 
 // Legacy individual "to PDF" tools now redirect to the unified Convert to PDF.
@@ -133,20 +134,7 @@ export default async function ToolPage({ params }: ToolPageProps) {
     (candidate) => candidate.category === tool.category && candidate.slug !== tool.slug
   ).slice(0, 6);
 
-  const faqItems = [
-    {
-      question: `How do I use ${tool.name} online?`,
-      answer: `Upload your file, adjust ${tool.name} options, run the tool, and download the processed document.`,
-    },
-    {
-      question: `Is ${tool.name} free to try?`,
-      answer: `${tool.name} is available in the WiserFiles workspace and can be tested directly in your browser.`,
-    },
-    {
-      question: `What file types work best with ${tool.name}?`,
-      answer: `For best results, use source files that match the tool intent and review the output preview before download.`,
-    },
-  ];
+  const faqItems = getToolFaqs(tool);
 
   return (
     <main className="depth-stage mx-auto flex w-full max-w-5xl flex-1 flex-col gap-8 px-6 py-10 md:px-10">
