@@ -4769,73 +4769,45 @@ export default function ToolWorkbench({ tool }: WorkbenchProps) {
       if (tool.slug === "redact-pdf") {
         if (!firstFile) throw new Error("Missing PDF file.");
 
-        // Render each page to a high-resolution image, then redact by drawing
-        // black rectangles on top. Rebuild the PDF via jsPDF so the original
-        // text layer is destroyed — redacted content cannot be recovered.
+        // Server-side PyMuPDF redaction: only the marked rectangles are
+        // deleted (glyphs + covered image data); the rest of the document
+        // stays real, searchable text — not a raster of the whole page.
         const source = await PDFDocument.load(await readAsArrayBuffer(firstFile));
         const pageCount = source.getPageCount();
-        setProgress({ current: 0, total: pageCount, label: "Redacting pages…" });
-
-        const redactedImages: Array<{ dataUrl: string; width: number; height: number }> = [];
-
+        const rects = [];
         for (let pageIdx = 0; pageIdx < pageCount; pageIdx += 1) {
-          setProgress({ current: pageIdx + 1, total: pageCount, label: `Redacting page ${pageIdx + 1} of ${pageCount}…` });
           const page = source.getPage(pageIdx);
           const { width, height } = page.getSize();
-
-          // Render the page as a high-resolution canvas image
-          const rendered = await renderPdfPagePreview(
-            new Uint8Array(await readAsArrayBuffer(firstFile)),
-            pageIdx + 1
-          );
-
-          const image = await dataUrlToImage(rendered.dataUrl);
-          const canvas = document.createElement("canvas");
-          canvas.width = image.width;
-          canvas.height = image.height;
-          const ctx = canvas.getContext("2d");
-          if (!ctx) throw new Error("Canvas context unavailable.");
-
-          ctx.drawImage(image, 0, 0);
-
-          // Apply redaction rectangles on the rendered image
-          const scaleX = image.width / width;
-          const scaleY = image.height / height;
-
-          // Default redaction: middle horizontal band covering ~80% width
-          ctx.fillStyle = "#000000";
-          const rx = 60 * scaleX;
-          const ry = 370 * scaleY;
-          const rw = (width - 120) * scaleX;
-          const rh = 40 * scaleY;
-          ctx.fillRect(rx, ry, rw, rh);
-
-          redactedImages.push({
-            dataUrl: canvas.toDataURL("image/jpeg", 0.92),
-            width: image.width,
-            height: image.height,
+          // Page-relative middle band (80% wide) — region selection is the
+          // follow-up; this is honest and lands consistently on any page size.
+          rects.push({
+            page: pageIdx + 1,
+            x: width * 0.1,
+            y: height * 0.46,
+            w: width * 0.8,
+            h: Math.min(40, height * 0.05),
           });
         }
 
-        // Rebuild a flat PDF from the redacted page images (no text layer)
-        const doc = new jsPDF({
-          unit: "pt",
-          format: [redactedImages[0]?.width ?? 612, redactedImages[0]?.height ?? 792],
-          compress: true,
-        });
+        setProgress({ current: 0, total: 1, label: "Redacting on server…" });
 
-        redactedImages.forEach((page, index) => {
-          if (index > 0) doc.addPage([page.width, page.height], "portrait");
-          doc.addImage(page.dataUrl, "JPEG", 0, 0, page.width, page.height);
-        });
+        const form = new FormData();
+        form.append("file", firstFile);
+        form.append("rects", JSON.stringify(rects));
+        const redactRes = await fetch("/api/redact-pdf", { method: "POST", body: form });
+        if (!redactRes.ok) {
+          const data = (await redactRes.json().catch(() => null)) as { error?: string } | null;
+          throw new Error(data?.error || "Redaction failed.");
+        }
+        const redactedBlob = await redactRes.blob();
 
         setProgress(null);
         stageOutput(
-          asPdfBlob(new Uint8Array(doc.output("arraybuffer"))),
+          redactedBlob,
           `${normalizeFileName(firstFile.name)}-redacted.pdf`,
-          "Redacted content has been flattened. Original text is not recoverable from this copy."
+          "Redacted server-side: only the marked regions are removed; the rest stays searchable text."
         );
-        complete("Content permanently removed under redaction areas. Original text cannot be recovered from this file.");
+        complete("Redaction complete. Region selection is coming next; for now a middle band is removed on each page.");
         return;
       }
 
