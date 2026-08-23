@@ -103,6 +103,8 @@ function buildTheme(c: ThemeColors): Extension {
       },
       ".cm-activeLine": { backgroundColor: c.activeLine },
       ".cm-activeLineGutter": { backgroundColor: c.activeLine },
+      ".cm-matchingBracket": { backgroundColor: c.selection, outline: `1px solid ${c.bracket}` },
+      ".cm-nonmatchingBracket": { outline: "1px solid rgba(239, 68, 68, 0.7)" },
     }),
     syntaxHighlighting(
       HighlightStyle.define([
