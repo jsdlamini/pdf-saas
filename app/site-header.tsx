@@ -35,13 +35,20 @@ export default function SiteHeader({ userId }: { userId: string | null }) {
 
           <div className="flex items-center justify-center gap-2 md:justify-start md:gap-3">
             <Link href="/" className="flex items-center gap-2 md:gap-3">
-              <span className="inline-flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-cyan-400 via-sky-500 to-indigo-500 text-sm font-bold text-slate-950 shadow-[0_10px_22px_-14px_rgba(14,165,233,0.9)] ring-1 ring-white/20 dark:from-cyan-300 dark:via-sky-400 dark:to-fuchsia-400 dark:text-slate-950 dark:ring-white/25">
+              <span className="inline-flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-xl bg-[var(--accent-600)] text-sm font-bold text-white shadow-sm ring-1 ring-white/20">
                 WF
               </span>
               <span className="font-display text-base font-semibold tracking-tight text-slate-950 md:text-lg">
                 WiserFiles
               </span>
             </Link>
+
+            <nav className="ml-2 hidden items-center gap-1 md:flex" aria-label="Primary">
+              <Link href="/#tools" className="nav-link">Tools</Link>
+              <Link href="/research-studio" className="nav-link">Templates</Link>
+              <Link href="/research-studio" className="nav-link">Research Studio</Link>
+              <Link href="/docs" className="nav-link">Docs</Link>
+            </nav>
           </div>
 
           <div className="flex items-center justify-end gap-1.5 md:gap-2">

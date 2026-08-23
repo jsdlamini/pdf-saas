@@ -6168,7 +6168,7 @@ export default function ToolWorkbench({ tool }: WorkbenchProps) {
       {tool.slug === "organize-pdf" ? (
         <div className="space-y-1">
           <label htmlFor="ranges" className="text-xs font-semibold uppercase tracking-wide text-slate-600">
-            Page order (optional fallback)
+            Page order
           </label>
           <input
             id="ranges"
@@ -6185,7 +6185,7 @@ export default function ToolWorkbench({ tool }: WorkbenchProps) {
       {tool.slug === "remove-pages" || tool.slug === "crop-pdf" ? (
         <div className="space-y-1">
           <label htmlFor="ranges" className="text-xs font-semibold uppercase tracking-wide text-slate-600">
-            {tool.slug === "crop-pdf" ? "Crop margin (points)" : "Pages to remove (optional fallback)"}
+            {tool.slug === "crop-pdf" ? "Crop margin (points)" : "Pages to remove"}
           </label>
           <input
             id="ranges"
@@ -7479,7 +7479,7 @@ export default function ToolWorkbench({ tool }: WorkbenchProps) {
             {tool.slug === "split-pdf" || tool.slug === "extract-pages" ? (
               <div className="space-y-1">
                 <label htmlFor="ranges" className="text-xs font-semibold uppercase tracking-wide text-slate-600">
-                  Pages to extract (optional fallback)
+                  Pages to extract
                 </label>
                 <input
                   id="ranges"
