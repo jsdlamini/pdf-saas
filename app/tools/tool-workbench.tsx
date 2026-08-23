@@ -1572,6 +1572,34 @@ export default function ToolWorkbench({ tool }: WorkbenchProps) {
         </div>
       </div>
 
+      {files.length > 0 ? (
+        <div className="flex flex-wrap items-center gap-2 text-xs">
+          <span className="rounded-full bg-slate-200 px-2.5 py-1 font-semibold text-slate-700">
+            Input: {formatBytes(files.reduce((sum, f) => sum + f.size, 0))}
+          </span>
+          <svg viewBox="0 0 16 16" className="h-3 w-3 text-slate-400" fill="none" stroke="currentColor" strokeWidth="2">
+            <path d="M3 8h10M9 4l4 4-4 4" strokeLinecap="round" strokeLinejoin="round" />
+          </svg>
+          <span
+            className="rounded-full px-2.5 py-1 font-semibold text-white"
+            style={{ background: outputPreview.blob.size < files.reduce((s, f) => s + f.size, 0) ? "#16a34a" : "#f59e0b" }}
+          >
+            Output: {formatBytes(outputPreview.blob.size)}
+          </span>
+          {(() => {
+            const inBytes = files.reduce((s, f) => s + f.size, 0);
+            const outBytes = outputPreview.blob.size;
+            const delta = inBytes > 0 ? Math.round(((outBytes - inBytes) / inBytes) * 100) : 0;
+            if (Math.abs(delta) < 1) return null;
+            return (
+              <span className={`font-bold ${outBytes < inBytes ? "text-emerald-700" : "text-amber-700"}`}>
+                {outBytes < inBytes ? `${Math.abs(delta)}% smaller` : `${delta}% larger`}
+              </span>
+            );
+          })()}
+        </div>
+      ) : null}
+
       {outputPreview.mime.includes("pdf") ? (
         <div className="space-y-2">
           {outputPreview.pdfPreviewDataUrl ? (
