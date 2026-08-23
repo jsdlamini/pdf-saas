@@ -14,6 +14,17 @@ import { getTemplateBySlug, RESEARCH_TEMPLATES, type ResearchTemplate } from "@/
 import { LatexEditor, EDITOR_THEMES, type EditorThemeId, type EditorFindRange } from "../components/latex-editor";
 import { EditorView } from "@codemirror/view";
 import type { EditorMode } from "@/lib/highlighters";
+import {
+  BookMarked,
+  Braces,
+  File,
+  FileCode,
+  FileText,
+  Folder,
+  FolderOpen,
+  Image as ImageIcon,
+  Settings,
+} from "lucide-react";
 import { loadJson, persistJson, removeJson } from "@/lib/json-storage";
 import { mergeAssetContents, unrecoverableAssetPaths } from "@/lib/project-assets";
 import { classifyUpload, joinUploadPath } from "@/lib/project-upload";
@@ -276,6 +287,33 @@ function fileTypeColor(name: string, isFolder: boolean): string {
   if (/^(png|jpe?g|gif|webp|svg|bmp|ico|pdf)$/.test(ext)) return "#2dd4bf";
   if (/^(py|js|ts|tsx|jsx|cpp|c|cc|cxx|h|hpp|cs|go|rs|java|json)$/.test(ext)) return "#fb7185";
   return "currentColor";
+}
+
+// VSCode-style file icon (distinct shape + colour per type).
+function fileTreeIcon(name: string, isFolder: boolean, expanded: boolean) {
+  if (isFolder) {
+    const Icon = expanded ? FolderOpen : Folder;
+    return { color: "#fbbf24", Icon };
+  }
+  const ext = name.split(".").pop()?.toLowerCase() || "";
+  if (ext === "tex") return { color: "#60a5fa", Icon: FileText };
+  if (ext === "bib") return { color: "#a78bfa", Icon: BookMarked };
+  if (ext === "cls" || ext === "sty") return { color: "#fbbf24", Icon: Settings };
+  if (/^(png|jpe?g|gif|webp|svg|bmp|ico)$/.test(ext)) return { color: "#2dd4bf", Icon: ImageIcon };
+  if (ext === "pdf") return { color: "#fb7185", Icon: FileText };
+  if (/^(py|js|ts|tsx|jsx|cpp|c|cc|cxx|h|hpp|cs|go|rs|java)$/.test(ext)) return { color: "#fb7185", Icon: FileCode };
+  if (ext === "json") return { color: "#fbbf24", Icon: Braces };
+  return { color: "currentColor", Icon: File };
+}
+
+// Template accent colour by category (Journal/Conference/Report/Code).
+function templateAccent(slug: string): { color: string; tint: string; label: string } {
+  if (slug.startsWith("python-") || slug.startsWith("cpp-")) {
+    return { color: "#fb7185", tint: "rgba(251,113,133,0.14)", label: "Code" };
+  }
+  if (slug === "elsevier") return { color: "#60a5fa", tint: "rgba(96,165,250,0.14)", label: "Journal" };
+  if (slug === "minimal") return { color: "#2dd4bf", tint: "rgba(45,212,191,0.14)", label: "Report" };
+  return { color: "#a78bfa", tint: "rgba(167,139,250,0.14)", label: "Conference" };
 }
 
 function hashString(value: string): number {
@@ -4805,10 +4843,10 @@ export default function ResearchStudioPage() {
               </span>
             ) : (
               <span className="studio-tree-icon" style={{ color: fileTypeColor(node.name, isFolder) }}>
-                <svg viewBox="0 0 20 20" style={{ width: 14, height: 14 }} fill="none" stroke="currentColor" strokeWidth="1.8">
-                  <path d="M6 3h6l4 4v10H6V3z" strokeLinecap="round" strokeLinejoin="round" />
-                  <path d="M12 3v4h4" strokeLinecap="round" strokeLinejoin="round" />
-                </svg>
+                {(() => {
+                  const { color, Icon } = fileTreeIcon(node.name, isFolder, expanded);
+                  return <Icon style={{ width: 14, height: 14 }} color={color} strokeWidth={1.8} aria-hidden="true" />;
+                })()}
               </span>
             )}
 
@@ -5235,19 +5273,36 @@ export default function ResearchStudioPage() {
         <div style={{ marginTop: 32 }}>
           <h3 style={{ fontSize: 14, fontWeight: 600, color: "var(--text-primary, #e2e8f0)", marginBottom: 12 }}>Start from a LaTeX template</h3>
           <div className="studio-template-grid">
-            {RESEARCH_TEMPLATES.filter((t) => !t.slug.startsWith("python-") && !t.slug.startsWith("cpp-")).map((template) => (
-              <div
-                key={template.slug}
-                className="studio-template-card"
-                onClick={() => createProjectFromTemplate(template)}
-                role="button"
-                tabIndex={0}
-                onKeyDown={(e) => { if (e.key === "Enter") createProjectFromTemplate(template); }}
-              >
-                <h4>{template.name}</h4>
-                <p>{template.description}</p>
-              </div>
-            ))}
+            {RESEARCH_TEMPLATES.filter((t) => !t.slug.startsWith("python-") && !t.slug.startsWith("cpp-")).map((template) => {
+              const accent = templateAccent(template.slug);
+              return (
+                <div
+                  key={template.slug}
+                  className="studio-template-card"
+                  onClick={() => createProjectFromTemplate(template)}
+                  role="button"
+                  tabIndex={0}
+                  onKeyDown={(e) => { if (e.key === "Enter") createProjectFromTemplate(template); }}
+                  style={{ background: accent.tint, borderColor: `color-mix(in srgb, ${accent.color} 30%, var(--border-color, #334155))` }}
+                >
+                  <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8 }}>
+                    <span
+                      style={{
+                        display: "inline-flex", alignItems: "center", justifyContent: "center",
+                        width: 22, height: 22, borderRadius: 6, background: accent.color,
+                        color: "#0d0f17", fontWeight: 700, fontSize: 11,
+                      }}
+                      aria-hidden="true"
+                    >
+                      {template.name.slice(0, 1)}
+                    </span>
+                    <span style={{ fontSize: 10, fontWeight: 700, letterSpacing: "0.08em", textTransform: "uppercase", color: accent.color }}>{accent.label}</span>
+                  </div>
+                  <h4>{template.name}</h4>
+                  <p>{template.description}</p>
+                </div>
+              );
+            })}
           </div>
         </div>
         </div>

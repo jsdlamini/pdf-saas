@@ -1354,7 +1354,6 @@ body[data-studio-editor="true"] footer {
 
 .studio-project-card[data-mode="latex"] {
   background: rgba(139, 92, 246, 0.14);
-  border-left: 3px solid #8b5cf6;
 }
 .studio-project-card[data-mode="latex"]:hover {
   background: rgba(139, 92, 246, 0.2);
@@ -1362,7 +1361,6 @@ body[data-studio-editor="true"] footer {
 
 .studio-project-card[data-mode="python"] {
   background: rgba(20, 184, 166, 0.14);
-  border-left: 3px solid #14b8a6;
 }
 .studio-project-card[data-mode="python"]:hover {
   background: rgba(20, 184, 166, 0.2);
@@ -1370,7 +1368,6 @@ body[data-studio-editor="true"] footer {
 
 .studio-project-card[data-mode="cpp"] {
   background: rgba(249, 115, 22, 0.14);
-  border-left: 3px solid #f97316;
 }
 .studio-project-card[data-mode="cpp"]:hover {
   background: rgba(249, 115, 22, 0.2);
