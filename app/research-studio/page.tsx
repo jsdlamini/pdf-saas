@@ -4807,18 +4807,29 @@ export default function ResearchStudioPage() {
             }}
           >
             {isFolder ? (
-              <span
-                className={`studio-tree-chevron ${expanded ? "studio-tree-chevron-expanded" : ""}`}
-                onClick={(e) => { e.stopPropagation(); toggleFolder(node.path); }}
-              >
-                <svg viewBox="0 0 20 20" style={{ width: 12, height: 12 }} fill="none" stroke="currentColor" strokeWidth="2">
-                  <path d="M7 4l6 6-6 6" strokeLinecap="round" strokeLinejoin="round" />
-                </svg>
-              </span>
+              <>
+                <span
+                  className={`studio-tree-chevron ${expanded ? "studio-tree-chevron-expanded" : ""}`}
+                  onClick={(e) => { e.stopPropagation(); toggleFolder(node.path); }}
+                >
+                  <svg viewBox="0 0 20 20" style={{ width: 12, height: 12 }} fill="none" stroke="currentColor" strokeWidth="2">
+                    <path d="M7 4l6 6-6 6" strokeLinecap="round" strokeLinejoin="round" />
+                  </svg>
+                </span>
+                <span className="studio-tree-icon">
+                  <img
+                    src={`/vscode-icons/${vscodeFolderIcon(node.name, expanded)}`}
+                    alt=""
+                    aria-hidden="true"
+                    style={{ width: 16, height: 16, display: "block" }}
+                    loading="lazy"
+                  />
+                </span>
+              </>
             ) : (
               <span className="studio-tree-icon">
                 <img
-                  src={`/vscode-icons/${isFolder ? vscodeFolderIcon(node.name, expanded) : vscodeFileIcon(node.name)}`}
+                  src={`/vscode-icons/${vscodeFileIcon(node.name)}`}
                   alt=""
                   aria-hidden="true"
                   style={{ width: 16, height: 16, display: "block" }}
