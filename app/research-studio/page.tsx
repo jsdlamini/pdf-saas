@@ -18,6 +18,7 @@ import type { EditorMode } from "@/lib/highlighters";
 import { vscodeFileIcon, vscodeFolderIcon } from "@/lib/file-icons";
 import { loadJson, persistJson, removeJson } from "@/lib/json-storage";
 import { mergeAssetContents, unrecoverableAssetPaths } from "@/lib/project-assets";
+import { renderPdfFirstPagePreview } from "@/lib/transforms/rasterize";
 import { classifyUpload, joinUploadPath } from "@/lib/project-upload";
 import { Button } from "@/components/ui/button";
 import {
@@ -73,6 +74,7 @@ type SavedProjectMeta = {
   name: string;
   updatedAt: string;
   type?: EditorMode;
+  coverDataUrl?: string;
 };
 
 type SavedProjectData = {
@@ -3997,6 +3999,16 @@ export default function ResearchStudioPage() {
       setAiFixSummary("");
       setAiFixSuggestions([]);
 
+      // Capture the first page as the project cover (best-effort).
+      try {
+        const cover = await renderPdfFirstPagePreview(new Uint8Array(await blob.arrayBuffer()));
+        setSavedProjects((current) =>
+          current.map((p) => (p.id === activeProjectId ? { ...p, coverDataUrl: cover } : p))
+        );
+      } catch {
+        // Cover capture is best-effort; the card falls back to a mode tint.
+      }
+
       const engine = response.headers.get("X-Latex-Engine") || "server engine";
       const warningsHeader = response.headers.get("X-Latex-Warnings");
       setCompileNotice(
@@ -5287,10 +5299,28 @@ export default function ResearchStudioPage() {
                     ...(isActive ? { borderColor: "rgba(30, 64, 175, 0.4)" } : {}),
                   }}
                 >
+                  {item.coverDataUrl ? (
+                    <div className="studio-project-cover">
+                      <img src={item.coverDataUrl} alt={`${item.name} preview`} loading="lazy" />
+                    </div>
+                  ) : (
+                    <div className="studio-project-cover studio-project-cover-empty" aria-hidden="true">
+                      <span>{mode === "python" ? "Py" : mode === "cpp" ? "C++" : "TeX"}</span>
+                    </div>
+                  )}
                   <p className="studio-project-card-name">{item.name}</p>
                   <p className="studio-project-card-meta">
                     Updated {new Date(item.updatedAt).toLocaleString()}
                     {fileCount > 0 ? ` · ${fileCount} file${fileCount !== 1 ? "s" : ""}` : ""}
+                    <span
+                      className="studio-compile-badge"
+                      style={{
+                        background: item.coverDataUrl ? "rgba(52, 211, 153, 0.16)" : "rgba(148, 163, 184, 0.14)",
+                        color: item.coverDataUrl ? "#34d399" : "var(--text-muted, #64748b)",
+                      }}
+                    >
+                      {item.coverDataUrl ? "Compiled" : "Not compiled"}
+                    </span>
                   </p>
                   <div className="studio-project-card-tags">
                     {tagName !== "Custom" ? (

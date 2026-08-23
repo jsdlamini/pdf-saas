@@ -1475,6 +1475,41 @@ body[data-studio-editor="true"] footer {
   transform: translateY(-2px);
 }
 
+.studio-project-cover {
+  height: 120px;
+  border-radius: 8px;
+  overflow: hidden;
+  margin-bottom: 12px;
+  border: 1px solid var(--border-color, #334155);
+  background: var(--bg-surface, #1e2130);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.studio-project-cover img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: top;
+  display: block;
+}
+.studio-project-cover-empty {
+  background: color-mix(in srgb, var(--accent-color, #60a5fa) 8%, var(--bg-surface, #1e2130));
+}
+.studio-project-cover-empty span {
+  font-size: 20px;
+  font-weight: 700;
+  color: var(--text-muted, #64748b);
+}
+.studio-compile-badge {
+  display: inline-block;
+  margin-left: 8px;
+  padding: 1px 8px;
+  border-radius: 9999px;
+  font-size: 10px;
+  font-weight: 700;
+}
+
 .studio-project-card-name {
   font-size: 14px;
   font-weight: 600;
