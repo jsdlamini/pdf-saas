@@ -39,16 +39,24 @@
   --radius-md: 0.5rem;
 
   /* Tool-catalogue category hues (content colour, not chrome). */
-  --tool-organise: #3B82F6;
-  --tool-organise-tint: #EFF6FF;
-  --tool-convert: #7C3AED;
-  --tool-convert-tint: #F5F3FF;
-  --tool-optimise: #0D9488;
-  --tool-optimise-tint: #F0FDFA;
-  --tool-secure: #D97706;
-  --tool-secure-tint: #FFFBEB;
-  --tool-edit: #E11D48;
-  --tool-edit-tint: #FFF1F2;
+  --tool-organise: #2563eb;
+  --tool-organise-tint: #dbeafe;
+  --tool-convert: #7c3aed;
+  --tool-convert-tint: #ede9fe;
+  --tool-optimise: #0d9488;
+  --tool-optimise-tint: #ccfbf1;
+  --tool-secure: #d97706;
+  --tool-secure-tint: #fef3c7;
+  --tool-edit: #e11d48;
+  --tool-edit-tint: #ffe4e6;
+
+  /* Full 50–900 ramps per category hue (so we can build with real colour). */
+  --tool-organise-50: #eff6ff; --tool-organise-100: #dbeafe; --tool-organise-200: #bfdbfe; --tool-organise-300: #93c5fd; --tool-organise-400: #60a5fa; --tool-organise-500: #3b82f6; --tool-organise-600: #2563eb; --tool-organise-700: #1d4ed8; --tool-organise-800: #1e40af; --tool-organise-900: #1e3a8a;
+  --tool-convert-50: #f5f3ff; --tool-convert-100: #ede9fe; --tool-convert-200: #ddd6fe; --tool-convert-300: #c4b5fd; --tool-convert-400: #a78bfa; --tool-convert-500: #8b5cf6; --tool-convert-600: #7c3aed; --tool-convert-700: #6d28d9; --tool-convert-800: #5b21b6; --tool-convert-900: #4c1d95;
+  --tool-optimise-50: #f0fdfa; --tool-optimise-100: #ccfbf1; --tool-optimise-200: #99f6e4; --tool-optimise-300: #5eead4; --tool-optimise-400: #2dd4bf; --tool-optimise-500: #14b8a6; --tool-optimise-600: #0d9488; --tool-optimise-700: #0f766e; --tool-optimise-800: #115e59; --tool-optimise-900: #134e4a;
+  --tool-secure-50: #fffbeb; --tool-secure-100: #fef3c7; --tool-secure-200: #fde68a; --tool-secure-300: #fcd34d; --tool-secure-400: #fbbf24; --tool-secure-500: #f59e0b; --tool-secure-600: #d97706; --tool-secure-700: #b45309; --tool-secure-800: #92400e; --tool-secure-900: #78350f;
+  --tool-edit-50: #fff1f2; --tool-edit-100: #ffe4e6; --tool-edit-200: #fecdd3; --tool-edit-300: #fda4af; --tool-edit-400: #fb7185; --tool-edit-500: #f43f5e; --tool-edit-600: #e11d48; --tool-edit-700: #be123c; --tool-edit-800: #9f1239; --tool-edit-900: #881337;
+  --accent-50: #eff6ff; --accent-100: #dbeafe; --accent-200: #bfdbfe; --accent-300: #93c5fd; --accent-400: #60a5fa; --accent-500: #3b82f6; --accent-600: #2563eb; --accent-700: #1d4ed8; --accent-800: #1e40af; --accent-900: #1e3a8a;
 
   /* Unified card + surface tokens */
   --radius-card: 16px;

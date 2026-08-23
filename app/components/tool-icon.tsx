@@ -51,15 +51,19 @@ const PATHS: Record<string, React.ReactNode> = {
 export function ToolIcon({
   category,
   className,
+  mono = false,
 }: {
   category: string;
   className?: string;
+  // When true, skip the category colour and inherit currentColor (used on
+  // filled coloured cards where the glyph should be white).
+  mono?: boolean;
 }) {
   return (
     <svg
       viewBox="0 0 24 24"
       className={className}
-      style={CATEGORY_COLORS[category as keyof typeof CATEGORY_COLORS] ? { color: CATEGORY_COLORS[category as keyof typeof CATEGORY_COLORS] } : undefined}
+      style={!mono && CATEGORY_COLORS[category as keyof typeof CATEGORY_COLORS] ? { color: CATEGORY_COLORS[category as keyof typeof CATEGORY_COLORS] } : undefined}
       fill="none"
       stroke="currentColor"
       strokeWidth="1.7"

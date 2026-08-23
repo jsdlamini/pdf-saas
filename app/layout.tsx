@@ -166,14 +166,16 @@ export default async function RootLayout({
           />
 
           <footer className="glass-3d mt-8">
-            <div className="mx-auto grid w-full max-w-7xl gap-8 px-6 py-10 md:grid-cols-3 md:px-10">
+            <div className="mx-auto grid w-full max-w-7xl gap-8 px-6 py-10 md:grid-cols-4 md:px-10">
               <div className="space-y-3">
                 <p className="font-display text-2xl font-semibold tracking-tight text-slate-950">
                   WiserFiles
                 </p>
+                <p className="text-sm text-slate-600">
+                  by <span className="font-semibold text-slate-800">Ideal Software Solutions</span>
+                </p>
                 <p className="max-w-sm text-sm text-slate-600">
-                  Professional PDF operations suite for conversion, editing, security,
-                  and team-ready document workflows.
+                  Every PDF tool you need — free, in your browser, nothing uploaded.
                 </p>
                 <Link
                   href="/research-studio"
@@ -188,30 +190,34 @@ export default async function RootLayout({
               </div>
 
               <div>
-                <p className="type-eyebrow text-slate-500">
-                  Core Tools
-                </p>
+                <p className="type-eyebrow text-slate-500">Core Tools</p>
                 <div className="mt-3 flex flex-col gap-2 text-sm text-slate-700">
                   <Link href="/tools/merge-pdf" className="footer-link">Merge PDF</Link>
                   <Link href="/tools/split-pdf" className="footer-link">Split PDF</Link>
                   <Link href="/tools/compress-pdf" className="footer-link">Compress PDF</Link>
                   <Link href="/tools/pdf-to-word" className="footer-link">PDF to Word</Link>
+                  <Link href="/tools/sign-pdf" className="footer-link">Sign PDF</Link>
                 </div>
               </div>
 
               <div>
-                <p className="type-eyebrow text-slate-500">
-                  Trust and Access
-                </p>
+                <p className="type-eyebrow text-slate-500">Product</p>
                 <div className="mt-3 flex flex-col gap-2 text-sm text-slate-700">
-                  <Link href="/tools/protect-pdf" className="footer-link">Protect PDF</Link>
-                  <Link href="/tools/unlock-pdf" className="footer-link">Unlock PDF</Link>
-                  <Link href="/tools/sign-pdf" className="footer-link">Sign PDF</Link>
-                  <Link href="/tools/compare-pdf" className="footer-link">Compare PDF</Link>
+                  <Link href="/research-studio" className="footer-link">Research Studio</Link>
+                  <Link href="/research-studio" className="footer-link">Templates</Link>
+                  <Link href="/docs" className="footer-link">Docs</Link>
                   <Link href="/history" className="footer-link">Activity history</Link>
-                  <Link href="/faq" className="footer-link">FAQ</Link>
-                  <span className="text-sm text-slate-400">—</span>
                   <FooterShareLink />
+                </div>
+              </div>
+
+              <div>
+                <p className="type-eyebrow text-slate-500">Company</p>
+                <div className="mt-3 flex flex-col gap-2 text-sm text-slate-700">
+                  <Link href="/about" className="footer-link">About</Link>
+                  <Link href="/faq" className="footer-link">FAQ</Link>
+                  <Link href="/privacy" className="footer-link">Privacy</Link>
+                  <Link href="/terms" className="footer-link">Terms</Link>
                 </div>
               </div>
             </div>

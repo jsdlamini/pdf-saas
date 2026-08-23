@@ -27,16 +27,55 @@ function getWorkflowCreatedAt() {
 }
 
 function getCategoryColor(category: string) {
-  // Low-saturation tint behind a saturated glyph (token-driven, not ad-hoc).
-  const map: Record<string, string> = {
-    Organize: "bg-[var(--tool-organise-tint)] text-[var(--tool-organise)] border-[var(--tool-organise)]",
-    Optimize: "bg-[var(--tool-optimise-tint)] text-[var(--tool-optimise)] border-[var(--tool-optimise)]",
-    Convert: "bg-[var(--tool-convert-tint)] text-[var(--tool-convert)] border-[var(--tool-convert)]",
-    Security: "bg-[var(--tool-secure-tint)] text-[var(--tool-secure)] border-[var(--tool-secure)]",
-    Edit: "bg-[var(--tool-edit-tint)] text-[var(--tool-edit)] border-[var(--tool-edit)]",
-    Sign: "bg-[var(--tool-secure-tint)] text-[var(--tool-secure)] border-[var(--tool-secure)]",
-  };
-  return map[category] ?? "bg-slate-100 text-slate-800 border-slate-300";
+  // Solid, saturated category chip (white text on the 600 step) — bright, not tinted.
+  const hue = CATEGORY_HUE[category] ?? "organise";
+  return `bg-[var(--tool-${hue}-600)] text-white border-transparent`;
+}
+
+// Category → token hue prefix (Sign shares the Secure amber hue).
+const CATEGORY_HUE: Record<string, string> = {
+  Organize: "organise",
+  Optimize: "optimise",
+  Convert: "convert",
+  Security: "secure",
+  Edit: "edit",
+  Sign: "secure",
+};
+
+const CATEGORY_GROUPS: Array<{ label: string; hue: string; categories: string[] }> = [
+  { label: "Organize", hue: "organise", categories: ["Organize"] },
+  { label: "Optimize", hue: "optimise", categories: ["Optimize"] },
+  { label: "Convert", hue: "convert", categories: ["Convert"] },
+  { label: "Security & Sign", hue: "secure", categories: ["Security", "Sign"] },
+  { label: "Edit", hue: "edit", categories: ["Edit"] },
+];
+
+// Render the first few pages of a dropped PDF as real thumbnails (< 1s for small docs).
+async function renderHeroThumbnails(file: File, maxPages = 4): Promise<string[]> {
+  try {
+    const pdfjs = await import("pdfjs-dist/legacy/build/pdf.mjs");
+    const { configurePdfJsWorker } = await import("@/lib/transforms/rasterize");
+    configurePdfJsWorker(pdfjs);
+    const bytes = new Uint8Array(await file.arrayBuffer());
+    const task = pdfjs.getDocument({ data: bytes });
+    const pdf = await task.promise;
+    const count = Math.min(pdf.numPages, maxPages);
+    const thumbs: string[] = [];
+    for (let index = 1; index <= count; index += 1) {
+      const page = await pdf.getPage(index);
+      const viewport = page.getViewport({ scale: 0.6 });
+      const canvas = document.createElement("canvas");
+      canvas.width = Math.max(1, Math.floor(viewport.width));
+      canvas.height = Math.max(1, Math.floor(viewport.height));
+      const context = canvas.getContext("2d");
+      if (!context) break;
+      await page.render({ canvas, canvasContext: context, viewport }).promise;
+      thumbs.push(canvas.toDataURL("image/jpeg", 0.85));
+    }
+    return thumbs;
+  } catch {
+    return [];
+  }
 }
 
 const ACCEPTED_TYPES = [
@@ -179,6 +218,7 @@ export default function Home() {
     width?: number;
     height?: number;
   } | null>(null);
+  const [heroThumbs, setHeroThumbs] = useState<string[]>([]);
   const dropSuggestions = useMemo(
     () => (dropFiles.length ? getDropSuggestions(dropFiles) : []),
     [dropFiles],
@@ -254,10 +294,25 @@ export default function Home() {
     return () => { cancelled = true; };
   }, [dropFiles]);
 
+  /* ── render real page thumbnails the moment a PDF lands ───────── */
+  useEffect(() => {
+    if (!dropFile || !isPdf(dropFile)) {
+      setHeroThumbs([]);
+      return;
+    }
+    let cancelled = false;
+    setHeroThumbs([]);
+    void renderHeroThumbnails(dropFile).then((thumbs) => {
+      if (!cancelled) setHeroThumbs(thumbs);
+    });
+    return () => { cancelled = true; };
+  }, [dropFile]);
+
   function clearDrop() {
     setDropFiles([]);
     setDropFileInfo(null);
     setDragOver(false);
+    setHeroThumbs([]);
     void clearSharedFiles();
   }
 
@@ -414,354 +469,387 @@ export default function Home() {
   }
 
   return (
-    <div className="ai-home-bg relative isolate flex w-full flex-1 flex-col">
-      <div className="pointer-events-none absolute -left-16 top-12 -z-10 h-64 w-64 rounded-full bg-[#1e40af]/10 blur-3xl" />
-      <div className="pointer-events-none absolute right-0 top-24 -z-10 h-72 w-72 rounded-full bg-[#1e40af]/8 blur-3xl" />
-      <div className="pointer-events-none absolute bottom-0 left-1/3 -z-10 h-64 w-64 rounded-full bg-slate-300/25 blur-3xl" />
-
-      <main className="relative z-10 mx-auto flex w-full max-w-7xl flex-col gap-4 px-6 py-6 md:gap-5 md:px-10 md:py-8">
+    <div className="flex w-full flex-1 flex-col">
+      <main className="w-full">
         {/* ── Server status banner ──────────────────────────────── */}
         {serverOnline === false ? (
-          <div className="rounded-xl border border-orange-200 bg-orange-50 px-4 py-2.5 text-sm text-orange-800">
+          <div className="border-b border-orange-200 bg-orange-50 px-4 py-2.5 text-center text-sm text-orange-800">
             <span className="font-semibold">⚡ Server tools (OCR, PDF-to-Word) are currently unavailable.</span>{" "}
             Browser tools still work. Retrying every 30 seconds…
           </div>
         ) : null}
 
-        {/* ── Zone 1: Drop-zone Hero ─────────────────────────────── */}
-        <header className="ai-hero-panel rounded-3xl px-6 py-7 md:px-10 md:py-9">
-          {/* Drop-zone */}
-          <div
-            role="button"
-            tabIndex={0}
-            aria-label="Drop file here or click to browse — PDF, PNG, JPG, WebP accepted"
-            id="hero-drop-zone"
-            onDragOver={onDragOver}
-            onDragLeave={onDragLeave}
-            onDrop={onDrop}
-            onKeyDown={(e) => {
-              if (e.key === "Enter" || e.key === " ") {
-                e.preventDefault();
-                const input = document.getElementById(
-                  "hero-file-input",
-                ) as HTMLInputElement | null;
-                input?.click();
-              }
-            }}
-            onClick={() => {
-              const input = document.getElementById(
-                "hero-file-input",
-              ) as HTMLInputElement | null;
-              input?.click();
-            }}
-            className={`drop-zone-hover-ring relative cursor-pointer rounded-2xl border-2 border-dashed p-8 text-center transition-all duration-300 md:p-12 focus:outline-none focus:ring-2 focus:ring-cyan-500 ${
-              dragOver
-                ? "border-[#1e40af] bg-gradient-to-br from-[#1e40af]/5 to-slate-50 drop-zone-active-glow"
-                : "border-slate-200 bg-gradient-to-br from-white to-slate-50 hover:border-[#1e40af]/60 hover:from-[#1e40af]/5 hover:shadow-[0_0_36px_-10px_rgba(30,64,175,0.25)]"
-            }`}
-          >
-            <input
-              id="hero-file-input"
-              type="file"
-              accept={ACCEPTED_TYPES.join(",")}
-              multiple
-              className="hidden"
-              onChange={(e) => {
-                const files = Array.from(e.target.files || []);
-                if (files.length) handleBrowseMultiple(files);
-                e.currentTarget.value = "";
-              }}
-            />
+        {/* ── Hero — coloured band with a dominant drop zone ────── */}
+        <section className="relative overflow-hidden bg-[var(--accent-700)] text-white">
+          <div className="mx-auto max-w-7xl px-4 py-10 sm:px-6 md:px-10 md:py-16">
+            <div className="mx-auto max-w-3xl text-center">
+              <p className="mb-4 inline-flex items-center gap-2 rounded-full bg-white/15 px-4 py-1.5 text-xs font-bold uppercase tracking-[0.16em] text-white ring-1 ring-white/25">
+                25 tools · free · nothing uploaded
+              </p>
+              <h1 className="font-display text-3xl font-bold leading-tight tracking-tight md:text-5xl">
+                Every PDF tool you need.
+                <br />
+                In your browser. Nothing uploaded.
+              </h1>
+              <p className="mx-auto mt-4 max-w-xl text-base text-blue-100 md:text-lg">
+                Merge, convert, sign, compress, and edit — your files stay on your machine.
+              </p>
+            </div>
 
-            {dropFile ? (
-              <div className="flex flex-col items-center gap-3">
-                <div className="inline-flex h-14 w-14 items-center justify-center rounded-2xl bg-cyan-100 text-cyan-700">
-                  <svg
-                    viewBox="0 0 24 24"
-                    className="h-7 w-7"
-                    fill="none"
-                    stroke="currentColor"
-                    strokeWidth="1.8"
-                  >
-                    <path
-                      d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8l-6-6z"
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                    />
-                    <path d="M14 2v6h6" strokeLinecap="round" strokeLinejoin="round" />
-                  </svg>
-                </div>
-                {dropFiles.length > 1 ? (
-                  <div className="flex max-w-full flex-wrap items-center justify-center gap-1.5">
-                    {dropFiles.map((f, i) => {
-                      const isPdfFile = isPdf(f);
-                      const isImageFile = isImage(f);
-                      const accent = isPdfFile ? "border-rose-200 bg-rose-50 text-rose-700" : isImageFile ? "border-emerald-200 bg-emerald-50 text-emerald-700" : "border-cyan-200 bg-cyan-50 text-cyan-700";
-                      return (
-                        <span key={`${f.name}-${i}`} className={`inline-flex max-w-[200px] items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs font-medium shadow-sm ${accent}`}>
-                          <svg viewBox="0 0 20 20" className="h-3.5 w-3.5 shrink-0" fill="none" stroke="currentColor" strokeWidth="1.8">
-                            <path d="M6 3h6l4 4v10H6V3z" strokeLinecap="round" strokeLinejoin="round" />
-                            <path d="M12 3v4h4" strokeLinecap="round" strokeLinejoin="round" />
-                          </svg>
-                          <span className="truncate">{f.name}</span>
-                          <button
-                            type="button"
-                            onClick={(e) => { e.stopPropagation(); removeDropFile(i); }}
-                            className="inline-flex h-4 w-4 shrink-0 items-center justify-center rounded-full text-current opacity-60 transition hover:bg-slate-200 hover:opacity-100"
-                            aria-label={`Remove ${f.name}`}
-                            title="Remove file"
-                          >
-                            ×
-                          </button>
-                        </span>
-                      );
-                    })}
-                  </div>
-                ) : (
-                  <div className="flex items-center justify-center gap-2">
-                    <p className="font-semibold text-slate-900">{dropFile.name}</p>
-                    <button
-                      type="button"
-                      onClick={(e) => { e.stopPropagation(); removeDropFile(0); }}
-                      className="inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-full text-slate-400 transition hover:bg-slate-200 hover:text-slate-700"
-                      aria-label={`Remove ${dropFile.name}`}
-                      title="Remove file"
-                    >
-                      ×
-                    </button>
-                  </div>
-                )}
-                <div className="flex flex-wrap items-center justify-center gap-x-4 gap-y-1 text-sm text-slate-500 drop-zone-hint">
-                  <span>{(dropFiles.reduce((sum, f) => sum + f.size, 0) / 1024 / 1024).toFixed(1)} MB</span>
-                  {dropFiles.length > 1 ? (
-                    <span className="inline-flex items-center gap-1 rounded-full bg-slate-200/70 px-2.5 py-0.5 text-xs font-medium text-slate-700">
-                      {dropFiles.length} files
-                    </span>
-                  ) : null}
-                  {dropFileInfo?.kind === "pdf" && dropFileInfo.pageCount ? (
-                    <span className="inline-flex items-center gap-1 rounded-full bg-slate-200/70 px-2.5 py-0.5 text-xs font-medium text-slate-700">
-                      {dropFileInfo.pageCount} page{dropFileInfo.pageCount !== 1 ? "s" : ""}
-                    </span>
-                  ) : null}
-                  {dropFileInfo?.kind === "image" && dropFileInfo.width && dropFileInfo.height ? (
-                    <span className="inline-flex items-center gap-1 rounded-full bg-slate-200/70 px-2.5 py-0.5 text-xs font-medium text-slate-700">
-                      {dropFileInfo.width}&times;{dropFileInfo.height} px
-                    </span>
-                  ) : null}
-                </div>
-                <p className="text-sm text-slate-500 drop-zone-hint">Choose a quick action:</p>
-                <div id="drop-suggestions" className="flex flex-wrap justify-center gap-2">
-                  {suggestedTools.map((tool) => (
-                    <button
-                      key={tool.slug}
-                      type="button"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        navigateToTool(tool.slug);
-                      }}
-                      className={`inline-flex items-center gap-1.5 rounded-full border px-4 py-2 text-sm font-semibold transition-all hover:shadow-lg ${getCategoryColor(tool.category)}`}
-                    >
-                      {tool.name}
-                    </button>
-                  ))}
-                </div>
-                <button
-                  type="button"
-                  onClick={(e) => { e.stopPropagation(); openAllToolsDialog(); }}
-                  className="inline-flex items-center gap-1.5 rounded-full border bg-gradient-to-r px-4 py-2 text-sm font-semibold transition-all hover:scale-105 hover:shadow-lg from-slate-100 to-slate-200 text-slate-700 hover:from-[#1e40af]/10 hover:to-[#1e40af]/5 hover:text-[#1e40af]"
-                >
-                  More tools
-                  <svg viewBox="0 0 20 20" className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth="1.8">
-                    <path d="M5 7l5 5 5-5" strokeLinecap="round" strokeLinejoin="round" />
-                  </svg>
-                </button>
-                <button
-                  type="button"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    clearDrop();
-                  }}
-                  className="inline-flex items-center gap-1 rounded-full border border-slate-300 bg-white px-3 py-1 text-xs font-semibold text-slate-600 shadow-sm transition hover:border-rose-300 hover:bg-rose-50 hover:text-rose-700"
-                >
-                  Clear all files
-                </button>
-              </div>
-            ) : (
-              <div className="flex flex-col items-center gap-3">
-                <div
-                  className={`drop-icon-drag-scale inline-flex h-16 w-16 items-center justify-center rounded-2xl transition-all duration-300 ${
-                    dragOver
-                      ? "scale-125 bg-gradient-to-br from-slate-200 to-slate-300 text-slate-700 shadow-lg shadow-slate-300/50"
-                      : "drop-icon-bounce bg-gradient-to-br from-slate-100 to-slate-200 text-slate-500"
-                  }`}
-                >
-                  <svg
-                    viewBox="0 0 24 24"
-                    className="h-8 w-8"
-                    fill="none"
-                    stroke="currentColor"
-                    strokeWidth="1.6"
-                  >
-                    <path
-                      d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M7 10l5 5 5-5M12 15V3"
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                    />
-                  </svg>
-                </div>
-                <p className="font-display text-2xl font-semibold tracking-tight text-slate-900 md:text-3xl">
-                  Drop your file(s) here
-                </p>
-                <p className="text-sm text-slate-500 drop-zone-subtitle">
-                  Or click to browse — PDF, Word, PNG, JPG, WebP accepted
-                </p>
-                {dropFiles.length > 1 ? (
-                  <p className="text-xs font-semibold text-cyan-700">{dropFiles.length} files selected</p>
-                ) : null}
-              </div>
-            )}
-          </div>
-
-          {/* Search bar below drop-zone */}
-          <div className="mt-5 flex items-center gap-2">
-            <div className="relative flex-1">
-              <svg
-                viewBox="0 0 20 20"
-                className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="1.8"
+            {/* Drop zone (white card on the colour band) */}
+            <div className="mx-auto mt-8 max-w-3xl">
+              <div
+                role="button"
+                tabIndex={0}
+                aria-label="Drop file here or click to browse — PDF, PNG, JPG, WebP accepted"
+                id="hero-drop-zone"
+                onDragOver={onDragOver}
+                onDragLeave={onDragLeave}
+                onDrop={onDrop}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" || e.key === " ") {
+                    e.preventDefault();
+                    const input = document.getElementById("hero-file-input") as HTMLInputElement | null;
+                    input?.click();
+                  }
+                }}
+                onClick={() => {
+                  const input = document.getElementById("hero-file-input") as HTMLInputElement | null;
+                  input?.click();
+                }}
+                className={`relative cursor-pointer rounded-2xl border-2 border-dashed bg-white p-6 text-center shadow-2xl transition-all duration-200 md:p-9 ${
+                  dragOver
+                    ? "border-[var(--accent-500)] ring-4 ring-[var(--accent-300)]"
+                    : "border-[var(--accent-300)] hover:border-[var(--accent-500)]"
+                }`}
               >
-                <circle cx="9" cy="9" r="4.5" />
-                <path d="M13 13l3 3" strokeLinecap="round" />
-              </svg>
-              <input
-                id="intent-input"
-                type="text"
-                value={intentQuery}
-                onChange={(event) => setIntentQuery(event.target.value)}
-                placeholder={listening ? "Listening..." : "Alternatively, type or say what you want — e.g. sign my PDF"}
-                aria-label="Search tools by intent"
-                className="ai-search-input w-full rounded-xl py-3 pl-9 pr-20 text-base"
-              />
-              <div className="absolute right-2 top-1/2 -translate-y-1/2 flex items-center gap-1">
-                <button
-                  type="button"
-                  onClick={toggleListening}
-                  className={`inline-flex h-8 w-8 items-center justify-center rounded-full transition-all ${
-                    listening
-                      ? "bg-red-500 text-white animate-pulse shadow-lg shadow-red-300/50"
-                      : "bg-red-100 text-red-500 hover:bg-red-200 hover:text-red-700"
-                  }`}
-                  aria-label={listening ? "Stop listening" : "Search by voice"}
-                  title={listening ? "Stop listening" : "Search by voice"}
-                >
-                  <svg viewBox="0 0 20 20" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="1.8">
-                    <path d="M10 1a3 3 0 0 0-3 3v4a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z" strokeLinecap="round" strokeLinejoin="round" />
-                    <path d="M18 10a8 8 0 1 1-16 0" strokeLinecap="round" />
-                  </svg>
-                </button>
-                {intentQuery ? (
-                  <button
-                    type="button"
-                    onClick={() => setIntentQuery("")}
-                    className="inline-flex h-8 w-8 items-center justify-center rounded-full bg-slate-100 text-slate-500 hover:bg-slate-200"
-                    aria-label="Clear search"
-                  >
-                    <svg viewBox="0 0 20 20" className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth="1.8">
-                      <path d="M5 5l10 10M15 5L5 15" strokeLinecap="round" />
-                    </svg>
-                  </button>
-                ) : null}
-              </div>
+                <input
+                  id="hero-file-input"
+                  type="file"
+                  accept={ACCEPTED_TYPES.join(",")}
+                  multiple
+                  className="hidden"
+                  onChange={(e) => {
+                    const files = Array.from(e.target.files || []);
+                    if (files.length) handleBrowseMultiple(files);
+                    e.currentTarget.value = "";
+                  }}
+                />
 
-              {/* Inline search results: cards */}
-              {intentQuery.trim() && searchResults !== null ? (
-                <div className="absolute left-0 right-0 top-[calc(100%+6px)] z-30 max-h-96 overflow-y-auto rounded-2xl border border-slate-200/80 bg-white/95 p-3 shadow-[0_16px_40px_-20px_rgba(15,23,42,0.32)] -md dark:border-slate-700/80 dark:bg-slate-950/95">
-                  {searchResults.length === 0 ? (
-                    <div className="flex flex-col items-center gap-1.5 px-4 py-8 text-center">
-                      <svg viewBox="0 0 24 24" className="h-8 w-8 text-slate-300" fill="none" stroke="currentColor" strokeWidth="1.6">
-                        <path d="M21 21l-4.5-4.5M11 19a8 8 0 1 1 0-16 8 8 0 0 1 0 16z" strokeLinecap="round" strokeLinejoin="round" />
-                      </svg>
-                      <p className="text-sm font-medium text-slate-600">No tools match your search</p>
-                      <p className="text-xs text-slate-400">Try a different keyword, like “merge”, “compress”, or “sign”.</p>
-                    </div>
-                  ) : (
-                    <div className="grid gap-2 sm:grid-cols-2">
-                      {searchResults.map((result) => (
-                        <Link
-                          key={result.slug}
-                          href={`/tools/${result.slug}`}
-                          onClick={() => setIntentQuery("")}
-                          className="flex flex-col gap-1 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5 text-left transition hover:border-cyan-300 hover:bg-cyan-50"
+                {dropFile ? (
+                  <div className="flex flex-col items-center gap-3 text-slate-900">
+                    {dropFiles.length > 1 ? (
+                      <div className="flex max-w-full flex-wrap items-center justify-center gap-1.5">
+                        {dropFiles.map((f, i) => {
+                          const isPdfFile = isPdf(f);
+                          const isImageFile = isImage(f);
+                          const accent = isPdfFile ? "border-rose-200 bg-rose-50 text-rose-700" : isImageFile ? "border-emerald-200 bg-emerald-50 text-emerald-700" : "border-cyan-200 bg-cyan-50 text-cyan-700";
+                          return (
+                            <span key={`${f.name}-${i}`} className={`inline-flex max-w-[200px] items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs font-medium shadow-sm ${accent}`}>
+                              <span className="truncate">{f.name}</span>
+                              <button
+                                type="button"
+                                onClick={(e) => { e.stopPropagation(); removeDropFile(i); }}
+                                className="inline-flex h-4 w-4 shrink-0 items-center justify-center rounded-full text-current opacity-60 transition hover:bg-slate-200 hover:opacity-100"
+                                aria-label={`Remove ${f.name}`}
+                                title="Remove file"
+                              >
+                                ×
+                              </button>
+                            </span>
+                          );
+                        })}
+                      </div>
+                    ) : (
+                      <div className="flex items-center justify-center gap-2">
+                        <p className="font-semibold text-slate-900">{dropFile.name}</p>
+                        <button
+                          type="button"
+                          onClick={(e) => { e.stopPropagation(); removeDropFile(0); }}
+                          className="inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-full text-slate-400 transition hover:bg-slate-200 hover:text-slate-700"
+                          aria-label={`Remove ${dropFile.name}`}
+                          title="Remove file"
                         >
-                          <div className="flex items-center gap-2">
-                            <ToolIcon category={result.category} className="h-5 w-5 shrink-0 text-slate-400" />
-                            <span className="text-sm font-semibold text-slate-800">
-                              {result.name}
-                            </span>
-                            <span
-                              className={`inline-flex shrink-0 rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide ${getCategoryColor(result.category)}`}
-                            >
-                              {result.category}
-                            </span>
-                          </div>
-                          <p className="text-xs text-slate-500 line-clamp-1">
-                            {result.description}
-                          </p>
-                        </Link>
+                          ×
+                        </button>
+                      </div>
+                    )}
+                    <div className="flex flex-wrap items-center justify-center gap-x-4 gap-y-1 text-sm text-slate-500">
+                      <span>{(dropFiles.reduce((sum, f) => sum + f.size, 0) / 1024 / 1024).toFixed(1)} MB</span>
+                      {dropFiles.length > 1 ? (
+                        <span className="inline-flex items-center gap-1 rounded-full bg-slate-200/70 px-2.5 py-0.5 text-xs font-medium text-slate-700">
+                          {dropFiles.length} files
+                        </span>
+                      ) : null}
+                      {dropFileInfo?.kind === "pdf" && dropFileInfo.pageCount ? (
+                        <span className="inline-flex items-center gap-1 rounded-full bg-slate-200/70 px-2.5 py-0.5 text-xs font-medium text-slate-700">
+                          {dropFileInfo.pageCount} page{dropFileInfo.pageCount !== 1 ? "s" : ""}
+                        </span>
+                      ) : null}
+                      {dropFileInfo?.kind === "image" && dropFileInfo.width && dropFileInfo.height ? (
+                        <span className="inline-flex items-center gap-1 rounded-full bg-slate-200/70 px-2.5 py-0.5 text-xs font-medium text-slate-700">
+                          {dropFileInfo.width}&times;{dropFileInfo.height} px
+                        </span>
+                      ) : null}
+                    </div>
+
+                    {/* Real page thumbnails, rendered the moment a PDF lands */}
+                    {isPdf(dropFile) && heroThumbs.length > 0 ? (
+                      <div className="flex gap-2 overflow-x-auto py-1">
+                        {heroThumbs.map((src, i) => (
+                          <img
+                            key={i}
+                            src={src}
+                            alt={`Page ${i + 1} of ${dropFile.name}`}
+                            className="h-28 w-20 shrink-0 rounded-md border border-slate-200 bg-white object-cover shadow-md"
+                          />
+                        ))}
+                      </div>
+                    ) : isPdf(dropFile) ? (
+                      <p className="text-xs text-slate-400">Rendering page previews…</p>
+                    ) : null}
+
+                    <p className="text-sm text-slate-500">Choose a quick action:</p>
+                    <div id="drop-suggestions" className="flex flex-wrap justify-center gap-2">
+                      {suggestedTools.map((tool) => (
+                        <button
+                          key={tool.slug}
+                          type="button"
+                          onClick={(e) => { e.stopPropagation(); navigateToTool(tool.slug); }}
+                          className="inline-flex items-center gap-1.5 rounded-full px-4 py-2 text-sm font-bold text-white transition hover:brightness-110"
+                          style={{ background: `var(--tool-${CATEGORY_HUE[tool.category] ?? "organise"}-600)` }}
+                        >
+                          {tool.name}
+                        </button>
                       ))}
                     </div>
-                  )}
+                    <button
+                      type="button"
+                      onClick={(e) => { e.stopPropagation(); openAllToolsDialog(); }}
+                      className="inline-flex items-center gap-1.5 rounded-full border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-700 transition hover:bg-slate-50"
+                    >
+                      More tools
+                      <svg viewBox="0 0 20 20" className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth="1.8">
+                        <path d="M5 7l5 5 5-5" strokeLinecap="round" strokeLinejoin="round" />
+                      </svg>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={(e) => { e.stopPropagation(); clearDrop(); }}
+                      className="inline-flex items-center gap-1 rounded-full border border-slate-300 bg-white px-3 py-1 text-xs font-semibold text-slate-600 transition hover:border-rose-300 hover:bg-rose-50 hover:text-rose-700"
+                    >
+                      Clear all files
+                    </button>
+                  </div>
+                ) : (
+                  <div className="flex flex-col items-center gap-3 text-slate-900">
+                    <div className="inline-flex h-16 w-16 items-center justify-center rounded-2xl bg-[var(--accent-100)] text-[var(--accent-700)]">
+                      <svg viewBox="0 0 24 24" className="h-8 w-8" fill="none" stroke="currentColor" strokeWidth="1.6">
+                        <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M7 10l5 5 5-5M12 15V3" strokeLinecap="round" strokeLinejoin="round" />
+                      </svg>
+                    </div>
+                    <p className="font-display text-2xl font-semibold tracking-tight text-slate-900 md:text-3xl">
+                      Drop your file(s) here
+                    </p>
+                    <p className="text-sm text-slate-500">
+                      Or click to browse — PDF, Word, PNG, JPG, WebP accepted
+                    </p>
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* Intent search (kept inside the band) */}
+            <div className="mx-auto mt-5 max-w-3xl">
+              <div className="relative">
+                <svg viewBox="0 0 20 20" className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" fill="none" stroke="currentColor" strokeWidth="1.8">
+                  <circle cx="9" cy="9" r="4.5" />
+                  <path d="M13 13l3 3" strokeLinecap="round" />
+                </svg>
+                <input
+                  id="intent-input"
+                  type="text"
+                  value={intentQuery}
+                  onChange={(event) => setIntentQuery(event.target.value)}
+                  placeholder={listening ? "Listening..." : "Or type what you want — e.g. sign my PDF"}
+                  aria-label="Search tools by intent"
+                  className="w-full rounded-xl border border-slate-200 bg-white py-3 pl-9 pr-20 text-base text-slate-900 shadow-lg outline-none placeholder:text-slate-400"
+                />
+                <div className="absolute right-2 top-1/2 flex -translate-y-1/2 items-center gap-1">
+                  <button
+                    type="button"
+                    onClick={toggleListening}
+                    className={`inline-flex h-8 w-8 items-center justify-center rounded-full transition-all ${listening ? "bg-red-500 text-white" : "bg-red-100 text-red-500 hover:bg-red-200"}`}
+                    aria-label={listening ? "Stop listening" : "Search by voice"}
+                    title={listening ? "Stop listening" : "Search by voice"}
+                  >
+                    <svg viewBox="0 0 20 20" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="1.8">
+                      <path d="M10 1a3 3 0 0 0-3 3v4a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z" strokeLinecap="round" strokeLinejoin="round" />
+                      <path d="M18 10a8 8 0 1 1-16 0" strokeLinecap="round" />
+                    </svg>
+                  </button>
+                  {intentQuery ? (
+                    <button
+                      type="button"
+                      onClick={() => setIntentQuery("")}
+                      className="inline-flex h-8 w-8 items-center justify-center rounded-full bg-slate-100 text-slate-500 hover:bg-slate-200"
+                      aria-label="Clear search"
+                    >
+                      <svg viewBox="0 0 20 20" className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth="1.8">
+                        <path d="M5 5l10 10M15 5L5 15" strokeLinecap="round" />
+                      </svg>
+                    </button>
+                  ) : null}
                 </div>
-              ) : null}
+
+                {intentQuery.trim() && searchResults !== null ? (
+                  <div className="absolute left-0 right-0 top-[calc(100%+6px)] z-30 max-h-96 overflow-y-auto rounded-2xl border border-slate-200 bg-white p-3 shadow-[0_16px_40px_-20px_rgba(15,23,42,0.32)]">
+                    {searchResults.length === 0 ? (
+                      <div className="flex flex-col items-center gap-1.5 px-4 py-8 text-center">
+                        <p className="text-sm font-medium text-slate-600">No tools match your search</p>
+                        <p className="text-xs text-slate-400">Try “merge”, “compress”, or “sign”.</p>
+                      </div>
+                    ) : (
+                      <div className="grid gap-2 sm:grid-cols-2">
+                        {searchResults.map((result) => (
+                          <Link
+                            key={result.slug}
+                            href={`/tools/${result.slug}`}
+                            onClick={() => setIntentQuery("")}
+                            className="flex flex-col gap-1 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5 text-left transition hover:border-[var(--accent-300)] hover:bg-[var(--accent-50)]"
+                          >
+                            <div className="flex items-center gap-2">
+                              <ToolIcon category={result.category} className="h-5 w-5 shrink-0" />
+                              <span className="text-sm font-semibold text-slate-800">{result.name}</span>
+                              <span className={`inline-flex shrink-0 rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide ${getCategoryColor(result.category)}`}>
+                                {result.category}
+                              </span>
+                            </div>
+                            <p className="text-xs text-slate-500 line-clamp-1">{result.description}</p>
+                          </Link>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                ) : null}
+              </div>
             </div>
           </div>
-        </header>
+        </section>
 
-        {/* ── Animated tool carousel ─────────────────────────────── */}
-        <div className="overflow-hidden py-4">
-          <div className="animate-tool-scroll flex gap-3 whitespace-nowrap">
-            {(() => {
-              const TOP_TOOLS = new Set([
-                "merge-pdf", "split-pdf", "compress-pdf", "ocr-pdf",
-                "sign-pdf", "pdf-to-word", "convert-to-pdf", "protect-pdf",
-              ]);
-              const topDuplicates = ACTIVE_TOOL_ITEMS.filter((t) => TOP_TOOLS.has(t.slug));
-              const weighted = [...ACTIVE_TOOL_ITEMS, ...topDuplicates];
-              return [...weighted, ...weighted];
-            })().map((tool, i) => (
-              <Link
-                key={`${tool.slug}-${i}`}
-                href={`/tools/${tool.slug}`}
-                className={`inline-flex shrink-0 items-center gap-1.5 rounded-full border px-4 py-2 text-sm font-semibold transition-all hover:shadow-lg ${getCategoryColor(tool.category)}`}
+        {/* ── Tools — five coloured category sections ───────────── */}
+        <section id="tools" className="mx-auto w-full max-w-7xl px-4 py-10 sm:px-6 md:px-10">
+          {CATEGORY_GROUPS.map((group) => {
+            const tools = ACTIVE_TOOL_ITEMS.filter((t) => group.categories.includes(t.category));
+            return (
+              <div
+                key={group.hue}
+                className="mb-6 rounded-3xl p-4 md:p-7"
+                style={{ background: `color-mix(in srgb, var(--tool-${group.hue}-600) 10%, var(--background))` }}
               >
-                <ToolIcon category={tool.category} className="h-4 w-4" />
-                {tool.name}
+                <div className="mb-4 flex items-center gap-3">
+                  <span
+                    className="inline-flex h-8 w-8 items-center justify-center rounded-lg text-sm font-bold text-white"
+                    style={{ background: `var(--tool-${group.hue}-600)` }}
+                  >
+                    {tools.length}
+                  </span>
+                  <h2
+                    className="font-display text-xl font-bold tracking-tight md:text-2xl"
+                    style={{ color: `var(--tool-${group.hue}-600)` }}
+                  >
+                    {group.label}
+                  </h2>
+                </div>
+                <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                  {tools.map((tool) => (
+                    <Link
+                      key={tool.slug}
+                      href={`/tools/${tool.slug}`}
+                      className="group flex items-start gap-3 rounded-xl p-4 text-white transition hover:brightness-110"
+                      style={{ background: `var(--tool-${group.hue}-600)` }}
+                    >
+                      <ToolIcon category={tool.category} mono className="mt-0.5 h-6 w-6 shrink-0" />
+                      <span className="flex min-w-0 flex-col">
+                        <span className="text-sm font-bold leading-snug">{tool.name}</span>
+                        <span className="mt-0.5 text-xs leading-snug text-white/85">{tool.description}</span>
+                      </span>
+                    </Link>
+                  ))}
+                </div>
+              </div>
+            );
+          })}
+        </section>
+
+        {/* ── Research Studio band ──────────────────────────────── */}
+        <section className="bg-slate-950 text-white">
+          <div className="mx-auto grid w-full max-w-7xl items-center gap-8 px-4 py-12 sm:px-6 md:grid-cols-2 md:px-10 md:py-16">
+            <div>
+              <p className="mb-3 inline-flex items-center gap-2 rounded-full bg-[var(--accent-500)]/20 px-3 py-1 text-xs font-bold uppercase tracking-[0.16em] text-[var(--accent-300)]">
+                Research Studio
+              </p>
+              <h2 className="font-display text-2xl font-bold tracking-tight md:text-4xl">
+                A real LaTeX editor, with your PDF beside it.
+              </h2>
+              <p className="mt-4 text-base text-slate-300">
+                Write, compile, and see the result instantly. GitHub sync, live collaboration,
+                version history, and 8 syntax themes. Nobody else in the PDF space has this.
+              </p>
+              <Link
+                href="/research-studio"
+                className="mt-6 inline-flex items-center gap-2 rounded-full bg-[var(--accent-500)] px-6 py-3 text-sm font-bold text-white transition hover:bg-[var(--accent-400)]"
+              >
+                Open Research Studio
+                <svg viewBox="0 0 20 20" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="2">
+                  <path d="M4 10h12M11 5l5 5-5 5" strokeLinecap="round" strokeLinejoin="round" />
+                </svg>
               </Link>
-            ))}
+            </div>
+            <div className="overflow-hidden rounded-2xl border border-slate-700 bg-slate-900 shadow-2xl">
+              <div className="flex items-center gap-1.5 border-b border-slate-700 bg-slate-800 px-3 py-2">
+                <span className="h-2.5 w-2.5 rounded-full bg-red-400" />
+                <span className="h-2.5 w-2.5 rounded-full bg-amber-400" />
+                <span className="h-2.5 w-2.5 rounded-full bg-emerald-400" />
+                <span className="ml-2 text-[10px] font-semibold text-slate-400">main.tex</span>
+              </div>
+              <div className="grid grid-cols-2">
+                <div className="border-r border-slate-700 p-3 font-mono text-[10px] leading-relaxed text-slate-300">
+                  <div><span className="text-violet-400">\documentclass</span><span className="text-slate-500">{"{article}"}</span></div>
+                  <div><span className="text-violet-400">\usepackage</span><span className="text-slate-500">{"{graphicx}"}</span></div>
+                  <div><span className="text-violet-400">\title</span><span className="text-slate-500">{"{My Paper}"}</span></div>
+                  <div><span className="text-violet-400">\begin</span><span className="text-slate-500">{"{document}"}</span></div>
+                  <div><span className="text-emerald-400">\section</span><span className="text-slate-300">{"{Introduction}"}</span></div>
+                  <div className="text-slate-300">We study the effect…</div>
+                  <div><span className="text-violet-400">\end</span><span className="text-slate-500">{"{document}"}</span></div>
+                </div>
+                <div className="flex items-center justify-center bg-white p-4">
+                  <div className="w-full rounded-sm border border-slate-200 bg-white p-3 text-slate-900">
+                    <div className="mb-1 h-2 w-1/2 rounded bg-slate-800" />
+                    <div className="mb-3 h-1.5 w-3/4 rounded bg-slate-300" />
+                    <div className="mb-1 h-1.5 w-full rounded bg-slate-200" />
+                    <div className="mb-1 h-1.5 w-full rounded bg-slate-200" />
+                    <div className="h-1.5 w-5/6 rounded bg-slate-200" />
+                  </div>
+                </div>
+              </div>
+              <div className="flex items-center gap-2 border-t border-slate-700 bg-slate-800 px-3 py-2">
+                <span className="h-2 w-2 rounded-full bg-emerald-400" />
+                <span className="text-[10px] font-semibold text-emerald-300">Compiled in 0.13s</span>
+              </div>
+            </div>
           </div>
-        </div>
+        </section>
 
-        {/* ── Trust badge ──────────────────────────────────────── */}
-        <div className="flex justify-center">
-          <div className="trust-badge inline-flex items-center gap-2 rounded-full border border-slate-200 bg-white px-4 py-2 text-sm text-slate-600 shadow-sm">
-            <svg viewBox="0 0 20 20" className="trust-badge-icon h-4 w-4 text-slate-400" fill="none" stroke="currentColor" strokeWidth="1.8">
-              <path d="M10 2l6 2.5v5c0 4-2.6 6.8-6 8.5-3.4-1.7-6-4.5-6-8.5v-5L10 2z" strokeLinecap="round" strokeLinejoin="round" />
-              <path d="M7.5 10l1.8 1.8 3.2-3.6" strokeLinecap="round" strokeLinejoin="round" />
-            </svg>
-            <span className="text-xs font-medium">
-              Most tools run entirely in your browser. Files sent to our servers are deleted as soon as processing finishes.
-            </span>
-          </div>
-        </div>
-
-        {/* ── Zone 2: Workflow Recipes (moved above tools) ────────── */}
-        <section className="ai-panel rounded-2xl p-4">
-          <div className="mb-3 flex items-center justify-between">
-            <h2 className="font-display text-lg font-semibold tracking-tight text-slate-950">
+        {/* ── Workflow Recipes showcase ─────────────────────────── */}
+        <section className="mx-auto w-full max-w-7xl px-4 py-10 sm:px-6 md:px-10">
+          <div className="mb-5">
+            <h2 className="font-display text-2xl font-bold tracking-tight text-slate-950 md:text-3xl">
               Workflow Recipes
             </h2>
+            <p className="mt-1 text-sm text-slate-600">
+              Chain tools into one named workflow — start with a file, walk out with the finished result.
+            </p>
           </div>
           <input
             ref={workflowFileInputRef}
@@ -773,43 +861,51 @@ export default function Home() {
               event.currentTarget.value = "";
             }}
           />
-          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-            {WORKFLOW_RECIPES.slice(0, 4).map((recipe) => (
-              <button
-                key={recipe.slug}
-                type="button"
-                onClick={() => startWorkflow(recipe)}
-                className="ai-workflow-card group rounded-xl p-4 text-left transition"
-              >
-                <p className="text-sm font-semibold text-slate-900 group-hover:text-slate-900">
-                  {recipe.name}
-                </p>
-                <p className="mt-1 text-xs text-slate-600">
-                  {recipe.description}
-                </p>
-                <div className="mt-3 flex items-center gap-0">
-                  {recipe.steps.map((step, index) => (
-                    <div
-                      key={`${recipe.slug}-${step.toolSlug}`}
-                      className="flex items-center"
-                    >
-                      <span className="inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-slate-200 text-[10px] font-bold text-slate-600 group-hover:bg-slate-300 group-hover:text-slate-900">
-                        {index + 1}
-                      </span>
-                      {index < recipe.steps.length - 1 ? (
-                        <span className="mx-1 block h-px w-3 bg-slate-300 group-hover:bg-slate-400" />
-                      ) : null}
-                    </div>
-                  ))}
-                </div>
-                <span className="mt-2 inline-block text-[10px] font-bold uppercase tracking-wide text-slate-600 opacity-0 transition-opacity group-hover:opacity-100">
-                  Start ›
-                </span>
-              </button>
-            ))}
+          <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+            {WORKFLOW_RECIPES.map((recipe, ri) => {
+              const hue = ["organise", "convert", "secure", "optimise"][ri % 4];
+              return (
+                <button
+                  key={recipe.slug}
+                  type="button"
+                  onClick={() => startWorkflow(recipe)}
+                  className="group flex flex-col rounded-2xl p-5 text-left text-white transition hover:brightness-110"
+                  style={{ background: `var(--tool-${hue}-600)` }}
+                >
+                  <p className="text-base font-bold">{recipe.name}</p>
+                  <p className="mt-1 text-xs leading-snug text-white/85">{recipe.description}</p>
+                  <div className="mt-4 flex flex-col gap-2">
+                    {recipe.steps.map((step, i) => (
+                      <div key={step.toolSlug} className="flex items-center gap-2">
+                        <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-white/25 text-[10px] font-bold">
+                          {i + 1}
+                        </span>
+                        <span className="text-xs font-semibold text-white">{step.label}</span>
+                      </div>
+                    ))}
+                  </div>
+                  <span className="mt-4 text-xs font-bold uppercase tracking-wide text-white/90 group-hover:underline">
+                    Start with a file ›
+                  </span>
+                </button>
+              );
+            })}
           </div>
         </section>
 
+        {/* ── Trust ─────────────────────────────────────────────── */}
+        <section className="mx-auto w-full max-w-7xl px-4 pb-12 sm:px-6 md:px-10">
+          <div className="flex flex-col items-center gap-3 rounded-2xl border border-slate-200 bg-white p-6 text-center sm:flex-row sm:text-left">
+            <svg viewBox="0 0 20 20" className="h-8 w-8 shrink-0 text-[var(--accent-600)]" fill="none" stroke="currentColor" strokeWidth="1.8">
+              <path d="M10 2l6 2.5v5c0 4-2.6 6.8-6 8.5-3.4-1.7-6-4.5-6-8.5v-5L10 2z" strokeLinecap="round" strokeLinejoin="round" />
+              <path d="M7.5 10l1.8 1.8 3.2-3.6" strokeLinecap="round" strokeLinejoin="round" />
+            </svg>
+            <p className="max-w-xl text-sm text-slate-600">
+              Most tools run entirely in your browser. Files sent to our servers are deleted as soon as
+              processing finishes.
+            </p>
+          </div>
+        </section>
       </main>
     </div>
   );
