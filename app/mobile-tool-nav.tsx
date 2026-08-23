@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { usePathname } from "next/navigation";
 import { useState } from "react";
 import { ACTIVE_TOOL_ITEMS, TOOL_CATEGORIES } from "@/lib/tools";
 import ToolNavSearch from "./tool-nav-search";
@@ -9,6 +10,10 @@ const MOBILE_NAV_PARENTS = ["All", ...TOOL_CATEGORIES] as const;
 
 export default function MobileToolNav() {
   const [open, setOpen] = useState(false);
+  const pathname = usePathname();
+
+  // Marketing tool nav — hidden inside the Research Studio workspace.
+  if (pathname.startsWith("/research-studio")) return null;
 
   return (
     <div className="fixed left-0 top-0 z-[80] md:hidden">

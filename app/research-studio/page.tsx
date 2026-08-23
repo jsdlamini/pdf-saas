@@ -1,6 +1,7 @@
 "use client";
 
 import { SignInButton, SignUpButton, useAuth, useUser } from "@clerk/nextjs";
+import StudioAccount from "../components/studio-account";
 import { showToast } from "../components/toast";
 import CommandPalette from "../components/command-palette";
 import { trackEvent } from "../components/analytics";
@@ -5022,6 +5023,7 @@ export default function ResearchStudioPage() {
                 </svg>
                 New Project
               </button>
+              <StudioAccount />
               <input
                 ref={zipImportRef}
                 type="file"
@@ -5081,7 +5083,7 @@ export default function ResearchStudioPage() {
             </p>
           ) : authLoaded ? (
             <div className="studio-auth-cta">
-              <span>Working offline — up to {GUEST_PROJECT_LIMIT} projects saved in this browser. Sign in to sync unlimited projects.</span>
+              <span>Working offline — sign in to sync across devices.</span>
               <SignUpButton mode="modal">
                 <button type="button">Create account</button>
               </SignUpButton>
@@ -5273,18 +5275,18 @@ export default function ResearchStudioPage() {
                   onKeyDown={(e) => { if (e.key === "Enter") createProjectFromTemplate(template); }}
                   style={{ background: accent.tint, borderColor: `color-mix(in srgb, ${accent.color} 30%, var(--border-color, #334155))` }}
                 >
-                  <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8 }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 10 }}>
                     <span
                       style={{
                         display: "inline-flex", alignItems: "center", justifyContent: "center",
-                        width: 22, height: 22, borderRadius: 6, background: accent.color,
-                        color: "#0d0f17", fontWeight: 700, fontSize: 11,
+                        width: 24, height: 24, borderRadius: 7, background: accent.color,
+                        color: "#0d0f17", fontWeight: 700, fontSize: 12, flexShrink: 0,
                       }}
                       aria-hidden="true"
                     >
                       {template.name.slice(0, 1)}
                     </span>
-                    <span style={{ fontSize: 10, fontWeight: 700, letterSpacing: "0.08em", textTransform: "uppercase", color: accent.color }}>{accent.label}</span>
+                    <span style={{ fontSize: 11, fontWeight: 600, color: accent.color }}>{accent.label}</span>
                   </div>
                   <h4>{template.name}</h4>
                   <p>{template.description}</p>
@@ -5624,6 +5626,7 @@ export default function ResearchStudioPage() {
               <path d="M10 9v4M10 6.5v.5" strokeLinecap="round" />
             </svg>
           </button>
+          <StudioAccount />
         </div>
       </header>
 
