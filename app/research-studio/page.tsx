@@ -266,6 +266,18 @@ function clamp(value: number, min: number, max: number) {
   return Math.min(Math.max(value, min), max);
 }
 
+// File-type colour for the tree icons and tab underlines (VS Code-style).
+function fileTypeColor(name: string, isFolder: boolean): string {
+  if (isFolder) return "#fbbf24"; // amber folders
+  const ext = name.split(".").pop()?.toLowerCase() || "";
+  if (ext === "tex") return "#60a5fa";
+  if (ext === "bib") return "#a78bfa";
+  if (ext === "cls" || ext === "sty") return "#fbbf24";
+  if (/^(png|jpe?g|gif|webp|svg|bmp|ico|pdf)$/.test(ext)) return "#2dd4bf";
+  if (/^(py|js|ts|tsx|jsx|cpp|c|cc|cxx|h|hpp|cs|go|rs|java|json)$/.test(ext)) return "#fb7185";
+  return "currentColor";
+}
+
 function hashString(value: string): number {
   let hash = 0;
   for (let i = 0; i < value.length; i += 1) {
@@ -1090,11 +1102,11 @@ export default function ResearchStudioPage() {
   const [codeOutputCollapsed, setCodeOutputCollapsed] = useState(false);
 
   const [editorTheme, setEditorTheme] = useState<EditorThemeId>(() => {
-    if (typeof window === "undefined") return "dark";
+    if (typeof window === "undefined") return "one-dark";
     try {
       const saved = localStorage.getItem("wiserfiles-editor-theme") as EditorThemeId | null;
-      return saved && EDITOR_THEMES[saved] ? saved : "dark";
-    } catch { return "dark"; }
+      return saved && EDITOR_THEMES[saved] ? saved : "one-dark";
+    } catch { return "one-dark"; }
   });
   useEffect(() => {
     try { localStorage.setItem("wiserfiles-editor-theme", editorTheme); } catch {}
@@ -4792,7 +4804,7 @@ export default function ResearchStudioPage() {
                 </svg>
               </span>
             ) : (
-              <span className="studio-tree-icon">
+              <span className="studio-tree-icon" style={{ color: fileTypeColor(node.name, isFolder) }}>
                 <svg viewBox="0 0 20 20" style={{ width: 14, height: 14 }} fill="none" stroke="currentColor" strokeWidth="1.8">
                   <path d="M6 3h6l4 4v10H6V3z" strokeLinecap="round" strokeLinejoin="round" />
                   <path d="M12 3v4h4" strokeLinecap="round" strokeLinejoin="round" />
@@ -5502,33 +5514,31 @@ export default function ResearchStudioPage() {
               <path d="M3 9l7-6 7 6v8a1 1 0 0 1-1 1h-4v-5H8v5H4a1 1 0 0 1-1-1V9z" strokeLinecap="round" strokeLinejoin="round" />
             </svg>
           </a>
-          <label
+          <button
+            type="button"
+            onClick={() => {
+              const next = uiTheme === "dark" ? "light" : "dark";
+              document.documentElement.dataset.theme = next;
+              document.documentElement.style.colorScheme = next;
+              try { localStorage.setItem("wiserfiles-theme", next); } catch {}
+              setUiTheme(next);
+            }}
             className="studio-btn studio-btn-ghost"
-            title="Studio color theme"
-            style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "0 8px", height: 32 }}
+            aria-label={uiTheme === "dark" ? "Switch to light mode" : "Switch to dark mode"}
+            title={uiTheme === "dark" ? "Switch to light mode" : "Switch to dark mode"}
+            style={{ width: 32, padding: 0 }}
           >
-            <svg viewBox="0 0 20 20" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="1.8">
-              <path d="M10 2a8 8 0 1 0 0 16c1.5 0 2.5-.8 2.5-2 0-.5-.2-1-.5-1.4-.4-.4-.6-.9-.6-1.5 0-1.1.9-2 2-2h1.2A4.8 4.8 0 0 0 18 10 8 8 0 0 0 10 2z" strokeLinecap="round" strokeLinejoin="round"/>
-              <circle cx="6.5" cy="10" r="0.5" fill="currentColor"/>
-              <circle cx="10.5" cy="6.5" r="0.5" fill="currentColor"/>
-              <circle cx="10.5" cy="13.5" r="0.5" fill="currentColor"/>
-            </svg>
-            <select
-              value={uiTheme}
-              onChange={(e) => {
-                const next = e.target.value as "dark" | "light";
-                document.documentElement.dataset.theme = next;
-                document.documentElement.style.colorScheme = next;
-                try { localStorage.setItem("wiserfiles-theme", next); } catch {}
-                setUiTheme(next);
-              }}
-              aria-label="Studio theme"
-              style={{ background: "transparent", border: "none", color: "inherit", fontSize: 12, fontWeight: 600, cursor: "pointer", outline: "none" }}
-            >
-              <option value="dark" style={{ background: "#0f172a", color: "#e2e8f0" }}>Dark</option>
-              <option value="light" style={{ background: "#ffffff", color: "#0f172a" }}>Light</option>
-            </select>
-          </label>
+            {uiTheme === "dark" ? (
+              <svg viewBox="0 0 20 20" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="1.8">
+                <circle cx="10" cy="10" r="3.2" />
+                <path d="M10 2v2M10 16v2M2 10h2M16 10h2M4.3 4.3l1.4 1.4M14.3 14.3l1.4 1.4M15.7 4.3l-1.4 1.4M5.7 14.3l-1.4 1.4" strokeLinecap="round" />
+              </svg>
+            ) : (
+              <svg viewBox="0 0 20 20" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="1.8">
+                <path d="M16 12.2A7 7 0 1 1 7.8 4a5.5 5.5 0 0 0 8.2 8.2z" strokeLinecap="round" strokeLinejoin="round" />
+              </svg>
+            )}
+          </button>
           <label
             className="studio-btn studio-btn-ghost"
             title="Editor color theme (syntax highlighting)"
@@ -5726,6 +5736,7 @@ export default function ResearchStudioPage() {
             <div
               key={path}
               className={`studio-tab ${selectedPath === path ? "studio-tab-active" : ""}`}
+              style={selectedPath === path ? { borderBottom: `2px solid ${fileTypeColor(path.split("/").pop() || "", false)}` } : undefined}
               onClick={() => { closeIntellisense(); setSelectedPath(path); }}
             >
               <span>{path.split("/").pop() || path}</span>
