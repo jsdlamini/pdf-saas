@@ -21,6 +21,23 @@
   --warning: #b45309;
   --danger: #dc2626;
 
+  /* shadcn/ui primitives (Base UI preset) — mapped onto our tokens. These
+     reference var(--accent) etc. so they follow the dark ramp automatically. */
+  --primary: var(--accent);
+  --primary-foreground: #ffffff;
+  --secondary: var(--surface-soft);
+  --secondary-foreground: var(--foreground);
+  --destructive: var(--danger);
+  --destructive-foreground: #ffffff;
+  --card: var(--surface);
+  --card-foreground: var(--foreground);
+  --popover: var(--surface);
+  --popover-foreground: var(--foreground);
+  --input: var(--border);
+  --ring: var(--accent);
+  --radius: 0.5rem;
+  --radius-md: 0.5rem;
+
   /* Unified card + surface tokens */
   --radius-card: 16px;
   --shadow-card: 0 1px 2px rgba(15, 23, 42, 0.05), 0 10px 28px -16px rgba(15, 23, 42, 0.18);
@@ -109,6 +126,21 @@ html[data-theme="dark"] {
   --color-foreground: var(--foreground);
   --font-sans: var(--font-body);
   --font-heading: var(--font-display);
+  /* shadcn/ui (Base UI preset) colour utilities mapped onto our tokens. */
+  --color-primary: var(--accent);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--surface-soft);
+  --color-secondary-foreground: var(--foreground);
+  --color-muted: var(--surface-soft); /* shadcn's subtle hover bg */
+  --color-muted-foreground: var(--muted); /* our muted text */
+  --color-destructive: var(--danger);
+  --color-destructive-foreground: var(--destructive-foreground);
+  --color-card: var(--surface);
+  --color-card-foreground: var(--foreground);
+  --color-popover: var(--surface);
+  --color-popover-foreground: var(--foreground);
+  --color-input: var(--border);
+  --color-ring: var(--accent);
 }
 
 body {
