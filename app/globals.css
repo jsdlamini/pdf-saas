@@ -1289,6 +1289,95 @@ body[data-studio-editor="true"] footer {
   padding: 24px;
 }
 
+/* ── Studio hero (projects screen) ───── */
+.studio-hero {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 24px;
+  align-items: center;
+  border-radius: 20px;
+  border: 1px solid color-mix(in srgb, #a78bfa 24%, var(--border-color, #334155));
+  background:
+    radial-gradient(120% 90% at 100% 0%, rgba(139, 92, 246, 0.22), transparent 55%),
+    radial-gradient(120% 90% at 0% 100%, rgba(96, 165, 250, 0.14), transparent 50%),
+    var(--bg-secondary, #131620);
+  padding: 28px;
+  margin-bottom: 28px;
+}
+@media (min-width: 900px) {
+  .studio-hero {
+    grid-template-columns: minmax(0, 1.1fr) minmax(0, 1fr);
+    padding: 36px;
+  }
+}
+
+.studio-hero-title {
+  font-size: 30px;
+  line-height: 1.12;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  color: var(--text-primary, #e2e8f0);
+  margin: 0;
+}
+@media (min-width: 900px) {
+  .studio-hero-title { font-size: 40px; }
+}
+
+.studio-hero-sub {
+  margin-top: 10px;
+  font-size: 14px;
+  line-height: 1.55;
+  color: var(--text-secondary, #94a3b8);
+  max-width: 46ch;
+}
+
+.studio-hero-points {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 18px;
+  list-style: none;
+  margin: 18px 0 0;
+  padding: 0;
+}
+.studio-hero-points li {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-primary, #e2e8f0);
+}
+.studio-hero-points li svg {
+  color: #a78bfa;
+}
+
+.studio-hero-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: 22px;
+}
+
+.studio-hero-auth {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 12px;
+  margin-top: 18px;
+  padding-top: 16px;
+  border-top: 1px solid var(--border-color, #334155);
+  font-size: 12px;
+  color: var(--text-muted, #64748b);
+}
+
+.studio-hero-visual {
+  border-radius: 14px;
+  border: 1px solid var(--border-color, #334155);
+  overflow: hidden;
+  background: #0b0e14;
+  box-shadow: 0 24px 50px -30px rgba(0, 0, 0, 0.7);
+}
+
 .studio-dashboard-header {
   margin-bottom: 24px;
 }

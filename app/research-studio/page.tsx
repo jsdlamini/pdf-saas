@@ -2907,6 +2907,12 @@ export default function ResearchStudioPage() {
   const [githubTokenInput, setGithubTokenInput] = useState("");
   const [githubHasToken, setGithubHasToken] = useState(false);
 
+  const [newProjectOpen, setNewProjectOpen] = useState(false);
+  const [newProjectName, setNewProjectName] = useState("");
+  const [newProjectType, setNewProjectType] = useState<EditorMode>("latex");
+  const [newProjectTemplate, setNewProjectTemplate] = useState("");
+  const [newProjectError, setNewProjectError] = useState("");
+
   async function githubSettings() {
     if (!userId) return;
     setGithubTokenInput("");
@@ -3493,16 +3499,12 @@ export default function ResearchStudioPage() {
     setAddFileError("");
   }
 
-  async function createNewProject() {
+  function createNewProject() {
     if (!userId && savedProjects.length >= GUEST_PROJECT_LIMIT) {
-      setCompileNotice("Guest limit reached: sign in to create more than 5 projects.");
-      await Swal.fire({
+      setCompileNotice("Guest limit reached: sign in to create more projects.");
+      void Swal.fire({
         title: "Project limit reached",
-        html: `Guest users can save up to ${GUEST_PROJECT_LIMIT} projects.
-          <a href="#" onclick="window.Clerk && window.Clerk.openSignIn && window.Clerk.openSignIn(); return false;" style="color:#0f766e;font-weight:600">Sign in</a>
-          or
-          <a href="#" onclick="window.Clerk && window.Clerk.openSignUp && window.Clerk.openSignUp(); return false;" style="color:#0f766e;font-weight:600">create an account</a>
-          to continue creating projects.`,
+        html: `Guest users can save up to ${GUEST_PROJECT_LIMIT} projects. <a href="#" onclick="window.Clerk && window.Clerk.openSignIn && window.Clerk.openSignIn(); return false;" style="color:#0f766e;font-weight:600">Sign in</a> or <a href="#" onclick="window.Clerk && window.Clerk.openSignUp && window.Clerk.openSignUp(); return false;" style="color:#0f766e;font-weight:600">create an account</a> to continue.`,
         icon: "info",
         confirmButtonText: "OK",
         confirmButtonColor: "#0f766e",
@@ -3511,106 +3513,21 @@ export default function ResearchStudioPage() {
       });
       return;
     }
+    setNewProjectName("");
+    setNewProjectType("latex");
+    setNewProjectTemplate("");
+    setNewProjectError("");
+    setNewProjectOpen(true);
+  }
 
-    // Build template options for each type
-    const latexTemplates = RESEARCH_TEMPLATES.filter((t) => !t.slug.startsWith("python-") && !t.slug.startsWith("cpp-"));
-    const pythonTemplates = RESEARCH_TEMPLATES.filter((t) => t.slug.startsWith("python-"));
-    const cppTemplates = RESEARCH_TEMPLATES.filter((t) => t.slug.startsWith("cpp-"));
-    const opts = (list: ResearchTemplate[]) =>
-      list.map((t) => `<option value="${t.slug}">${t.name}</option>`).join("");
-
-    // Show dialog with name + type + template selector
-    const result = await Swal.fire({
-      title: "New Project",
-      html: `
-        <div style="text-align:left;display:flex;flex-direction:column;gap:12px">
-          <div>
-            <label style="font-size:13px;font-weight:600;color:#e2e8f0;display:block;margin-bottom:4px">Project Name</label>
-            <input id="swal-project-name" class="swal2-input" placeholder="My Research Project" style="background:#0f172a;color:#e2e8f0;border-color:#334155;width:calc(100% - 24px);max-width:100%;min-width:0;box-sizing:border-box;margin-left:0;margin-right:24px;text-align:left">
-          </div>
-          <div>
-            <label style="font-size:13px;font-weight:600;color:#e2e8f0;display:block;margin-bottom:4px">Project Type</label>
-            <div style="display:flex;gap:8px;flex-wrap:wrap">
-              <label style="flex:1;padding:8px 4px;border:1px solid #818cf8;border-radius:6px;text-align:center;cursor:pointer;color:#e2e8f0;font-size:12px">
-                <input type="radio" name="project-type" value="latex" checked style="margin-right:4px" onchange="this.ownerDocument.getElementById('swal-tpl-latex').style.display='';this.ownerDocument.getElementById('swal-tpl-python').style.display='none';this.ownerDocument.getElementById('swal-tpl-cpp').style.display='none'"> LaTeX
-              </label>
-              <label style="flex:1;padding:8px 4px;border:1px solid #4ade80;border-radius:6px;text-align:center;cursor:pointer;color:#e2e8f0;font-size:12px">
-                <input type="radio" name="project-type" value="python" style="margin-right:4px" onchange="this.ownerDocument.getElementById('swal-tpl-latex').style.display='none';this.ownerDocument.getElementById('swal-tpl-python').style.display='';this.ownerDocument.getElementById('swal-tpl-cpp').style.display='none'"> Python
-              </label>
-              <label style="flex:1;padding:8px 4px;border:1px solid #f97316;border-radius:6px;text-align:center;cursor:pointer;color:#e2e8f0;font-size:12px">
-                <input type="radio" name="project-type" value="cpp" style="margin-right:4px" onchange="this.ownerDocument.getElementById('swal-tpl-latex').style.display='none';this.ownerDocument.getElementById('swal-tpl-python').style.display='none';this.ownerDocument.getElementById('swal-tpl-cpp').style.display=''"> C++
-              </label>
-            </div>
-          </div>
-          <div style="display:flex;flex-direction:column;gap:6px">
-            <label style="font-size:13px;font-weight:600;color:#e2e8f0;display:block">Start from a template</label>
-            <select id="swal-tpl-latex" class="swal2-input" style="background:#0f172a;color:#e2e8f0;border-color:#334155;width:calc(100% - 24px);margin-left:0;margin-right:24px;text-align:left">
-              <option value="">Blank project (no template)</option>
-              ${opts(latexTemplates)}
-            </select>
-            <select id="swal-tpl-python" class="swal2-input" style="display:none;background:#0f172a;color:#e2e8f0;border-color:#334155;width:calc(100% - 24px);margin-left:0;margin-right:24px;text-align:left">
-              <option value="">Blank project (no template)</option>
-              ${opts(pythonTemplates)}
-            </select>
-            <select id="swal-tpl-cpp" class="swal2-input" style="display:none;background:#0f172a;color:#e2e8f0;border-color:#334155;width:calc(100% - 24px);margin-left:0;margin-right:24px;text-align:left">
-              <option value="">Blank project (no template)</option>
-              ${opts(cppTemplates)}
-            </select>
-          </div>
-        </div>
-      `,
-      showCancelButton: true,
-      confirmButtonText: "Create",
-      cancelButtonText: "Cancel",
-      confirmButtonColor: "#0f766e",
-      cancelButtonColor: "#334155",
-      background: "#1a1d2b",
-      color: "#e2e8f0",
-      customClass: {
-        popup: "swal-draggable",
-        title: "swal-drag-handle",
-      },
-      position: "top",
-      didOpen: () => {
-        const popup = document.querySelector(".swal-draggable") as HTMLElement | null;
-        const titleEl = document.querySelector(".swal-drag-handle") as HTMLElement | null;
-        if (!popup || !titleEl) return;
-        let offsetX = 0, offsetY = 0, dragging = false;
-        titleEl.style.cursor = "grab";
-        titleEl.addEventListener("mousedown", (e) => {
-          dragging = true;
-          offsetX = (e as MouseEvent).clientX - popup.getBoundingClientRect().left;
-          offsetY = (e as MouseEvent).clientY - popup.getBoundingClientRect().top;
-          titleEl.style.cursor = "grabbing";
-        });
-        document.addEventListener("mousemove", (e) => {
-          if (!dragging) return;
-          popup.style.position = "fixed";
-          popup.style.left = `${e.clientX - offsetX}px`;
-          popup.style.top = `${e.clientY - offsetY}px`;
-          popup.style.margin = "0";
-        });
-        document.addEventListener("mouseup", () => {
-          dragging = false;
-          titleEl.style.cursor = "grab";
-        });
-      },
-      preConfirm: () => {
-        const name = (document.getElementById("swal-project-name") as HTMLInputElement)?.value?.trim();
-        if (!name) {
-          Swal.showValidationMessage("Enter a project name");
-          return false;
-        }
-        const typeEl = document.querySelector('input[name="project-type"]:checked') as HTMLInputElement | null;
-        const type = (typeEl?.value || "latex") as EditorMode;
-        const selectId = type === "python" ? "swal-tpl-python" : type === "cpp" ? "swal-tpl-cpp" : "swal-tpl-latex";
-        const templateSlug = (document.getElementById(selectId) as HTMLSelectElement)?.value || "";
-        return { name, type, templateSlug };
-      },
-    });
-
-    if (!result.isConfirmed || !result.value) return;
-    const { name, type, templateSlug } = result.value as { name: string; type: EditorMode; templateSlug: string };
+  function finishCreateProject() {
+    const name = newProjectName.trim();
+    if (!name) {
+      setNewProjectError("Enter a project name.");
+      return;
+    }
+    const type = newProjectType;
+    const templateSlug = newProjectTemplate;
 
     const nextProjectId = makeProjectId();
     const template = templateSlug ? getTemplateBySlug(templateSlug) : null;
@@ -3660,6 +3577,111 @@ export default function ResearchStudioPage() {
     setCompileNotice("New project created and saved. Add files and compile when ready.");
     trackStudioEvent("project-create", type);
     setWorkspaceScreen("editor");
+    setNewProjectOpen(false);
+  }
+
+  function renderNewProjectDialog() {
+    const templatesForType = RESEARCH_TEMPLATES.filter((t) =>
+      newProjectType === "python"
+        ? t.slug.startsWith("python-")
+        : newProjectType === "cpp"
+          ? t.slug.startsWith("cpp-")
+          : !t.slug.startsWith("python-") && !t.slug.startsWith("cpp-")
+    );
+    return (
+      <Dialog open={newProjectOpen} onOpenChange={(open) => { setNewProjectOpen(open); if (!open) setNewProjectError(""); }}>
+        <DialogContent className="sm:max-w-lg">
+          <DialogHeader>
+            <DialogTitle>New Project</DialogTitle>
+            <DialogDescription>
+              Start a new LaTeX, Python, or C++ project — blank or from a template.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-4">
+            <div className="space-y-1.5">
+              <Label htmlFor="new-project-name">Project name</Label>
+              <Input
+                id="new-project-name"
+                value={newProjectName}
+                onChange={(e) => { setNewProjectName(e.target.value); setNewProjectError(""); }}
+                placeholder="My Research Project"
+                autoFocus
+              />
+              {newProjectError ? (
+                <p className="text-xs font-semibold text-[var(--danger)]">{newProjectError}</p>
+              ) : null}
+            </div>
+
+            <div className="space-y-1.5">
+              <Label>Project type</Label>
+              <div className="grid grid-cols-3 gap-2">
+                {(["latex", "python", "cpp"] as EditorMode[]).map((mode) => {
+                  const selected = newProjectType === mode;
+                  const active = mode === "latex" ? "#818cf8" : mode === "python" ? "#4ade80" : "#f97316";
+                  return (
+                    <button
+                      key={mode}
+                      type="button"
+                      onClick={() => { setNewProjectType(mode); setNewProjectTemplate(""); }}
+                      className="rounded-lg border px-3 py-2 text-sm font-semibold transition"
+                      style={{
+                        borderColor: selected ? active : "var(--border, #cbd5e1)",
+                        background: selected ? `${active}22` : "transparent",
+                        color: selected ? active : "var(--foreground, #0f172a)",
+                      }}
+                    >
+                      {mode === "latex" ? "LaTeX" : mode === "python" ? "Python" : "C++"}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+
+            <div className="space-y-1.5">
+              <Label>Start from a template</Label>
+              <div className="grid max-h-52 grid-cols-1 gap-1.5 overflow-y-auto pr-1 sm:grid-cols-2">
+                <button
+                  type="button"
+                  onClick={() => setNewProjectTemplate("")}
+                  className="rounded-lg border px-3 py-2 text-left text-sm transition"
+                  style={{
+                    borderColor: newProjectTemplate === "" ? "var(--accent, #1e40af)" : "var(--border, #cbd5e1)",
+                    background: newProjectTemplate === "" ? "var(--accent-50, #eff6ff)" : "transparent",
+                  }}
+                >
+                  <span className="font-semibold">Blank project</span>
+                  <span className="mt-0.5 block text-xs opacity-70">No template — start from scratch.</span>
+                </button>
+                {templatesForType.map((t) => {
+                  const selected = newProjectTemplate === t.slug;
+                  return (
+                    <button
+                      key={t.slug}
+                      type="button"
+                      onClick={() => setNewProjectTemplate(t.slug)}
+                      className="rounded-lg border px-3 py-2 text-left text-sm transition"
+                      style={{
+                        borderColor: selected ? "var(--accent, #1e40af)" : "var(--border, #cbd5e1)",
+                        background: selected ? "var(--accent-50, #eff6ff)" : "transparent",
+                      }}
+                    >
+                      <span className="font-semibold">{t.name}</span>
+                      <span className="mt-0.5 block text-xs opacity-70">{t.description}</span>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          </div>
+
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setNewProjectOpen(false)}>Cancel</Button>
+            <Button onClick={() => finishCreateProject()}>Create project</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    );
   }
 
   function openProjectsBoard() {
@@ -4994,12 +5016,102 @@ export default function ResearchStudioPage() {
             <p className="text-sm text-rose-300">Shared project not found or has expired.</p>
           </div>
         ) : null}
+
+        {/* ── Studio hero ── */}
+        <section className="studio-hero">
+          <div className="studio-hero-copy">
+            <h1 className="studio-hero-title">A real LaTeX editor, with your PDF beside it.</h1>
+            <p className="studio-hero-sub">
+              Write, compile, and see the result instantly — with GitHub sync, live
+              collaboration, version history, and AI assistance built in.
+            </p>
+            <ul className="studio-hero-points">
+              <li>
+                <svg viewBox="0 0 20 20" style={{ width: 14, height: 14 }} fill="none" stroke="currentColor" strokeWidth="2">
+                  <path d="M6 10l3 3 5-6" strokeLinecap="round" strokeLinejoin="round" />
+                </svg>
+                GitHub sync
+              </li>
+              <li>
+                <svg viewBox="0 0 20 20" style={{ width: 14, height: 14 }} fill="none" stroke="currentColor" strokeWidth="2">
+                  <path d="M6 10l3 3 5-6" strokeLinecap="round" strokeLinejoin="round" />
+                </svg>
+                Live PDF preview
+              </li>
+              <li>
+                <svg viewBox="0 0 20 20" style={{ width: 14, height: 14 }} fill="none" stroke="currentColor" strokeWidth="2">
+                  <path d="M6 10l3 3 5-6" strokeLinecap="round" strokeLinejoin="round" />
+                </svg>
+                AI assistance
+              </li>
+            </ul>
+            <div className="studio-hero-actions">
+              <button type="button" onClick={() => void createNewProject()} className="studio-btn studio-btn-primary">
+                <svg viewBox="0 0 20 20" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="2">
+                  <path d="M10 4v12M4 10h12" strokeLinecap="round" strokeLinejoin="round" />
+                </svg>
+                New Project
+              </button>
+              <button
+                type="button"
+                onClick={() => document.getElementById("templates")?.scrollIntoView({ behavior: "smooth" })}
+                className="studio-btn studio-btn-secondary"
+              >
+                Start from a template
+              </button>
+            </div>
+            {!isSignedIn ? (
+              <div className="studio-hero-auth">
+                <span>Working offline — sign in to sync across devices.</span>
+                <SignUpButton mode="modal">
+                  <button type="button" className="studio-btn studio-btn-primary">Create account</button>
+                </SignUpButton>
+                <SignInButton mode="modal">
+                  <button type="button" className="studio-btn studio-btn-secondary">Sign in</button>
+                </SignInButton>
+              </div>
+            ) : null}
+          </div>
+          <div className="studio-hero-visual" aria-hidden="true">
+            <div style={{ display: "flex", alignItems: "center", gap: 6, padding: "8px 12px", borderBottom: "1px solid var(--border-color, #334155)", background: "#11141c" }}>
+              <span style={{ width: 9, height: 9, borderRadius: "50%", background: "#f87171" }} />
+              <span style={{ width: 9, height: 9, borderRadius: "50%", background: "#fbbf24" }} />
+              <span style={{ width: 9, height: 9, borderRadius: "50%", background: "#34d399" }} />
+              <span style={{ marginLeft: 4, fontSize: 10, fontWeight: 600, color: "#64748b" }}>main.tex</span>
+            </div>
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", minHeight: 200 }}>
+              <div style={{ padding: 12, fontFamily: "var(--font-mono)", fontSize: 10, lineHeight: 1.7, color: "#cbd5e1", borderRight: "1px solid var(--border-color, #334155)" }}>
+                <div><span style={{ color: "#a78bfa" }}>\documentclass</span><span style={{ color: "#64748b" }}>{"article"}</span></div>
+                <div><span style={{ color: "#a78bfa" }}>\usepackage</span><span style={{ color: "#64748b" }}>{"graphicx"}</span></div>
+                <div><span style={{ color: "#a78bfa" }}>\title</span><span style={{ color: "#64748b" }}>{"My Paper"}</span></div>
+                <div><span style={{ color: "#a78bfa" }}>\begin</span><span style={{ color: "#64748b" }}>{"document"}</span></div>
+                <div><span style={{ color: "#34d399" }}>\section</span><span style={{ color: "#e2e8f0" }}>{"Introduction"}</span></div>
+                <div style={{ color: "#e2e8f0" }}>We study…</div>
+                <div><span style={{ color: "#a78bfa" }}>\end</span><span style={{ color: "#64748b" }}>{"document"}</span></div>
+              </div>
+              <div style={{ display: "flex", alignItems: "center", justifyContent: "center", background: "#fff", padding: 14 }}>
+                <div style={{ width: "100%", borderRadius: 4, border: "1px solid #e2e8f0", background: "#fff", padding: 12 }}>
+                  <div style={{ height: 10, width: "55%", borderRadius: 3, background: "#1e293b", marginBottom: 8 }} />
+                  <div style={{ height: 6, width: "75%", borderRadius: 3, background: "#cbd5e1", marginBottom: 10 }} />
+                  <div style={{ height: 6, width: "100%", borderRadius: 3, background: "#e2e8f0", marginBottom: 5 }} />
+                  <div style={{ height: 6, width: "100%", borderRadius: 3, background: "#e2e8f0", marginBottom: 5 }} />
+                  <div style={{ height: 6, width: "82%", borderRadius: 3, background: "#e2e8f0" }} />
+                </div>
+              </div>
+            </div>
+            <div style={{ display: "flex", alignItems: "center", gap: 6, padding: "7px 12px", borderTop: "1px solid var(--border-color, #334155)", background: "#11141c" }}>
+              <span style={{ width: 7, height: 7, borderRadius: "50%", background: "#34d399" }} />
+              <span style={{ fontSize: 10, fontWeight: 600, color: "#34d399" }}>Compiled in 0.13s</span>
+            </div>
+          </div>
+        </section>
+
         {/* Dashboard header */}
         <div className="studio-dashboard-header">
           <div className="flex items-center justify-between gap-4 flex-wrap">
             <div>
-              <h1 className="studio-dashboard-title">Research Studio</h1>
-              <p className="studio-dashboard-subtitle">Create, open, and manage your LaTeX research projects</p>
+              <h1 className="studio-dashboard-title">Your projects</h1>
+              <p className="studio-dashboard-subtitle">Create, open, and manage your research projects</p>
             </div>
             <div className="flex items-center gap-2">
               <a
@@ -5260,7 +5372,7 @@ export default function ResearchStudioPage() {
         )}
 
         {/* Template quick-start section */}
-        <div style={{ marginTop: 32 }}>
+        <div id="templates" style={{ marginTop: 32 }}>
           <h3 style={{ fontSize: 14, fontWeight: 600, color: "var(--text-primary, #e2e8f0)", marginBottom: 12 }}>Start from a LaTeX template</h3>
           <div className="studio-template-grid">
             {RESEARCH_TEMPLATES.filter((t) => !t.slug.startsWith("python-") && !t.slug.startsWith("cpp-")).map((template) => {
@@ -5296,6 +5408,7 @@ export default function ResearchStudioPage() {
           </div>
         </div>
         </div>
+        {renderNewProjectDialog()}
       </main>
     );
   }
@@ -6810,6 +6923,7 @@ export default function ResearchStudioPage() {
           })}
         </div>
       ) : null}
+      {renderNewProjectDialog()}
     </main>
   );
 }
