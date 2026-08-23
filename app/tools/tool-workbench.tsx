@@ -26,6 +26,19 @@ import { A4_PAGE_SIZE_PORTRAIT, buildMixedFilePageNodes, clampPdfImageDimensions
 import { configurePdfJsWorker, dataUrlToImage, extractPdfFormFields, loadPdfPagesText, processCompressionImage, renderComparePageWithDiffs, renderEditPagePreview, renderPdfPagePreview, renderPdfThumbnails, renderPdfToImages, samplePdfTextCoverage, type CompressionOptions, type EditFormField, type EditTextSpan, type PageThumbnail } from "@/lib/transforms/rasterize";
 import { buildOfficePreviewHtml, buildOfficePreviewText } from "@/lib/transforms/text-extract";
 
+// Category → token hue prefix (Sign shares the Secure amber hue).
+function categoryHue(category: string): string {
+  const map: Record<string, string> = {
+    Organize: "organise",
+    Optimize: "optimise",
+    Convert: "convert",
+    Security: "secure",
+    Edit: "edit",
+    Sign: "secure",
+  };
+  return map[category] ?? "organise";
+}
+
 type WorkbenchProps = {
   tool: ToolItem;
 };
@@ -5345,13 +5358,17 @@ export default function ToolWorkbench({ tool }: WorkbenchProps) {
         <ShareButton toolSlug={tool.slug} toolName={tool.name} />
       </div>
 
-      {/* ── Full-width top banner ── */}
-      <div className="space-y-2">
+      {/* ── Category-coloured header band ── */}
+      <div className="space-y-3">
+      <div
+        className="rounded-2xl p-5 md:p-6"
+        style={{ background: `var(--tool-${categoryHue(tool.category)}-600)` }}
+      >
         {backTarget ? (
           <button
             type="button"
             onClick={() => router.push(backTarget.href)}
-            className="inline-flex items-center gap-1.5 rounded-full border border-slate-300 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 shadow-sm transition hover:border-cyan-300 hover:bg-cyan-50 hover:text-cyan-900"
+            className="mb-4 inline-flex items-center gap-1.5 rounded-full border border-white/30 bg-white/10 px-3 py-1.5 text-xs font-semibold text-white transition hover:bg-white/20"
           >
             <svg viewBox="0 0 16 16" className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth="2">
               <path d="M10 3L5 8l5 5" strokeLinecap="round" strokeLinejoin="round" />
@@ -5360,92 +5377,106 @@ export default function ToolWorkbench({ tool }: WorkbenchProps) {
           </button>
         ) : null}
 
-        <div className="flex flex-wrap items-baseline gap-x-3 gap-y-0.5">
-          <div className="flex items-center gap-2.5">
-            <ToolIcon category={tool.category} className="h-6 w-6 shrink-0 text-slate-500" />
-            <h2 className="font-display text-2xl font-semibold text-slate-950">{tool.name}</h2>
-            {tool.processing === "local" ? (
-              <span className="inline-flex items-center gap-1 rounded-full border border-emerald-200 bg-emerald-50 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-emerald-700">
-                <svg viewBox="0 0 20 20" className="h-3 w-3" fill="none" stroke="currentColor" strokeWidth="2"><path d="M10 2a8 8 0 1 0 0 16 8 8 0 0 0 0-16z"/><path d="M7 10l2 2 4-4" strokeLinecap="round" strokeLinejoin="round"/></svg>
-                Works offline
-              </span>
-            ) : tool.processing === "conditional" ? (
-              <span className="inline-flex items-center gap-1 rounded-full border border-emerald-200 bg-emerald-50 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-emerald-700">
-                Offline for PDFs
-              </span>
-            ) : (
-              <span className="inline-flex items-center gap-1 rounded-full border border-slate-200 bg-slate-50 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-slate-500">
-                Requires internet
-              </span>
-            )}
+        <div className="flex flex-wrap items-center gap-3">
+          <span className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-white/20 ring-1 ring-white/25">
+            <ToolIcon category={tool.category} mono className="h-6 w-6" />
+          </span>
+          <div className="min-w-0 flex-1">
+            <h2 className="font-display text-2xl font-bold text-white md:text-3xl">{tool.name}</h2>
+            <p className="mt-0.5 text-sm text-white/85">{tool.description}</p>
           </div>
-          {(() => {
-            const hasAiIntake = smartIntake?.source === "ai";
-            if (hasAiIntake && smartIntake) {
-              return (
-                <span className="text-sm text-slate-500">
-                  {smartIntake.documentType}
-                  {smartIntake.intakeSummary ? ` — ${smartIntake.intakeSummary}` : ""}
-                  {smartIntakeLoading ? <span className="ml-2 text-xs text-cyan-700">Analyzing…</span> : null}
-                </span>
-              );
-            }
-            if (preflightLoading) {
-              return <span className="text-xs text-slate-400">Analyzing…</span>;
-            }
-            return null;
-          })()}
+          {tool.processing === "local" ? (
+            <span className="inline-flex items-center gap-1.5 rounded-full bg-white/20 px-3 py-1.5 text-xs font-bold uppercase tracking-wide text-white ring-1 ring-white/25">
+              <svg viewBox="0 0 20 20" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="2"><path d="M10 2a8 8 0 1 0 0 16 8 8 0 0 0 0-16z"/><path d="M7 10l2 2 4-4" strokeLinecap="round" strokeLinejoin="round"/></svg>
+              Works offline
+            </span>
+          ) : tool.processing === "conditional" ? (
+            <span className="inline-flex items-center gap-1.5 rounded-full bg-white/20 px-3 py-1.5 text-xs font-bold uppercase tracking-wide text-white ring-1 ring-white/25">
+              Offline for PDFs
+            </span>
+          ) : (
+            <span className="inline-flex items-center gap-1.5 rounded-full bg-white/20 px-3 py-1.5 text-xs font-bold uppercase tracking-wide text-white ring-1 ring-white/25">
+              Requires internet
+            </span>
+          )}
         </div>
 
-        <p className="text-sm text-slate-700">{tool.description}</p>
+        {(() => {
+          const hasAiIntake = smartIntake?.source === "ai";
+          if (hasAiIntake && smartIntake) {
+            return (
+              <p className="mt-2 text-xs text-white/80">
+                {smartIntake.documentType}
+                {smartIntake.intakeSummary ? ` — ${smartIntake.intakeSummary}` : ""}
+                {smartIntakeLoading ? <span className="ml-2">Analyzing…</span> : null}
+              </p>
+            );
+          }
+          if (preflightLoading) {
+            return <p className="mt-2 text-xs text-white/70">Analyzing…</p>;
+          }
+          return null;
+        })()}
 
-        <p className="field-help">{uploadHint}</p>
+        <p className="mt-2 text-xs text-white/75">{uploadHint}</p>
+      </div>
 
-        {shouldShowFileInput ? (
-          <input
-            ref={fileInputRef}
-            type="file"
-            accept={inputAccept}
-            multiple={acceptsMultiple}
-            onChange={(event) => onSelect(event.target.files)}
-            className="hidden"
-          />
-        ) : null}
+      {shouldShowFileInput ? (
+        <input
+          ref={fileInputRef}
+          type="file"
+          accept={inputAccept}
+          multiple={acceptsMultiple}
+          onChange={(event) => onSelect(event.target.files)}
+          className="hidden"
+        />
+      ) : null}
 
-        {shouldShowFileInput ? (
+      {shouldShowFileInput ? (
+        <div className="flex flex-wrap items-center gap-2">
           <button
             type="button"
             onClick={() => fileInputRef.current?.click()}
-            className="inline-flex items-center gap-2 rounded-full border border-cyan-300 bg-white px-4 py-2 text-sm font-semibold text-cyan-800 shadow-sm transition hover:bg-cyan-50"
+            className="inline-flex items-center gap-2 rounded-full px-4 py-2 text-sm font-bold text-white transition hover:brightness-110"
+            style={{ background: `var(--tool-${categoryHue(tool.category)}-600)` }}
           >
             <svg viewBox="0 0 20 20" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="2">
               <path d="M10 4v12M4 10h12" strokeLinecap="round" />
             </svg>
             {files.length > 0 ? "Add More Files" : "Choose Files"}
           </button>
-        ) : null}
 
-        {shouldShowFileInput && files.length === 0 ? (
-          <button
-            type="button"
-            onClick={async () => {
-              try {
-                setError("");
-                setStatus("Loading sample document…");
-                const resp = await fetch("/sample.pdf");
-                if (!resp.ok) throw new Error("Sample not available");
-                const blob = await resp.blob();
-                const file = new File([blob], "sample.pdf", { type: "application/pdf" });
-                await applySelectedFiles([file]);
-              } catch {
-                setError("Could not load the sample document. Please try uploading your own file.");
-              }
-            }}
-            className="text-xs text-slate-500 underline hover:text-cyan-700 transition cursor-pointer"
-          >
-            No file handy? Try with a sample document
-          </button>
-        ) : null}
+          {files.length === 0 ? (
+            <button
+              type="button"
+              onClick={async () => {
+                try {
+                  setError("");
+                  setStatus("Loading sample document…");
+                  const resp = await fetch("/sample.pdf");
+                  if (!resp.ok) throw new Error("Sample not available");
+                  const blob = await resp.blob();
+                  const file = new File([blob], "sample.pdf", { type: "application/pdf" });
+                  await applySelectedFiles([file]);
+                } catch {
+                  setError("Could not load the sample document. Please try uploading your own file.");
+                }
+              }}
+              className="inline-flex items-center gap-2 rounded-full border-2 px-4 py-2 text-sm font-bold transition hover:opacity-80"
+              style={{
+                borderColor: `var(--tool-${categoryHue(tool.category)}-600)`,
+                color: `var(--tool-${categoryHue(tool.category)}-600)`,
+              }}
+            >
+              <svg viewBox="0 0 20 20" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="2">
+                <path d="M10 12a2 2 0 1 0 0-4 2 2 0 0 0 0 4z" strokeLinecap="round" strokeLinejoin="round" />
+                <path d="M2 10c1.5-4 4.5-6 8-6s6.5 2 8 6c-1.5 4-4.5 6-8 6s-6.5-2-8-6z" strokeLinecap="round" strokeLinejoin="round" />
+              </svg>
+              Try with a sample document
+            </button>
+          ) : null}
+        </div>
+      ) : null}
 
         {shouldShowFileInput && files.length > 0 ? (
           <div className="flex max-w-full flex-wrap items-center gap-1.5">
