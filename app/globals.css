@@ -38,6 +38,18 @@
   --radius: 0.5rem;
   --radius-md: 0.5rem;
 
+  /* Tool-catalogue category hues (content colour, not chrome). */
+  --tool-organise: #3B82F6;
+  --tool-organise-tint: #EFF6FF;
+  --tool-convert: #7C3AED;
+  --tool-convert-tint: #F5F3FF;
+  --tool-optimise: #0D9488;
+  --tool-optimise-tint: #F0FDFA;
+  --tool-secure: #D97706;
+  --tool-secure-tint: #FFFBEB;
+  --tool-edit: #E11D48;
+  --tool-edit-tint: #FFF1F2;
+
   /* Unified card + surface tokens */
   --radius-card: 16px;
   --shadow-card: 0 1px 2px rgba(15, 23, 42, 0.05), 0 10px 28px -16px rgba(15, 23, 42, 0.18);
@@ -119,6 +131,17 @@ html[data-theme="dark"] {
   --success: #4ade80;
   --warning: #fbbf24;
   --danger: #f87171;
+
+  --tool-organise: #60a5fa;
+  --tool-organise-tint: rgba(59, 130, 246, 0.16);
+  --tool-convert: #a78bfa;
+  --tool-convert-tint: rgba(124, 58, 237, 0.16);
+  --tool-optimise: #2dd4bf;
+  --tool-optimise-tint: rgba(13, 148, 136, 0.16);
+  --tool-secure: #fbbf24;
+  --tool-secure-tint: rgba(217, 119, 6, 0.16);
+  --tool-edit: #fb7185;
+  --tool-edit-tint: rgba(225, 29, 72, 0.16);
 }
 
 @theme inline {
