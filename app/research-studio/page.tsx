@@ -14,17 +14,7 @@ import { getTemplateBySlug, RESEARCH_TEMPLATES, type ResearchTemplate } from "@/
 import { LatexEditor, EDITOR_THEMES, type EditorThemeId, type EditorFindRange } from "../components/latex-editor";
 import { EditorView } from "@codemirror/view";
 import type { EditorMode } from "@/lib/highlighters";
-import {
-  BookMarked,
-  Braces,
-  File,
-  FileCode,
-  FileText,
-  Folder,
-  FolderOpen,
-  Image as ImageIcon,
-  Settings,
-} from "lucide-react";
+import { vscodeFileIcon, vscodeFolderIcon } from "@/lib/file-icons";
 import { loadJson, persistJson, removeJson } from "@/lib/json-storage";
 import { mergeAssetContents, unrecoverableAssetPaths } from "@/lib/project-assets";
 import { classifyUpload, joinUploadPath } from "@/lib/project-upload";
@@ -277,7 +267,8 @@ function clamp(value: number, min: number, max: number) {
   return Math.min(Math.max(value, min), max);
 }
 
-// File-type colour for the tree icons and tab underlines (VS Code-style).
+// File-type colour for the tab underlines (VS Code-style). The tree icons
+// themselves carry their own colour via the vscode-icons SVGs.
 function fileTypeColor(name: string, isFolder: boolean): string {
   if (isFolder) return "#fbbf24"; // amber folders
   const ext = name.split(".").pop()?.toLowerCase() || "";
@@ -287,23 +278,6 @@ function fileTypeColor(name: string, isFolder: boolean): string {
   if (/^(png|jpe?g|gif|webp|svg|bmp|ico|pdf)$/.test(ext)) return "#2dd4bf";
   if (/^(py|js|ts|tsx|jsx|cpp|c|cc|cxx|h|hpp|cs|go|rs|java|json)$/.test(ext)) return "#fb7185";
   return "currentColor";
-}
-
-// VSCode-style file icon (distinct shape + colour per type).
-function fileTreeIcon(name: string, isFolder: boolean, expanded: boolean) {
-  if (isFolder) {
-    const Icon = expanded ? FolderOpen : Folder;
-    return { color: "#fbbf24", Icon };
-  }
-  const ext = name.split(".").pop()?.toLowerCase() || "";
-  if (ext === "tex") return { color: "#60a5fa", Icon: FileText };
-  if (ext === "bib") return { color: "#a78bfa", Icon: BookMarked };
-  if (ext === "cls" || ext === "sty") return { color: "#fbbf24", Icon: Settings };
-  if (/^(png|jpe?g|gif|webp|svg|bmp|ico)$/.test(ext)) return { color: "#2dd4bf", Icon: ImageIcon };
-  if (ext === "pdf") return { color: "#fb7185", Icon: FileText };
-  if (/^(py|js|ts|tsx|jsx|cpp|c|cc|cxx|h|hpp|cs|go|rs|java)$/.test(ext)) return { color: "#fb7185", Icon: FileCode };
-  if (ext === "json") return { color: "#fbbf24", Icon: Braces };
-  return { color: "currentColor", Icon: File };
 }
 
 // Template accent colour by category (Journal/Conference/Report/Code).
@@ -4842,11 +4816,14 @@ export default function ResearchStudioPage() {
                 </svg>
               </span>
             ) : (
-              <span className="studio-tree-icon" style={{ color: fileTypeColor(node.name, isFolder) }}>
-                {(() => {
-                  const { color, Icon } = fileTreeIcon(node.name, isFolder, expanded);
-                  return <Icon style={{ width: 14, height: 14 }} color={color} strokeWidth={1.8} aria-hidden="true" />;
-                })()}
+              <span className="studio-tree-icon">
+                <img
+                  src={`/vscode-icons/${isFolder ? vscodeFolderIcon(node.name, expanded) : vscodeFileIcon(node.name)}`}
+                  alt=""
+                  aria-hidden="true"
+                  style={{ width: 16, height: 16, display: "block" }}
+                  loading="lazy"
+                />
               </span>
             )}
 
