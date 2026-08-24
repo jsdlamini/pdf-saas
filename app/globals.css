@@ -1447,6 +1447,23 @@ body[data-studio-editor="true"] footer {
   background: #0b0e14;
   overflow: hidden;
   box-shadow: 0 18px 40px -28px rgba(0, 0, 0, 0.8);
+  cursor: pointer;
+  transition: border-color 160ms ease, box-shadow 160ms ease;
+}
+.studio-hero-showcase-code:hover {
+  border-color: var(--line-strong, #475569);
+  box-shadow: 0 22px 48px -26px rgba(0, 0, 0, 0.9);
+}
+.studio-hero-showcase-launch {
+  margin-left: 10px;
+  font-size: 10px;
+  font-weight: 700;
+  color: var(--text-muted, #64748b);
+  opacity: 0.85;
+  transition: opacity 160ms ease;
+}
+.studio-hero-showcase-code:hover .studio-hero-showcase-launch {
+  opacity: 1;
 }
 .studio-hero-showcase-bar {
   display: flex;

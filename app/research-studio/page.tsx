@@ -5032,28 +5032,8 @@ export default function ResearchStudioPage() {
 
         {/* ── Studio hero ── */}
         <section className="studio-hero">
-          <StudioHeroCards />
+          <StudioHeroCards onLaunch={() => void createNewProject()} />
           <div className="studio-hero-copy">
-            <ul className="studio-hero-points">
-              <li>
-                <svg viewBox="0 0 20 20" style={{ width: 14, height: 14 }} fill="none" stroke="currentColor" strokeWidth="2">
-                  <path d="M6 10l3 3 5-6" strokeLinecap="round" strokeLinejoin="round" />
-                </svg>
-                GitHub sync
-              </li>
-              <li>
-                <svg viewBox="0 0 20 20" style={{ width: 14, height: 14 }} fill="none" stroke="currentColor" strokeWidth="2">
-                  <path d="M6 10l3 3 5-6" strokeLinecap="round" strokeLinejoin="round" />
-                </svg>
-                Live PDF preview
-              </li>
-              <li>
-                <svg viewBox="0 0 20 20" style={{ width: 14, height: 14 }} fill="none" stroke="currentColor" strokeWidth="2">
-                  <path d="M6 10l3 3 5-6" strokeLinecap="round" strokeLinejoin="round" />
-                </svg>
-                AI assistance
-              </li>
-            </ul>
             <div className="studio-hero-actions">
               <button type="button" onClick={() => void createNewProject()} className="studio-btn studio-btn-primary">
                 <svg viewBox="0 0 20 20" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="2">

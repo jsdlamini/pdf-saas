@@ -149,7 +149,7 @@ function highlight(code: string, lang: Slide["id"]): { text: string; color: stri
 const ROTATE_MS = 7000;
 const FADE_MS = 450;
 
-export default function StudioHeroCards() {
+export default function StudioHeroCards({ onLaunch }: { onLaunch?: () => void }) {
   const [active, setActive] = useState(0);
   const [count, setCount] = useState(0);
   const [fading, setFading] = useState(false);
@@ -221,6 +221,17 @@ export default function StudioHeroCards() {
       <div
         className="studio-hero-showcase-code"
         style={{ borderTop: `3px solid ${slide.accent}` }}
+        role="button"
+        tabIndex={0}
+        onClick={onLaunch}
+        onKeyDown={(e) => {
+          if ((e.key === "Enter" || e.key === " ") && onLaunch) {
+            e.preventDefault();
+            onLaunch();
+          }
+        }}
+        aria-label={`Start a ${slide.title} project`}
+        title={`Start a ${slide.title} project`}
       >
         <div className="studio-hero-showcase-bar">
           <span style={{ width: 10, height: 10, borderRadius: "50%", background: slide.accent }} />
@@ -228,6 +239,7 @@ export default function StudioHeroCards() {
           <span className="studio-hero-showcase-status" style={{ color: slide.accent }}>
             {slide.status}
           </span>
+          <span className="studio-hero-showcase-launch">Start project →</span>
         </div>
         <pre className="studio-hero-showcase-code-text">
           {highlight(slide.code.slice(0, count), slide.id).map((tok, i) => (
