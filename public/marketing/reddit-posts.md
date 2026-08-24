@@ -2,31 +2,31 @@
 
 ## Primary post (r/InternetIsBeautiful)
 
-**Title:** I built 25 free PDF tools plus a full research studio — AI peer review, live collaboration, computed figures — all in your browser
+**Title:** I built 25 free PDF tools plus a research studio — and fixed PDF → Excel so it gives you actual cells, not a text dump
 
 **Body:**
 
 After getting frustrated with PDF tools that watermark your documents, cap you at 2 files per day, or make you sign up just to download, I built the tool I wanted to use myself.
 
-[WiserFiles](https://pdf.idealsoftwaresolutions.com) — 25 PDF tools, all free, plus a Research Studio that I'm genuinely proud of:
+[WiserFiles](https://pdf.idealsoftwaresolutions.com) — 25 PDF tools, all free, plus a Research Studio:
 
-**PDF tools:**
-• Merge, split, compress, OCR, sign, redact, convert, compare, rotate, and 16 more
-• Voice search — just say "compress my PDF" and it finds the tool
-• Works offline (installable as a PWA)
-• Files encrypted in transit and auto-deleted after processing
+**PDF tools that actually do the thing:**
+• **PDF → Excel** extracts real tables into rows and columns (each table gets its own sheet) — not the usual "here's every page's text in one cell"
+• **PDF → PowerPoint** builds real slides with a title and bulleted body per page, plus embedded images
+• **PDF → Word** preserves headings, lists, and tables instead of flattening to plain text
+• **Redact** permanently removes text so it can't be recovered
+• Merge, split, compress, OCR, sign, compare, rotate, and 16 more
+• 20 of 25 tools work fully offline — nothing uploaded, nothing stored
 
 **Research Studio (for students & researchers):**
-• A real code editor (CodeMirror 6) for LaTeX, Python, and C++ — fast, line numbers, proper highlighting
-• **Import a full LaTeX project as a zip** — chapters, figures, and appendices all come along
-• **Multi-file C++ and Python projects** compile and run — headers and multiple source files just work
-• **AI writing assistant** — summarize, rewrite, expand, or improve any selection
-• **AI peer review** — get a simulated reviewer's critique (strengths, weaknesses, score) before you submit
-• **Live collaboration** — invite co-authors, see their cursors and edits in real time
-• **Computed figures** — generate a matplotlib plot from Python and auto-embed it in your paper
-• **Version history with visual diffs** — never lose a draft
-• **Export to Word or Markdown** — for journals that want .docx
-• Import citations by DOI, CSV-to-LaTeX tables, and live journal word-limit tracking
+• A real CodeMirror editor for LaTeX, Python, and C++ with a live PDF beside your source
+• Instant incremental compile — your PDF updates in a fraction of a second
+• Import a full LaTeX/Overleaf project as a zip
+• Multi-file C++ and Python projects compile and run
+• AI writing assistant + simulated peer review (strengths, weaknesses, score)
+• Live collaboration with real-time cursors and edits
+• Computed matplotlib figures embedded in your paper
+• Version history with visual diffs, DOI citation import, Word/Markdown export
 
 **What it doesn't do:**
 • Store your files
@@ -36,7 +36,7 @@ After getting frustrated with PDF tools that watermark your documents, cap you a
 • Show ads
 • Cost anything
 
-Built with Next.js, CodeMirror, pdf-lib, jspdf, PostgreSQL, and DeepSeek for the AI features. The Research Studio started as a LaTeX editor for my own thesis and grew into a full reproducible-research workspace.
+Built with Next.js, CodeMirror, pdf-lib, PyMuPDF, python-pptx, openpyxl, PostgreSQL, and DeepSeek. The Research Studio started as a LaTeX editor for my own thesis.
 
 Happy to answer questions. Would love feedback from anyone who writes papers or processes documents regularly.
 
@@ -44,43 +44,35 @@ Happy to answer questions. Would love feedback from anyone who writes papers or 
 
 ## Cross-post versions
 
-### r/college
-**Title:** Built a completely free PDF tool suite + research studio for students — no account, files auto-deleted
+### r/excel
+**Title:** PDF → Excel that gives you real tables, not one giant text cell
 
 **Body:**
 
-[WiserFiles](https://pdf.idealsoftwaresolutions.com) is a free toolkit I built. It has 25 PDF tools (merge, split, OCR, sign, compress, convert) plus a research studio with:
+Every free "PDF to Excel" converter I tried pasted each page's text into a single cell. So I fixed it: [WiserFiles](https://pdf.idealsoftwaresolutions.com/tools/pdf-to-excel) detects the actual tables in your PDF and writes each one to its own worksheet with real rows and columns.
 
-• LaTeX + Python + C++ editing with live code execution
-• Import your existing LaTeX project as a zip
-• Multi-file C++/Python projects compile and run
-• AI writing help (summarize, rewrite, improve grammar)
-• AI peer review before you submit your paper
-• Live collaboration with co-authors
-• Export to Word for professors who want .docx
-
-No account needed for the PDF tools. Files auto-delete. Everything's free.
+It's free, runs server-side with PyMuPDF's table detection, and deletes your file right after. If your PDF has no tables it gives you a per-page text sheet instead of a broken workbook.
 
 ### r/PhD
-**Title:** Free LaTeX editor with AI peer review, live collaboration, and computed figures
+**Title:** Free LaTeX editor with a live PDF, instant compile, and AI peer review
 
 **Body:**
 
 I built a free research studio because Overleaf's free tier is limiting and I wanted my analysis code next to my paper.
 
-Features: LaTeX + Python + C++ in one workspace, a real CodeMirror editor, one-click import of an existing Overleaf/LaTeX project, multi-file C++/Python, AI writing assistant, simulated peer review, real-time collaboration (cursors + live edits), version history with diffs, computed matplotlib figures embedded in the paper, DOI citation import, and Word/Markdown export.
+Features: LaTeX + Python + C++ in one workspace, a real CodeMirror editor with a live PDF beside your source, instant incremental compile, one-click import of an existing Overleaf/LaTeX project, multi-file C++/Python, AI writing assistant, simulated peer review, real-time collaboration (cursors + live edits), version history with diffs, computed matplotlib figures, DOI citation import, and Word/Markdown export.
 
 [Try it](https://pdf.idealsoftwaresolutions.com/research-studio) — no credit card, no watermarks.
 
 ### r/webdev
-**Title:** I built a PDF toolkit + research studio — Next.js, PostgreSQL, DeepSeek, real-time collaboration
+**Title:** I built a PDF toolkit + research studio — Next.js, PyMuPDF, DeepSeek, real-time collaboration
 
 **Body:**
 
 Sharing my project [WiserFiles](https://pdf.idealsoftwaresolutions.com) — a Next.js app with:
 
 • Client-side PDF processing (pdf-lib/jspdf) for privacy
-• Server-side OCR (Tesseract) and conversions (LibreOffice)
+• Server-side table detection for PDF → Excel (PyMuPDF), typography inference for PDF → PowerPoint (python-pptx), and structure-aware PDF → Word
 • A research studio with a CodeMirror editor for LaTeX/Python/C++, zip import, multi-file code execution, AI writing (DeepSeek), real-time collaboration (PostgreSQL LISTEN/NOTIFY + SSE), and computed figures
 • Clerk auth with guest quotas
 
