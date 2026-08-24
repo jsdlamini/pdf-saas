@@ -30,7 +30,7 @@ ENV HOSTNAME=0.0.0.0
 RUN apt-get update \
  && apt-get install -y --no-install-recommends ocrmypdf=14.0.1+dfsg1-1 tesseract-ocr=5.3.0-2 ghostscript=10.0.0~dfsg-11+deb12u8 qpdf latexmk texlive-extra-utils texlive-latex-base texlive-latex-recommended texlive-latex-extra texlive-fonts-recommended texlive-fonts-extra texlive-science texlive-publishers texlive-pictures texlive-bibtex-extra biber tesseract-ocr-deu tesseract-ocr-eng tesseract-ocr-fra tesseract-ocr-spa tesseract-ocr-ita tesseract-ocr-por tesseract-ocr-nld tesseract-ocr-pol libreoffice-writer=4:7.4.7-1+deb12u14 python3 python3-pip python3-matplotlib g++ pandoc \
  && rm -rf /var/lib/apt/lists/* \
- && pip3 install --no-cache-dir --break-system-packages pdf2docx==0.5.13 pymupdf==1.28.2 python-docx==1.2.0 \
+ && pip3 install --no-cache-dir --break-system-packages pdf2docx==0.5.13 pymupdf==1.28.2 python-docx==1.2.0 openpyxl==3.1.5 python-pptx==1.0.2 \
  && useradd --create-home --shell /bin/bash app
 
 COPY package.json package-lock.json ./

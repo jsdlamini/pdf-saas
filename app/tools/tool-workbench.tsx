@@ -4489,40 +4489,112 @@ export default function ToolWorkbench({ tool }: WorkbenchProps) {
 
       if (tool.slug === "pdf-to-powerpoint") {
         if (!firstFile) throw new Error("Missing PDF file.");
-        const pages = await loadPdfPagesText(new Uint8Array(await readAsArrayBuffer(firstFile)));
-        const presentation = new PptxGenJS();
-        presentation.layout = "LAYOUT_WIDE";
-        pages.forEach((text, index) => {
-          const slide = presentation.addSlide();
-          slide.addText(`Page ${index + 1}`, { x: 0.5, y: 0.4, w: 12, h: 0.6, fontSize: 22, bold: true });
-          slide.addText(text.slice(0, 1800), { x: 0.7, y: 1.3, w: 11.5, h: 5.3, fontSize: 14 });
-        });
-        const pptxBytes = (await presentation.write({ outputType: "arraybuffer" })) as ArrayBuffer;
-        stageOutput(
-          new Blob([pptxBytes], {
-            type: "application/vnd.openxmlformats-officedocument.presentationml.presentation",
-          }),
-          `${normalizeFileName(firstFile.name)}.pptx`,
-          "Binary PPTX preview is metadata-only. Download to inspect slides."
-        );
-        complete("PPTX file ready for preview.");
+
+        let pptxServerFailed = false;
+        try {
+          setStatus("Converting PDF to PowerPoint on server...");
+          logProcessing("Sending PDF to server for PPTX conversion via typography inference.");
+          const formData = new FormData();
+          formData.append("file", firstFile);
+          const response = await fetch("/api/pdf-to-powerpoint", { method: "POST", body: formData });
+
+          if (response.ok) {
+            setStatus("Downloading converted PPTX…");
+            const pptxBlob = await response.blob();
+            const disposition = response.headers.get("Content-Disposition");
+            const downloadName = getFileNameFromDisposition(disposition) || `${normalizeFileName(firstFile.name)}.pptx`;
+            stageOutput(pptxBlob, downloadName, "Editable PPTX with a title and bulleted body per slide. Download to open in PowerPoint.");
+            complete("PPTX file ready for preview.");
+            return;
+          }
+
+          let serverMessage = "Server conversion unavailable.";
+          try {
+            const serverBody = await response.json();
+            if (serverBody?.error) serverMessage = serverBody.error;
+          } catch {
+            // ignore parse errors
+          }
+          logProcessing(`Server conversion failed (${response.status}): ${serverMessage}. Falling back to client-side text extraction.`);
+          pptxServerFailed = true;
+        } catch (networkError) {
+          logProcessing(`Could not reach server for PPTX conversion: ${networkError instanceof Error ? networkError.message : "network error"}. Falling back to client-side text extraction.`);
+          pptxServerFailed = true;
+        }
+
+        if (pptxServerFailed) {
+          setStatus("Falling back to client-side text extraction...");
+          const pages = await loadPdfPagesText(new Uint8Array(await readAsArrayBuffer(firstFile)));
+          const presentation = new PptxGenJS();
+          presentation.layout = "LAYOUT_WIDE";
+          pages.forEach((text, index) => {
+            const slide = presentation.addSlide();
+            slide.addText(`Page ${index + 1}`, { x: 0.5, y: 0.4, w: 12, h: 0.6, fontSize: 22, bold: true });
+            slide.addText(text.slice(0, 1800), { x: 0.7, y: 1.3, w: 11.5, h: 5.3, fontSize: 14 });
+          });
+          const pptxBytes = (await presentation.write({ outputType: "arraybuffer" })) as ArrayBuffer;
+          stageOutput(
+            new Blob([pptxBytes], {
+              type: "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+            }),
+            `${normalizeFileName(firstFile.name)}.pptx`,
+            "Client-side text extraction (fallback). Download to inspect slides."
+          );
+          complete("PPTX file ready for preview (client-side fallback).");
+        }
         return;
       }
 
       if (tool.slug === "pdf-to-excel") {
         if (!firstFile) throw new Error("Missing PDF file.");
-        const pages = await loadPdfPagesText(new Uint8Array(await readAsArrayBuffer(firstFile)));
-        const rows: Array<Array<string | number>> = [["Page", "Content"]];
-        pages.forEach((text, index) => rows.push([index + 1, text]));
-        const workbook = XLSX.utils.book_new();
-        XLSX.utils.book_append_sheet(workbook, XLSX.utils.aoa_to_sheet(rows), "PDF Export");
-        const output = XLSX.write(workbook, { type: "array", bookType: "xlsx" });
-        stageOutput(
-          new Blob([output], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" }),
-          `${normalizeFileName(firstFile.name)}.xlsx`,
-          "Binary XLSX preview is metadata-only. Download to inspect workbook."
-        );
-        complete("XLSX file ready for preview.");
+
+        let xlsxServerFailed = false;
+        try {
+          setStatus("Extracting tables from PDF on server...");
+          logProcessing("Sending PDF to server for XLSX conversion via table detection.");
+          const formData = new FormData();
+          formData.append("file", firstFile);
+          const response = await fetch("/api/pdf-to-excel", { method: "POST", body: formData });
+
+          if (response.ok) {
+            setStatus("Downloading converted XLSX…");
+            const xlsxBlob = await response.blob();
+            const disposition = response.headers.get("Content-Disposition");
+            const downloadName = getFileNameFromDisposition(disposition) || `${normalizeFileName(firstFile.name)}.xlsx`;
+            stageOutput(xlsxBlob, downloadName, "Spreadsheet with detected tables in separate sheets. Download to open in Excel.");
+            complete("XLSX file ready for preview.");
+            return;
+          }
+
+          let serverMessage = "Server conversion unavailable.";
+          try {
+            const serverBody = await response.json();
+            if (serverBody?.error) serverMessage = serverBody.error;
+          } catch {
+            // ignore parse errors
+          }
+          logProcessing(`Server conversion failed (${response.status}): ${serverMessage}. Falling back to client-side text extraction.`);
+          xlsxServerFailed = true;
+        } catch (networkError) {
+          logProcessing(`Could not reach server for XLSX conversion: ${networkError instanceof Error ? networkError.message : "network error"}. Falling back to client-side text extraction.`);
+          xlsxServerFailed = true;
+        }
+
+        if (xlsxServerFailed) {
+          setStatus("Falling back to client-side text extraction...");
+          const pages = await loadPdfPagesText(new Uint8Array(await readAsArrayBuffer(firstFile)));
+          const rows: Array<Array<string | number>> = [["Page", "Content"]];
+          pages.forEach((text, index) => rows.push([index + 1, text]));
+          const workbook = XLSX.utils.book_new();
+          XLSX.utils.book_append_sheet(workbook, XLSX.utils.aoa_to_sheet(rows), "PDF Export");
+          const output = XLSX.write(workbook, { type: "array", bookType: "xlsx" });
+          stageOutput(
+            new Blob([output], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" }),
+            `${normalizeFileName(firstFile.name)}.xlsx`,
+            "Client-side text extraction (fallback). Download to inspect workbook."
+          );
+          complete("XLSX file ready for preview (client-side fallback).");
+        }
         return;
       }
 
