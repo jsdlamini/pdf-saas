@@ -39,6 +39,19 @@ function categoryHue(category: string): string {
   return map[category] ?? "organise";
 }
 
+function passwordStrength(pw: string): { pct: number; color: string; label: string } {
+  if (!pw) return { pct: 0, color: "#94a3b8", label: "Enter a password" };
+  let score = 0;
+  if (pw.length >= 8) score += 1;
+  if (pw.length >= 12) score += 1;
+  if (/[a-z]/.test(pw) && /[A-Z]/.test(pw)) score += 1;
+  if (/\d/.test(pw)) score += 1;
+  if (/[^a-zA-Z0-9]/.test(pw)) score += 1;
+  if (score <= 1) return { pct: 25, color: "#dc2626", label: "Weak" };
+  if (score <= 3) return { pct: 60, color: "#d97706", label: "Medium" };
+  return { pct: 100, color: "#16a34a", label: "Strong" };
+}
+
 type WorkbenchProps = {
   tool: ToolItem;
 };
@@ -601,6 +614,8 @@ export default function ToolWorkbench({ tool }: WorkbenchProps) {
   const [compareTextReport, setCompareTextReport] = useState<string>("");
   const [ranges, setRanges] = useState("1");
   const [password, setPassword] = useState("");
+  const [jpgDpi, setJpgDpi] = useState<"72" | "150" | "300">("150");
+  const [jpgRange, setJpgRange] = useState("");
   const [editText, setEditText] = useState("");
   const [editPreview, setEditPreview] = useState("");
   const [editCanvasSize, setEditCanvasSize] = useState({ width: 0, height: 0 });
@@ -641,6 +656,7 @@ export default function ToolWorkbench({ tool }: WorkbenchProps) {
     reduceMargins: false,
     stripMetadata: true,
   });
+  const [compressPreset, setCompressPreset] = useState<"screen" | "ebook" | "print" | "custom">("screen");
   const [signatureMode, setSignatureMode] = useState<"text" | "draw">("text");
   const [signatureDrawn, setSignatureDrawn] = useState(false);
   const [signatures, setSignatures] = useState<Array<{ id: string; kind: "text" | "draw"; text?: string; dataUrl?: string; xRatio: number; yRatio: number; pageNumber: number | null; rotation?: number; widthRatio?: number }>>([]);
@@ -1131,6 +1147,7 @@ export default function ToolWorkbench({ tool }: WorkbenchProps) {
   }
 
   function updateCompressionOption(option: keyof CompressionOptions, value: boolean) {
+    setCompressPreset("custom");
     setCompressionOptions((current) => {
       if (option === "blackWhite") {
         return { ...current, blackWhite: value, grayscale: value ? false : current.grayscale };
@@ -1139,6 +1156,19 @@ export default function ToolWorkbench({ tool }: WorkbenchProps) {
         return { ...current, grayscale: true, blackWhite: false };
       }
       return { ...current, [option]: value };
+    });
+  }
+
+  function applyCompressPreset(preset: "screen" | "ebook" | "print") {
+    setCompressPreset(preset);
+    setCompressionOptions((current) => {
+      if (preset === "screen") {
+        return { ...current, reduceResolution: true, reduceQuality: true, reduceMargins: false, grayscale: false, blackWhite: false, removeImages: false, stripMetadata: true };
+      }
+      if (preset === "ebook") {
+        return { ...current, reduceResolution: true, reduceQuality: false, reduceMargins: false, grayscale: false, blackWhite: false, removeImages: false, stripMetadata: true };
+      }
+      return { ...current, reduceResolution: false, reduceQuality: false, reduceMargins: false, grayscale: false, blackWhite: false, removeImages: false, stripMetadata: false };
     });
   }
 
@@ -4494,19 +4524,30 @@ export default function ToolWorkbench({ tool }: WorkbenchProps) {
 
       if (tool.slug === "pdf-to-jpg") {
         if (!firstFile) throw new Error("Missing PDF file.");
-        const images = await renderPdfToImages(new Uint8Array(await readAsArrayBuffer(firstFile)), password || undefined);
+        const scale = Number(jpgDpi) / 72;
+        let pageNumbers: number[] | undefined;
+        if (jpgRange.trim()) {
+          try {
+            pageNumbers = parseRanges(jpgRange, 10000);
+          } catch {
+            throw new Error("Enter a valid page range, like 1-3,5.");
+          }
+          if (!pageNumbers.length) throw new Error("Enter a valid page range, like 1-3,5.");
+        }
+        const images = await renderPdfToImages(new Uint8Array(await readAsArrayBuffer(firstFile)), password || undefined, scale, pageNumbers);
         const zip = new JSZip();
         setProgress({ current: 0, total: images.length, label: "Converting pages to JPG…" });
+        const numberedPages = pageNumbers ?? images.map((_, i) => i + 1);
         for (let index = 0; index < images.length; index += 1) {
           setProgress({ current: index + 1, total: images.length, label: `Converting page ${index + 1} of ${images.length}…` });
           const response = await fetch(images[index].dataUrl);
-          zip.file(`${normalizeFileName(firstFile.name)}-page-${index + 1}.jpg`, await response.blob());
+          zip.file(`${normalizeFileName(firstFile.name)}-page-${numberedPages[index] ?? index + 1}.jpg`, await response.blob());
         }
         const archive = await zip.generateAsync({ type: "blob" });
         stageOutput(
           archive,
           `${normalizeFileName(firstFile.name)}-jpg-pages.zip`,
-          "Preview sample image below, then download the full JPG archive.",
+          `${images.length} page(s) at ${jpgDpi} DPI. Preview below, then download the JPG archive.`,
           images[0]?.dataUrl
         );
         complete("JPG package ready for preview.");
@@ -6501,6 +6542,25 @@ export default function ToolWorkbench({ tool }: WorkbenchProps) {
       {tool.slug === "compress-pdf" ? (
         <div className="space-y-3 rounded-xl border border-slate-200 bg-slate-50 p-3">
           <p className="type-eyebrow text-slate-600">Compression Options</p>
+          <div className="flex flex-wrap gap-2">
+            {(["screen", "ebook", "print"] as const).map((preset) => (
+              <button
+                key={preset}
+                type="button"
+                onClick={() => applyCompressPreset(preset)}
+                className={`rounded-full border px-3 py-1.5 text-xs font-semibold transition ${
+                  compressPreset === preset
+                    ? "border-teal-500 bg-teal-50 text-teal-800"
+                    : "border-slate-200 bg-white text-slate-600 hover:border-teal-300"
+                }`}
+              >
+                {preset === "screen" ? "Screen (smallest)" : preset === "ebook" ? "eBook (balanced)" : "Print (best quality)"}
+              </button>
+            ))}
+            {compressPreset === "custom" ? (
+              <span className="rounded-full border border-amber-200 bg-amber-50 px-3 py-1.5 text-xs font-semibold text-amber-700">Custom</span>
+            ) : null}
+          </div>
           <div className="grid gap-2 sm:grid-cols-2">
             <label className="flex items-center gap-2 text-sm text-slate-700">
               <input
@@ -6573,6 +6633,39 @@ export default function ToolWorkbench({ tool }: WorkbenchProps) {
         </div>
       ) : null}
 
+      {tool.slug === "pdf-to-jpg" ? (
+        <div className="space-y-2 rounded-xl border border-slate-200 bg-slate-50 p-3">
+          <p className="type-eyebrow text-slate-600">JPG Export Options</p>
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="text-xs font-semibold text-slate-600">Quality:</span>
+            {(["72", "150", "300"] as const).map((dpi) => (
+              <button
+                key={dpi}
+                type="button"
+                onClick={() => setJpgDpi(dpi)}
+                className={`rounded-full border px-2.5 py-1 text-xs font-semibold transition ${
+                  jpgDpi === dpi ? "border-violet-500 bg-violet-50 text-violet-800" : "border-slate-200 bg-white text-slate-600 hover:border-violet-300"
+                }`}
+              >
+                {dpi} DPI
+              </button>
+            ))}
+          </div>
+          <div className="space-y-1">
+            <label htmlFor="jpg-range" className="text-xs font-semibold uppercase tracking-wide text-slate-600">Pages (optional)</label>
+            <input
+              id="jpg-range"
+              type="text"
+              value={jpgRange}
+              onChange={(e) => setJpgRange(e.target.value)}
+              placeholder="All pages — or 1-3,5"
+              className="w-full rounded-xl border border-slate-300 bg-slate-50 px-3 py-2 text-sm text-slate-800"
+            />
+            <p className="field-help">Leave blank for every page. Use ranges like 1-3 or a list like 1,4,7.</p>
+          </div>
+        </div>
+      ) : null}
+
       {tool.slug === "protect-pdf" || tool.slug === "unlock-pdf" ? (
         <div className="space-y-1">
           <label htmlFor="password" className="text-xs font-semibold uppercase tracking-wide text-slate-600">
@@ -6591,6 +6684,16 @@ export default function ToolWorkbench({ tool }: WorkbenchProps) {
               ? "Leave blank to attempt unlocking without a password. If the PDF requires one, enter it here."
               : "Use the same password to open the protected output later."}
           </p>
+          {tool.slug === "protect-pdf" ? (
+            <div className="mt-1 flex items-center gap-2">
+              <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-slate-200">
+                <div className="h-full transition-all" style={{ width: `${passwordStrength(password).pct}%`, background: passwordStrength(password).color }} />
+              </div>
+              <span className="text-[11px] font-semibold" style={{ color: passwordStrength(password).color }}>
+                {passwordStrength(password).label}
+              </span>
+            </div>
+          ) : null}
         </div>
       ) : null}
 

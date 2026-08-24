@@ -94,16 +94,17 @@ export async function samplePdfTextCoverage(bytes: Uint8Array, password?: string
   };
 }
 
-export async function renderPdfToImages(bytes: Uint8Array, password?: string) {
+export async function renderPdfToImages(bytes: Uint8Array, password?: string, scale = 2, pages?: number[]) {
   const pdfjs = await import("pdfjs-dist/legacy/build/pdf.mjs");
   configurePdfJsWorker(pdfjs);
   const task = pdfjs.getDocument({ data: new Uint8Array(bytes), password: password || undefined });
   const pdf = await task.promise;
   const images: Array<{ dataUrl: string; width: number; height: number }> = [];
+  const targets = pages && pages.length ? pages.filter((p) => p >= 1 && p <= pdf.numPages) : Array.from({ length: pdf.numPages }, (_, i) => i + 1);
 
-  for (let index = 1; index <= pdf.numPages; index += 1) {
+  for (const index of targets) {
     const page = await pdf.getPage(index);
-    const viewport = page.getViewport({ scale: 2 });
+    const viewport = page.getViewport({ scale });
     const canvas = document.createElement("canvas");
     const context = canvas.getContext("2d");
     if (!context) throw new Error("Canvas rendering context unavailable.");
