@@ -616,6 +616,8 @@ export default function ToolWorkbench({ tool }: WorkbenchProps) {
   const [password, setPassword] = useState("");
   const [jpgDpi, setJpgDpi] = useState<"72" | "150" | "300">("150");
   const [jpgRange, setJpgRange] = useState("");
+  const [pageNumberPosition, setPageNumberPosition] = useState<"bottom-center" | "bottom-right" | "bottom-left" | "top-center" | "top-right" | "top-left">("bottom-right");
+  const [pageNumberFormat, setPageNumberFormat] = useState<"n" | "n-of-total" | "page-n" | "page-n-of-total">("n-of-total");
   const [editText, setEditText] = useState("");
   const [editPreview, setEditPreview] = useState("");
   const [editCanvasSize, setEditCanvasSize] = useState({ width: 0, height: 0 });
@@ -4241,15 +4243,25 @@ export default function ToolWorkbench({ tool }: WorkbenchProps) {
         const source = await PDFDocument.load(await readAsArrayBuffer(firstFile));
         const font = await source.embedFont(StandardFonts.Helvetica);
         const total = source.getPageCount();
+        const formatText = (pageNum: number) => {
+          if (pageNumberFormat === "n") return `${pageNum}`;
+          if (pageNumberFormat === "n-of-total") return `${pageNum} / ${total}`;
+          if (pageNumberFormat === "page-n") return `Page ${pageNum}`;
+          return `Page ${pageNum} of ${total}`;
+        };
         source.getPages().forEach((page, index) => {
-          const { width } = page.getSize();
-          page.drawText(`${index + 1} / ${total}`, {
-            x: width - 80,
-            y: 20,
-            size: 11,
-            font,
-            color: rgb(0.25, 0.28, 0.32),
-          });
+          const { width, height } = page.getSize();
+          const text = formatText(index + 1);
+          const textWidth = font.widthOfTextAtSize(text, 11);
+          const margin = 20;
+          let x: number;
+          let y: number;
+          if (pageNumberPosition.endsWith("center")) x = (width - textWidth) / 2;
+          else if (pageNumberPosition.endsWith("left")) x = margin;
+          else x = width - textWidth - margin;
+          if (pageNumberPosition.startsWith("top")) y = height - margin - 12;
+          else y = margin;
+          page.drawText(text, { x, y, size: 11, font, color: rgb(0.25, 0.28, 0.32) });
         });
         stageOutput(
           asPdfBlob(await source.save()),
@@ -6662,6 +6674,44 @@ export default function ToolWorkbench({ tool }: WorkbenchProps) {
               className="w-full rounded-xl border border-slate-300 bg-slate-50 px-3 py-2 text-sm text-slate-800"
             />
             <p className="field-help">Leave blank for every page. Use ranges like 1-3 or a list like 1,4,7.</p>
+          </div>
+        </div>
+      ) : null}
+
+      {tool.slug === "page-numbers" ? (
+        <div className="space-y-2 rounded-xl border border-slate-200 bg-slate-50 p-3">
+          <p className="type-eyebrow text-slate-600">Page Number Options</p>
+          <div className="grid gap-2 sm:grid-cols-2">
+            <div className="space-y-1">
+              <label htmlFor="page-number-format" className="text-xs font-semibold uppercase tracking-wide text-slate-600">Format</label>
+              <select
+                id="page-number-format"
+                value={pageNumberFormat}
+                onChange={(e) => setPageNumberFormat(e.target.value as typeof pageNumberFormat)}
+                className="w-full rounded-xl border border-slate-300 bg-slate-50 px-3 py-2 text-sm text-slate-800"
+              >
+                <option value="n">1</option>
+                <option value="n-of-total">1 / 12</option>
+                <option value="page-n">Page 1</option>
+                <option value="page-n-of-total">Page 1 of 12</option>
+              </select>
+            </div>
+            <div className="space-y-1">
+              <label htmlFor="page-number-position" className="text-xs font-semibold uppercase tracking-wide text-slate-600">Position</label>
+              <select
+                id="page-number-position"
+                value={pageNumberPosition}
+                onChange={(e) => setPageNumberPosition(e.target.value as typeof pageNumberPosition)}
+                className="w-full rounded-xl border border-slate-300 bg-slate-50 px-3 py-2 text-sm text-slate-800"
+              >
+                <option value="bottom-right">Bottom right</option>
+                <option value="bottom-center">Bottom center</option>
+                <option value="bottom-left">Bottom left</option>
+                <option value="top-right">Top right</option>
+                <option value="top-center">Top center</option>
+                <option value="top-left">Top left</option>
+              </select>
+            </div>
           </div>
         </div>
       ) : null}
