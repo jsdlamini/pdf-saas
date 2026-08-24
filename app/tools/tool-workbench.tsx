@@ -643,7 +643,7 @@ export default function ToolWorkbench({ tool }: WorkbenchProps) {
   });
   const [signatureMode, setSignatureMode] = useState<"text" | "draw">("text");
   const [signatureDrawn, setSignatureDrawn] = useState(false);
-  const [signatures, setSignatures] = useState<Array<{ id: string; kind: "text" | "draw"; text?: string; dataUrl?: string; xRatio: number; yRatio: number; pageNumber: number | null }>>([]);
+  const [signatures, setSignatures] = useState<Array<{ id: string; kind: "text" | "draw"; text?: string; dataUrl?: string; xRatio: number; yRatio: number; pageNumber: number | null; rotation?: number; widthRatio?: number }>>([]);
   const [activeSignatureId, setActiveSignatureId] = useState("");
   const [savedSignatures, setSavedSignatures] = useState<Array<{ id: string; kind: "text" | "draw"; label: string; text?: string; dataUrl?: string }>>(() => {
     if (typeof window === "undefined") return [];
@@ -3572,6 +3572,8 @@ export default function ToolWorkbench({ tool }: WorkbenchProps) {
         xRatio: 0.82 - (count % 3) * 0.06,
         yRatio: 0.12 + Math.floor(count / 3) * 0.08,
         pageNumber: targetPage,
+        rotation: 0,
+        widthRatio: 0.24,
       };
       setSignatures((prev) => [...prev, newSig]);
       setActiveSignatureId(newSig.id);
@@ -3587,6 +3589,8 @@ export default function ToolWorkbench({ tool }: WorkbenchProps) {
         xRatio: 0.82 - (count % 3) * 0.06,
         yRatio: 0.12 + Math.floor(count / 3) * 0.08,
         pageNumber: targetPage,
+        rotation: 0,
+        widthRatio: 0.28,
       };
       setSignatures((prev) => [...prev, newSig]);
       setActiveSignatureId(newSig.id);
@@ -3621,6 +3625,81 @@ export default function ToolWorkbench({ tool }: WorkbenchProps) {
     } else {
       setSignaturePlacement({ xRatio: xTopRatio, yRatio: yPdfRatio });
     }
+  }
+
+  // Drag / resize / rotate placed signatures directly on the preview.
+  type SignatureDragMode = "move" | "resize" | "rotate";
+  const signaturePreviewRef = useRef<HTMLDivElement | null>(null);
+  const signatureDragRef = useRef<{
+    id: string;
+    mode: SignatureDragMode;
+    startClientX: number;
+    startClientY: number;
+    origX: number;
+    origY: number;
+    origRotation: number;
+    origWidth: number;
+    rect: { width: number; height: number; left: number; top: number };
+  } | null>(null);
+
+  function applySignatureDrag(clientX: number, clientY: number) {
+    const drag = signatureDragRef.current;
+    if (!drag) return;
+    const { rect } = drag;
+    if (!rect.width || !rect.height) return;
+
+    if (drag.mode === "move") {
+      const dx = (clientX - drag.startClientX) / rect.width;
+      const dy = (clientY - drag.startClientY) / rect.height;
+      const xRatio = clamp(drag.origX + dx, 0.02, 0.98);
+      const yTop = 1 - drag.origY + dy;
+      const yRatio = clamp(1 - yTop, 0.02, 0.98);
+      setSignatures((prev) => prev.map((s) => (s.id === drag.id ? { ...s, xRatio, yRatio } : s)));
+    } else if (drag.mode === "resize") {
+      const dx = (clientX - drag.startClientX) / rect.width;
+      const widthRatio = clamp(drag.origWidth + dx, 0.06, 0.9);
+      setSignatures((prev) => prev.map((s) => (s.id === drag.id ? { ...s, widthRatio } : s)));
+    } else {
+      const cx = drag.origX * rect.width;
+      const cy = (1 - drag.origY) * rect.height;
+      const startAngle = Math.atan2(drag.startClientY - rect.top - cy, drag.startClientX - rect.left - cx);
+      const curAngle = Math.atan2(clientY - rect.top - cy, clientX - rect.left - cx);
+      const deltaDeg = ((curAngle - startAngle) * 180) / Math.PI;
+      const rotation = drag.origRotation + deltaDeg;
+      setSignatures((prev) => prev.map((s) => (s.id === drag.id ? { ...s, rotation } : s)));
+    }
+  }
+
+  function beginSignatureDrag(id: string, mode: SignatureDragMode, event: React.PointerEvent) {
+    const el = signaturePreviewRef.current;
+    const sig = signatures.find((s) => s.id === id);
+    if (!el || !sig) return;
+    const rect = el.getBoundingClientRect();
+    if (!rect.width || !rect.height) return;
+    signatureDragRef.current = {
+      id,
+      mode,
+      startClientX: event.clientX,
+      startClientY: event.clientY,
+      origX: sig.xRatio,
+      origY: sig.yRatio,
+      origRotation: sig.rotation ?? 0,
+      origWidth: sig.widthRatio ?? (sig.kind === "draw" ? 0.28 : 0.24),
+      rect: { width: rect.width, height: rect.height, left: rect.left, top: rect.top },
+    };
+    event.preventDefault();
+    event.stopPropagation();
+
+    const handleMove = (e: PointerEvent) => applySignatureDrag(e.clientX, e.clientY);
+    const handleUp = () => {
+      window.removeEventListener("pointermove", handleMove);
+      window.removeEventListener("pointerup", handleUp);
+      window.removeEventListener("pointercancel", handleUp);
+      signatureDragRef.current = null;
+    };
+    window.addEventListener("pointermove", handleMove);
+    window.addEventListener("pointerup", handleUp);
+    window.addEventListener("pointercancel", handleUp);
   }
 
   async function loadSignPage(pageNumber: number) {
@@ -5111,19 +5190,22 @@ export default function ToolWorkbench({ tool }: WorkbenchProps) {
               const anchorX = clamp(width * sig.xRatio, 24, width - 24);
               const anchorY = clamp(height * sig.yRatio, 24, height - 24);
 
+              const rotation = sig.rotation ?? 0;
               const embedded = sig.kind === "draw" ? embeddedSignatureImages[sig.id] : null;
+              const shouldRotate = Math.abs(rotation) > 0.01;
               if (embedded) {
                 const rawWidth = embedded.width;
                 const rawHeight = embedded.height;
-                let signatureWidth = 170;
+                const signatureWidth = clamp(width * (sig.widthRatio ?? 0.28), 40, width * 0.8);
                 let signatureHeight = (signatureWidth / rawWidth) * rawHeight;
-                if (signatureHeight < 24) {
-                  signatureHeight = 24;
-                  signatureWidth = (signatureHeight / rawHeight) * rawWidth;
-                }
-                if (signatureHeight > 150) {
-                  signatureHeight = 150;
-                  signatureWidth = (signatureHeight / rawHeight) * rawWidth;
+                signatureHeight = clamp(signatureHeight, 16, height * 0.5);
+                if (shouldRotate) {
+                  page.pushOperators(
+                    pushGraphicsState(),
+                    translate(anchorX, anchorY),
+                    rotateDegrees(rotation),
+                    translate(-anchorX, -anchorY)
+                  );
                 }
                 page.drawImage(embedded, {
                   x: clamp(anchorX - signatureWidth / 2, 12, width - signatureWidth - 12),
@@ -5132,9 +5214,18 @@ export default function ToolWorkbench({ tool }: WorkbenchProps) {
                   height: signatureHeight,
                   opacity: 0.95,
                 });
+                if (shouldRotate) page.pushOperators(popGraphicsState());
               } else if (sig.kind === "text" && sig.text) {
-                const textSize = 22;
+                const textSize = clamp(22 * (sig.widthRatio ?? 0.24) / 0.24, 12, 60);
                 const textWidth = font.widthOfTextAtSize(sig.text, textSize);
+                if (shouldRotate) {
+                  page.pushOperators(
+                    pushGraphicsState(),
+                    translate(anchorX, anchorY),
+                    rotateDegrees(rotation),
+                    translate(-anchorX, -anchorY)
+                  );
+                }
                 page.drawText(sig.text, {
                   x: clamp(anchorX - textWidth / 2, 12, width - textWidth - 12),
                   y: clamp(anchorY - textSize / 2, 12, height - textSize - 12),
@@ -5142,6 +5233,7 @@ export default function ToolWorkbench({ tool }: WorkbenchProps) {
                   font,
                   color: rgb(0.06, 0.06, 0.35),
                 });
+                if (shouldRotate) page.pushOperators(popGraphicsState());
               }
             }
           } else {
@@ -6733,7 +6825,7 @@ export default function ToolWorkbench({ tool }: WorkbenchProps) {
                 {thumbnailLoading ? (
                   <p className="field-help">Generating placement preview...</p>
                 ) : signaturePlacementPreview ? (
-                  <div className="relative inline-block w-full max-w-[320px] overflow-hidden rounded-lg border border-slate-300 bg-white">
+                  <div ref={signaturePreviewRef} className="relative inline-block w-full max-w-[320px] overflow-hidden rounded-lg border border-slate-300 bg-white">
                     {/* eslint-disable-next-line @next/next/no-img-element */}
                     <img
                       src={signaturePlacementPreview}
@@ -6741,20 +6833,50 @@ export default function ToolWorkbench({ tool }: WorkbenchProps) {
                       onClick={onSignaturePlacementPick}
                       className="h-auto w-full cursor-crosshair"
                     />
-                    {signaturesForPage(signPageNumber).map((sig) => (
-                      <span
-                        key={sig.id}
-                        className={`pointer-events-none absolute -translate-x-1/2 -translate-y-1/2 ${activeSignatureId === sig.id ? "rounded-sm outline outline-2 outline-offset-1 outline-cyan-500" : ""}`}
-                        style={{ left: `${sig.xRatio * 100}%`, top: `${(1 - sig.yRatio) * 100}%` }}
-                      >
-                        {sig.kind === "draw" && sig.dataUrl ? (
-                          // eslint-disable-next-line @next/next/no-img-element
-                          <img src={sig.dataUrl} alt="Placed signature" className="max-h-14 max-w-28 rounded-sm border border-cyan-400/70 bg-white shadow-sm" />
-                        ) : (
-                          <span className="whitespace-nowrap text-sm italic text-indigo-900 drop-shadow-sm" style={{ fontFamily: 'Georgia, "Times New Roman", serif' }}>{sig.text}</span>
-                        )}
-                      </span>
-                    ))}
+                    {signaturesForPage(signPageNumber).map((sig) => {
+                      const isActive = activeSignatureId === sig.id;
+                      const widthRatio = sig.widthRatio ?? (sig.kind === "draw" ? 0.28 : 0.24);
+                      const rotation = sig.rotation ?? 0;
+                      return (
+                        <div
+                          key={sig.id}
+                          className={`absolute ${isActive ? "rounded-sm outline outline-2 outline-offset-1 outline-cyan-500" : ""}`}
+                          style={{
+                            left: `${sig.xRatio * 100}%`,
+                            top: `${(1 - sig.yRatio) * 100}%`,
+                            width: `${widthRatio * 100}%`,
+                            transform: `translate(-50%, -50%) rotate(${rotation}deg)`,
+                            cursor: "move",
+                            touchAction: "none",
+                            pointerEvents: "auto",
+                          }}
+                          onPointerDown={(e) => beginSignatureDrag(sig.id, "move", e)}
+                        >
+                          {sig.kind === "draw" && sig.dataUrl ? (
+                            // eslint-disable-next-line @next/next/no-img-element
+                            <img src={sig.dataUrl} alt="Placed signature" draggable={false} className="w-full rounded-sm border border-cyan-400/70 bg-white shadow-sm" />
+                          ) : (
+                            <span className="block w-full text-center italic text-indigo-900 drop-shadow-sm" style={{ fontFamily: 'Georgia, "Times New Roman", serif', fontSize: "clamp(10px, 4vw, 24px)" }}>{sig.text}</span>
+                          )}
+                          {isActive ? (
+                            <>
+                              <span
+                                aria-hidden="true"
+                                className="absolute -bottom-1.5 -right-1.5 h-3.5 w-3.5 rounded-sm border border-cyan-600 bg-white"
+                                style={{ cursor: "nwse-resize" }}
+                                onPointerDown={(e) => beginSignatureDrag(sig.id, "resize", e)}
+                              />
+                              <span
+                                aria-hidden="true"
+                                className="absolute -top-5 left-1/2 h-3.5 w-3.5 -translate-x-1/2 rounded-full border border-cyan-600 bg-white"
+                                style={{ cursor: "grab" }}
+                                onPointerDown={(e) => beginSignatureDrag(sig.id, "rotate", e)}
+                              />
+                            </>
+                          ) : null}
+                        </div>
+                      );
+                    })}
                     <span
                       className="pointer-events-none absolute h-4 w-4 -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-cyan-600 bg-cyan-300/40"
                       style={{
