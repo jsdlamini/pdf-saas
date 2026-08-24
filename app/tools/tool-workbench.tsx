@@ -4301,43 +4301,115 @@ export default function ToolWorkbench({ tool }: WorkbenchProps) {
 
       if (tool.slug === "repair-pdf") {
         if (!firstFile) throw new Error("Missing PDF file.");
-        const source = await PDFDocument.load(await readAsArrayBuffer(firstFile), { ignoreEncryption: true });
-        source.setTitle("");
-        source.setAuthor("");
-        source.setSubject("");
-        source.setKeywords([]);
-        source.setProducer("WiserFiles PDF Repair");
-        source.setCreator("");
-        const bytes = await source.save({ useObjectStreams: false, objectsPerTick: 50 });
-        stageOutput(
-          asPdfBlob(bytes),
-          `${normalizeFileName(firstFile.name)}-repaired.pdf`,
-          "PDF structure rebuilt. Some content may be unrecoverable if the original was severely damaged."
-        );
-        complete("PDF structure rebuilt. Some content may be unrecoverable if the original was severely damaged.");
+
+        let repairServerFailed = false;
+        try {
+          setStatus("Repairing PDF on server...");
+          logProcessing("Sending PDF to server for structural repair (qpdf).");
+          const formData = new FormData();
+          formData.append("file", firstFile);
+          const response = await fetch("/api/repair-pdf", { method: "POST", body: formData });
+
+          if (response.ok) {
+            setStatus("Downloading repaired PDF…");
+            const pdfBlob = await response.blob();
+            const disposition = response.headers.get("Content-Disposition");
+            const downloadName = getFileNameFromDisposition(disposition) || `${normalizeFileName(firstFile.name)}-repaired.pdf`;
+            stageOutput(pdfBlob, downloadName, "PDF structure rebuilt with qpdf. Download the repaired file.");
+            complete("PDF structure rebuilt.");
+            return;
+          }
+
+          let serverMessage = "Server repair unavailable.";
+          try {
+            const serverBody = await response.json();
+            if (serverBody?.error) serverMessage = serverBody.error;
+          } catch {
+            // ignore parse errors
+          }
+          logProcessing(`Server repair failed (${response.status}): ${serverMessage}. Falling back to client-side rebuild.`);
+          repairServerFailed = true;
+        } catch (networkError) {
+          logProcessing(`Could not reach server for PDF repair: ${networkError instanceof Error ? networkError.message : "network error"}. Falling back to client-side rebuild.`);
+          repairServerFailed = true;
+        }
+
+        if (repairServerFailed) {
+          setStatus("Falling back to client-side rebuild...");
+          const source = await PDFDocument.load(await readAsArrayBuffer(firstFile), { ignoreEncryption: true });
+          source.setTitle("");
+          source.setAuthor("");
+          source.setSubject("");
+          source.setKeywords([]);
+          source.setProducer("WiserFiles PDF Repair");
+          source.setCreator("");
+          const bytes = await source.save({ useObjectStreams: false, objectsPerTick: 50 });
+          stageOutput(
+            asPdfBlob(bytes),
+            `${normalizeFileName(firstFile.name)}-repaired.pdf`,
+            "Client-side rebuild (fallback). Some content may be unrecoverable if the original was severely damaged."
+          );
+          complete("PDF structure rebuilt (client-side fallback).");
+        }
         return;
       }
 
       if (tool.slug === "pdf-to-pdfa") {
         if (!firstFile) throw new Error("Missing PDF file.");
-        const source = await PDFDocument.load(await readAsArrayBuffer(firstFile), { ignoreEncryption: true });
-        source.setTitle(source.getTitle() || "PDF/A-2b Document");
-        source.setProducer("WiserFiles PDF/A-2b Export");
-        source.setCreator(source.getCreator() || "");
+
+        let pdfaServerFailed = false;
         try {
-          await source.embedFont(StandardFonts.Helvetica);
-          await source.embedFont(StandardFonts.TimesRoman);
-          await source.embedFont(StandardFonts.Courier);
-        } catch {
-          // Font embedding is best-effort for PDF/A conformance.
+          setStatus("Converting to PDF/A on server...");
+          logProcessing("Sending PDF to server for Ghostscript PDF/A-2b conversion.");
+          const formData = new FormData();
+          formData.append("file", firstFile);
+          const response = await fetch("/api/pdf-to-pdfa", { method: "POST", body: formData });
+
+          if (response.ok) {
+            setStatus("Downloading PDF/A file…");
+            const pdfBlob = await response.blob();
+            const disposition = response.headers.get("Content-Disposition");
+            const downloadName = getFileNameFromDisposition(disposition) || `${normalizeFileName(firstFile.name)}-pdfa.pdf`;
+            stageOutput(pdfBlob, downloadName, "Archival PDF/A-2b produced by Ghostscript. Download the file.");
+            complete("PDF/A-2b file ready.");
+            return;
+          }
+
+          let serverMessage = "Server conversion unavailable.";
+          try {
+            const serverBody = await response.json();
+            if (serverBody?.error) serverMessage = serverBody.error;
+          } catch {
+            // ignore parse errors
+          }
+          logProcessing(`Server conversion failed (${response.status}): ${serverMessage}. Falling back to client-side conformance.`);
+          pdfaServerFailed = true;
+        } catch (networkError) {
+          logProcessing(`Could not reach server for PDF/A conversion: ${networkError instanceof Error ? networkError.message : "network error"}. Falling back to client-side conformance.`);
+          pdfaServerFailed = true;
         }
-        const bytes = await source.save({ useObjectStreams: true, objectsPerTick: 50 });
-        stageOutput(
-          asPdfBlob(bytes),
-          `${normalizeFileName(firstFile.name)}-pdfa.pdf`,
-          "Basic PDF/A-2b conformance applied. Verify with a dedicated validator."
-        );
-        complete("Basic PDF/A-2b conformance applied. Verify with a dedicated validator.");
+
+        if (pdfaServerFailed) {
+          setStatus("Falling back to client-side conformance...");
+          const source = await PDFDocument.load(await readAsArrayBuffer(firstFile), { ignoreEncryption: true });
+          source.setTitle(source.getTitle() || "PDF/A-2b Document");
+          source.setProducer("WiserFiles PDF/A-2b Export");
+          source.setCreator(source.getCreator() || "");
+          try {
+            await source.embedFont(StandardFonts.Helvetica);
+            await source.embedFont(StandardFonts.TimesRoman);
+            await source.embedFont(StandardFonts.Courier);
+          } catch {
+            // Font embedding is best-effort for PDF/A conformance.
+          }
+          const bytes = await source.save({ useObjectStreams: true, objectsPerTick: 50 });
+          stageOutput(
+            asPdfBlob(bytes),
+            `${normalizeFileName(firstFile.name)}-pdfa.pdf`,
+            "Client-side conformance (fallback). Verify with a dedicated validator."
+          );
+          complete("Basic PDF/A-2b conformance applied (client-side fallback).");
+        }
         return;
       }
 

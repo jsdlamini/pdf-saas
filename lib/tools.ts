@@ -113,7 +113,7 @@ export const TOOL_ITEMS: ToolItem[] = [
     name: "Repair PDF",
     description: "Recover damaged PDF structure and metadata.",
     category: "Optimize",
-    processing: "local",
+    processing: "server",
   },
   {
     slug: "ocr-pdf",
@@ -227,9 +227,9 @@ export const TOOL_ITEMS: ToolItem[] = [
     name: "PDF to PDF-A",
     description: "Convert documents to archival PDF-A format.",
     category: "Optimize",
-    // Runs fully client-side via pdf-lib (sets metadata + embeds fonts), even
-    // though this was previously labeled "server" in the old `runtime` field.
-    processing: "local",
+    // Runs server-side via Ghostscript -dPDFA=2 (real PDF/A-2b), with a
+    // client-side pdf-lib conformance fallback.
+    processing: "server",
   },
 ];
 
