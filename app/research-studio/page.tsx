@@ -5032,12 +5032,8 @@ export default function ResearchStudioPage() {
 
         {/* ── Studio hero ── */}
         <section className="studio-hero">
+          <StudioHeroCards />
           <div className="studio-hero-copy">
-            <h1 className="studio-hero-title">LaTeX, Python, and C++ — compiled live, PDF beside it.</h1>
-            <p className="studio-hero-sub">
-              Write, run, and compile with instant preview — plus GitHub sync, live
-              collaboration, version history, and AI assistance built in.
-            </p>
             <ul className="studio-hero-points">
               <li>
                 <svg viewBox="0 0 20 20" style={{ width: 14, height: 14 }} fill="none" stroke="currentColor" strokeWidth="2">
@@ -5085,7 +5081,6 @@ export default function ResearchStudioPage() {
               </div>
             ) : null}
           </div>
-          <StudioHeroCards />
         </section>
 
         {/* Dashboard header */}

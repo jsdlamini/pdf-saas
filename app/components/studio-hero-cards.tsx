@@ -2,36 +2,34 @@
 
 import { useEffect, useRef, useState } from "react";
 
-// Three large, separate live-typing editor cards (LaTeX / Python / C++) for the
-// studio hero. Each card types its own code, holds, then loops.
-type CardSpec = {
-  mode: string;
-  file: string;
+// Rotating hero showcase: one language at a time — descriptor text on the left,
+// a live-typing code card on the right — fading out before the next language.
+type Slide = {
+  id: string;
+  title: string;
+  tagline: string;
   accent: string;
+  file: string;
   status: string;
   code: string;
 };
 
-const CARDS: CardSpec[] = [
+const SLIDES: Slide[] = [
   {
-    mode: "latex",
-    file: "main.tex",
+    id: "latex",
+    title: "LaTeX",
+    tagline: "Write papers and theses, and compile to a PDF beside you.",
     accent: "#a78bfa",
+    file: "main.tex",
     status: "Compiled · PDF ready",
     code: `\\documentclass{article}
 \\usepackage{graphicx}
 \\usepackage{amsmath}
 
-\\title{Quantum Error Rates}
-\\author{J. Dlamini}
-
+\\title{My Paper}
 \\begin{document}
-\\maketitle
-
 \\section{Introduction}
-We study the effect of
-decoherence on the error
-rate of surface codes.
+We study the effect of...
 
 \\begin{equation}
   E = 1 - e^{-\\gamma t}
@@ -39,28 +37,28 @@ rate of surface codes.
 \\end{document}`,
   },
   {
-    mode: "python",
-    file: "main.py",
+    id: "python",
+    title: "Python",
+    tagline: "Run scripts and notebooks with instant output.",
     accent: "#2dd4bf",
+    file: "main.py",
     status: "Ran successfully",
     code: `import numpy as np
-import matplotlib.pyplot as plt
 
-def simulate(n=1000):
-    data = np.random.randn(n)
-    return data
-
-if __name__ == "__main__":
-    data = simulate()
+def main():
+    data = np.load("data.npy")
     print("mean:", data.mean())
     print("std :", data.std())
-    plt.hist(data, bins=40)
-    plt.savefig("hist.png")`,
+
+if __name__ == "__main__":
+    main()`,
   },
   {
-    mode: "cpp",
-    file: "main.cpp",
+    id: "cpp",
+    title: "C++",
+    tagline: "Build and run native code with a live output panel.",
     accent: "#fb923c",
+    file: "main.cpp",
     status: "Built · exit 0",
     code: `#include <iostream>
 #include <vector>
@@ -74,16 +72,18 @@ int main() {
       v.begin(), v.end(), 0L);
 
   std::cout << "sum: " << sum << "\\n";
-  std::cout << "mean: "
-            << sum / v.size() << "\\n";
   return 0;
 }`,
   },
 ];
 
-function TypeCard({ spec, delay }: { spec: CardSpec; delay: number }) {
+const ROTATE_MS = 6000;
+const FADE_MS = 450;
+
+export default function StudioHeroCards() {
+  const [active, setActive] = useState(0);
   const [count, setCount] = useState(0);
-  const [cycle, setCycle] = useState(0);
+  const [fading, setFading] = useState(false);
   const reducedRef = useRef(false);
 
   useEffect(() => {
@@ -92,68 +92,62 @@ function TypeCard({ spec, delay }: { spec: CardSpec; delay: number }) {
       Boolean(window.matchMedia?.("(prefers-reduced-motion: reduce)").matches);
   }, []);
 
-  const full = spec.code.length;
+  const slide = SLIDES[active];
 
+  // Live typing for the active slide.
   useEffect(() => {
     if (reducedRef.current) {
-      setCount(full);
+      setCount(slide.code.length);
       return;
     }
-    let interval: ReturnType<typeof setInterval> | null = null;
-    let hold: ReturnType<typeof setTimeout> | null = null;
-    const start = setTimeout(() => {
-      let i = 0;
-      interval = setInterval(() => {
-        i += 1;
-        setCount(i);
-        if (i >= full && interval) {
-          clearInterval(interval);
-          interval = null;
-          hold = setTimeout(() => {
-            setCount(0);
-            setCycle((c) => c + 1);
-          }, 3600);
-        }
-      }, 18);
-    }, delay);
-    return () => {
-      clearTimeout(start);
-      if (interval) clearInterval(interval);
-      if (hold) clearTimeout(hold);
-    };
+    setCount(0);
+    let i = 0;
+    const interval = setInterval(() => {
+      i += 1;
+      setCount(i);
+      if (i >= slide.code.length) clearInterval(interval);
+    }, 14);
+    return () => clearInterval(interval);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [cycle, delay, full]);
+  }, [active]);
+
+  // Rotate: fade out, swap, fade in.
+  useEffect(() => {
+    if (reducedRef.current) return;
+    const timer = setInterval(() => {
+      setFading(true);
+      setTimeout(() => {
+        setActive((a) => (a + 1) % SLIDES.length);
+        setFading(false);
+      }, FADE_MS);
+    }, ROTATE_MS);
+    return () => clearInterval(timer);
+  }, []);
 
   return (
-    <div
-      className="studio-hero-card"
-      style={{ animationDelay: `${delay + 150}ms`, borderTop: `3px solid ${spec.accent}` }}
-    >
-      <div className="studio-hero-card-bar">
-        <span style={{ width: 10, height: 10, borderRadius: "50%", background: spec.accent }} />
-        <span className="studio-hero-card-file">{spec.file}</span>
-        <span className="studio-hero-card-mode" style={{ color: spec.accent }}>
-          {spec.mode}
-        </span>
+    <div className="studio-hero-showcase" style={{ opacity: fading ? 0 : 1 }}>
+      <div className="studio-hero-showcase-copy">
+        <h1 className="studio-hero-showcase-title" style={{ color: slide.accent }}>
+          {slide.title}
+        </h1>
+        <p className="studio-hero-showcase-tagline">{slide.tagline}</p>
       </div>
-      <pre className="studio-hero-card-code">
-        {spec.code.slice(0, count)}
-        <span className="studio-hero-cursor" style={{ background: spec.accent }} />
-      </pre>
-      <div className="studio-hero-card-foot">
-        <span className="studio-hero-card-foot-dot" style={{ background: spec.accent }} />
-        <span>{spec.status}</span>
+      <div
+        className="studio-hero-showcase-code"
+        style={{ borderTop: `3px solid ${slide.accent}` }}
+      >
+        <div className="studio-hero-showcase-bar">
+          <span style={{ width: 10, height: 10, borderRadius: "50%", background: slide.accent }} />
+          <span className="studio-hero-showcase-file">{slide.file}</span>
+          <span className="studio-hero-showcase-status" style={{ color: slide.accent }}>
+            {slide.status}
+          </span>
+        </div>
+        <pre className="studio-hero-showcase-code-text">
+          {slide.code.slice(0, count)}
+          <span className="studio-hero-cursor" style={{ background: slide.accent }} />
+        </pre>
       </div>
-    </div>
-  );
-}
-
-export default function StudioHeroCards() {
-  return (
-    <div className="studio-hero-cards">
-      {CARDS.map((spec, i) => (
-        <TypeCard key={spec.mode} spec={spec} delay={i * 700} />
-      ))}
     </div>
   );
 }
