@@ -1555,6 +1555,22 @@ body[data-studio-editor="true"] footer {
   position: relative;
 }
 
+.studio-sort-select {
+  height: 36px;
+  padding: 0 10px;
+  background: var(--bg-secondary, #131620);
+  border: 1px solid var(--border-color, #334155);
+  border-radius: 8px;
+  color: var(--text-primary, #e2e8f0);
+  font-size: 13px;
+  cursor: pointer;
+  outline: none;
+  flex-shrink: 0;
+}
+.studio-sort-select:focus {
+  border-color: var(--accent-color, #4ade80);
+}
+
 .studio-search-icon {
   position: absolute;
   left: 12px;
