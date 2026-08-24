@@ -5,7 +5,7 @@ import { useEffect, useRef, useState } from "react";
 // Rotating hero showcase: one language at a time — descriptor text on the left,
 // a live-typing code card on the right — fading out before the next language.
 type Slide = {
-  id: string;
+  id: "latex" | "python" | "cpp";
   title: string;
   tagline: string;
   description: string;
@@ -87,6 +87,64 @@ int main() {
 }`,
   },
 ];
+
+/* ── Lightweight syntax highlighter for the typed code ──────────── */
+// VS Code Dark+ palette, so the animation reads as real code.
+const PLY = "#d4d4d4"; // plain
+const KW = "#c586c0"; // keyword
+const TY = "#4ec9b0"; // type
+const STR = "#ce9178"; // string
+const COM = "#6a9955"; // comment
+const NUM = "#b5cea8"; // number
+const FN = "#dcdcaa"; // function
+const VAR = "#9cdcfe"; // variable / argument
+const PP = "#c586c0"; // preprocessor
+
+type Rule = { pattern: string; color: string };
+
+const RULES: Record<Slide["id"], Rule[]> = {
+  latex: [
+    { pattern: "\\\\[a-zA-Z]+", color: KW },
+    { pattern: "\\{[^}]*\\}", color: VAR },
+    { pattern: "%.*", color: COM },
+    { pattern: "\\d+", color: NUM },
+  ],
+  python: [
+    { pattern: "#.*", color: COM },
+    { pattern: '"(?:\\\\.|[^"\\\\])*"', color: STR },
+    { pattern: "'(?:\\\\.|[^'\\\\])*'", color: STR },
+    { pattern: "\\b(?:def|import|if|elif|else|for|while|in|return|as|from|None|True|False|and|or|not|with|class|print|range|len|sum|abs|min|max|lambda|pass|break|continue|raise|try|except|finally|assert|is|del|global|nonlocal)\\b", color: KW },
+    { pattern: "\\b\\d+(?:\\.\\d+)?\\b", color: NUM },
+    { pattern: "\\b[A-Za-z_]\\w*(?=\\s*\\()", color: FN },
+  ],
+  cpp: [
+    { pattern: "#\\w+", color: PP },
+    { pattern: "//.*", color: COM },
+    { pattern: '"(?:\\\\.|[^"\\\\])*"', color: STR },
+    { pattern: "\\b(?:int|long|float|double|char|bool|void|auto|size_t)\\b", color: TY },
+    { pattern: "\\b(?:return|if|else|for|while|using|namespace|const)\\b", color: KW },
+    { pattern: "\\b\\d+L?\\b", color: NUM },
+    { pattern: "std::[a-z_]+", color: TY },
+    { pattern: "\\b[A-Za-z_]\\w*(?=\\s*\\()", color: FN },
+  ],
+};
+
+function highlight(code: string, lang: Slide["id"]): { text: string; color: string }[] {
+  const rules = RULES[lang];
+  const source = rules.map((r) => `(${r.pattern})`).join("|");
+  const re = new RegExp(source, "g");
+  const out: { text: string; color: string }[] = [];
+  let last = 0;
+  let m: RegExpExecArray | null;
+  while ((m = re.exec(code)) !== null) {
+    if (m.index > last) out.push({ text: code.slice(last, m.index), color: PLY });
+    const group = m.slice(1).findIndex((g) => g !== undefined);
+    out.push({ text: m[0], color: rules[group]?.color ?? PLY });
+    last = m.index + m[0].length;
+  }
+  if (last < code.length) out.push({ text: code.slice(last), color: PLY });
+  return out;
+}
 
 const ROTATE_MS = 7000;
 const FADE_MS = 450;
@@ -172,7 +230,11 @@ export default function StudioHeroCards() {
           </span>
         </div>
         <pre className="studio-hero-showcase-code-text">
-          {slide.code.slice(0, count)}
+          {highlight(slide.code.slice(0, count), slide.id).map((tok, i) => (
+            <span key={i} style={{ color: tok.color }}>
+              {tok.text}
+            </span>
+          ))}
           <span className="studio-hero-cursor" style={{ background: slide.accent }} />
         </pre>
       </div>
