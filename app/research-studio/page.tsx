@@ -87,6 +87,7 @@ type SavedProjectData = {
   updatedAt: string;
   editorMode?: EditorMode;
   revisions?: StoredRevision[];
+  coverDataUrl?: string;
 };
 
 type StoredRevision = {
@@ -1004,6 +1005,7 @@ export default function ResearchStudioPage() {
           name: p.name,
           updatedAt: p.updatedAt,
           type: p.editorMode || (p.entries.some((e) => e.path.endsWith(".py")) ? "python" : p.entries.some((e) => e.path.endsWith(".cpp")) ? "cpp" : "latex"),
+          coverDataUrl: p.coverDataUrl,
         }));
     } catch { return initialState.savedProjects; }
   });
@@ -1191,6 +1193,7 @@ export default function ResearchStudioPage() {
   const cleanBuildNextRef = useRef(false);
   const [compiledPdfBlob, setCompiledPdfBlob] = useState<Blob | null>(null);
   const [compiledPdfUrl, setCompiledPdfUrl] = useState("");
+  const [coverDataUrl, setCoverDataUrl] = useState("");
   const [compiledPdfFileName, setCompiledPdfFileName] = useState("compiled-main.pdf");
   const [compileMainLog, setCompileMainLog] = useState("");
   const [compileMainLogFileName, setCompileMainLogFileName] = useState("main.log");
@@ -1216,6 +1219,7 @@ export default function ResearchStudioPage() {
     try { localStorage.setItem("wiserfiles-studio-projects-pane", projectsPaneOpen ? "open" : "closed"); } catch {}
   }, [projectsPaneOpen]);
   const [searchQuery, setSearchQuery] = useState("");
+  const [sortMode, setSortMode] = useState<"updated" | "name">("updated");
   const [openTabs, setOpenTabs] = useState<string[]>([]);
 
   // Auto-collapse file tree on mobile
@@ -1669,7 +1673,7 @@ export default function ResearchStudioPage() {
         }
       })();
     }, 2000);
-  }, [projectEntries, activeProjectId, projectName, selectedPath, lastCompileAt, userId, accountSyncUnavailable]);
+  }, [projectEntries, activeProjectId, projectName, selectedPath, lastCompileAt, coverDataUrl, userId, accountSyncUnavailable]);
 
   useEffect(() => {
     triggerAutoSave();
@@ -2295,6 +2299,7 @@ export default function ResearchStudioPage() {
           : snapshot.entries?.some((e) => e.path.endsWith(".cpp")) ? "cpp"
           : "latex"
         ),
+        coverDataUrl: snapshot.coverDataUrl,
       };
       return [meta, ...current.filter((item) => item.id !== snapshot.id)].slice(0, 20);
     });
@@ -2467,6 +2472,7 @@ export default function ResearchStudioPage() {
     setCompileBusy(false);
     setCompiledPdfBlob(null);
     setCompiledPdfUrl("");
+    setCoverDataUrl("");
     setCompiledPdfFileName("compiled-main.pdf");
     setCompileMainLog("");
     setCompileMainLogFileName("main.log");
@@ -2583,6 +2589,7 @@ export default function ResearchStudioPage() {
       lastCompileAt: overrides?.lastCompileAt ?? lastCompileAt,
       updatedAt: overrides?.updatedAt ?? now,
       editorMode: overrides?.editorMode ?? editorMode,
+      coverDataUrl: overrides?.coverDataUrl ?? coverDataUrl,
     };
   }
 
@@ -3090,6 +3097,7 @@ export default function ResearchStudioPage() {
     setCompileBusy(false);
     setCompiledPdfBlob(null);
     setCompiledPdfUrl("");
+    setCoverDataUrl(saved.coverDataUrl || "");
     setCompiledPdfFileName("compiled-main.pdf");
     setAiFixBusy(false);
     setAiFixError("");
@@ -3445,6 +3453,7 @@ export default function ResearchStudioPage() {
     setCompileBusy(false);
     setCompiledPdfBlob(null);
     setCompiledPdfUrl("");
+    setCoverDataUrl("");
     setCompiledPdfFileName("compiled-main.pdf");
     setAiFixBusy(false);
     setAiFixError("");
@@ -3568,6 +3577,7 @@ export default function ResearchStudioPage() {
     setCompileBusy(false);
     setCompiledPdfBlob(null);
     setCompiledPdfUrl("");
+    setCoverDataUrl("");
     setCompiledPdfFileName("compiled-main.pdf");
     setAiFixBusy(false);
     setAiFixError("");
@@ -4003,6 +4013,7 @@ export default function ResearchStudioPage() {
       // Capture the first page as the project cover (best-effort).
       try {
         const cover = await renderPdfFirstPagePreview(new Uint8Array(await blob.arrayBuffer()));
+        setCoverDataUrl(cover);
         setSavedProjects((current) =>
           current.map((p) => (p.id === activeProjectId ? { ...p, coverDataUrl: cover } : p))
         );
@@ -4932,12 +4943,18 @@ export default function ResearchStudioPage() {
 
   // Filter projects by search query
   const filteredProjects = useMemo(() => {
-    if (!searchQuery.trim()) return savedProjects;
-    const q = searchQuery.toLowerCase();
-    return savedProjects.filter(
-      (p) => p.name.toLowerCase().includes(q)
-    );
-  }, [savedProjects, searchQuery]);
+    const q = searchQuery.trim().toLowerCase();
+    const base = q
+      ? savedProjects.filter((p) => p.name.toLowerCase().includes(q))
+      : savedProjects;
+    const sorted = [...base];
+    if (sortMode === "name") {
+      sorted.sort((a, b) => a.name.localeCompare(b.name));
+    } else {
+      sorted.sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime());
+    }
+    return sorted;
+  }, [savedProjects, searchQuery, sortMode]);
 
   // Group saved projects by language for the Projects pane
   const projectsByLanguage = useMemo(() => {
@@ -5043,7 +5060,7 @@ export default function ResearchStudioPage() {
               </button>
               <button
                 type="button"
-                onClick={() => document.getElementById("templates")?.scrollIntoView({ behavior: "smooth" })}
+                onClick={() => void createNewProject()}
                 className="studio-btn studio-btn-secondary"
               >
                 Start from a template
@@ -5127,18 +5144,31 @@ export default function ResearchStudioPage() {
             </div>
           </div>
 
-          {/* Search bar */}
-          <div className="studio-search-wrapper" style={{ marginTop: 16 }}>
-            <svg viewBox="0 0 20 20" className="studio-search-icon" fill="none" stroke="currentColor" strokeWidth="1.8">
-              <circle cx="9" cy="9" r="4" />
-              <path d="M12.5 12.5L16 16" strokeLinecap="round" />
-            </svg>
-            <input
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              placeholder="Search projects..."
-              className="studio-search"
-            />
+          {/* Search bar + sort */}
+          <div className="flex items-center gap-2" style={{ marginTop: 16 }}>
+            <div className="studio-search-wrapper" style={{ flex: 1 }}>
+              <svg viewBox="0 0 20 20" className="studio-search-icon" fill="none" stroke="currentColor" strokeWidth="1.8">
+                <circle cx="9" cy="9" r="4" />
+                <path d="M12.5 12.5L16 16" strokeLinecap="round" />
+              </svg>
+              <input
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                placeholder="Search projects..."
+                className="studio-search"
+              />
+            </div>
+            {savedProjects.length > 1 ? (
+              <select
+                value={sortMode}
+                onChange={(e) => setSortMode(e.target.value as "updated" | "name")}
+                aria-label="Sort projects"
+                className="studio-sort-select"
+              >
+                <option value="updated">Recently updated</option>
+                <option value="name">Name A–Z</option>
+              </select>
+            ) : null}
           </div>
 
           {/* Auth info */}
@@ -5175,15 +5205,20 @@ export default function ResearchStudioPage() {
 
         {/* Project cards grid */}
         {savedProjects.length === 0 && !loadingProject ? (
-          <div style={{ textAlign: "center", padding: "60px 20px" }}>
-            <div style={{ display: "inline-flex", alignItems: "center", justifyContent: "center", width: 56, height: 56, borderRadius: 14, background: "var(--bg-secondary, #131620)", marginBottom: 16 }}>
-              <svg viewBox="0 0 24 24" style={{ width: 28, height: 28, color: "var(--text-muted, #64748b)" }} fill="none" stroke="currentColor" strokeWidth="1.5">
-                <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8l-6-6z" />
-                <path d="M14 2v6h6M8 13h4M8 17h8" strokeLinecap="round" strokeLinejoin="round" />
-              </svg>
+          <div style={{ textAlign: "center", padding: "56px 20px" }}>
+            <div style={{ position: "relative", width: 104, height: 104, margin: "0 auto 22px" }}>
+              <div style={{ position: "absolute", inset: 0, borderRadius: 18, background: "rgba(167,139,250,0.18)", border: "1px solid rgba(167,139,250,0.35)", transform: "rotate(-10deg)" }} />
+              <div style={{ position: "absolute", inset: 5, borderRadius: 15, background: "rgba(45,212,191,0.18)", border: "1px solid rgba(45,212,191,0.35)", transform: "rotate(0deg)" }} />
+              <div style={{ position: "absolute", inset: 10, borderRadius: 13, background: "rgba(251,146,60,0.22)", border: "1px solid rgba(251,146,60,0.4)", transform: "rotate(8deg)", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                <svg viewBox="0 0 24 24" style={{ width: 30, height: 30, color: "#fdba74" }} fill="none" stroke="currentColor" strokeWidth="1.6">
+                  <path d="M12 5v14M5 12h14" strokeLinecap="round" />
+                </svg>
+              </div>
             </div>
-            <p style={{ fontSize: 14, fontWeight: 600, color: "var(--text-primary, #e2e8f0)", marginBottom: 4 }}>No projects yet</p>
-            <p style={{ fontSize: 12, color: "var(--text-muted, #64748b)", maxWidth: 280, margin: "0 auto 16px" }}>Create your first project to start writing, running code, and collaborating.</p>
+            <p style={{ fontSize: 15, fontWeight: 700, color: "var(--text-primary, #e2e8f0)", marginBottom: 6 }}>No projects yet</p>
+            <p style={{ fontSize: 12.5, color: "var(--text-muted, #64748b)", maxWidth: 320, margin: "0 auto 18px", lineHeight: 1.6 }}>
+              Create your first project — LaTeX, Python, or C++ — and start writing, running, and compiling.
+            </p>
             <button type="button" onClick={() => void createNewProject()} className="studio-btn studio-btn-primary">
               <svg viewBox="0 0 20 20" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="2">
                 <path d="M10 4v12M4 10h12" strokeLinecap="round" strokeLinejoin="round" />
@@ -5346,42 +5381,6 @@ export default function ResearchStudioPage() {
           </div>
         )}
 
-        {/* Template quick-start section */}
-        <div id="templates" style={{ marginTop: 32 }}>
-          <h3 style={{ fontSize: 14, fontWeight: 600, color: "var(--text-primary, #e2e8f0)", marginBottom: 12 }}>Start from a LaTeX template</h3>
-          <div className="studio-template-grid">
-            {RESEARCH_TEMPLATES.filter((t) => !t.slug.startsWith("python-") && !t.slug.startsWith("cpp-")).map((template) => {
-              const accent = templateAccent(template.slug);
-              return (
-                <div
-                  key={template.slug}
-                  className="studio-template-card"
-                  onClick={() => createProjectFromTemplate(template)}
-                  role="button"
-                  tabIndex={0}
-                  onKeyDown={(e) => { if (e.key === "Enter") createProjectFromTemplate(template); }}
-                  style={{ background: accent.tint, borderColor: `color-mix(in srgb, ${accent.color} 30%, var(--border-color, #334155))` }}
-                >
-                  <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 10 }}>
-                    <span
-                      style={{
-                        display: "inline-flex", alignItems: "center", justifyContent: "center",
-                        width: 24, height: 24, borderRadius: 7, background: accent.color,
-                        color: "#0d0f17", fontWeight: 700, fontSize: 12, flexShrink: 0,
-                      }}
-                      aria-hidden="true"
-                    >
-                      {template.name.slice(0, 1)}
-                    </span>
-                    <span style={{ fontSize: 11, fontWeight: 600, color: accent.color }}>{accent.label}</span>
-                  </div>
-                  <h4>{template.name}</h4>
-                  <p>{template.description}</p>
-                </div>
-              );
-            })}
-          </div>
-        </div>
         </div>
         {renderNewProjectDialog()}
       </main>
