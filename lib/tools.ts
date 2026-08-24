@@ -134,14 +134,14 @@ export const TOOL_ITEMS: ToolItem[] = [
     name: "PDF to PowerPoint",
     description: "Turn PDF slides into editable PPTX.",
     category: "Convert",
-    processing: "local",
+    processing: "server",
   },
   {
     slug: "pdf-to-excel",
     name: "PDF to Excel",
     description: "Extract tables from PDF into spreadsheet format.",
     category: "Convert",
-    processing: "local",
+    processing: "server",
   },
   {
     slug: "pdf-to-latex",
