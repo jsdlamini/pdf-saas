@@ -5085,9 +5085,7 @@ export default function ResearchStudioPage() {
               </div>
             ) : null}
           </div>
-          <div className="studio-hero-visual">
-            <StudioHeroCards />
-          </div>
+          <StudioHeroCards />
         </section>
 
         {/* Dashboard header */}
