@@ -2,6 +2,7 @@
 
 import { SignInButton, SignUpButton, useAuth, useUser } from "@clerk/nextjs";
 import StudioAccount from "../components/studio-account";
+import StudioHeroCards from "../components/studio-hero-cards";
 import { showToast } from "../components/toast";
 import CommandPalette from "../components/command-palette";
 import { trackEvent } from "../components/analytics";
@@ -5032,9 +5033,9 @@ export default function ResearchStudioPage() {
         {/* ── Studio hero ── */}
         <section className="studio-hero">
           <div className="studio-hero-copy">
-            <h1 className="studio-hero-title">A real LaTeX editor, with your PDF beside it.</h1>
+            <h1 className="studio-hero-title">LaTeX, Python, and C++ — compiled live, PDF beside it.</h1>
             <p className="studio-hero-sub">
-              Write, compile, and see the result instantly — with GitHub sync, live
+              Write, run, and compile with instant preview — plus GitHub sync, live
               collaboration, version history, and AI assistance built in.
             </p>
             <ul className="studio-hero-points">
@@ -5084,37 +5085,8 @@ export default function ResearchStudioPage() {
               </div>
             ) : null}
           </div>
-          <div className="studio-hero-visual" aria-hidden="true">
-            <div style={{ display: "flex", alignItems: "center", gap: 6, padding: "8px 12px", borderBottom: "1px solid var(--border-color, #334155)", background: "#11141c" }}>
-              <span style={{ width: 9, height: 9, borderRadius: "50%", background: "#f87171" }} />
-              <span style={{ width: 9, height: 9, borderRadius: "50%", background: "#fbbf24" }} />
-              <span style={{ width: 9, height: 9, borderRadius: "50%", background: "#34d399" }} />
-              <span style={{ marginLeft: 4, fontSize: 10, fontWeight: 600, color: "#64748b" }}>main.tex</span>
-            </div>
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", minHeight: 200 }}>
-              <div style={{ padding: 12, fontFamily: "var(--font-mono)", fontSize: 10, lineHeight: 1.7, color: "#cbd5e1", borderRight: "1px solid var(--border-color, #334155)" }}>
-                <div><span style={{ color: "#a78bfa" }}>\documentclass</span><span style={{ color: "#64748b" }}>{"article"}</span></div>
-                <div><span style={{ color: "#a78bfa" }}>\usepackage</span><span style={{ color: "#64748b" }}>{"graphicx"}</span></div>
-                <div><span style={{ color: "#a78bfa" }}>\title</span><span style={{ color: "#64748b" }}>{"My Paper"}</span></div>
-                <div><span style={{ color: "#a78bfa" }}>\begin</span><span style={{ color: "#64748b" }}>{"document"}</span></div>
-                <div><span style={{ color: "#34d399" }}>\section</span><span style={{ color: "#e2e8f0" }}>{"Introduction"}</span></div>
-                <div style={{ color: "#e2e8f0" }}>We study…</div>
-                <div><span style={{ color: "#a78bfa" }}>\end</span><span style={{ color: "#64748b" }}>{"document"}</span></div>
-              </div>
-              <div style={{ display: "flex", alignItems: "center", justifyContent: "center", background: "#fff", padding: 14 }}>
-                <div style={{ width: "100%", borderRadius: 4, border: "1px solid #e2e8f0", background: "#fff", padding: 12 }}>
-                  <div style={{ height: 10, width: "55%", borderRadius: 3, background: "#1e293b", marginBottom: 8 }} />
-                  <div style={{ height: 6, width: "75%", borderRadius: 3, background: "#cbd5e1", marginBottom: 10 }} />
-                  <div style={{ height: 6, width: "100%", borderRadius: 3, background: "#e2e8f0", marginBottom: 5 }} />
-                  <div style={{ height: 6, width: "100%", borderRadius: 3, background: "#e2e8f0", marginBottom: 5 }} />
-                  <div style={{ height: 6, width: "82%", borderRadius: 3, background: "#e2e8f0" }} />
-                </div>
-              </div>
-            </div>
-            <div style={{ display: "flex", alignItems: "center", gap: 6, padding: "7px 12px", borderTop: "1px solid var(--border-color, #334155)", background: "#11141c" }}>
-              <span style={{ width: 7, height: 7, borderRadius: "50%", background: "#34d399" }} />
-              <span style={{ fontSize: 10, fontWeight: 600, color: "#34d399" }}>Compiled in 0.13s</span>
-            </div>
+          <div className="studio-hero-visual">
+            <StudioHeroCards />
           </div>
         </section>
 
