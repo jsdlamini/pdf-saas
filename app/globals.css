@@ -1413,6 +1413,34 @@ body[data-studio-editor="true"] footer {
   max-width: 42ch;
 }
 
+.studio-hero-showcase-desc {
+  margin-top: 10px;
+  font-size: 13px;
+  line-height: 1.6;
+  color: var(--text-muted, #64748b);
+  max-width: 46ch;
+}
+
+.studio-hero-showcase-features {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 7px 14px;
+  list-style: none;
+  margin: 14px 0 0;
+  padding: 0;
+}
+.studio-hero-showcase-features li {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-primary, #e2e8f0);
+}
+.studio-hero-showcase-features li svg {
+  color: inherit;
+}
+
 .studio-hero-showcase-code {
   border-radius: 14px;
   border: 1px solid var(--border-color, #334155);
