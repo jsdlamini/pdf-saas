@@ -3026,7 +3026,8 @@ export default function ResearchStudioPage() {
       setCompileNotice("Sign in to push projects to GitHub.");
       return;
     }
-    const defaultRepo = (projectName || "my-project")
+    const lastRepo = (() => { try { return localStorage.getItem("wiserfiles-last-github-repo") || ""; } catch { return ""; } })();
+    const defaultRepo = lastRepo || (projectName || "my-project")
       .toLowerCase()
       .replace(/[^a-z0-9._-]+/g, "-")
       .replace(/^-+|-+$/g, "")
@@ -3082,12 +3083,139 @@ export default function ResearchStudioPage() {
       }
       setCompileNotice(`Pushed to GitHub: ${data.url}`);
       showToast(`Pushed ${data.pushed?.length || 0} files to GitHub`, "success");
+      try { localStorage.setItem("wiserfiles-last-github-repo", repo); } catch { /* best-effort */ }
       if (data.failed?.length) {
         appendPreviewError(`Some files failed: ${data.failed.join(", ")}`);
       }
       trackStudioEvent("github-push", repo);
     } catch (error) {
       const message = error instanceof Error ? error.message : "GitHub push failed.";
+      setCompileNotice(message);
+      appendPreviewError(message);
+    }
+  }
+
+  async function openFromGithub() {
+    if (!userId) {
+      setCompileNotice("Sign in to open projects from GitHub.");
+      return;
+    }
+
+    let repos: Array<{ name: string; full_name: string; default_branch: string; private: boolean }> = [];
+    try {
+      const res = await fetch("/api/github/repos");
+      const data = (await res.json().catch(() => null)) as { repos?: typeof repos; error?: string } | null;
+      if (!res.ok || !data) {
+        if (data?.error?.includes("Connect GitHub")) {
+          await githubSettings();
+          return;
+        }
+        setCompileNotice(data?.error || "Could not list GitHub repositories.");
+        return;
+      }
+      repos = data.repos || [];
+    } catch {
+      setCompileNotice("Could not reach GitHub.");
+      return;
+    }
+
+    if (!repos.length) {
+      setCompileNotice("No repositories found on your GitHub account.");
+      return;
+    }
+
+    const options = repos
+      .map((r) => `<option value="${r.name}">${r.name}${r.private ? " (private)" : ""}</option>`)
+      .join("");
+
+    const result = await Swal.fire({
+      title: "Open from GitHub",
+      html: `
+        <div style="text-align:left;display:flex;flex-direction:column;gap:10px">
+          <label style="font-size:12px;font-weight:600;color:#e2e8f0">Repository</label>
+          <select id="swal-gh-open-repo" class="swal2-input" style="background:#0f172a;color:#e2e8f0;border-color:#334155;width:100%">${options}</select>
+          <p style="font-size:11px;color:#94a3b8">Files are copied into a new studio project. Images and other binary assets are skipped.</p>
+        </div>
+      `,
+      showCancelButton: true,
+      confirmButtonText: "Open",
+      cancelButtonText: "Cancel",
+      confirmButtonColor: "#4ade80",
+      cancelButtonColor: "#334155",
+      background: "#1a1d2b",
+      color: "#e2e8f0",
+      position: "top",
+      preConfirm: () => {
+        const repo = (document.getElementById("swal-gh-open-repo") as HTMLSelectElement)?.value;
+        return repo ? { repo } : false;
+      },
+    });
+
+    if (!result.isConfirmed || !result.value) return;
+    const repoName = (result.value as { repo: string }).repo;
+
+    setCompileNotice(`Loading ${repoName} from GitHub...`);
+    try {
+      const res = await fetch(`/api/github/repo?repo=${encodeURIComponent(repoName)}`);
+      const data = (await res.json().catch(() => null)) as { files?: Array<{ path: string; content: string }>; error?: string; truncated?: boolean } | null;
+      if (!res.ok || !data?.files?.length) {
+        throw new Error(data?.error || "Could not import this repository.");
+      }
+
+      const nextProjectId = makeProjectId();
+      const entries: ProjectEntry[] = data.files.map((f) => ({ path: f.path, kind: "file" as const, content: f.content }));
+      const editorMode: EditorMode = entries.some((e) => e.path.endsWith(".py"))
+        ? "python"
+        : entries.some((e) => e.path.endsWith(".cpp"))
+          ? "cpp"
+          : "latex";
+      const defaultPath =
+        entries.find((e) => /(^|\/)(main\.(tex|py|cpp))$/.test(e.path))?.path ||
+        entries[0]?.path ||
+        (editorMode === "python" ? "main.py" : editorMode === "cpp" ? "main.cpp" : "main.tex");
+      const createdAt = new Date().toISOString();
+      const snapshot: SavedProjectData = {
+        id: nextProjectId,
+        name: repoName,
+        entries,
+        selectedPath: defaultPath,
+        lastCompileAt: "Not compiled yet",
+        updatedAt: createdAt,
+        editorMode,
+      };
+
+      persistProjectSnapshot(snapshot);
+      queueServerProjectSync(snapshot);
+      setSavedProjects((current) => [
+        { id: nextProjectId, name: repoName, updatedAt: createdAt, type: editorMode },
+        ...current.filter((item) => item.id !== nextProjectId),
+      ]);
+
+      if (compiledPdfUrl) URL.revokeObjectURL(compiledPdfUrl);
+      closeIntellisense();
+      setActiveProjectId(nextProjectId);
+      setProjectName(repoName);
+      setProjectEntries(entries);
+      setSelectedPath(defaultPath);
+      setAddFileError("");
+      setCompileBusy(false);
+      setCompiledPdfBlob(null);
+      setCompiledPdfUrl("");
+      setCoverDataUrl("");
+      setCompiledPdfFileName("compiled-main.pdf");
+      setAiFixBusy(false);
+      setAiFixError("");
+      setAiFixSummary("");
+      setAiFixSuggestions([]);
+      setLastCompileAt("Not compiled yet");
+      setEditorMode(editorMode);
+      setCodeOutput(null);
+      setCodeRunBusy(false);
+      setCompileNotice(`Imported ${entries.length} file${entries.length !== 1 ? "s" : ""} from ${repoName}${data.truncated ? " (some binary/large files were skipped)" : ""}.`);
+      trackStudioEvent("github-import", repoName);
+      setWorkspaceScreen("editor");
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "GitHub import failed.";
       setCompileNotice(message);
       appendPreviewError(message);
     }
@@ -5818,6 +5946,7 @@ export default function ResearchStudioPage() {
               { label: <>Import ZIP</>, action: () => { setOpenMenu(""); document.getElementById("zip-import-editor-menu")?.click(); } },
               "-",
               { label: <>Push to GitHub</>, action: () => { setOpenMenu(""); void pushToGithub(); } },
+              { label: <>Open from GitHub</>, action: () => { setOpenMenu(""); void openFromGithub(); } },
               { label: <>GitHub Settings</>, action: () => { setOpenMenu(""); void githubSettings(); } },
             ]
           },
