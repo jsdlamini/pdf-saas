@@ -88,6 +88,7 @@ type SavedProjectData = {
   editorMode?: EditorMode;
   revisions?: StoredRevision[];
   coverDataUrl?: string;
+  githubRepo?: string;
 };
 
 type StoredRevision = {
@@ -1204,6 +1205,7 @@ export default function ResearchStudioPage() {
   const [compiledPdfBlob, setCompiledPdfBlob] = useState<Blob | null>(null);
   const [compiledPdfUrl, setCompiledPdfUrl] = useState("");
   const [coverDataUrl, setCoverDataUrl] = useState("");
+  const [githubRepo, setGithubRepo] = useState("");
   const [compiledPdfFileName, setCompiledPdfFileName] = useState("compiled-main.pdf");
   const [compileMainLog, setCompileMainLog] = useState("");
   const [compileMainLogFileName, setCompileMainLogFileName] = useState("main.log");
@@ -2600,6 +2602,7 @@ export default function ResearchStudioPage() {
       updatedAt: overrides?.updatedAt ?? now,
       editorMode: overrides?.editorMode ?? editorMode,
       coverDataUrl: overrides?.coverDataUrl ?? coverDataUrl,
+      githubRepo: overrides?.githubRepo ?? githubRepo,
     };
   }
 
@@ -2615,6 +2618,7 @@ export default function ResearchStudioPage() {
           : "Save queued — retrying against account storage."
       );
       showToast("Project saved", "success");
+      if (githubRepo) void pushToGithubSilent();
     } catch (saveError) {
       const message = saveError instanceof Error ? saveError.message : "Project save failed.";
       setCompileNotice(message);
@@ -3021,13 +3025,48 @@ export default function ResearchStudioPage() {
     }
   }
 
+  async function pushFilesToGithub(repo: string, isPrivate: boolean, silent: boolean) {
+    try {
+      const res = await fetch("/api/github", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          repoName: repo,
+          isPrivate,
+          message: `Update ${projectName || "project"} from WiserFiles`,
+          files: projectEntries.filter((e) => e.kind === "file").map((e) => ({ path: e.path, content: e.content })),
+        }),
+      });
+      const data = (await res.json()) as { ok?: boolean; url?: string; pushed?: string[]; failed?: string[]; error?: string };
+      if (!res.ok || !data.ok) {
+        if (data.error?.includes("Set up a GitHub personal access token")) {
+          await githubSettings();
+          throw new Error("Set up your GitHub token, then push again.");
+        }
+        throw new Error(data.error || "GitHub push failed.");
+      }
+      setGithubRepo(repo);
+      setCompileNotice(`Pushed to GitHub: ${data.url || repo}`);
+      if (!silent) showToast(`Pushed ${data.pushed?.length || 0} files to GitHub`, "success");
+      try { localStorage.setItem("wiserfiles-last-github-repo", repo); } catch { /* best-effort */ }
+      if (data.failed?.length) {
+        appendPreviewError(`Some files failed: ${data.failed.join(", ")}`);
+      }
+      trackStudioEvent("github-push", repo);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "GitHub push failed.";
+      setCompileNotice(message);
+      appendPreviewError(message);
+    }
+  }
+
   async function pushToGithub() {
     if (!userId) {
       setCompileNotice("Sign in to push projects to GitHub.");
       return;
     }
     const lastRepo = (() => { try { return localStorage.getItem("wiserfiles-last-github-repo") || ""; } catch { return ""; } })();
-    const defaultRepo = lastRepo || (projectName || "my-project")
+    const defaultRepo = githubRepo || lastRepo || (projectName || "my-project")
       .toLowerCase()
       .replace(/[^a-z0-9._-]+/g, "-")
       .replace(/^-+|-+$/g, "")
@@ -3060,39 +3099,13 @@ export default function ResearchStudioPage() {
 
     if (!value) return;
     const { repo, isPrivate } = value as { repo: string; isPrivate: boolean };
-
     setCompileNotice(`Pushing ${projectEntries.filter((e) => e.kind === "file").length} files to GitHub...`);
-    try {
-      const res = await fetch("/api/github", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          repoName: repo,
-          isPrivate,
-          message: `Update ${projectName || "project"} from WiserFiles`,
-          files: projectEntries.filter((e) => e.kind === "file").map((e) => ({ path: e.path, content: e.content })),
-        }),
-      });
-      const data = (await res.json()) as { ok?: boolean; url?: string; pushed?: string[]; failed?: string[]; error?: string };
-      if (!res.ok || !data.ok) {
-        if (data.error?.includes("Set up a GitHub personal access token")) {
-          await githubSettings();
-          throw new Error("Set up your GitHub token, then push again.");
-        }
-        throw new Error(data.error || "GitHub push failed.");
-      }
-      setCompileNotice(`Pushed to GitHub: ${data.url}`);
-      showToast(`Pushed ${data.pushed?.length || 0} files to GitHub`, "success");
-      try { localStorage.setItem("wiserfiles-last-github-repo", repo); } catch { /* best-effort */ }
-      if (data.failed?.length) {
-        appendPreviewError(`Some files failed: ${data.failed.join(", ")}`);
-      }
-      trackStudioEvent("github-push", repo);
-    } catch (error) {
-      const message = error instanceof Error ? error.message : "GitHub push failed.";
-      setCompileNotice(message);
-      appendPreviewError(message);
-    }
+    await pushFilesToGithub(repo, isPrivate, false);
+  }
+
+  async function pushToGithubSilent() {
+    if (!githubRepo || !userId) return;
+    await pushFilesToGithub(githubRepo, false, true);
   }
 
   async function openFromGithub() {
@@ -3275,6 +3288,7 @@ export default function ResearchStudioPage() {
     setCompiledPdfBlob(null);
     setCompiledPdfUrl("");
     setCoverDataUrl(saved.coverDataUrl || "");
+    setGithubRepo(saved.githubRepo || "");
     setCompiledPdfFileName("compiled-main.pdf");
     setAiFixBusy(false);
     setAiFixError("");
@@ -4933,6 +4947,7 @@ export default function ResearchStudioPage() {
     if (isMod && event.key.toLowerCase() === "s") {
       event.preventDefault();
       void compileProject();
+      if (githubRepo) void pushToGithubSilent();
       return;
     }
 
