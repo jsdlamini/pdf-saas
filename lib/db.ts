@@ -67,6 +67,7 @@ const MIGRATIONS: string[] = [
     github_token TEXT NOT NULL,
     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
   )`,
+  `ALTER TABLE wiserfiles_user_secrets ADD COLUMN IF NOT EXISTS github_installation_id TEXT`,
 
   `CREATE TABLE IF NOT EXISTS wiserfiles_analytics (
     id SERIAL PRIMARY KEY,

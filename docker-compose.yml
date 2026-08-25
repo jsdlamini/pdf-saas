@@ -61,6 +61,12 @@ services:
       NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY: ${NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY:-}
       NEXT_PUBLIC_SITE_URL: ${NEXT_PUBLIC_SITE_URL:-https://pdf.idealsoftwaresolutions.com}
       CLERK_SECRET_KEY: ${CLERK_SECRET_KEY:-}
+      # Encryption key for integration secrets at rest (AES-256-GCM).
+      ENCRYPTION_KEY: ${ENCRYPTION_KEY:-}
+      # GitHub App (installation flow) — private key stays server-side only.
+      GITHUB_APP_ID: ${GITHUB_APP_ID:-}
+      GITHUB_APP_PRIVATE_KEY: ${GITHUB_APP_PRIVATE_KEY:-}
+      NEXT_PUBLIC_GITHUB_APP_SLUG: ${NEXT_PUBLIC_GITHUB_APP_SLUG:-}
       # DeepSeek configuration is read from host environment or project .env.
       DEEPSEEK_API_KEY: ${DEEPSEEK_API_KEY:-}
       DEEPSEEK_MODEL: ${DEEPSEEK_MODEL:-deepseek-chat}

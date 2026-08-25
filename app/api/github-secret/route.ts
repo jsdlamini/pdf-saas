@@ -1,6 +1,7 @@
 import { auth } from "@clerk/nextjs/server";
 import { db, ensureMigrated } from "@/lib/db";
 import { encryptSecret } from "@/lib/crypto";
+import { githubAppConfigured } from "@/lib/github-app";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -14,9 +15,17 @@ export async function GET() {
   if (!userId) return jsonError("Sign in required.", 401);
 
   await ensureMigrated();
-  const res = await db.query(`SELECT updated_at FROM wiserfiles_user_secrets WHERE user_id = $1`, [userId]);
+  const res = await db.query(
+    `SELECT github_token, github_installation_id FROM wiserfiles_user_secrets WHERE user_id = $1`,
+    [userId]
+  );
+  const row = res.rows[0];
 
-  return Response.json({ hasToken: res.rows.length > 0 });
+  return Response.json({
+    hasToken: Boolean(row?.github_token),
+    hasInstallation: Boolean(row?.github_installation_id),
+    githubAppConfigured: githubAppConfigured(),
+  });
 }
 
 export async function POST(request: Request) {
