@@ -1419,32 +1419,30 @@ export default function ToolWorkbench({ tool }: WorkbenchProps) {
       }
 
       if (OFFICE_PREVIEW_MIME_PATTERN.test(preparedBlob.type)) {
-        if (preparedBlob.type.toLowerCase().includes("wordprocessingml")) {
-          // DOCX: render semantic HTML (headings/lists/paragraphs) so the
-          // preview actually shows the conversion worked.
-          buildOfficePreviewHtml(preparedBlob, preparedBlob.type)
-            .then((html) => {
-              if (previewJobRef.current !== previewJob) return;
-              setPreviewHtml(html || "");
+        // DOCX/XLSX/PPTX all get a structured HTML preview: mammoth for Word,
+        // real HTML tables for spreadsheets, slide cards for presentations.
+        buildOfficePreviewHtml(preparedBlob, preparedBlob.type)
+          .then((html) => {
+            if (previewJobRef.current !== previewJob) return;
+            if (html) {
+              setPreviewHtml(html);
               setPreviewText("");
-            })
-            .catch(() => {
-              if (previewJobRef.current !== previewJob) return;
+            } else {
               setPreviewHtml("");
-              setPreviewText("Could not build an in-browser structured preview for this output.");
-            });
-        } else {
-          setPreviewHtml("");
-          buildOfficePreviewText(preparedBlob, preparedBlob.type)
-            .then((text) => {
-              if (previewJobRef.current !== previewJob) return;
-              setPreviewText(text);
-            })
-            .catch(() => {
-              if (previewJobRef.current !== previewJob) return;
-              setPreviewText("Could not build an in-browser structured preview for this output.");
-            });
-        }
+              buildOfficePreviewText(preparedBlob, preparedBlob.type)
+                .then((text) => {
+                  if (previewJobRef.current === previewJob) setPreviewText(text);
+                })
+                .catch(() => {
+                  if (previewJobRef.current === previewJob) setPreviewText("Could not build an in-browser structured preview for this output.");
+                });
+            }
+          })
+          .catch(() => {
+            if (previewJobRef.current !== previewJob) return;
+            setPreviewHtml("");
+            setPreviewText("Could not build an in-browser structured preview for this output.");
+          });
       }
 
       if (preparedBlob.type.includes("pdf")) {

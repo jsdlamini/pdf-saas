@@ -3164,6 +3164,12 @@ html[data-theme="light"] .studio-dark ::-webkit-scrollbar-thumb {
 .office-preview-html table { border-collapse: collapse; margin: 0.5rem 0; }
 .office-preview-html td, .office-preview-html th { border: 1px solid #cbd5e1; padding: 0.3rem 0.5rem; }
 .office-preview-html img { max-width: 100%; height: auto; }
+.office-preview-html .office-sheet { margin-bottom: 0.75rem; }
+.office-preview-html .office-sheet h4 { margin: 0.4rem 0 0.3rem; }
+.office-preview-html .office-sheet table { width: 100%; background: #fff; }
+.office-preview-html .office-slide { border: 1px solid #e2e8f0; border-radius: 8px; padding: 0.5rem 0.75rem; margin-bottom: 0.5rem; background: #fff; }
+.office-preview-html .office-slide h4 { margin: 0 0 0.3rem; }
+.office-preview-html .office-note { font-size: 0.8rem; color: #64748b; margin-top: 0.5rem; }
 
 /* Spinner for pending async states. Honours prefers-reduced-motion. */
 .studio-spinner {
