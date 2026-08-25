@@ -16,7 +16,7 @@ function jsonError(msg: string, status: number) {
   return Response.json({ error: msg }, { status });
 }
 
-async function githubJson(token: string, path: string): Promise<{ ok: boolean; status: number; data: any }> {
+async function githubJson(token: string, path: string): Promise<{ ok: boolean; status: number; data: unknown }> {
   const res = await fetch(`${GITHUB_API}${path}`, {
     headers: {
       Accept: "application/vnd.github+json",
