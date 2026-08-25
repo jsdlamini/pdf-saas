@@ -1,7 +1,5 @@
 import { auth } from "@clerk/nextjs/server";
-import { db, ensureMigrated } from "@/lib/db";
-import { decryptSecret } from "@/lib/crypto";
-import { getInstallationToken } from "@/lib/github-app";
+import { getGithubTokenInfo, resolveGithubOwner } from "@/lib/github-auth";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -19,24 +17,6 @@ type PushPayload = {
 
 function jsonError(msg: string, status: number) {
   return Response.json({ error: msg }, { status });
-}
-
-async function getStoredGithubToken(userId: string): Promise<string> {
-  await ensureMigrated();
-  const res = await db.query(
-    `SELECT github_token, github_installation_id FROM wiserfiles_user_secrets WHERE user_id = $1`,
-    [userId]
-  );
-  if (!res.rows.length) return "";
-
-  // Prefer the GitHub App installation token (fresh per call) over a stored PAT.
-  const installationId = res.rows[0].github_installation_id as string | null;
-  if (installationId) {
-    const token = await getInstallationToken(installationId);
-    if (token) return token;
-  }
-
-  return res.rows[0].github_token ? decryptSecret(res.rows[0].github_token) : "";
 }
 
 async function githubRequest(token: string, path: string, options: RequestInit = {}) {
@@ -83,7 +63,8 @@ export async function POST(request: Request) {
   const body = (await request.json().catch(() => null)) as PushPayload | null;
   if (!body) return jsonError("Invalid payload.", 400);
 
-  const token = (body.token || "").trim() || (await getStoredGithubToken(userId));
+  const { token: storedToken, kind } = await getGithubTokenInfo(userId);
+  const token = (body.token || "").trim() || storedToken;
   const repoName = (body.repoName || "").trim();
   const files = Array.isArray(body.files) ? body.files : [];
   const deletes = Array.isArray(body.deletes) ? body.deletes : [];
@@ -109,16 +90,25 @@ export async function POST(request: Request) {
   if (!normalized.size && !normalizedDeletes.length) return jsonError("No valid files to push.", 400);
 
   try {
-    const userRes = await githubRequest(token, "/user");
-    if (!userRes.ok) {
-      return jsonError(`GitHub authentication failed (${userRes.status}). Check your connection.`, 401);
+    const owner = await resolveGithubOwner(token, kind, repoName);
+    if (!owner) {
+      return jsonError(
+        kind === "installation"
+          ? "The GitHub App can only push to repositories it is installed on. Open (or create) the repository on GitHub first, then push again."
+          : `GitHub authentication failed. Check your connection.`,
+        401
+      );
     }
-    const user = (await userRes.json()) as { login: string };
-    const owner = user.login;
 
     // Ensure the repository exists.
     const repoRes = await githubRequest(token, `/repos/${owner}/${repoName}`);
     if (repoRes.status === 404) {
+      if (kind === "installation") {
+        return jsonError(
+          "This repository does not exist, and the GitHub App cannot create new repositories. Create it on GitHub first (or connect a personal access token), then push again.",
+          400
+        );
+      }
       const createRes = await githubRequest(token, "/user/repos", {
         method: "POST",
         headers: { "Content-Type": "application/json" },

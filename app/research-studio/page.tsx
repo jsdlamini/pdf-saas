@@ -3125,7 +3125,7 @@ export default function ResearchStudioPage() {
     }
 
     const options = repos
-      .map((r) => `<option value="${r.name}">${r.name}${r.private ? " (private)" : ""}</option>`)
+      .map((r) => `<option value="${r.full_name || r.name}">${r.name}${r.private ? " (private)" : ""}</option>`)
       .join("");
 
     const result = await Swal.fire({
@@ -3152,11 +3152,12 @@ export default function ResearchStudioPage() {
     });
 
     if (!result.isConfirmed || !result.value) return;
-    const repoName = (result.value as { repo: string }).repo;
+    const fullName = (result.value as { repo: string }).repo;
+    const repoName = fullName.includes("/") ? fullName.slice(fullName.lastIndexOf("/") + 1) : fullName;
 
     setCompileNotice(`Loading ${repoName} from GitHub...`);
     try {
-      const res = await fetch(`/api/github/repo?repo=${encodeURIComponent(repoName)}`);
+      const res = await fetch(`/api/github/repo?repo=${encodeURIComponent(fullName)}`);
       const data = (await res.json().catch(() => null)) as { files?: Array<{ path: string; content: string }>; error?: string; truncated?: boolean } | null;
       if (!res.ok || !data?.files?.length) {
         throw new Error(data?.error || "Could not import this repository.");
