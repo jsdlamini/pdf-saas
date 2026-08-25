@@ -1057,8 +1057,18 @@ export default function ResearchStudioPage() {
   const [projectEntries, setProjectEntries] = useState<ProjectEntry[]>(initialState.projectEntries);
   const searchParams = useSearchParams();
   const shareId = searchParams.get("share");
+  const githubResult = searchParams.get("github");
   const [sharedProject, setSharedProject] = useState<any>(null);
   const [shareLoading, setShareLoading] = useState(!!shareId);
+
+  // GitHub App callback result (redirected back with ?github=connected|error).
+  useEffect(() => {
+    if (githubResult === "connected") {
+      showToast("GitHub App connected", "success");
+    } else if (githubResult === "error") {
+      setCompileNotice("Could not connect the GitHub App.");
+    }
+  }, [githubResult]);
 
   // Load shared project on mount
   useEffect(() => {
@@ -2916,6 +2926,8 @@ export default function ResearchStudioPage() {
   const [githubDialogOpen, setGithubDialogOpen] = useState(false);
   const [githubTokenInput, setGithubTokenInput] = useState("");
   const [githubHasToken, setGithubHasToken] = useState(false);
+  const [githubHasInstallation, setGithubHasInstallation] = useState(false);
+  const [githubAppAvailable, setGithubAppAvailable] = useState(false);
 
   const [newProjectOpen, setNewProjectOpen] = useState(false);
   const [newProjectName, setNewProjectName] = useState("");
@@ -2928,12 +2940,34 @@ export default function ResearchStudioPage() {
     setGithubTokenInput("");
     try {
       const res = await fetch("/api/github-secret");
-      const data = (await res.json()) as { hasToken?: boolean };
+      const data = (await res.json()) as { hasToken?: boolean; hasInstallation?: boolean; githubAppConfigured?: boolean };
       setGithubHasToken(Boolean(data.hasToken));
+      setGithubHasInstallation(Boolean(data.hasInstallation));
+      setGithubAppAvailable(Boolean(data.githubAppConfigured));
     } catch {
       setGithubHasToken(false);
+      setGithubHasInstallation(false);
+      setGithubAppAvailable(false);
     }
     setGithubDialogOpen(true);
+  }
+
+  async function connectGithubApp() {
+    try {
+      const res = await fetch("/api/github-app/connect");
+      if (!res.ok) {
+        setCompileNotice("GitHub App is not configured on the server.");
+        return;
+      }
+      const data = (await res.json()) as { url?: string };
+      if (data.url) {
+        window.location.href = data.url;
+      } else {
+        setCompileNotice("GitHub App is not configured on the server.");
+      }
+    } catch {
+      setCompileNotice("Could not start GitHub App connection.");
+    }
   }
 
   async function saveGithubToken() {
@@ -5394,13 +5428,25 @@ export default function ResearchStudioPage() {
           <DialogHeader>
             <DialogTitle>GitHub settings</DialogTitle>
             <DialogDescription>
-              {githubHasToken
-                ? "A token is currently saved. You can replace or clear it."
+              {githubHasToken || githubHasInstallation
+                ? "GitHub is connected. You can push projects from the studio."
                 : "Connect GitHub so you can push projects from the studio."}
             </DialogDescription>
           </DialogHeader>
+          <div className="grid gap-2 rounded-lg border p-3">
+            <Label>GitHub App</Label>
+            {githubHasInstallation ? (
+              <p className="text-xs font-semibold text-emerald-600">✓ Connected via GitHub App</p>
+            ) : githubAppAvailable ? (
+              <Button variant="secondary" onClick={() => void connectGithubApp()}>
+                Connect with GitHub App
+              </Button>
+            ) : (
+              <p className="text-xs text-muted-foreground">GitHub App is not configured on this server.</p>
+            )}
+          </div>
           <div className="grid gap-2">
-            <Label htmlFor="gh-token">Personal access token</Label>
+            <Label htmlFor="gh-token">Personal access token (manual)</Label>
             <Input
               id="gh-token"
               type="password"

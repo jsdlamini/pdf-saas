@@ -1,6 +1,7 @@
 import { auth } from "@clerk/nextjs/server";
 import { db, ensureMigrated } from "@/lib/db";
 import { decryptSecret } from "@/lib/crypto";
+import { getInstallationToken } from "@/lib/github-app";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -23,10 +24,19 @@ function jsonError(msg: string, status: number) {
 async function getStoredGithubToken(userId: string): Promise<string> {
   await ensureMigrated();
   const res = await db.query(
-    `SELECT github_token FROM wiserfiles_user_secrets WHERE user_id = $1`,
+    `SELECT github_token, github_installation_id FROM wiserfiles_user_secrets WHERE user_id = $1`,
     [userId]
   );
-  return res.rows.length ? decryptSecret(res.rows[0].github_token) : "";
+  if (!res.rows.length) return "";
+
+  // Prefer the GitHub App installation token (fresh per call) over a stored PAT.
+  const installationId = res.rows[0].github_installation_id as string | null;
+  if (installationId) {
+    const token = await getInstallationToken(installationId);
+    if (token) return token;
+  }
+
+  return res.rows[0].github_token ? decryptSecret(res.rows[0].github_token) : "";
 }
 
 async function githubRequest(token: string, path: string, options: RequestInit = {}) {
