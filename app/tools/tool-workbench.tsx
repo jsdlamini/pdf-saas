@@ -618,6 +618,9 @@ export default function ToolWorkbench({ tool }: WorkbenchProps) {
   const [jpgRange, setJpgRange] = useState("");
   const [pageNumberPosition, setPageNumberPosition] = useState<"bottom-center" | "bottom-right" | "bottom-left" | "top-center" | "top-right" | "top-left">("bottom-right");
   const [pageNumberFormat, setPageNumberFormat] = useState<"n" | "n-of-total" | "page-n" | "page-n-of-total">("n-of-total");
+  const [cropPreview, setCropPreview] = useState("");
+  const [cropRect, setCropRect] = useState<{ x: number; y: number; w: number; h: number } | null>(null);
+  const cropDragRef = useRef<{ startX: number; startY: number; rect: { left: number; top: number; width: number; height: number } } | null>(null);
   const [editText, setEditText] = useState("");
   const [editPreview, setEditPreview] = useState("");
   const [editCanvasSize, setEditCanvasSize] = useState({ width: 0, height: 0 });
@@ -879,6 +882,7 @@ export default function ToolWorkbench({ tool }: WorkbenchProps) {
   const isOrganizeTool = tool.slug === "organize-pdf";
   const isRotateTool = tool.slug === "rotate-pdf";
   const isSignTool = tool.slug === "sign-pdf";
+  const isCropTool = tool.slug === "crop-pdf";
   const isMergeTool = tool.slug === "merge-pdf";
   const isConvertTool = tool.slug === "convert-to-pdf";
   const isMultiFileTool =
@@ -1231,7 +1235,7 @@ export default function ToolWorkbench({ tool }: WorkbenchProps) {
     if (!first) return;
     const isPdf = first.type === "application/pdf" || first.name.toLowerCase().endsWith(".pdf");
     if (!isPdf && !isConvertTool) return;
-    if (!usesThumbnailEditor && !isSignTool && !isMergeTool && !isConvertTool && !isEditTool) return;
+    if (!usesThumbnailEditor && !isSignTool && !isCropTool && !isMergeTool && !isConvertTool && !isEditTool) return;
 
     try {
       setThumbnailLoading(true);
@@ -1256,6 +1260,11 @@ export default function ToolWorkbench({ tool }: WorkbenchProps) {
         setSignaturePlacementPreview(preview.dataUrl);
         setSignPageCount(preview.pageCount);
         setSignPageNumber(1);
+      }
+
+      if (isCropTool) {
+        const preview = await renderPdfPagePreview(firstBytes, 1);
+        setCropPreview(preview.dataUrl);
       }
 
       if (isEditTool) {
@@ -3734,6 +3743,33 @@ export default function ToolWorkbench({ tool }: WorkbenchProps) {
     window.addEventListener("pointercancel", handleUp);
   }
 
+  function onCropPointerDown(event: React.PointerEvent<HTMLImageElement>) {
+    const rect = event.currentTarget.getBoundingClientRect();
+    if (!rect.width || !rect.height) return;
+    cropDragRef.current = { startX: event.clientX, startY: event.clientY, rect: { left: rect.left, top: rect.top, width: rect.width, height: rect.height } };
+    event.preventDefault();
+    try {
+      event.currentTarget.setPointerCapture?.(event.pointerId);
+    } catch {
+      // best-effort
+    }
+  }
+
+  function onCropPointerMove(event: React.PointerEvent<HTMLImageElement>) {
+    const drag = cropDragRef.current;
+    if (!drag) return;
+    const r = drag.rect;
+    const x0 = clamp((Math.min(drag.startX, event.clientX) - r.left) / r.width, 0, 1);
+    const y0 = clamp((Math.min(drag.startY, event.clientY) - r.top) / r.height, 0, 1);
+    const x1 = clamp((Math.max(drag.startX, event.clientX) - r.left) / r.width, 0, 1);
+    const y1 = clamp((Math.max(drag.startY, event.clientY) - r.top) / r.height, 0, 1);
+    setCropRect({ x: x0, y: y0, w: x1 - x0, h: y1 - y0 });
+  }
+
+  function onCropPointerUp() {
+    cropDragRef.current = null;
+  }
+
   async function loadSignPage(pageNumber: number) {
     const bytes = signPdfBytesRef.current;
     if (!bytes) return;
@@ -5537,12 +5573,22 @@ export default function ToolWorkbench({ tool }: WorkbenchProps) {
 
       if (tool.slug === "crop-pdf") {
         if (!firstFile) throw new Error("Missing PDF file.");
-        const margin = Number(ranges);
-        if (!Number.isFinite(margin) || margin < 0) throw new Error("Enter a numeric margin value (points).");
         const source = await PDFDocument.load(await readAsArrayBuffer(firstFile));
+        const hasRect = Boolean(cropRect && cropRect.w > 0.01 && cropRect.h > 0.01);
         source.getPages().forEach((page) => {
           const { width, height } = page.getSize();
-          page.setCropBox(margin, margin, width - margin * 2, height - margin * 2);
+          if (hasRect && cropRect) {
+            const x = cropRect.x * width;
+            const yTop = cropRect.y * height;
+            const w = cropRect.w * width;
+            const h = cropRect.h * height;
+            const yBottom = height - yTop - h;
+            page.setCropBox(x, yBottom, w, h);
+          } else {
+            const margin = Number(ranges) || 0;
+            if (!Number.isFinite(margin) || margin < 0) throw new Error("Enter a numeric margin (points) or drag a rectangle on the preview.");
+            page.setCropBox(margin, margin, width - margin * 2, height - margin * 2);
+          }
         });
         stageOutput(
           asPdfBlob(await source.save()),
@@ -6531,23 +6577,62 @@ export default function ToolWorkbench({ tool }: WorkbenchProps) {
       ) : null}
 
       {tool.slug === "remove-pages" || tool.slug === "crop-pdf" ? (
-        <div className="space-y-1">
-          <label htmlFor="ranges" className="text-xs font-semibold uppercase tracking-wide text-slate-600">
-            {tool.slug === "crop-pdf" ? "Crop margin (points)" : "Pages to remove"}
-          </label>
-          <input
-            id="ranges"
-            type="text"
-            value={ranges}
-            onChange={(event) => setRanges(event.target.value)}
-            placeholder={tool.slug === "crop-pdf" ? "Example: 20" : "Example: 2,4-5"}
-            className="w-full rounded-xl border border-slate-300 bg-slate-50 px-3 py-2 text-sm text-slate-800"
-          />
-          <p className="field-help">
-            {tool.slug === "crop-pdf"
-              ? "Crop margin is in PDF points. 72 points equals about 1 inch."
-              : "Select pages to remove using commas and ranges like 3,7-9."}
-          </p>
+        <div className="space-y-2">
+          <div className="space-y-1">
+            <label htmlFor="ranges" className="text-xs font-semibold uppercase tracking-wide text-slate-600">
+              {tool.slug === "crop-pdf" ? "Crop margin (points, optional)" : "Pages to remove"}
+            </label>
+            <input
+              id="ranges"
+              type="text"
+              value={ranges}
+              onChange={(event) => setRanges(event.target.value)}
+              placeholder={tool.slug === "crop-pdf" ? "Example: 20 — or drag below" : "Example: 2,4-5"}
+              className="w-full rounded-xl border border-slate-300 bg-slate-50 px-3 py-2 text-sm text-slate-800"
+            />
+            <p className="field-help">
+              {tool.slug === "crop-pdf"
+                ? "Crop margin is in PDF points (72 points ≈ 1 inch). Dragging a rectangle below takes precedence."
+                : "Select pages to remove using commas and ranges like 3,7-9."}
+            </p>
+          </div>
+          {tool.slug === "crop-pdf" && cropPreview ? (
+            <div className="space-y-2 rounded-xl border border-slate-200 bg-slate-50 p-3">
+              <div className="flex items-center justify-between">
+                <p className="text-xs font-semibold uppercase tracking-wide text-slate-600">Drag to select the area to keep</p>
+                {cropRect ? (
+                  <button type="button" onClick={() => setCropRect(null)} className="text-xs font-semibold text-rose-500 hover:text-rose-700">
+                    Clear crop
+                  </button>
+                ) : null}
+              </div>
+              <div className="relative inline-block w-full max-w-[320px] overflow-hidden rounded-lg border border-slate-300 bg-white">
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img
+                  src={cropPreview}
+                  alt="Crop preview"
+                  className="h-auto w-full cursor-crosshair select-none"
+                  draggable={false}
+                  onPointerDown={onCropPointerDown}
+                  onPointerMove={onCropPointerMove}
+                  onPointerUp={onCropPointerUp}
+                  onPointerCancel={onCropPointerUp}
+                />
+                {cropRect ? (
+                  <div
+                    className="pointer-events-none absolute border-2 border-cyan-500 bg-cyan-400/20"
+                    style={{
+                      left: `${cropRect.x * 100}%`,
+                      top: `${cropRect.y * 100}%`,
+                      width: `${cropRect.w * 100}%`,
+                      height: `${cropRect.h * 100}%`,
+                    }}
+                  />
+                ) : null}
+              </div>
+              <p className="field-help">The selected area is applied to every page. Clear it to crop a uniform margin instead.</p>
+            </div>
+          ) : null}
         </div>
       ) : null}
 
