@@ -1,10 +1,9 @@
 import { auth } from "@clerk/nextjs/server";
-import { getGithubAccessToken } from "@/lib/github-auth";
+import { GITHUB_API, getGithubTokenInfo, resolveGithubOwner } from "@/lib/github-auth";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-const GITHUB_API = "https://api.github.com";
 const MAX_FILES = 300;
 const MAX_TOTAL_CHARS = 5_000_000;
 
@@ -34,26 +33,34 @@ export async function GET(request: Request) {
   const { userId } = await auth();
   if (!userId) return jsonError("Sign in required.", 401);
 
-  const token = await getGithubAccessToken(userId);
+  const { token, kind } = await getGithubTokenInfo(userId);
   if (!token) return jsonError("Connect GitHub first.", 400);
 
-  const repoName = new URL(request.url).searchParams.get("repo")?.trim();
-  if (!repoName || !/^[a-zA-Z0-9._-]+$/.test(repoName)) {
-    return jsonError("A valid repository name is required.", 400);
+  const repoParam = new URL(request.url).searchParams.get("repo")?.trim() || "";
+  if (!repoParam || !/^[a-zA-Z0-9._/-]+$/.test(repoParam)) {
+    return jsonError("A valid repository is required.", 400);
   }
 
-  const user = await githubJson(token, "/user");
-  if (!user.ok) return jsonError("Could not read your GitHub account.", 502);
-  const owner = (user.data as { login: string }).login;
+  // Accept either "owner/name" (full_name) or just "name".
+  let owner = "";
+  let repoName = repoParam;
+  const slash = repoParam.indexOf("/");
+  if (slash !== -1) {
+    owner = repoParam.slice(0, slash);
+    repoName = repoParam.slice(slash + 1);
+  } else {
+    owner = (await resolveGithubOwner(token, kind, repoName)) || "";
+  }
+  if (!owner || !repoName) return jsonError("Could not determine the repository owner.", 404);
 
   const repo = await githubJson(token, `/repos/${owner}/${repoName}`);
   if (!repo.ok) return jsonError(`Repository "${repoName}" not found or not accessible.`, 404);
-  const branch = (repo.data as { default_branch?: string }).default_branch || "main";
+  const branch = ((repo.data as { default_branch?: string }).default_branch) || "main";
 
   const tree = await githubJson(token, `/repos/${owner}/${repoName}/git/trees/${encodeURIComponent(branch)}?recursive=1`);
   if (!tree.ok) return jsonError("Could not read the repository file tree.", 502);
 
-  const entries = (tree.data as { tree?: Array<{ path: string; type: string; sha: string }> }).tree || [];
+  const entries = ((tree.data as { tree?: Array<{ path: string; type: string; sha: string }> }).tree) || [];
   const blobs = entries
     .filter((e) => e.type === "blob" && !BINARY_EXT.test(e.path))
     .slice(0, MAX_FILES);
