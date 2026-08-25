@@ -2970,6 +2970,20 @@ export default function ResearchStudioPage() {
     }
   }
 
+  async function disconnectGithubApp() {
+    try {
+      const res = await fetch("/api/github-app/installation", { method: "DELETE" });
+      if (res.ok) {
+        showToast("GitHub App disconnected", "success");
+        setGithubHasInstallation(false);
+      } else {
+        setCompileNotice("Could not disconnect the GitHub App.");
+      }
+    } catch {
+      setCompileNotice("Could not disconnect the GitHub App.");
+    }
+  }
+
   async function saveGithubToken() {
     const token = githubTokenInput.trim();
     if (!token) {
@@ -5436,7 +5450,12 @@ export default function ResearchStudioPage() {
           <div className="grid gap-2 rounded-lg border p-3">
             <Label>GitHub App</Label>
             {githubHasInstallation ? (
-              <p className="text-xs font-semibold text-emerald-600">✓ Connected via GitHub App</p>
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <p className="text-xs font-semibold text-emerald-600">✓ Connected via GitHub App</p>
+                <Button variant="destructive" size="sm" onClick={() => void disconnectGithubApp()}>
+                  Disconnect
+                </Button>
+              </div>
             ) : githubAppAvailable ? (
               <Button variant="secondary" onClick={() => void connectGithubApp()}>
                 Connect with GitHub App
