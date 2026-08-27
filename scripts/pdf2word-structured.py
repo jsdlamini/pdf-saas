@@ -286,6 +286,17 @@ def convert(input_path, output_path):
         except Exception:
             pass
 
+        # Image placements with their on-page rectangle, so images keep their
+        # displayed size and appear inline in the flow (not appended at the end).
+        images = []
+        try:
+            for xref, *_ in page.get_images(full=True):
+                for rect in page.get_image_rects(xref):
+                    if rect.width >= 10 and rect.height >= 10:
+                        images.append((rect.y0, pymupdf.Rect(rect), xref))
+        except Exception:
+            pass
+
         pending = None  # (style, spans, left, right)
 
         def flush():
@@ -306,9 +317,38 @@ def convert(input_path, output_path):
                 add_runs(paragraph, spans)
             pending = None
 
-        for block in page.get_text("dict")["blocks"]:
-            if "lines" not in block:
+        def emit_image(bbox, xref):
+            flush()
+            try:
+                pix = pymupdf.Pixmap(doc, xref)
+                if pix.n - pix.alpha >= 4:
+                    pix = pymupdf.Pixmap(pymupdf.csRGB, pix)
+                stream = io.BytesIO(pix.tobytes("png"))
+                width_in = bbox.width / 72
+                height_in = bbox.height / 72
+                max_w = 6.5
+                if width_in > max_w:
+                    ratio = max_w / width_in
+                    width_in = max_w
+                    height_in *= ratio
+                document.add_picture(stream, width=Inches(width_in), height=Inches(height_in))
+                document.paragraphs[-1].alignment = WD_ALIGN_PARAGRAPH.CENTER
+            except Exception:
+                pass
+
+        # Merge text blocks and images into one top-to-bottom flow.
+        text_blocks = [b for b in page.get_text("dict")["blocks"] if "lines" in b]
+        items = [("text", b["bbox"][1], b) for b in text_blocks]
+        items += [("image", y, (bbox, xref)) for (y, bbox, xref) in images]
+        items.sort(key=lambda item: item[1])
+
+        for kind, _top, payload in items:
+            if kind == "image":
+                bbox, xref = payload
+                emit_image(bbox, xref)
                 continue
+
+            block = payload
             block_rect = pymupdf.Rect(block["bbox"])
             if any(block_rect.intersects(r) for r in table_regions):
                 continue
@@ -389,19 +429,7 @@ def convert(input_path, output_path):
 
             flush()
 
-        # Images, placed after the page's text.
-        for info in page.get_images(full=True):
-            try:
-                if info[2] < 20 or info[3] < 20:
-                    continue  # skip tiny/background art
-                pix = pymupdf.Pixmap(doc, info[0])
-                if pix.n - pix.alpha >= 4:
-                    pix = pymupdf.Pixmap(pymupdf.csRGB, pix)
-                stream = io.BytesIO(pix.tobytes("png"))
-                document.add_picture(stream, width=Inches(5.5))
-                document.paragraphs[-1].alignment = WD_ALIGN_PARAGRAPH.CENTER
-            except Exception:
-                continue
+        flush()
 
     document.save(output_path)
     structured_styles = {
@@ -416,6 +444,7 @@ def convert(input_path, output_path):
         flush=True,
     )
     return 0
+
 
 
 def main():
