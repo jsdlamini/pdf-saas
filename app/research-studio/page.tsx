@@ -89,6 +89,7 @@ type SavedProjectData = {
   revisions?: StoredRevision[];
   coverDataUrl?: string;
   githubRepo?: string;
+  githubPushed?: Record<string, string>;
 };
 
 type StoredRevision = {
@@ -302,6 +303,21 @@ function hashString(value: string): number {
     hash = (hash * 31 + value.charCodeAt(i)) >>> 0;
   }
   return hash / 4294967295;
+}
+
+// cyrb53 string hash — used to diff project files against the last-pushed state
+// so a GitHub push only sends changed files.
+function contentHash(content: string): string {
+  let h1 = 0xdeadbeef;
+  let h2 = 0x41c6ce57;
+  for (let i = 0; i < content.length; i += 1) {
+    const ch = content.charCodeAt(i);
+    h1 = Math.imul(h1 ^ ch, 2654435761);
+    h2 = Math.imul(h2 ^ ch, 1597334677);
+  }
+  h1 = Math.imul(h1 ^ (h1 >>> 16), 2246822507) ^ Math.imul(h2 ^ (h2 >>> 13), 3266489909);
+  h2 = Math.imul(h2 ^ (h2 >>> 16), 2246822507) ^ Math.imul(h1 ^ (h1 >>> 13), 3266489909);
+  return (4294967296 * (2097151 & h2) + (h1 >>> 0)).toString(36);
 }
 
 type DiffLine = { type: "same" | "add" | "remove"; text: string };
@@ -1206,6 +1222,7 @@ export default function ResearchStudioPage() {
   const [compiledPdfUrl, setCompiledPdfUrl] = useState("");
   const [coverDataUrl, setCoverDataUrl] = useState("");
   const [githubRepo, setGithubRepo] = useState("");
+  const [githubPushed, setGithubPushed] = useState<Record<string, string>>({});
   const [terminalOpen, setTerminalOpen] = useState(false);
   const [terminalCommand, setTerminalCommand] = useState("");
   const [terminalOutput, setTerminalOutput] = useState("");
@@ -2626,6 +2643,7 @@ export default function ResearchStudioPage() {
       editorMode: overrides?.editorMode ?? editorMode,
       coverDataUrl: overrides?.coverDataUrl ?? coverDataUrl,
       githubRepo: overrides?.githubRepo ?? githubRepo,
+      githubPushed: overrides?.githubPushed ?? githubPushed,
     };
   }
 
@@ -3059,16 +3077,31 @@ export default function ResearchStudioPage() {
   }
 
   async function pushFilesToGithub(repo: string, isPrivate: boolean, silent: boolean) {
-    // Text files go inline; images are referenced by path and read from the
-    // asset store server-side. Upload happens in small batches so the client can
-    // report a real percentage and no single request trips the proxy.
+    // Incremental push: diff against the last-pushed state and only upload
+    // changed files (and delete removed ones). Text files go inline; images are
+    // referenced by path and read from the asset store server-side.
     const textFiles = projectEntries.filter((e) => e.kind === "file" && !isBinaryAssetPath(e.path));
     const binaryPaths = projectEntries.filter((e) => e.kind === "file" && isBinaryAssetPath(e.path)).map((e) => e.path);
 
-    const textItems = textFiles.map((e) => ({ kind: "text" as const, path: e.path, content: e.content }));
-    const imageItems = binaryPaths.map((p) => ({ kind: "image" as const, path: p }));
+    const currentHashes: Record<string, string> = {};
+    for (const e of projectEntries) {
+      if (e.kind === "file") currentHashes[e.path] = contentHash(e.content || "");
+    }
+
+    const changedText = textFiles.filter((e) => githubPushed[e.path] !== currentHashes[e.path]);
+    const changedBinary = binaryPaths.filter((p) => githubPushed[p] !== currentHashes[p]);
+    const deletedPaths = Object.keys(githubPushed).filter((p) => !(p in currentHashes));
+
+    if (!changedText.length && !changedBinary.length && !deletedPaths.length) {
+      setCompileNotice("Everything is already pushed to GitHub.");
+      if (!silent) showToast("Already up to date with GitHub", "success");
+      return;
+    }
+
+    const textItems = changedText.map((e) => ({ kind: "text" as const, path: e.path, content: e.content }));
+    const imageItems = changedBinary.map((p) => ({ kind: "image" as const, path: p }));
     const allItems = [...textItems, ...imageItems];
-    const total = allItems.length;
+    const total = allItems.length + deletedPaths.length;
 
     setPushBusy(true);
     setPushProgress(0);
@@ -3097,7 +3130,7 @@ export default function ResearchStudioPage() {
         }
         blobs.push(...data.blobs);
         if (data.missingAssets) missingAssets.push(...data.missingAssets);
-        const done = Math.min(i + BATCH, total);
+        const done = Math.min(i + BATCH, allItems.length);
         setPushProgress(Math.round((done / Math.max(total, 1)) * 100));
       }
 
@@ -3110,6 +3143,7 @@ export default function ResearchStudioPage() {
           isPrivate,
           message: `Update ${projectName || "project"} from WiserFiles`,
           blobs,
+          deletes: deletedPaths,
         }),
       });
       const commitData = (await commitRes.json().catch(() => null)) as { ok?: boolean; url?: string; pushed?: string[]; error?: string } | null;
@@ -3123,8 +3157,16 @@ export default function ResearchStudioPage() {
 
       setPushProgress(100);
       setGithubRepo(repo);
-      setCompileNotice(`Pushed to GitHub: ${commitData.url || repo}`);
-      if (!silent) showToast(`Pushed ${commitData.pushed?.length || blobs.length} files to GitHub`, "success");
+      setGithubPushed(currentHashes);
+      try {
+        const snapshot = buildCurrentProjectSnapshot({ githubPushed: currentHashes });
+        persistProjectSnapshot(snapshot);
+        queueServerProjectSync(snapshot);
+      } catch { /* best-effort baseline persistence */ }
+
+      const changeCount = blobs.length + deletedPaths.length;
+      setCompileNotice(`Pushed ${changeCount} change${changeCount !== 1 ? "s" : ""} to GitHub: ${commitData.url || repo}`);
+      if (!silent) showToast(`Pushed ${changeCount} change${changeCount !== 1 ? "s" : ""} to GitHub`, "success");
       try { localStorage.setItem("wiserfiles-last-github-repo", repo); } catch { /* best-effort */ }
       if (missingAssets.length) {
         appendPreviewError(`Some images were skipped (not found in the asset store): ${missingAssets.join(", ")}`);
@@ -3414,6 +3456,7 @@ export default function ResearchStudioPage() {
     setCompiledPdfUrl("");
     setCoverDataUrl(saved.coverDataUrl || "");
     setGithubRepo(saved.githubRepo || "");
+    setGithubPushed(saved.githubPushed || {});
     setCompiledPdfFileName("compiled-main.pdf");
     setAiFixBusy(false);
     setAiFixError("");
@@ -5858,34 +5901,6 @@ export default function ResearchStudioPage() {
               </button>
               <button
                 type="button"
-                onClick={() => void handlePushButton()}
-                disabled={pushBusy}
-                className="studio-btn studio-btn-secondary"
-                aria-label={pushBusy ? "Pushing to GitHub..." : "Push to GitHub"}
-                title="Push to GitHub"
-              >
-                <svg viewBox="0 0 20 20" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="1.8">
-                  <path d="M10 3v9M6.5 8.5L10 12l3.5-3.5" strokeLinecap="round" strokeLinejoin="round" />
-                  <path d="M4 14v2a1 1 0 0 0 1 1h10a1 1 0 0 0 1-1v-2" strokeLinecap="round" />
-                </svg>
-                <span className="hidden sm:inline">{pushBusy ? "Pushing..." : "Push"}</span>
-              </button>
-              <button
-                type="button"
-                onClick={() => void runAiReview()}
-                disabled={aiReviewBusy}
-                className="studio-btn studio-btn-secondary"
-                aria-label={aiReviewBusy ? "Reviewing..." : "AI review"}
-                title="AI peer review"
-              >
-                <svg viewBox="0 0 20 20" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="1.8">
-                  <path d="M10 3l1.5 3.5L15 8l-3.5 1.5L10 13l-1.5-3.5L5 8l3.5-1.5L10 3z" strokeLinecap="round" strokeLinejoin="round" />
-                  <path d="M4 15l.7 1.6L6.3 17.3 4.7 18 4 18l-.7-1.6L4 15zM15 12l.8 1.7 1.7.8-1.7.8L15 17l-.8-1.7-1.7-.8 1.7-.8L15 12z" strokeLinecap="round" strokeLinejoin="round" />
-                </svg>
-                <span className="hidden sm:inline">{aiReviewBusy ? "Reviewing..." : "Review"}</span>
-              </button>
-              <button
-                type="button"
                 onClick={() => void downloadProjectBundle()}
                 className="studio-btn studio-btn-secondary"
                 aria-label="Download project bundle"
@@ -5998,7 +6013,7 @@ export default function ResearchStudioPage() {
               { label: <>New Project</>, action: () => { setOpenMenu(""); createNewProject(); } },
               { label: <>Open Project</>, action: () => { setOpenMenu(""); openProjectsBoard(); } },
               "-",
-              { label: <>Save <kbd className="studio-menu-kbd">Ctrl+S</kbd></>, action: () => { setOpenMenu(""); saveCurrentProject(); } },
+              { label: <>Save</>, action: () => { setOpenMenu(""); saveCurrentProject(); } },
               { label: <>Download ZIP</>, action: () => { setOpenMenu(""); void downloadProjectBundle(); } },
               ...(!isCodeMode ? [
                 "-",
@@ -6008,7 +6023,7 @@ export default function ResearchStudioPage() {
               "-",
               { label: <>Import ZIP</>, action: () => { setOpenMenu(""); document.getElementById("zip-import-editor-menu")?.click(); } },
               "-",
-              { label: <>Push to GitHub</>, action: () => { setOpenMenu(""); void pushToGithub(); } },
+              { label: <>Push to GitHub <kbd className="studio-menu-kbd">Ctrl+S</kbd></>, action: () => { setOpenMenu(""); void handlePushButton(); } },
               { label: <>Open from GitHub</>, action: () => { setOpenMenu(""); void openFromGithub(); } },
               { label: <>GitHub Settings</>, action: () => { setOpenMenu(""); void githubSettings(); } },
             ]
