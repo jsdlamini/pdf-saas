@@ -28,10 +28,6 @@ export default function AboutPage() {
           own document. So we built the thing we wanted: 25 PDF tools that mostly run in your
           browser, plus a LaTeX editor for the writing itself.
         </p>
-        <p className="text-sm text-slate-700">
-          It's built in Eswatini, for researchers and students — the ones who can't justify
-          Overleaf Pro but still need to get a paper out.
-        </p>
       </section>
 
       <section className="space-y-3 rounded-2xl border border-slate-200 bg-white p-6">

@@ -23,7 +23,7 @@ export default function SiteFooter() {
             by <Link href="/about" className="font-semibold text-slate-800 underline decoration-slate-300 hover:decoration-slate-600">Ideal Software Solutions</Link>
           </p>
           <p className="max-w-sm text-sm text-slate-600">
-            Every PDF tool you need, free. Built in Eswatini.
+            Every PDF tool you need, free.
           </p>
           <Link
             href="/research-studio"
