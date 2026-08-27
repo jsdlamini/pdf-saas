@@ -3140,6 +3140,19 @@ export default function ResearchStudioPage() {
     }
   }
 
+  async function handlePushButton() {
+    if (!userId) {
+      setCompileNotice("Sign in to push projects to GitHub.");
+      return;
+    }
+    if (pushBusy) return;
+    if (githubRepo) {
+      await pushFilesToGithub(githubRepo, false, false);
+    } else {
+      await pushToGithub();
+    }
+  }
+
   async function pushToGithub() {
     if (!userId) {
       setCompileNotice("Sign in to push projects to GitHub.");
@@ -5842,6 +5855,20 @@ export default function ResearchStudioPage() {
                   <path d="M4 7h12M9 3h2l1 4M6 7l1 9h6l1-9M8.5 11h3" strokeLinecap="round" strokeLinejoin="round" />
                 </svg>
                 <span className="hidden sm:inline">Clean</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => void handlePushButton()}
+                disabled={pushBusy}
+                className="studio-btn studio-btn-secondary"
+                aria-label={pushBusy ? "Pushing to GitHub..." : "Push to GitHub"}
+                title="Push to GitHub"
+              >
+                <svg viewBox="0 0 20 20" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="1.8">
+                  <path d="M10 3v9M6.5 8.5L10 12l3.5-3.5" strokeLinecap="round" strokeLinejoin="round" />
+                  <path d="M4 14v2a1 1 0 0 0 1 1h10a1 1 0 0 0 1-1v-2" strokeLinecap="round" />
+                </svg>
+                <span className="hidden sm:inline">{pushBusy ? "Pushing..." : "Push"}</span>
               </button>
               <button
                 type="button"
