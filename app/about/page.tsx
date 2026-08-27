@@ -21,21 +21,16 @@ export default function AboutPage() {
       </div>
 
       <section className="space-y-3 rounded-2xl border border-slate-200 bg-white p-6">
-        <h2 className="font-display text-lg font-semibold text-slate-950">What we make</h2>
+        <h2 className="font-display text-lg font-semibold text-slate-950">Why it exists</h2>
         <p className="text-sm text-slate-700">
-          WiserFiles is a PDF operations suite and a LaTeX Research Studio in one. Twenty-five
-          tools cover conversion, editing, organisation, optimisation, and security — and the
-          Research Studio brings a full LaTeX editor with live preview, GitHub sync, and
-          collaboration to the browser.
+          It started with a thesis. The tools we could find either watermarked the output,
+          capped how many files you could process, or wanted a subscription to download your
+          own document. So we built the thing we wanted: 25 PDF tools that mostly run in your
+          browser, plus a LaTeX editor for the writing itself.
         </p>
-      </section>
-
-      <section className="space-y-3 rounded-2xl border border-slate-200 bg-white p-6">
-        <h2 className="font-display text-lg font-semibold text-slate-950">Our position</h2>
         <p className="text-sm text-slate-700">
-          Most PDF sites only convert files. We also give researchers and students a real
-          editing environment — write in LaTeX, compile instantly, and keep your documents
-          under version control.
+          It's built in Eswatini, for researchers and students — the ones who can't justify
+          Overleaf Pro but still need to get a paper out.
         </p>
       </section>
 

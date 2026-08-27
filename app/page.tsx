@@ -484,15 +484,14 @@ export default function Home() {
           <div className="mx-auto max-w-7xl px-4 py-10 sm:px-6 md:px-10 md:py-16">
             <div className="mx-auto max-w-3xl text-center">
               <p className="mb-4 inline-flex items-center gap-2 rounded-full bg-white/15 px-4 py-1.5 text-xs font-bold uppercase tracking-[0.16em] text-white ring-1 ring-white/25">
-                25 tools · free · nothing uploaded
+                25 tools · free
               </p>
               <h1 className="font-display text-3xl font-bold leading-tight tracking-tight md:text-5xl">
-                Every PDF tool you need.
-                <br />
-                In your browser. Nothing uploaded.
+                Every PDF tool you need. Free.
               </h1>
               <p className="mx-auto mt-4 max-w-xl text-base text-blue-100 md:text-lg">
-                Merge, convert, sign, compress, and edit — your files stay on your machine.
+                Most tools run in your browser, so your file never leaves it. The few that need
+                our servers are deleted the moment they're done.
               </p>
             </div>
 
@@ -747,13 +746,7 @@ export default function Home() {
                 className="mb-6 rounded-3xl p-4 md:p-7"
                 style={{ background: `color-mix(in srgb, var(--tool-${group.hue}-600) 10%, var(--background))` }}
               >
-                <div className="mb-4 flex items-center gap-3">
-                  <span
-                    className="inline-flex h-8 w-8 items-center justify-center rounded-lg text-sm font-bold text-white"
-                    style={{ background: `var(--tool-${group.hue}-600)` }}
-                  >
-                    {tools.length}
-                  </span>
+                <div className="mb-4">
                   <h2
                     className="font-display text-xl font-bold tracking-tight md:text-2xl"
                     style={{ color: `var(--tool-${group.hue}-600)` }}
@@ -793,8 +786,8 @@ export default function Home() {
                 A real LaTeX editor, with your PDF beside it.
               </h2>
               <p className="mt-4 text-base text-slate-300">
-                Write, compile, and see the result instantly. GitHub sync, live collaboration,
-                version history, and 8 syntax themes. Nobody else in the PDF space has this.
+                Write in LaTeX, Python, or C++. Compile and watch the PDF update beside your
+                source. Push the whole project to GitHub when it's ready.
               </p>
               <Link
                 href="/research-studio"
@@ -806,37 +799,14 @@ export default function Home() {
                 </svg>
               </Link>
             </div>
-            <div className="overflow-hidden rounded-2xl border border-slate-700 bg-slate-900 shadow-2xl">
-              <div className="flex items-center gap-1.5 border-b border-slate-700 bg-slate-800 px-3 py-2">
-                <span className="h-2.5 w-2.5 rounded-full bg-red-400" />
-                <span className="h-2.5 w-2.5 rounded-full bg-amber-400" />
-                <span className="h-2.5 w-2.5 rounded-full bg-emerald-400" />
-                <span className="ml-2 text-[10px] font-semibold text-slate-400">main.tex</span>
-              </div>
-              <div className="grid grid-cols-2">
-                <div className="border-r border-slate-700 p-3 font-mono text-[10px] leading-relaxed text-slate-300">
-                  <div><span className="text-violet-400">\documentclass</span><span className="text-slate-500">{"{article}"}</span></div>
-                  <div><span className="text-violet-400">\usepackage</span><span className="text-slate-500">{"{graphicx}"}</span></div>
-                  <div><span className="text-violet-400">\title</span><span className="text-slate-500">{"{My Paper}"}</span></div>
-                  <div><span className="text-violet-400">\begin</span><span className="text-slate-500">{"{document}"}</span></div>
-                  <div><span className="text-emerald-400">\section</span><span className="text-slate-300">{"{Introduction}"}</span></div>
-                  <div className="text-slate-300">We study the effect…</div>
-                  <div><span className="text-violet-400">\end</span><span className="text-slate-500">{"{document}"}</span></div>
-                </div>
-                <div className="flex items-center justify-center bg-white p-4">
-                  <div className="w-full rounded-sm border border-slate-200 bg-white p-3 text-slate-900">
-                    <div className="mb-1 h-2 w-1/2 rounded bg-slate-800" />
-                    <div className="mb-3 h-1.5 w-3/4 rounded bg-slate-300" />
-                    <div className="mb-1 h-1.5 w-full rounded bg-slate-200" />
-                    <div className="mb-1 h-1.5 w-full rounded bg-slate-200" />
-                    <div className="h-1.5 w-5/6 rounded bg-slate-200" />
-                  </div>
-                </div>
-              </div>
-              <div className="flex items-center gap-2 border-t border-slate-700 bg-slate-800 px-3 py-2">
-                <span className="h-2 w-2 rounded-full bg-emerald-400" />
-                <span className="text-[10px] font-semibold text-emerald-300">Compiled in 0.13s</span>
-              </div>
+            <div className="rounded-2xl border border-slate-700 bg-slate-900 p-6">
+              <p className="text-sm font-semibold text-slate-200">What's in it:</p>
+              <ul className="mt-3 space-y-2.5 text-sm text-slate-400">
+                <li className="flex gap-2"><span className="text-slate-600">—</span> LaTeX, Python and C++ in one editor</li>
+                <li className="flex gap-2"><span className="text-slate-600">—</span> The PDF updates as you compile</li>
+                <li className="flex gap-2"><span className="text-slate-600">—</span> Push the whole project to GitHub</li>
+                <li className="flex gap-2"><span className="text-slate-600">—</span> AI help with writing when you're stuck</li>
+              </ul>
             </div>
           </div>
         </section>
@@ -902,7 +872,7 @@ export default function Home() {
             </svg>
             <p className="max-w-xl text-sm text-slate-600">
               Most tools run entirely in your browser. Files sent to our servers are deleted as soon as
-              processing finishes.
+              processing finishes. Built in Eswatini, for researchers and students.
             </p>
           </div>
         </section>
