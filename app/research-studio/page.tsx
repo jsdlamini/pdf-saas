@@ -5996,7 +5996,6 @@ export default function ResearchStudioPage() {
               "-",
               { label: <>Push to GitHub</>, action: () => { setOpenMenu(""); void pushToGithub(); } },
               { label: <>Open from GitHub</>, action: () => { setOpenMenu(""); void openFromGithub(); } },
-              { label: <>Run command</>, action: () => { setOpenMenu(""); setTerminalOpen((o) => !o); } },
               { label: <>GitHub Settings</>, action: () => { setOpenMenu(""); void githubSettings(); } },
             ]
           },
@@ -6067,6 +6066,8 @@ export default function ResearchStudioPage() {
               "-",
               { label: "Version History", action: () => { setOpenMenu(""); setHistoryOpen(true); } },
               { label: "Keyboard Shortcuts", action: () => { setOpenMenu(""); setShowShortcuts(!showShortcuts); } },
+              "-",
+              { label: terminalOpen ? "Hide Terminal" : "Terminal", action: () => { setOpenMenu(""); setTerminalOpen((o) => !o); } },
             ]
           },
           {
@@ -7147,28 +7148,30 @@ export default function ResearchStudioPage() {
         <div
           style={{
             position: "fixed", left: 0, right: 0, bottom: 0, zIndex: 60,
-            borderTop: "1px solid var(--border-color, #334155)",
-            background: "var(--bg-sidebar, #1a1d2b)",
-            color: "var(--text-primary, #e2e8f0)",
-            maxHeight: "38vh", display: "flex", flexDirection: "column",
+            borderTop: "1px solid #333",
+            background: "#000",
+            color: "#f0f0f0",
+            maxHeight: "42vh", display: "flex", flexDirection: "column",
+            fontFamily: "var(--font-mono)",
           }}
         >
-          <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "6px 10px", borderBottom: "1px solid var(--border-color, #334155)" }}>
-            <span style={{ fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.06em", color: "var(--text-muted, #64748b)" }}>Terminal</span>
-            <span style={{ fontSize: 10, color: "var(--text-muted, #64748b)" }}>Allowed: pdflatex, python3, g++, make, git, ls, …</span>
-            <button type="button" onClick={() => setTerminalOpen(false)} aria-label="Close terminal" style={{ marginLeft: "auto", background: "none", border: "none", color: "var(--text-muted, #64748b)", cursor: "pointer", fontSize: 16 }}>×</button>
+          <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "5px 10px", borderBottom: "1px solid #222", color: "#999", fontSize: 11 }}>
+            <span style={{ fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.06em", color: "#ccc" }}>Terminal</span>
+            <span style={{ fontSize: 10 }}>Safe commands only — pdflatex, python3, g++, make, git, ls, …</span>
+            <button type="button" onClick={() => setTerminalOpen(false)} aria-label="Close terminal" style={{ marginLeft: "auto", background: "none", border: "none", color: "#999", cursor: "pointer", fontSize: 16 }}>×</button>
           </div>
-          <pre style={{ flex: 1, margin: 0, padding: "8px 10px", overflowY: "auto", fontFamily: "var(--font-mono)", fontSize: 12, lineHeight: 1.5, whiteSpace: "pre-wrap", wordBreak: "break-word" }}>{terminalOutput || "Type a command below and press Run. Your project files are available in the working directory."}</pre>
-          <div style={{ display: "flex", gap: 8, padding: "8px 10px", borderTop: "1px solid var(--border-color, #334155)" }}>
+          <pre style={{ flex: 1, margin: 0, padding: "10px 12px", overflowY: "auto", fontSize: 13, lineHeight: 1.5, whiteSpace: "pre-wrap", wordBreak: "break-word", color: "#f0f0f0" }}>{terminalOutput || "$ Type a command below and press Enter.\n$ Your project files are in the working directory."}</pre>
+          <div style={{ display: "flex", alignItems: "center", gap: 6, padding: "8px 10px", borderTop: "1px solid #222" }}>
+            <span style={{ color: "#0f0", fontSize: 14 }}>$</span>
             <input
               value={terminalCommand}
               onChange={(e) => setTerminalCommand(e.target.value)}
               onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); void runTerminalCommand(); } }}
-              placeholder="e.g. pdflatex main.tex"
+              placeholder="pdflatex main.tex"
               aria-label="Terminal command"
-              style={{ flex: 1, background: "var(--bg-primary, #0d0f17)", border: "1px solid var(--border-color, #334155)", borderRadius: 6, color: "var(--text-primary, #e2e8f0)", padding: "6px 10px", fontFamily: "var(--font-mono)", fontSize: 13 }}
+              style={{ flex: 1, background: "#000", border: "none", color: "#f0f0f0", padding: "4px 0", fontFamily: "var(--font-mono)", fontSize: 14, outline: "none" }}
             />
-            <button type="button" onClick={() => void runTerminalCommand()} disabled={terminalBusy} className="studio-btn studio-btn-primary" style={{ whiteSpace: "nowrap" }}>
+            <button type="button" onClick={() => void runTerminalCommand()} disabled={terminalBusy} style={{ background: "#222", border: "1px solid #444", borderRadius: 4, color: terminalBusy ? "#777" : "#f0f0f0", padding: "4px 12px", fontFamily: "var(--font-mono)", fontSize: 12, cursor: terminalBusy ? "default" : "pointer" }}>
               {terminalBusy ? "Running…" : "Run"}
             </button>
           </div>
