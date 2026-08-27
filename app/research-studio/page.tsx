@@ -5917,35 +5917,6 @@ export default function ResearchStudioPage() {
               </svg>
             )}
           </button>
-          <label
-            className="studio-btn studio-btn-ghost"
-            title="Editor color theme (syntax highlighting)"
-            style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "0 8px", height: 32 }}
-          >
-            <span
-              style={{
-                display: "inline-block",
-                width: 10,
-                height: 10,
-                borderRadius: "50%",
-                background: EDITOR_THEMES[editorTheme]?.dark ? "#0f172a" : "#f8fafc",
-                border: "1px solid currentColor",
-              }}
-              aria-hidden="true"
-            />
-            <select
-              value={editorTheme}
-              onChange={(e) => setEditorTheme(e.target.value as EditorThemeId)}
-              aria-label="Editor theme"
-              style={{ background: "transparent", border: "none", color: "inherit", fontSize: 12, fontWeight: 600, cursor: "pointer", outline: "none" }}
-            >
-              {Object.entries(EDITOR_THEMES).map(([id, t]) => (
-                <option key={id} value={id} style={{ background: t.dark ? "#0f172a" : "#ffffff", color: t.dark ? "#e2e8f0" : "#0f172a" }}>
-                  {t.label}
-                </option>
-              ))}
-            </select>
-          </label>
           <button
             type="button"
             onClick={() => setShowShortcuts((c) => !c)}

@@ -483,9 +483,6 @@ export default function Home() {
         <section className="relative overflow-hidden bg-[var(--accent-700)] text-white">
           <div className="mx-auto max-w-7xl px-4 py-10 sm:px-6 md:px-10 md:py-16">
             <div className="mx-auto max-w-3xl text-center">
-              <p className="mb-4 inline-flex items-center gap-2 rounded-full bg-white/15 px-4 py-1.5 text-xs font-bold uppercase tracking-[0.16em] text-white ring-1 ring-white/25">
-                25 tools · free
-              </p>
               <h1 className="font-display text-3xl font-bold leading-tight tracking-tight md:text-5xl">
                 Every PDF tool you need. Free.
               </h1>
@@ -872,7 +869,7 @@ export default function Home() {
             </svg>
             <p className="max-w-xl text-sm text-slate-600">
               Most tools run entirely in your browser. Files sent to our servers are deleted as soon as
-              processing finishes. Built in Eswatini, for researchers and students.
+              processing finishes.
             </p>
           </div>
         </section>
