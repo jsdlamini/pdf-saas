@@ -1210,6 +1210,7 @@ export default function ResearchStudioPage() {
   const [terminalCommand, setTerminalCommand] = useState("");
   const [terminalOutput, setTerminalOutput] = useState("");
   const [terminalBusy, setTerminalBusy] = useState(false);
+  const terminalInputRef = useRef<HTMLInputElement | null>(null);
   const [compiledPdfFileName, setCompiledPdfFileName] = useState("compiled-main.pdf");
   const [compileMainLog, setCompileMainLog] = useState("");
   const [compileMainLogFileName, setCompileMainLogFileName] = useState("main.log");
@@ -3124,11 +3125,14 @@ export default function ResearchStudioPage() {
         body: JSON.stringify({
           command,
           files: projectEntries.filter((e) => e.kind === "file").map((e) => ({ path: e.path, content: e.content })),
+          folders: projectEntries.filter((e) => e.kind === "folder").map((e) => e.path),
         }),
       });
-      const data = (await res.json()) as { stdout?: string; stderr?: string; exitCode?: number; error?: string };
-      if (!res.ok) {
-        setTerminalOutput((prev) => `${prev}${data.error || "Command failed.\n"}\n`);
+      const data = (await res.json().catch(() => null)) as { stdout?: string; stderr?: string; exitCode?: number; error?: string } | null;
+      if (!data) {
+        setTerminalOutput((prev) => `${prev}No response from server.\n`);
+      } else if (data.error) {
+        setTerminalOutput((prev) => `${prev}${data.error}\n`);
       } else {
         const out = [data.stdout, data.stderr].filter(Boolean).join("\n");
         setTerminalOutput((prev) => `${prev}${out || "(no output)"}\n[exit ${data.exitCode ?? "?"}]\n`);
@@ -7151,7 +7155,7 @@ export default function ResearchStudioPage() {
             borderTop: "1px solid #333",
             background: "#000",
             color: "#f0f0f0",
-            maxHeight: "42vh", display: "flex", flexDirection: "column",
+            height: "42vh", display: "flex", flexDirection: "column",
             fontFamily: "var(--font-mono)",
           }}
         >
@@ -7160,20 +7164,27 @@ export default function ResearchStudioPage() {
             <span style={{ fontSize: 10 }}>Safe commands only — pdflatex, python3, g++, make, git, ls, …</span>
             <button type="button" onClick={() => setTerminalOpen(false)} aria-label="Close terminal" style={{ marginLeft: "auto", background: "none", border: "none", color: "#999", cursor: "pointer", fontSize: 16 }}>×</button>
           </div>
-          <pre style={{ flex: 1, margin: 0, padding: "10px 12px", overflowY: "auto", fontSize: 13, lineHeight: 1.5, whiteSpace: "pre-wrap", wordBreak: "break-word", color: "#f0f0f0" }}>{terminalOutput || "$ Type a command below and press Enter.\n$ Your project files are in the working directory."}</pre>
-          <div style={{ display: "flex", alignItems: "center", gap: 6, padding: "8px 10px", borderTop: "1px solid #222" }}>
-            <span style={{ color: "#0f0", fontSize: 14 }}>$</span>
-            <input
-              value={terminalCommand}
-              onChange={(e) => setTerminalCommand(e.target.value)}
-              onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); void runTerminalCommand(); } }}
-              placeholder="pdflatex main.tex"
-              aria-label="Terminal command"
-              style={{ flex: 1, background: "#000", border: "none", color: "#f0f0f0", padding: "4px 0", fontFamily: "var(--font-mono)", fontSize: 14, outline: "none" }}
-            />
-            <button type="button" onClick={() => void runTerminalCommand()} disabled={terminalBusy} style={{ background: "#222", border: "1px solid #444", borderRadius: 4, color: terminalBusy ? "#777" : "#f0f0f0", padding: "4px 12px", fontFamily: "var(--font-mono)", fontSize: 12, cursor: terminalBusy ? "default" : "pointer" }}>
-              {terminalBusy ? "Running…" : "Run"}
-            </button>
+          <div
+            onClick={() => terminalInputRef.current?.focus()}
+            style={{ flex: 1, overflowY: "auto", padding: "10px 12px", fontSize: 13, lineHeight: 1.5, cursor: "text" }}
+          >
+            <pre style={{ margin: 0, whiteSpace: "pre-wrap", wordBreak: "break-word" }}>{terminalOutput}</pre>
+            <div style={{ display: "flex", alignItems: "center" }}>
+              <span style={{ color: "#0f0" }}>$&nbsp;</span>
+              <input
+                ref={terminalInputRef}
+                value={terminalCommand}
+                onChange={(e) => setTerminalCommand(e.target.value)}
+                onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); void runTerminalCommand(); } }}
+                placeholder="type a command…"
+                aria-label="Terminal command"
+                autoFocus
+                spellCheck={false}
+                autoComplete="off"
+                autoCapitalize="off"
+                style={{ flex: 1, background: "transparent", border: "none", outline: "none", color: "#f0f0f0", caretColor: "#0f0", fontFamily: "var(--font-mono)", fontSize: 13, padding: 0 }}
+              />
+            </div>
           </div>
         </div>
       ) : null}
