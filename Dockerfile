@@ -44,6 +44,7 @@ COPY scripts/pdf2word-structured.py ./scripts/pdf2word-structured.py
 COPY scripts/pdf2excel.py ./scripts/pdf2excel.py
 COPY scripts/pdf2powerpoint.py ./scripts/pdf2powerpoint.py
 COPY scripts/redact-pdf.py ./scripts/redact-pdf.py
+COPY scripts/sandbox-runner.mjs ./scripts/sandbox-runner.mjs
 COPY scripts/log-binary-versions.sh ./scripts/log-binary-versions.sh
 
 # Give the runtime user ownership of the app directory (Next.js writes .next/cache),

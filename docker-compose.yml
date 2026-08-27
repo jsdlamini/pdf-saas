@@ -76,6 +76,25 @@ services:
     networks:
       - default
       - webnet
+      - sandboxnet
+
+  # Isolated execution for user code/commands. Reuses the web image (same
+  # toolchain) but runs only the sandbox runner, with NO app environment and NO
+  # route to the database or the internet (sandboxnet is internal).
+  sandbox:
+    image: ${WEB_IMAGE:-pdf-saas-web:local}
+    container_name: pdf-saas-sandbox
+    restart: unless-stopped
+    command: ["node", "scripts/sandbox-runner.mjs"]
+    user: "app"
+    depends_on:
+      - web
+    environment:
+      SANDBOX_PORT: "3100"
+    networks:
+      - sandboxnet
+    mem_limit: 2g
+    cpus: 1
 
 networks:
   # Shared external network (created outside this project). nginx-proxy lives
@@ -84,3 +103,7 @@ networks:
   webnet:
     external: true
     name: ${WEB_EXTERNAL_NETWORK:-docker_webnet}
+  # Internal-only network between web and sandbox. No internet, no db.
+  sandboxnet:
+    driver: bridge
+    internal: true
