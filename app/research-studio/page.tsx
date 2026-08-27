@@ -2969,6 +2969,8 @@ export default function ResearchStudioPage() {
   const [invitesLoading, setInvitesLoading] = useState(false);
   const [inviteBusy, setInviteBusy] = useState(false);
   const [shareBusy, setShareBusy] = useState(false);
+  const [pushProgress, setPushProgress] = useState<number | null>(null);
+  const [pushBusy, setPushBusy] = useState(false);
 
   async function githubSettings() {
     if (!userId) return;
@@ -3058,42 +3060,83 @@ export default function ResearchStudioPage() {
 
   async function pushFilesToGithub(repo: string, isPrivate: boolean, silent: boolean) {
     // Text files go inline; images are referenced by path and read from the
-    // asset store server-side, so the JSON body stays small.
+    // asset store server-side. Upload happens in small batches so the client can
+    // report a real percentage and no single request trips the proxy.
     const textFiles = projectEntries.filter((e) => e.kind === "file" && !isBinaryAssetPath(e.path));
     const binaryPaths = projectEntries.filter((e) => e.kind === "file" && isBinaryAssetPath(e.path)).map((e) => e.path);
+
+    const textItems = textFiles.map((e) => ({ kind: "text" as const, path: e.path, content: e.content }));
+    const imageItems = binaryPaths.map((p) => ({ kind: "image" as const, path: p }));
+    const allItems = [...textItems, ...imageItems];
+    const total = allItems.length;
+
+    setPushBusy(true);
+    setPushProgress(0);
+
     try {
-      const res = await fetch("/api/github", {
+      const blobs: { path: string; sha: string }[] = [];
+      const missingAssets: string[] = [];
+      const BATCH = 4;
+
+      for (let i = 0; i < allItems.length; i += BATCH) {
+        const batch = allItems.slice(i, i + BATCH);
+        const res = await fetch("/api/github", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            action: "blobs",
+            repoName: repo,
+            projectId: activeProjectId,
+            files: batch.filter((b) => b.kind === "text").map((b) => ({ path: b.path, content: (b as { content: string }).content })),
+            binaryPaths: batch.filter((b) => b.kind === "image").map((b) => b.path),
+          }),
+        });
+        const data = (await res.json().catch(() => null)) as { blobs?: { path: string; sha: string }[]; missingAssets?: string[]; error?: string } | null;
+        if (!res.ok || !data?.blobs) {
+          throw new Error(data?.error || "GitHub push failed.");
+        }
+        blobs.push(...data.blobs);
+        if (data.missingAssets) missingAssets.push(...data.missingAssets);
+        const done = Math.min(i + BATCH, total);
+        setPushProgress(Math.round((done / Math.max(total, 1)) * 100));
+      }
+
+      const commitRes = await fetch("/api/github", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
+          action: "commit",
           repoName: repo,
           isPrivate,
           message: `Update ${projectName || "project"} from WiserFiles`,
-          projectId: activeProjectId,
-          files: textFiles.map((e) => ({ path: e.path, content: e.content })),
-          binaryPaths,
+          blobs,
         }),
       });
-      const data = (await res.json()) as { ok?: boolean; url?: string; pushed?: string[]; failed?: string[]; error?: string };
-      if (!res.ok || !data.ok) {
-        if (data.error?.includes("Set up a GitHub personal access token")) {
+      const commitData = (await commitRes.json().catch(() => null)) as { ok?: boolean; url?: string; pushed?: string[]; error?: string } | null;
+      if (!commitRes.ok || !commitData?.ok) {
+        if (commitData?.error?.includes("Set up a GitHub personal access token")) {
           await githubSettings();
           throw new Error("Set up your GitHub token, then push again.");
         }
-        throw new Error(data.error || "GitHub push failed.");
+        throw new Error(commitData?.error || "GitHub push failed.");
       }
+
+      setPushProgress(100);
       setGithubRepo(repo);
-      setCompileNotice(`Pushed to GitHub: ${data.url || repo}`);
-      if (!silent) showToast(`Pushed ${data.pushed?.length || 0} files to GitHub`, "success");
+      setCompileNotice(`Pushed to GitHub: ${commitData.url || repo}`);
+      if (!silent) showToast(`Pushed ${commitData.pushed?.length || blobs.length} files to GitHub`, "success");
       try { localStorage.setItem("wiserfiles-last-github-repo", repo); } catch { /* best-effort */ }
-      if (data.failed?.length) {
-        appendPreviewError(`Some files failed: ${data.failed.join(", ")}`);
+      if (missingAssets.length) {
+        appendPreviewError(`Some images were skipped (not found in the asset store): ${missingAssets.join(", ")}`);
       }
       trackStudioEvent("github-push", repo);
     } catch (error) {
       const message = error instanceof Error ? error.message : "GitHub push failed.";
       setCompileNotice(message);
       appendPreviewError(message);
+    } finally {
+      setPushBusy(false);
+      setTimeout(() => setPushProgress(null), 900);
     }
   }
 
@@ -7099,6 +7142,16 @@ export default function ResearchStudioPage() {
         </div>
       ) : null}
       {renderNewProjectDialog()}
+
+      {pushProgress !== null ? (
+        <div style={{ position: "fixed", top: 12, left: "50%", transform: "translateX(-50%)", zIndex: 80, display: "flex", alignItems: "center", gap: 10, background: "#111827", border: "1px solid #334155", borderRadius: 10, padding: "8px 14px", boxShadow: "0 8px 24px rgba(0,0,0,0.4)", color: "#e2e8f0", fontFamily: "var(--font-mono)", fontSize: 12 }}>
+          <span style={{ whiteSpace: "nowrap" }}>Pushing to GitHub</span>
+          <div style={{ width: 180, height: 6, borderRadius: 3, background: "#334155", overflow: "hidden" }}>
+            <div style={{ height: "100%", width: `${pushProgress}%`, background: "#4ade80", transition: "width 0.2s ease" }} />
+          </div>
+          <span style={{ minWidth: 36, textAlign: "right" }}>{pushProgress}%</span>
+        </div>
+      ) : null}
 
       <Dialog open={collaborateOpen} onOpenChange={setCollaborateOpen}>
         <DialogContent className="sm:max-w-md">

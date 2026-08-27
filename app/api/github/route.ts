@@ -9,12 +9,18 @@ export const dynamic = "force-dynamic";
 const GITHUB_API = "https://api.github.com";
 const ASSETS_ROOT = process.env.PROJECT_ASSETS_DIR || "/app/data/assets";
 
+// Two-phase push so the client can report progress and no single request grows
+// large or slow enough to trip the reverse proxy:
+//   action=blobs  -> uploads blobs (parallel, small batches) and returns shas
+//   action=commit -> builds tree + commit + updates the ref in one step
 type PushPayload = {
+  action?: "blobs" | "commit";
   token?: string;
   repoName?: string;
   projectId?: string;
   files?: { path: string; content: string }[];
   binaryPaths?: string[];
+  blobs?: { path: string; sha: string }[];
   deletes?: string[];
   message?: string;
   isPrivate?: boolean;
@@ -38,11 +44,11 @@ async function githubRequest(token: string, path: string, options: RequestInit =
   return res;
 }
 
-// The Contents API expects {path} with slashes preserved. encodeURIComponent on
-// the whole path turns "images/ch1/a.png" into a single literal filename, which
-// is why nested paths never worked. Encode each segment instead.
-function encodePath(path: string): string {
-  return path.split("/").map((seg) => encodeURIComponent(seg)).join("/");
+function sanitizePath(path: string): string | null {
+  const safe = path.replace(/^\/+/, "").replace(/\\/g, "/");
+  if (!safe || safe.includes("..") || safe.includes(":")) return null;
+  const parts = safe.split("/").filter((p) => p && p !== "." && p !== "..");
+  return parts.length ? parts.join("/") : null;
 }
 
 function toBase64(path: string, content: string): string {
@@ -54,11 +60,52 @@ function toBase64(path: string, content: string): string {
   return Buffer.from(content, "utf8").toString("base64");
 }
 
-function sanitizePath(path: string): string | null {
-  const safe = path.replace(/^\/+/, "").replace(/\\/g, "/");
-  if (!safe || safe.includes("..") || safe.includes(":")) return null;
-  const parts = safe.split("/").filter((p) => p && p !== "." && p !== "..");
-  return parts.length ? parts.join("/") : null;
+async function ensureRepo(token: string, owner: string, repoName: string, isPrivate: boolean): Promise<void> {
+  const repoRes = await githubRequest(token, `/repos/${owner}/${repoName}`);
+  if (repoRes.status === 404) {
+    const createRes = await githubRequest(token, "/user/repos", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        name: repoName,
+        private: isPrivate,
+        auto_init: true,
+        description: "Created from WiserFiles Research Studio",
+      }),
+    });
+    if (!createRes.ok && createRes.status !== 422) {
+      const detail = await createRes.text();
+      throw new Error(`Could not create repository: ${detail.slice(0, 300)}`);
+    }
+  } else if (!repoRes.ok) {
+    throw new Error(`Could not access repository (${repoRes.status}).`);
+  }
+}
+
+async function uploadBlob(token: string, owner: string, repoName: string, base64: string): Promise<string> {
+  const res = await githubRequest(token, `/repos/${owner}/${repoName}/git/blobs`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ content: base64, encoding: "base64" }),
+  });
+  if (!res.ok) {
+    const detail = await res.text();
+    throw new Error(`Could not upload a file: ${detail.slice(0, 200)}`);
+  }
+  const blob = (await res.json()) as { sha: string };
+  return blob.sha;
+}
+
+async function resolveOwnerForPush(token: string, kind: "installation" | "pat" | "", repoName: string): Promise<string> {
+  const owner = await resolveGithubOwner(token, kind, repoName);
+  if (!owner) {
+    throw new Error(
+      kind === "installation"
+        ? "The GitHub App can only push to repositories it is installed on. Open (or create) the repository on GitHub first, then push again."
+        : "GitHub authentication failed. Check your connection."
+    );
+  }
+  return owner;
 }
 
 export async function POST(request: Request) {
@@ -71,93 +118,70 @@ export async function POST(request: Request) {
   const { token: storedToken, kind } = await getGithubTokenInfo(userId);
   const token = (body.token || "").trim() || storedToken;
   const repoName = (body.repoName || "").trim();
-  const projectId = (body.projectId || "").trim();
-  const files = Array.isArray(body.files) ? body.files : [];
-  const binaryPaths = Array.isArray(body.binaryPaths) ? body.binaryPaths : [];
-  const deletes = Array.isArray(body.deletes) ? body.deletes : [];
-  const message = (body.message || "Update from WiserFiles Research Studio").trim();
+  const action = body.action || "commit";
 
   if (!token) return jsonError("Connect GitHub first (File → GitHub Settings).", 400);
   if (!repoName) return jsonError("A repository name is required.", 400);
   if (!/^[a-zA-Z0-9._-]+$/.test(repoName)) return jsonError("Repository name contains invalid characters.", 400);
-  if (!files.length && !binaryPaths.length && !deletes.length) return jsonError("No files to push.", 400);
-
-  // Normalise inputs and reject unsafe paths before any network work.
-  const normalized = new Map<string, { content: string; base64: string }>();
-  for (const file of files) {
-    if (!file || typeof file.path !== "string" || typeof file.content !== "string") continue;
-    const safe = sanitizePath(file.path);
-    if (!safe) continue;
-    normalized.set(safe, { content: file.content, base64: toBase64(safe, file.content) });
-  }
-
-  // Binary assets (images) are read from the asset store server-side so the
-  // client JSON stays small. Missing assets are skipped.
-  if (binaryPaths.length && projectId) {
-    for (const rawPath of binaryPaths) {
-      if (typeof rawPath !== "string") continue;
-      const safe = sanitizePath(rawPath);
-      if (!safe) continue;
-      try {
-        const bytes = await readFile(join(ASSETS_ROOT, userId, sanitizePath(projectId) || projectId, safe));
-        normalized.set(safe, { content: "", base64: bytes.toString("base64") });
-      } catch {
-        // Asset not present in the store — skip it.
-      }
-    }
-  }
-
-  const normalizedDeletes = deletes
-    .map((p) => (typeof p === "string" ? sanitizePath(p) : null))
-    .filter((p): p is string => Boolean(p));
-
-  if (!normalized.size && !normalizedDeletes.length) return jsonError("No valid files to push.", 400);
 
   try {
-    const owner = await resolveGithubOwner(token, kind, repoName);
-    if (!owner) {
-      return jsonError(
-        kind === "installation"
-          ? "The GitHub App can only push to repositories it is installed on. Open (or create) the repository on GitHub first, then push again."
-          : `GitHub authentication failed. Check your connection.`,
-        401
-      );
+    const owner = await resolveOwnerForPush(token, kind, repoName);
+
+    if (action === "blobs") {
+      const files = Array.isArray(body.files) ? body.files : [];
+      const binaryPaths = Array.isArray(body.binaryPaths) ? body.binaryPaths : [];
+      const projectId = (body.projectId || "").trim();
+
+      await ensureRepo(token, owner, repoName, Boolean(body.isPrivate));
+
+      const blobs: { path: string; sha: string }[] = [];
+      const missingAssets: string[] = [];
+
+      // Prepare all (path, base64) pairs first.
+      const toUpload: { path: string; base64: string }[] = [];
+      for (const file of files) {
+        if (!file || typeof file.path !== "string" || typeof file.content !== "string") continue;
+        const safe = sanitizePath(file.path);
+        if (!safe) continue;
+        toUpload.push({ path: safe, base64: toBase64(safe, file.content) });
+      }
+      if (binaryPaths.length && projectId) {
+        for (const rawPath of binaryPaths) {
+          if (typeof rawPath !== "string") continue;
+          const safe = sanitizePath(rawPath);
+          if (!safe) continue;
+          try {
+            const bytes = await readFile(join(ASSETS_ROOT, userId, sanitizePath(projectId) || projectId, safe));
+            toUpload.push({ path: safe, base64: bytes.toString("base64") });
+          } catch {
+            missingAssets.push(safe);
+          }
+        }
+      }
+
+      // Upload in parallel with a small concurrency cap.
+      const CONCURRENCY = 4;
+      for (let i = 0; i < toUpload.length; i += CONCURRENCY) {
+        const batch = toUpload.slice(i, i + CONCURRENCY);
+        const shas = await Promise.all(batch.map((f) => uploadBlob(token, owner, repoName, f.base64)));
+        batch.forEach((f, j) => blobs.push({ path: f.path, sha: shas[j] }));
+      }
+
+      return Response.json({ blobs, missingAssets });
     }
 
-    // Ensure the repository exists.
-    const repoRes = await githubRequest(token, `/repos/${owner}/${repoName}`);
-    if (repoRes.status === 404) {
-      if (kind === "installation") {
-        return jsonError(
-          "This repository does not exist, and the GitHub App cannot create new repositories. Create it on GitHub first (or connect a personal access token), then push again.",
-          400
-        );
-      }
-      const createRes = await githubRequest(token, "/user/repos", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          name: repoName,
-          private: Boolean(body.isPrivate),
-          auto_init: true,
-          description: "Created from WiserFiles Research Studio",
-        }),
-      });
-      if (!createRes.ok && createRes.status !== 422) {
-        const detail = await createRes.text();
-        return jsonError(`Could not create repository: ${detail.slice(0, 300)}`, 502);
-      }
-    } else if (!repoRes.ok) {
-      return jsonError(`Could not access repository (${repoRes.status}).`, 502);
-    }
+    // action === "commit"
+    const blobs = Array.isArray(body.blobs) ? body.blobs : [];
+    const deletes = Array.isArray(body.deletes) ? body.deletes : [];
+    const message = (body.message || "Update from WiserFiles Research Studio").trim();
 
-    // One commit for the whole change set via the Git Data API (blobs -> tree ->
-    // commit -> ref), so a multi-file push is a single commit that also supports
-    // deletes, instead of the Contents API's one-commit-per-file loop.
-    const repoInfo = (await repoRes.json()) as { default_branch?: string };
-    const branch = repoInfo.default_branch || "main";
+    await ensureRepo(token, owner, repoName, Boolean(body.isPrivate));
 
-    const headRefRes = await githubRequest(token, `/repos/${owner}/${repoName}/git/ref/heads/${encodePath(branch)}`);
+    const repoInfoRes = await githubRequest(token, `/repos/${owner}/${repoName}`);
+    const repoInfo = repoInfoRes.ok ? ((await repoInfoRes.json()) as { default_branch?: string }) : null;
+    const branch = repoInfo?.default_branch || "main";
+
+    const headRefRes = await githubRequest(token, `/repos/${owner}/${repoName}/git/ref/heads/${encodeURIComponent(branch)}`);
     if (!headRefRes.ok) {
       const detail = await headRefRes.text();
       return jsonError(`Could not read the default branch: ${detail.slice(0, 200)}`, 502);
@@ -168,79 +192,60 @@ export async function POST(request: Request) {
 
     const baseCommitRes = await githubRequest(token, `/repos/${owner}/${repoName}/git/commits/${baseCommitSha}`);
     if (!baseCommitRes.ok) return jsonError("Could not read the repository tree.", 502);
-    const baseCommit = (await baseCommitRes.json()) as { tree?: { sha?: string } };
-    const baseTreeSha = baseCommit.tree?.sha;
+    const baseTreeSha = ((await baseCommitRes.json()) as { tree?: { sha?: string } }).tree?.sha;
     if (!baseTreeSha) return jsonError("Could not resolve the repository tree.", 502);
 
-    // Create a blob for each file.
     const treeEntries: Array<{ path: string; mode: string; type: string; sha: string | null }> = [];
-    for (const [path, file] of normalized.entries()) {
-      const blobRes = await githubRequest(token, `/repos/${owner}/${repoName}/git/blobs`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ content: file.base64, encoding: "base64" }),
-      });
-      if (!blobRes.ok) {
-        const detail = await blobRes.text();
-        return jsonError(`Could not upload ${path}: ${detail.slice(0, 200)}`, 502);
-      }
-      const blob = (await blobRes.json()) as { sha: string };
-      treeEntries.push({ path, mode: "100644", type: "blob", sha: blob.sha });
+    for (const blob of blobs) {
+      if (!blob || typeof blob.path !== "string" || typeof blob.sha !== "string") continue;
+      const safe = sanitizePath(blob.path);
+      if (!safe) continue;
+      treeEntries.push({ path: safe, mode: "100644", type: "blob", sha: blob.sha });
     }
-    for (const path of normalizedDeletes) {
-      treeEntries.push({ path, mode: "100644", type: "blob", sha: null });
+    for (const path of deletes) {
+      const safe = typeof path === "string" ? sanitizePath(path) : null;
+      if (safe) treeEntries.push({ path: safe, mode: "100644", type: "blob", sha: null });
     }
+
+    if (!treeEntries.length) return jsonError("No files to push.", 400);
 
     const treeRes = await githubRequest(token, `/repos/${owner}/${repoName}/git/trees`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ base_tree: baseTreeSha, tree: treeEntries }),
     });
-    if (!treeRes.ok) {
-      const detail = await treeRes.text();
-      return jsonError(`Could not build the commit tree: ${detail.slice(0, 200)}`, 502);
-    }
-    const tree = (await treeRes.json()) as { sha: string };
+    if (!treeRes.ok) return jsonError("Could not build the commit tree.", 502);
+    const treeSha = ((await treeRes.json()) as { sha: string }).sha;
 
     const commitRes = await githubRequest(token, `/repos/${owner}/${repoName}/git/commits`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ message, tree: tree.sha, parents: [baseCommitSha] }),
+      body: JSON.stringify({ message, tree: treeSha, parents: [baseCommitSha] }),
     });
-    if (!commitRes.ok) {
-      const detail = await commitRes.text();
-      return jsonError(`Could not create the commit: ${detail.slice(0, 200)}`, 502);
-    }
-    const commit = (await commitRes.json()) as { sha: string };
+    if (!commitRes.ok) return jsonError("Could not create the commit.", 502);
+    const commitSha = ((await commitRes.json()) as { sha: string }).sha;
 
-    // force: false => if the remote moved since we read the head, this 422s and
-    // we report a conflict instead of silently overwriting someone else's work.
-    const refRes = await githubRequest(token, `/repos/${owner}/${repoName}/git/refs/heads/${encodePath(branch)}`, {
+    const refRes = await githubRequest(token, `/repos/${owner}/${repoName}/git/refs/heads/${encodeURIComponent(branch)}`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ sha: commit.sha, force: false }),
+      body: JSON.stringify({ sha: commitSha, force: false }),
     });
     if (!refRes.ok) {
-      const detail = await refRes.text();
       const conflict = refRes.status === 422;
       return jsonError(
         conflict
           ? "The repository changed on GitHub since your last sync — pull first to avoid overwriting it."
-          : `Could not push: ${detail.slice(0, 200)}`,
+          : "Could not push.",
         conflict ? 409 : 502
       );
     }
 
     return Response.json({
       ok: true,
-      owner,
-      repo: repoName,
       url: `https://github.com/${owner}/${repoName}`,
-      pushed: [...normalized.keys()],
-      deleted: normalizedDeletes,
-      commit: commit.sha,
+      pushed: blobs.map((b) => b.path),
     });
   } catch (error) {
-    return jsonError(error instanceof Error ? error.message : "GitHub push failed.", 502);
+    return jsonError(error instanceof Error ? error.message : "GitHub push failed.", 500);
   }
 }
