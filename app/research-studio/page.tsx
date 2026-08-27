@@ -1211,6 +1211,13 @@ export default function ResearchStudioPage() {
   const [terminalOutput, setTerminalOutput] = useState("");
   const [terminalBusy, setTerminalBusy] = useState(false);
   const terminalInputRef = useRef<HTMLInputElement | null>(null);
+  const terminalScrollRef = useRef<HTMLDivElement | null>(null);
+
+  // Keep the terminal scrolled to the latest line as output streams in.
+  useEffect(() => {
+    const el = terminalScrollRef.current;
+    if (el) el.scrollTop = el.scrollHeight;
+  }, [terminalOutput, terminalOpen]);
   const [compiledPdfFileName, setCompiledPdfFileName] = useState("compiled-main.pdf");
   const [compileMainLog, setCompileMainLog] = useState("");
   const [compileMainLogFileName, setCompileMainLogFileName] = useState("main.log");
@@ -2944,6 +2951,14 @@ export default function ResearchStudioPage() {
   const [newProjectTemplate, setNewProjectTemplate] = useState("");
   const [newProjectError, setNewProjectError] = useState("");
 
+  const [collaborateOpen, setCollaborateOpen] = useState(false);
+  const [inviteEmail, setInviteEmail] = useState("");
+  const [inviteAccess, setInviteAccess] = useState<"read" | "write" | "admin">("write");
+  const [invites, setInvites] = useState<Array<{ id: string; shared_with_email: string; access_level: string }>>([]);
+  const [invitesLoading, setInvitesLoading] = useState(false);
+  const [inviteBusy, setInviteBusy] = useState(false);
+  const [shareBusy, setShareBusy] = useState(false);
+
   async function githubSettings() {
     if (!userId) return;
     setGithubTokenInput("");
@@ -4404,148 +4419,77 @@ export default function ResearchStudioPage() {
     applyEditorUpdate(nextText, cursor, cursor);
   }
 
-  async function openCollaborateDialog() {
-    const result = await Swal.fire({
-      title: "⋮⋮ Collaborate",
-      titleText: "⋮⋮ Collaborate",
-      position: "top",
-      customClass: {
-        popup: "swal-draggable",
-        title: "swal-drag-handle",
-      },
-      html: `
-        <div style="text-align:left;display:flex;flex-direction:column;gap:12px">
-          <div style="background:#1e293b;border-radius:8px;padding:12px">
-            <p style="font-size:13px;font-weight:600;color:#e2e8f0;margin:0 0 4px">📋 Share Link</p>
-            <p style="font-size:11px;color:#94a3b8;margin:0 0 8px">Anyone with the link can view and copy this project.</p>
-            <button type="button" id="swal-share-btn" class="swal2-confirm swal2-styled" style="width:100%;background:#4ade80;font-size:12px;padding:8px">Copy Share Link</button>
-          </div>
-          <div style="background:#1e293b;border-radius:8px;padding:12px">
-            <p style="font-size:13px;font-weight:600;color:#e2e8f0;margin:0 0 4px">✉ Invite by Email</p>
-            <p style="font-size:11px;color:#94a3b8;margin:0 0 8px">Send an invitation with specific access permissions.</p>
-            <input id="swal-invite-email" class="swal2-input" placeholder="colleague@university.edu" style="background:#0f172a;color:#e2e8f0;border-color:#334155;margin-bottom:8px">
-            <select id="swal-invite-access" class="swal2-input" style="background:#0f172a;color:#e2e8f0;border-color:#334155;margin-bottom:8px">
-              <option value="read">Read only — can view and compile</option>
-              <option value="write">Write — can edit files</option>
-              <option value="admin">Admin — full access</option>
-            </select>
-            <button type="button" id="swal-invite-btn" class="swal2-confirm swal2-styled" style="width:100%;background:#818cf8;font-size:12px;padding:8px">Send Invite</button>
-          </div>
-          <div style="background:#1e293b;border-radius:8px;padding:12px">
-            <p style="font-size:13px;font-weight:600;color:#e2e8f0;margin:0 0 8px">👥 Collaborators</p>
-            <div id="swal-invites-list" style="display:flex;flex-direction:column;gap:6px">
-              <p style="font-size:11px;color:#94a3b8;margin:0">Loading…</p>
-            </div>
-          </div>
-        </div>
-      `,
-      showConfirmButton: false,
-      showCancelButton: true,
-      cancelButtonText: "Close",
-      cancelButtonColor: "#475569",
-      background: "#1a1d2b",
-      color: "#e2e8f0",
-      didOpen: () => {
-        // Make dialog draggable
-        const modal = Swal.getPopup();
-        if (modal) {
-          modal.style.position = "absolute";
-          modal.style.top = "8%";
-          modal.style.left = "50%";
-          modal.style.transform = "translateX(-50%)";
-          let isDragging = false, startX = 0, startY = 0, startLeft = 0, startTop = 0;
-          modal.addEventListener("mousedown", (e) => {
-            if ((e.target as HTMLElement).tagName === "INPUT" || (e.target as HTMLElement).tagName === "SELECT" || (e.target as HTMLElement).tagName === "BUTTON") return;
-            isDragging = true;
-            startX = e.clientX; startY = e.clientY;
-            const rect = modal.getBoundingClientRect();
-            startLeft = rect.left; startTop = rect.top;
-            modal.style.cursor = "grabbing";
-          });
-          window.addEventListener("mousemove", (e) => {
-            if (!isDragging) return;
-            modal.style.left = `${startLeft + e.clientX - startX}px`;
-            modal.style.top = `${startTop + e.clientY - startY}px`;
-            modal.style.transform = "none";
-          });
-          window.addEventListener("mouseup", () => {
-            isDragging = false;
-            if (modal) modal.style.cursor = "";
-          });
-        }
-        // Load and render existing invites
-        const loadInvites = async () => {
-          const list = document.getElementById("swal-invites-list");
-          if (!list) return;
-          try {
-            const res = await fetch(`/api/project-invites?projectId=${encodeURIComponent(activeProjectId)}`);
-            const data = await res.json();
-            const invites = Array.isArray(data.invites) ? data.invites : [];
-            if (!invites.length) {
-              list.innerHTML = '<p style="font-size:11px;color:#94a3b8;margin:0">No collaborators invited yet.</p>';
-              return;
-            }
-            list.innerHTML = invites.map((inv: any) => `
-              <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;padding:6px 8px;background:#0f172a;border-radius:6px">
-                <div style="min-width:0">
-                  <div style="font-size:12px;color:#e2e8f0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${inv.shared_with_email}</div>
-                  <div style="font-size:10px;color:#94a3b8">${inv.access_level}</div>
-                </div>
-                <button type="button" data-invite-id="${inv.id}" style="background:none;border:1px solid #334155;color:#f87171;border-radius:5px;padding:3px 8px;font-size:11px;cursor:pointer">Revoke</button>
-              </div>
-            `).join("");
-            list.querySelectorAll("[data-invite-id]").forEach((btn) => {
-              btn.addEventListener("click", async () => {
-                const id = (btn as HTMLElement).getAttribute("data-invite-id");
-                await fetch(`/api/project-invites?id=${encodeURIComponent(id || "")}`, { method: "DELETE" });
-                void loadInvites();
-              });
-            });
-          } catch {
-            list.innerHTML = '<p style="font-size:11px;color:#94a3b8;margin:0">Could not load collaborators.</p>';
-          }
-        };
-        void loadInvites();
-        // Share + Invite buttons
-        document.getElementById("swal-share-btn")?.addEventListener("click", async () => {
-          try {
-            const snapshot = buildCurrentProjectSnapshot();
-            const res = await fetch("/api/share-project", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ projectData: snapshot }) });
-            const { shareId } = await res.json();
-            await navigator.clipboard.writeText(`${window.location.origin}/research-studio?share=${shareId}`);
-            setCompileNotice("Share link copied! Anyone with this link can view and copy your project.");
-          } catch { setCompileNotice("Could not create share link."); }
-          Swal.close();
-        });
-        document.getElementById("swal-invite-btn")?.addEventListener("click", async () => {
-          const email = (document.getElementById("swal-invite-email") as HTMLInputElement)?.value?.trim();
-          const access = (document.getElementById("swal-invite-access") as HTMLSelectElement)?.value;
-          if (!email) { Swal.showValidationMessage("Enter an email address"); return; }
-          try {
-            // Create a share link first so the email points at THIS project
-            const snapshot = buildCurrentProjectSnapshot();
-            const shareRes = await fetch("/api/share-project", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ projectData: snapshot, accessLevel: access }) });
-            const shareData = await shareRes.json();
-            const shareId = shareData?.shareId || "";
+  async function loadCollaborateInvites() {
+    setInvitesLoading(true);
+    try {
+      const res = await fetch(`/api/project-invites?projectId=${encodeURIComponent(activeProjectId)}`);
+      const data = await res.json();
+      setInvites(Array.isArray(data.invites) ? data.invites : []);
+    } catch {
+      setInvites([]);
+    } finally {
+      setInvitesLoading(false);
+    }
+  }
 
-            const res = await fetch("/api/project-invites", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ projectId: activeProjectId, projectName, email, accessLevel: access, shareId }) });
-            const data = await res.json().catch(() => ({}));
-            if (!res.ok) {
-              setCompileNotice(data.error || "Could not send invitation.");
-              showToast(data.error || "Could not send invitation.", "error");
-            } else if (data.emailSent === false) {
-              setCompileNotice(`Invite saved, but email failed: ${data.emailError || "unknown error"}`);
-              showToast("Invite saved, but email failed to send.", "error");
-            } else {
-              setCompileNotice(`Invitation email sent to ${email} (${access} access).`);
-              showToast(`Email sent to ${email}`, "success");
-              trackStudioEvent("invite-send", access);
-            }
-          } catch { setCompileNotice("Could not send invitation."); }
-          Swal.close();
-        });
-      },
-    });
+  function openCollaborateDialog() {
+    if (!activeProjectId) return;
+    setInviteEmail("");
+    setInviteAccess("write");
+    setCollaborateOpen(true);
+    void loadCollaborateInvites();
+  }
+
+  async function copyShareLink() {
+    setShareBusy(true);
+    try {
+      const snapshot = buildCurrentProjectSnapshot();
+      const res = await fetch("/api/share-project", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ projectData: snapshot }) });
+      const { shareId } = await res.json();
+      await navigator.clipboard.writeText(`${window.location.origin}/research-studio?share=${shareId}`);
+      setCompileNotice("Share link copied! Anyone with this link can view and copy your project.");
+      showToast("Share link copied", "success");
+    } catch {
+      setCompileNotice("Could not create share link.");
+    } finally {
+      setShareBusy(false);
+    }
+  }
+
+  async function sendInvite() {
+    const email = inviteEmail.trim();
+    if (!email) { setCompileNotice("Enter an email address."); return; }
+    setInviteBusy(true);
+    try {
+      const snapshot = buildCurrentProjectSnapshot();
+      const shareRes = await fetch("/api/share-project", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ projectData: snapshot, accessLevel: inviteAccess }) });
+      const shareData = await shareRes.json();
+      const shareId = shareData?.shareId || "";
+      const res = await fetch("/api/project-invites", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ projectId: activeProjectId, projectName, email, accessLevel: inviteAccess, shareId }) });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        setCompileNotice(data.error || "Could not send invitation.");
+        showToast(data.error || "Could not send invitation.", "error");
+      } else if (data.emailSent === false) {
+        setCompileNotice(`Invite saved, but email failed: ${data.emailError || "unknown error"}`);
+        showToast("Invite saved, but email failed to send.", "error");
+      } else {
+        setCompileNotice(`Invitation email sent to ${email} (${inviteAccess} access).`);
+        showToast(`Email sent to ${email}`, "success");
+        trackStudioEvent("invite-send", inviteAccess);
+        setInviteEmail("");
+        void loadCollaborateInvites();
+      }
+    } catch {
+      setCompileNotice("Could not send invitation.");
+    } finally {
+      setInviteBusy(false);
+    }
+  }
+
+  async function revokeInvite(id: string) {
+    await fetch(`/api/project-invites?id=${encodeURIComponent(id)}`, { method: "DELETE" });
+    void loadCollaborateInvites();
   }
 
   async function shareProject() {
@@ -7119,6 +7063,74 @@ export default function ResearchStudioPage() {
       ) : null}
       {renderNewProjectDialog()}
 
+      <Dialog open={collaborateOpen} onOpenChange={setCollaborateOpen}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Collaborate</DialogTitle>
+            <DialogDescription>Share this project or invite people by email.</DialogDescription>
+          </DialogHeader>
+
+          <div className="grid gap-2 rounded-lg border p-3">
+            <Label>Share link</Label>
+            <p className="text-xs text-muted-foreground">Anyone with the link can view and copy this project.</p>
+            <Button variant="secondary" onClick={() => void copyShareLink()} disabled={shareBusy}>
+              {shareBusy ? "Copying…" : "Copy share link"}
+            </Button>
+          </div>
+
+          <div className="grid gap-2 rounded-lg border p-3">
+            <Label htmlFor="invite-email">Invite by email</Label>
+            <Input
+              id="invite-email"
+              type="email"
+              placeholder="colleague@university.edu"
+              value={inviteEmail}
+              onChange={(e) => setInviteEmail(e.target.value)}
+            />
+            <select
+              value={inviteAccess}
+              onChange={(e) => setInviteAccess(e.target.value as "read" | "write" | "admin")}
+              aria-label="Access level"
+              className="rounded-lg border border-[var(--border,#cbd5e1)] bg-transparent px-3 py-2 text-sm"
+            >
+              <option value="read">Read only — can view and compile</option>
+              <option value="write">Write — can edit files</option>
+              <option value="admin">Admin — full access</option>
+            </select>
+            <Button onClick={() => void sendInvite()} disabled={inviteBusy}>
+              {inviteBusy ? "Sending…" : "Send invite"}
+            </Button>
+          </div>
+
+          <div className="grid gap-2 rounded-lg border p-3">
+            <Label>Collaborators</Label>
+            {invitesLoading ? (
+              <p className="text-xs text-muted-foreground">Loading…</p>
+            ) : invites.length === 0 ? (
+              <p className="text-xs text-muted-foreground">No collaborators invited yet.</p>
+            ) : (
+              <div className="grid gap-2">
+                {invites.map((inv) => (
+                  <div key={inv.id} className="flex items-center justify-between gap-2 rounded-lg border px-3 py-2">
+                    <div className="min-w-0">
+                      <p className="truncate text-sm font-medium">{inv.shared_with_email}</p>
+                      <p className="text-xs text-muted-foreground">{inv.access_level}</p>
+                    </div>
+                    <Button variant="destructive" size="sm" onClick={() => void revokeInvite(inv.id)}>
+                      Revoke
+                    </Button>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setCollaborateOpen(false)}>Close</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
       {terminalOpen ? (
         <div
           style={{
@@ -7127,6 +7139,7 @@ export default function ResearchStudioPage() {
             background: "#000",
             color: "#f0f0f0",
             height: "42vh", display: "flex", flexDirection: "column",
+            overflow: "hidden",
             fontFamily: "var(--font-mono)",
           }}
         >
@@ -7135,8 +7148,9 @@ export default function ResearchStudioPage() {
             <button type="button" onClick={() => setTerminalOpen(false)} aria-label="Close terminal" style={{ marginLeft: "auto", background: "none", border: "none", color: "#999", cursor: "pointer", fontSize: 16 }}>×</button>
           </div>
           <div
+            ref={terminalScrollRef}
             onClick={() => terminalInputRef.current?.focus()}
-            style={{ flex: 1, overflowY: "auto", padding: "10px 12px", fontSize: 13, lineHeight: 1.5, cursor: "text" }}
+            style={{ flex: 1, minHeight: 0, overflowY: "auto", padding: "10px 12px", fontSize: 13, lineHeight: 1.5, cursor: "text" }}
           >
             <pre style={{ margin: 0, whiteSpace: "pre-wrap", wordBreak: "break-word" }}>{terminalOutput}</pre>
             <div style={{ display: "flex", alignItems: "center" }}>

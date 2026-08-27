@@ -165,6 +165,13 @@ const server = createServer(async (req, res) => {
     const command = String(body.command || "").trim();
     const files = Array.isArray(body.files) ? body.files : [];
     const folders = Array.isArray(body.folders) ? body.folders : [];
+
+    // No shell is involved (execFile), so pipes/redirects would be passed as
+    // literal arguments and fail confusingly. Reject them with a clear message.
+    if (/[|;&<>`]|\$\(/.test(command)) {
+      return json(res, 403, { error: "Pipes, redirects and shell operators aren't supported here — run one command at a time." });
+    }
+
     const argv = splitCommand(command);
     const full = argv[0] || "";
     const name = full.split("/").pop() || full;
