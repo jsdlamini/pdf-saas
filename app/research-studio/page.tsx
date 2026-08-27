@@ -18,7 +18,7 @@ import { EditorView } from "@codemirror/view";
 import type { EditorMode } from "@/lib/highlighters";
 import { vscodeFileIcon, vscodeFolderIcon } from "@/lib/file-icons";
 import { loadJson, persistJson, removeJson } from "@/lib/json-storage";
-import { mergeAssetContents, unrecoverableAssetPaths } from "@/lib/project-assets";
+import { mergeAssetContents, unrecoverableAssetPaths, isBinaryAssetPath } from "@/lib/project-assets";
 import { renderPdfFirstPagePreview } from "@/lib/transforms/rasterize";
 import { classifyUpload, joinUploadPath } from "@/lib/project-upload";
 import { Button } from "@/components/ui/button";
@@ -3057,6 +3057,11 @@ export default function ResearchStudioPage() {
   }
 
   async function pushFilesToGithub(repo: string, isPrivate: boolean, silent: boolean) {
+    // Push text files inline; skip binary assets (images) so the JSON payload
+    // stays small enough for the reverse proxy (large base64 images were
+    // exceeding the request-body limit and failing with "Invalid payload.").
+    const textFiles = projectEntries.filter((e) => e.kind === "file" && !isBinaryAssetPath(e.path));
+    const skippedBinary = projectEntries.filter((e) => e.kind === "file" && isBinaryAssetPath(e.path)).length;
     try {
       const res = await fetch("/api/github", {
         method: "POST",
@@ -3065,7 +3070,7 @@ export default function ResearchStudioPage() {
           repoName: repo,
           isPrivate,
           message: `Update ${projectName || "project"} from WiserFiles`,
-          files: projectEntries.filter((e) => e.kind === "file").map((e) => ({ path: e.path, content: e.content })),
+          files: textFiles.map((e) => ({ path: e.path, content: e.content })),
         }),
       });
       const data = (await res.json()) as { ok?: boolean; url?: string; pushed?: string[]; failed?: string[]; error?: string };
@@ -3077,11 +3082,19 @@ export default function ResearchStudioPage() {
         throw new Error(data.error || "GitHub push failed.");
       }
       setGithubRepo(repo);
-      setCompileNotice(`Pushed to GitHub: ${data.url || repo}`);
-      if (!silent) showToast(`Pushed ${data.pushed?.length || 0} files to GitHub`, "success");
+      const pushedCount = data.pushed?.length ?? textFiles.length;
+      setCompileNotice(
+        skippedBinary
+          ? `Pushed ${pushedCount} text files to GitHub. ${skippedBinary} image${skippedBinary !== 1 ? "s" : ""} skipped (binary assets aren't pushed yet).`
+          : `Pushed to GitHub: ${data.url || repo}`
+      );
+      if (!silent) showToast(`Pushed ${pushedCount} files to GitHub`, "success");
       try { localStorage.setItem("wiserfiles-last-github-repo", repo); } catch { /* best-effort */ }
       if (data.failed?.length) {
         appendPreviewError(`Some files failed: ${data.failed.join(", ")}`);
+      }
+      if (skippedBinary) {
+        appendPreviewError(`${skippedBinary} image file${skippedBinary !== 1 ? "s" : ""} were skipped — binary assets aren't pushed to GitHub yet.`);
       }
       trackStudioEvent("github-push", repo);
     } catch (error) {
