@@ -1206,6 +1206,10 @@ export default function ResearchStudioPage() {
   const [compiledPdfUrl, setCompiledPdfUrl] = useState("");
   const [coverDataUrl, setCoverDataUrl] = useState("");
   const [githubRepo, setGithubRepo] = useState("");
+  const [terminalOpen, setTerminalOpen] = useState(false);
+  const [terminalCommand, setTerminalCommand] = useState("");
+  const [terminalOutput, setTerminalOutput] = useState("");
+  const [terminalBusy, setTerminalBusy] = useState(false);
   const [compiledPdfFileName, setCompiledPdfFileName] = useState("compiled-main.pdf");
   const [compileMainLog, setCompileMainLog] = useState("");
   const [compileMainLogFileName, setCompileMainLogFileName] = useState("main.log");
@@ -3106,6 +3110,35 @@ export default function ResearchStudioPage() {
   async function pushToGithubSilent() {
     if (!githubRepo || !userId) return;
     await pushFilesToGithub(githubRepo, false, true);
+  }
+
+  async function runTerminalCommand() {
+    const command = terminalCommand.trim();
+    if (!command || terminalBusy) return;
+    setTerminalBusy(true);
+    setTerminalOutput((prev) => `${prev}$ ${command}\n`);
+    try {
+      const res = await fetch("/api/run-command", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          command,
+          files: projectEntries.filter((e) => e.kind === "file").map((e) => ({ path: e.path, content: e.content })),
+        }),
+      });
+      const data = (await res.json()) as { stdout?: string; stderr?: string; exitCode?: number; error?: string };
+      if (!res.ok) {
+        setTerminalOutput((prev) => `${prev}${data.error || "Command failed.\n"}\n`);
+      } else {
+        const out = [data.stdout, data.stderr].filter(Boolean).join("\n");
+        setTerminalOutput((prev) => `${prev}${out || "(no output)"}\n[exit ${data.exitCode ?? "?"}]\n`);
+      }
+    } catch (error) {
+      setTerminalOutput((prev) => `${prev}Error: ${error instanceof Error ? error.message : "failed"}\n`);
+    } finally {
+      setTerminalBusy(false);
+      setTerminalCommand("");
+    }
   }
 
   async function openFromGithub() {
@@ -5963,6 +5996,7 @@ export default function ResearchStudioPage() {
               "-",
               { label: <>Push to GitHub</>, action: () => { setOpenMenu(""); void pushToGithub(); } },
               { label: <>Open from GitHub</>, action: () => { setOpenMenu(""); void openFromGithub(); } },
+              { label: <>Run command</>, action: () => { setOpenMenu(""); setTerminalOpen((o) => !o); } },
               { label: <>GitHub Settings</>, action: () => { setOpenMenu(""); void githubSettings(); } },
             ]
           },
@@ -7108,6 +7142,38 @@ export default function ResearchStudioPage() {
         </div>
       ) : null}
       {renderNewProjectDialog()}
+
+      {terminalOpen ? (
+        <div
+          style={{
+            position: "fixed", left: 0, right: 0, bottom: 0, zIndex: 60,
+            borderTop: "1px solid var(--border-color, #334155)",
+            background: "var(--bg-sidebar, #1a1d2b)",
+            color: "var(--text-primary, #e2e8f0)",
+            maxHeight: "38vh", display: "flex", flexDirection: "column",
+          }}
+        >
+          <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "6px 10px", borderBottom: "1px solid var(--border-color, #334155)" }}>
+            <span style={{ fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.06em", color: "var(--text-muted, #64748b)" }}>Terminal</span>
+            <span style={{ fontSize: 10, color: "var(--text-muted, #64748b)" }}>Allowed: pdflatex, python3, g++, make, git, ls, …</span>
+            <button type="button" onClick={() => setTerminalOpen(false)} aria-label="Close terminal" style={{ marginLeft: "auto", background: "none", border: "none", color: "var(--text-muted, #64748b)", cursor: "pointer", fontSize: 16 }}>×</button>
+          </div>
+          <pre style={{ flex: 1, margin: 0, padding: "8px 10px", overflowY: "auto", fontFamily: "var(--font-mono)", fontSize: 12, lineHeight: 1.5, whiteSpace: "pre-wrap", wordBreak: "break-word" }}>{terminalOutput || "Type a command below and press Run. Your project files are available in the working directory."}</pre>
+          <div style={{ display: "flex", gap: 8, padding: "8px 10px", borderTop: "1px solid var(--border-color, #334155)" }}>
+            <input
+              value={terminalCommand}
+              onChange={(e) => setTerminalCommand(e.target.value)}
+              onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); void runTerminalCommand(); } }}
+              placeholder="e.g. pdflatex main.tex"
+              aria-label="Terminal command"
+              style={{ flex: 1, background: "var(--bg-primary, #0d0f17)", border: "1px solid var(--border-color, #334155)", borderRadius: 6, color: "var(--text-primary, #e2e8f0)", padding: "6px 10px", fontFamily: "var(--font-mono)", fontSize: 13 }}
+            />
+            <button type="button" onClick={() => void runTerminalCommand()} disabled={terminalBusy} className="studio-btn studio-btn-primary" style={{ whiteSpace: "nowrap" }}>
+              {terminalBusy ? "Running…" : "Run"}
+            </button>
+          </div>
+        </div>
+      ) : null}
     </main>
   );
 }
