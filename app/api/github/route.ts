@@ -1,15 +1,20 @@
 import { auth } from "@clerk/nextjs/server";
+import { readFile } from "node:fs/promises";
+import { join } from "node:path";
 import { getGithubTokenInfo, resolveGithubOwner } from "@/lib/github-auth";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 const GITHUB_API = "https://api.github.com";
+const ASSETS_ROOT = process.env.PROJECT_ASSETS_DIR || "/app/data/assets";
 
 type PushPayload = {
   token?: string;
   repoName?: string;
+  projectId?: string;
   files?: { path: string; content: string }[];
+  binaryPaths?: string[];
   deletes?: string[];
   message?: string;
   isPrivate?: boolean;
@@ -66,14 +71,16 @@ export async function POST(request: Request) {
   const { token: storedToken, kind } = await getGithubTokenInfo(userId);
   const token = (body.token || "").trim() || storedToken;
   const repoName = (body.repoName || "").trim();
+  const projectId = (body.projectId || "").trim();
   const files = Array.isArray(body.files) ? body.files : [];
+  const binaryPaths = Array.isArray(body.binaryPaths) ? body.binaryPaths : [];
   const deletes = Array.isArray(body.deletes) ? body.deletes : [];
   const message = (body.message || "Update from WiserFiles Research Studio").trim();
 
   if (!token) return jsonError("Connect GitHub first (File → GitHub Settings).", 400);
   if (!repoName) return jsonError("A repository name is required.", 400);
   if (!/^[a-zA-Z0-9._-]+$/.test(repoName)) return jsonError("Repository name contains invalid characters.", 400);
-  if (!files.length && !deletes.length) return jsonError("No files to push.", 400);
+  if (!files.length && !binaryPaths.length && !deletes.length) return jsonError("No files to push.", 400);
 
   // Normalise inputs and reject unsafe paths before any network work.
   const normalized = new Map<string, { content: string; base64: string }>();
@@ -83,6 +90,23 @@ export async function POST(request: Request) {
     if (!safe) continue;
     normalized.set(safe, { content: file.content, base64: toBase64(safe, file.content) });
   }
+
+  // Binary assets (images) are read from the asset store server-side so the
+  // client JSON stays small. Missing assets are skipped.
+  if (binaryPaths.length && projectId) {
+    for (const rawPath of binaryPaths) {
+      if (typeof rawPath !== "string") continue;
+      const safe = sanitizePath(rawPath);
+      if (!safe) continue;
+      try {
+        const bytes = await readFile(join(ASSETS_ROOT, userId, sanitizePath(projectId) || projectId, safe));
+        normalized.set(safe, { content: "", base64: bytes.toString("base64") });
+      } catch {
+        // Asset not present in the store — skip it.
+      }
+    }
+  }
+
   const normalizedDeletes = deletes
     .map((p) => (typeof p === "string" ? sanitizePath(p) : null))
     .filter((p): p is string => Boolean(p));
