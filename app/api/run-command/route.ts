@@ -36,6 +36,7 @@ export async function POST(request: Request) {
   const body = (await request.json().catch(() => null)) as {
     command?: string;
     files?: Array<{ path: string; content: string }>;
+    folders?: string[];
   } | null;
   const command = (body?.command || "").trim();
   if (!command) return jsonError("Enter a command.", 400);
@@ -44,7 +45,7 @@ export async function POST(request: Request) {
     const res = await fetch(`${SANDBOX_URL}/run`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ command, files: body?.files ?? [] }),
+      body: JSON.stringify({ command, files: body?.files ?? [], folders: body?.folders ?? [] }),
     });
     const data = (await res.json().catch(() => null)) as {
       exitCode?: number;
@@ -53,11 +54,13 @@ export async function POST(request: Request) {
       stderr?: string;
       error?: string;
     } | null;
-    if (!res.ok || !data) {
-      return jsonError(data?.error || "The sandbox is unavailable.", 502);
+    // Always return 200 so nginx never intercepts a 502/503 with its HTML
+    // error page; errors ride in the JSON body instead.
+    if (!data) {
+      return Response.json({ error: "The sandbox is unavailable." });
     }
     return Response.json(data);
   } catch {
-    return jsonError("The sandbox is unavailable right now. Try again shortly.", 503);
+    return Response.json({ error: "The sandbox is unavailable right now. Try again shortly." });
   }
 }

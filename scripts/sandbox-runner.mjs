@@ -164,6 +164,7 @@ const server = createServer(async (req, res) => {
 
     const command = String(body.command || "").trim();
     const files = Array.isArray(body.files) ? body.files : [];
+    const folders = Array.isArray(body.folders) ? body.folders : [];
     const argv = splitCommand(command);
     const full = argv[0] || "";
     const name = full.split("/").pop() || full;
@@ -175,6 +176,12 @@ const server = createServer(async (req, res) => {
     const tempDir = await mkdtemp(join(tmpdir(), "sandbox-cmd-"));
     try {
       await writeProjectFiles(files, tempDir);
+      for (const folder of folders) {
+        if (typeof folder === "string") {
+          const safe = sanitizePath(folder);
+          if (safe) await mkdir(join(tempDir, safe), { recursive: true });
+        }
+      }
       try {
         const result = await execFileAsync(name, argv.slice(1), {
           cwd: tempDir,
