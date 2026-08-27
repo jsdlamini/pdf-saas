@@ -20,10 +20,10 @@ export default function SiteFooter() {
             WiserFiles
           </p>
           <p className="text-sm text-slate-600">
-            by <span className="font-semibold text-slate-800">Ideal Software Solutions</span>
+            by <Link href="/about" className="font-semibold text-slate-800 underline decoration-slate-300 hover:decoration-slate-600">Ideal Software Solutions</Link>
           </p>
           <p className="max-w-sm text-sm text-slate-600">
-            Every PDF tool you need — free, in your browser, nothing uploaded.
+            Every PDF tool you need, free. Built in Eswatini.
           </p>
           <Link
             href="/research-studio"

@@ -7161,7 +7161,6 @@ export default function ResearchStudioPage() {
         >
           <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "5px 10px", borderBottom: "1px solid #222", color: "#999", fontSize: 11 }}>
             <span style={{ fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.06em", color: "#ccc" }}>Terminal</span>
-            <span style={{ fontSize: 10 }}>Safe commands only — pdflatex, python3, g++, make, git, ls, …</span>
             <button type="button" onClick={() => setTerminalOpen(false)} aria-label="Close terminal" style={{ marginLeft: "auto", background: "none", border: "none", color: "#999", cursor: "pointer", fontSize: 16 }}>×</button>
           </div>
           <div
@@ -7182,7 +7181,7 @@ export default function ResearchStudioPage() {
                 spellCheck={false}
                 autoComplete="off"
                 autoCapitalize="off"
-                style={{ flex: 1, background: "transparent", border: "none", outline: "none", color: "#f0f0f0", caretColor: "#0f0", fontFamily: "var(--font-mono)", fontSize: 13, padding: 0 }}
+                style={{ flex: 1, appearance: "none", WebkitAppearance: "none", background: "transparent", border: "none", boxShadow: "none", outline: "none", color: "#f0f0f0", caretColor: "#0f0", fontFamily: "var(--font-mono)", fontSize: 13, padding: 0 }}
               />
             </div>
           </div>
