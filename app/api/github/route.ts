@@ -82,6 +82,31 @@ async function ensureRepo(token: string, owner: string, repoName: string, isPriv
   }
 }
 
+// A freshly created empty repo has no commits, which blocks the Git Data API
+// (blobs/trees) with a 409. Seed an initial commit via the Contents API so the
+// repo has a branch to build on.
+async function initializeRepoIfEmpty(token: string, owner: string, repoName: string): Promise<void> {
+  const repoRes = await githubRequest(token, `/repos/${owner}/${repoName}`);
+  const repoInfo = repoRes.ok ? ((await repoRes.json()) as { default_branch?: string | null }) : null;
+  const branch = repoInfo?.default_branch || "main";
+
+  const refRes = await githubRequest(token, `/repos/${owner}/${repoName}/git/ref/heads/${encodeURIComponent(branch)}`);
+  if (refRes.status === 404) {
+    const initRes = await githubRequest(token, `/repos/${owner}/${repoName}/contents/README.md`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        message: "Initial commit from WiserFiles",
+        content: Buffer.from("# Created by WiserFiles\n").toString("base64"),
+      }),
+    });
+    if (!initRes.ok && initRes.status !== 422) {
+      const detail = await initRes.text();
+      throw new Error(`Could not initialize the empty repository: ${detail.slice(0, 200)}`);
+    }
+  }
+}
+
 async function uploadBlob(token: string, owner: string, repoName: string, base64: string): Promise<string> {
   const res = await githubRequest(token, `/repos/${owner}/${repoName}/git/blobs`, {
     method: "POST",
@@ -133,6 +158,7 @@ export async function POST(request: Request) {
       const projectId = (body.projectId || "").trim();
 
       await ensureRepo(token, owner, repoName, Boolean(body.isPrivate));
+      await initializeRepoIfEmpty(token, owner, repoName);
 
       const blobs: { path: string; sha: string }[] = [];
       const missingAssets: string[] = [];
@@ -176,6 +202,7 @@ export async function POST(request: Request) {
     const message = (body.message || "Update from WiserFiles Research Studio").trim();
 
     await ensureRepo(token, owner, repoName, Boolean(body.isPrivate));
+    await initializeRepoIfEmpty(token, owner, repoName);
 
     const repoInfoRes = await githubRequest(token, `/repos/${owner}/${repoName}`);
     const repoInfo = repoInfoRes.ok ? ((await repoInfoRes.json()) as { default_branch?: string }) : null;
