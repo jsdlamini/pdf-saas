@@ -1237,11 +1237,22 @@ export default function ResearchStudioPage() {
       return localStorage.getItem("wiserfiles-studio-projects-pane") === "open";
     } catch { return false; }
   });
+  // When pinned, the pane stays open and does not auto-hide on mouse leave.
+  const [projectsPanePinned, setProjectsPanePinned] = useState(() => {
+    if (typeof window === "undefined") return false;
+    try {
+      return localStorage.getItem("wiserfiles-studio-projects-pinned") === "yes";
+    } catch { return false; }
+  });
   const [isMobile, setIsMobile] = useState(false);
 
   useEffect(() => {
     try { localStorage.setItem("wiserfiles-studio-projects-pane", projectsPaneOpen ? "open" : "closed"); } catch {}
   }, [projectsPaneOpen]);
+
+  useEffect(() => {
+    try { localStorage.setItem("wiserfiles-studio-projects-pinned", projectsPanePinned ? "yes" : "no"); } catch {}
+  }, [projectsPanePinned]);
   const [searchQuery, setSearchQuery] = useState("");
   const [sortMode, setSortMode] = useState<"updated" | "name">("updated");
   const [openTabs, setOpenTabs] = useState<string[]>([]);
@@ -3944,6 +3955,14 @@ export default function ResearchStudioPage() {
     setWorkspaceScreen("projects");
   }
 
+  function toggleProjectsPanePin() {
+    setProjectsPanePinned((pinned) => {
+      const next = !pinned;
+      setProjectsPaneOpen(next);
+      return next;
+    });
+  }
+
   async function renameProjectEntry(targetPath: string) {
     const target = projectEntries.find((entry) => entry.path === targetPath);
     if (!target) return;
@@ -5980,7 +5999,7 @@ export default function ResearchStudioPage() {
           {
             label: "View", key: "view", items: [
               { label: rightPaneCollapsed ? (isCodeMode ? "Show Output" : "Show PDF Preview") : (isCodeMode ? "Hide Output" : "Hide PDF Preview"), action: () => { setOpenMenu(""); setRightPaneCollapsed(!rightPaneCollapsed); } },
-              { label: projectsPaneOpen ? "Hide Projects" : "Show Projects", action: () => { setOpenMenu(""); setProjectsPaneOpen((prev) => !prev); } },
+              { label: projectsPaneOpen ? "Hide Projects" : "Show Projects", action: () => { setOpenMenu(""); toggleProjectsPanePin(); } },
               { label: leftPaneCollapsed ? "Show File Tree" : "Hide File Tree", action: () => { setOpenMenu(""); setLeftPaneCollapsed(!leftPaneCollapsed); } },
               "-",
               { label: "Version History", action: () => { setOpenMenu(""); setHistoryOpen(true); } },
@@ -6071,14 +6090,14 @@ export default function ResearchStudioPage() {
         <div
           className={`studio-projects-rail ${projectsPaneOpen ? "studio-projects-rail-open" : ""}`}
           onMouseEnter={() => setProjectsPaneOpen(true)}
-          onMouseLeave={() => setProjectsPaneOpen(false)}
+          onMouseLeave={() => { if (!projectsPanePinned) setProjectsPaneOpen(false); }}
         >
           <button
             type="button"
             className="studio-activity-bar"
-            onClick={() => setProjectsPaneOpen((prev) => !prev)}
-            aria-label={projectsPaneOpen ? "Hide Projects pane" : "Show Projects pane"}
-            title="Projects (Ctrl/Cmd+Shift+E)"
+            onClick={toggleProjectsPanePin}
+            aria-label={projectsPanePinned ? "Unpin and hide Projects pane" : "Pin and show Projects pane"}
+            title="Projects (Ctrl/Cmd+Shift+E) — click to pin"
           >
             <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.6">
               <path d="M3 5.5A1.5 1.5 0 0 1 4.5 4h3L9 5.5h6.5A1.5 1.5 0 0 1 17 7v7.5a1.5 1.5 0 0 1-1.5 1.5h-11A1.5 1.5 0 0 1 3 14.5v-9z" strokeLinecap="round" strokeLinejoin="round" />
@@ -6090,6 +6109,18 @@ export default function ResearchStudioPage() {
               <div className="studio-projects-panel-header">
                 <span className="studio-projects-panel-title">Projects</span>
                 <div className="studio-projects-panel-actions">
+                  <button
+                    type="button"
+                    onClick={toggleProjectsPanePin}
+                    className={`studio-projects-panel-action ${projectsPanePinned ? "studio-projects-panel-action-active" : ""}`}
+                    title={projectsPanePinned ? "Unpin (auto-hide)" : "Pin (keep open)"}
+                    aria-pressed={projectsPanePinned}
+                  >
+                    <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.8">
+                      <path d="M9 3l3 2-2 2 3 3 2-2 2 3-6 5-3-3-4 1 1-4-3-3 5-6z" strokeLinecap="round" strokeLinejoin="round" />
+                    </svg>
+                    {projectsPanePinned ? "Pinned" : "Pin"}
+                  </button>
                   <button
                     type="button"
                     onClick={() => void createNewProject()}
@@ -6651,7 +6682,7 @@ export default function ResearchStudioPage() {
                 { label: "Version History", action: () => { setPaletteOpen(false); setHistoryOpen(true); } },
                 { label: "Toggle PDF Preview", action: () => { setPaletteOpen(false); setRightPaneCollapsed(!rightPaneCollapsed); } },
                 { label: "Toggle File Tree", action: () => { setPaletteOpen(false); setLeftPaneCollapsed(!leftPaneCollapsed); } },
-                { label: "Toggle Projects Pane", action: () => { setPaletteOpen(false); setProjectsPaneOpen((prev) => !prev); } },
+                { label: "Toggle Projects Pane", action: () => { setPaletteOpen(false); toggleProjectsPanePin(); } },
                 { label: "Back to Projects", action: () => { setPaletteOpen(false); openProjectsBoard(); } },
                 { label: "Keyboard Shortcuts", action: () => { setPaletteOpen(false); setShowShortcuts(true); } },
               ]}
