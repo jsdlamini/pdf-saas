@@ -274,6 +274,72 @@ const server = createServer(async (req, res) => {
     return;
   }
 
+  // Unit-test grading: pytest (Python) or doctest (C++). Writes the student's
+  // files plus a hidden test file, then runs the test runner and returns its
+  // exit code + output.
+  if (req.url === "/test") {
+    const body = await readBody(req);
+    if (body === null) return json(res, 400, { error: "invalid json" });
+
+    const mode = body.mode;
+    const files = Array.isArray(body.files) ? body.files : [];
+    const testFilePath = body.testFilePath || "";
+    const testFileContent = body.testFileContent || "";
+
+    if ((mode !== "pytest" && mode !== "doctest") || !testFilePath || !testFileContent) {
+      return json(res, 400, { error: "mode, testFilePath and testFileContent are required." });
+    }
+
+    const tempDir = await mkdtemp(join(tmpdir(), "sandbox-test-"));
+    try {
+      await writeProjectFiles(files, tempDir);
+      const safeTest = sanitizeRelPath(testFilePath);
+      await writeFile(join(tempDir, safeTest), testFileContent, "utf8");
+
+      let result;
+      if (mode === "pytest") {
+        try {
+          const r = await execFileAsync("pytest", [safeTest, "-q", "--tb=short"], {
+            cwd: tempDir,
+            timeout: CODE_TIMEOUT_MS,
+            maxBuffer: MAX_OUTPUT,
+            env: sandboxedEnv(tempDir, { PYTHONDONTWRITEBYTECODE: "1" }),
+          });
+          result = { output: truncateOutput(r.stdout || ""), error: r.stderr || "", exitCode: 0 };
+        } catch (err) {
+          result = { output: truncateOutput(err.stdout || ""), error: err.stderr || err.stdout || "Tests failed.", exitCode: err.code ?? 1 };
+        }
+      } else {
+        // doctest (C++): compile the test file (which includes the student's
+        // solution) with doctest.h, then run the binary.
+        const binaryPath = join(tempDir, "program");
+        try {
+          await execFileAsync("g++", ["-std=c++17", "-O2", "-I", "/doctest", "-o", binaryPath, safeTest], {
+            cwd: tempDir,
+            timeout: 30_000,
+            maxBuffer: MAX_OUTPUT,
+            env: sandboxedEnv(tempDir),
+          });
+        } catch (err) {
+          result = { output: "", error: err.stderr || err.stdout || "Compilation failed.", exitCode: err.code ?? 1 };
+        }
+        if (!result) {
+          await chmod(binaryPath, 0o755);
+          try {
+            const r = await execWithStdin(binaryPath, [], { timeout: CODE_TIMEOUT_MS, env: sandboxedEnv(tempDir) });
+            result = { output: truncateOutput(r.stdout || ""), error: r.stderr || "", exitCode: 0 };
+          } catch (err) {
+            result = { output: truncateOutput(err.stdout || ""), error: err.stderr || `Tests failed (${err.code ?? 1}).`, exitCode: err.code ?? 1 };
+          }
+        }
+      }
+      json(res, 200, result);
+    } finally {
+      await rm(tempDir, { recursive: true, force: true });
+    }
+    return;
+  }
+
   json(res, 404, { error: "not found" });
 });
 

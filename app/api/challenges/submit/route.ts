@@ -1,6 +1,6 @@
 import { auth } from "@clerk/nextjs/server";
 import { db, ensureMigrated } from "@/lib/db";
-import { gradeIoSubmission, resolveCohortId, activeSeasonId, type HiddenTest } from "@/lib/challenges";
+import { gradeIoSubmission, gradeUnitSubmission, resolveCohortId, activeSeasonId, type HiddenTest, type UnitTestSpec } from "@/lib/challenges";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -31,8 +31,15 @@ export async function POST(request: Request) {
   if (!ch.rows.length) return jsonError("Challenge not found.", 404);
   const challenge = ch.rows[0];
 
-  const tests = Array.isArray(challenge.hidden_tests) ? (challenge.hidden_tests as HiddenTest[]) : [];
-  const result = await gradeIoSubmission(body.language, body.files, body.mainPath || body.files[0].path, tests);
+  const mode = (challenge.test_mode as "io" | "pytest" | "doctest") || "io";
+  let result;
+  if (mode === "io") {
+    const tests = Array.isArray(challenge.hidden_tests) ? (challenge.hidden_tests as HiddenTest[]) : [];
+    result = await gradeIoSubmission(body.language, body.files, body.mainPath || body.files[0].path, tests);
+  } else {
+    const spec = challenge.hidden_tests as UnitTestSpec;
+    result = await gradeUnitSubmission(mode, body.files, spec.test_file_path, spec.test_file);
+  }
   const passed = result.total > 0 && result.passed === result.total;
 
   const cohortId = await resolveCohortId(userId);

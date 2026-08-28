@@ -145,6 +145,7 @@ const MIGRATIONS: string[] = [
     season_id INTEGER REFERENCES wiserfiles_seasons(id) ON DELETE SET NULL,
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
   )`,
+  `ALTER TABLE wiserfiles_challenges ADD COLUMN IF NOT EXISTS test_mode TEXT NOT NULL DEFAULT 'io'`,
 
   `CREATE TABLE IF NOT EXISTS wiserfiles_submissions (
     id SERIAL PRIMARY KEY,
