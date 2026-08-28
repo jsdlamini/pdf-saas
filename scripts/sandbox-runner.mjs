@@ -19,9 +19,9 @@ const execFileAsync = promisify(execFile);
 
 // execFile's `input` option is unreliable (stdin never closes), so run
 // commands that need stdin via spawn and write to stdin manually.
-function execWithStdin(command, args, { stdin = "", timeout = CODE_TIMEOUT_MS, maxBuffer = MAX_OUTPUT, env } = {}) {
+function execWithStdin(command, args, { stdin = "", timeout = CODE_TIMEOUT_MS, maxBuffer = MAX_OUTPUT, env, cwd } = {}) {
   return new Promise((resolve, reject) => {
-    const child = spawn(command, args, { env, stdio: ["pipe", "pipe", "pipe"] });
+    const child = spawn(command, args, { env, cwd, stdio: ["pipe", "pipe", "pipe"] });
     let stdout = "";
     let stderr = "";
     let timedOut = false;
@@ -220,6 +220,7 @@ const server = createServer(async (req, res) => {
       try {
         const result = await execWithStdin(name, argv.slice(1), {
           stdin,
+          cwd: tempDir,
           timeout: TIMEOUT_MS,
           env: sandboxedEnv(tempDir),
         });
