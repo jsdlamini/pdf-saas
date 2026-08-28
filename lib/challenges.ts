@@ -3,6 +3,8 @@ import { db, ensureMigrated } from "./db";
 
 export type HiddenTest = { input: string; expected: string };
 
+export type UnitTestSpec = { test_file: string; test_file_path: string };
+
 export type ChallengeSeed = {
   slug: string;
   language: "python" | "cpp";
@@ -10,7 +12,8 @@ export type ChallengeSeed = {
   points: number;
   statement_md: string;
   starter_code: string;
-  hidden_tests: HiddenTest[];
+  test_mode?: "io" | "pytest" | "doctest";
+  hidden_tests: HiddenTest[] | UnitTestSpec;
 };
 
 export const CHALLENGE_SEED: ChallengeSeed[] = [
@@ -150,6 +153,36 @@ export const CHALLENGE_SEED: ChallengeSeed[] = [
       { input: "abc\n", expected: "cba" },
     ],
   },
+
+  // ── Unit-test challenges ────────────────────────────────────────
+  {
+    slug: "py-unittest",
+    language: "python",
+    difficulty: "medium",
+    points: 25,
+    statement_md:
+      "Write a function `add(a, b)` in `solution.py` that returns the sum of its two arguments. Do not read input or print anything — a hidden test file imports your function and checks it.",
+    starter_code: "def add(a, b):\n    # return a + b\n    pass\n",
+    test_mode: "pytest",
+    hidden_tests: {
+      test_file_path: "test_solution.py",
+      test_file: "from solution import add\n\ndef test_add():\n    assert add(2, 3) == 5\n    assert add(-1, 1) == 0\n    assert add(0, 0) == 0\n",
+    },
+  },
+  {
+    slug: "cpp-unittest",
+    language: "cpp",
+    difficulty: "medium",
+    points: 25,
+    statement_md:
+      "Write a function `int max_of_three(int a, int b, int c)` in `solution.cpp` (no `main` function) that returns the largest of the three arguments. A hidden test file includes your solution and checks it.",
+    starter_code: "int max_of_three(int a, int b, int c) {\n  // return the largest\n  return 0;\n}\n",
+    test_mode: "doctest",
+    hidden_tests: {
+      test_file_path: "test.cpp",
+      test_file: "#define DOCTEST_CONFIG_IMPLEMENT_WITH_MAIN\n#include \"doctest.h\"\n#include \"solution.cpp\"\n\nTEST_CASE(\"max_of_three\") {\n  CHECK(max_of_three(1, 5, 3) == 5);\n  CHECK(max_of_three(10, 10, 2) == 10);\n  CHECK(max_of_three(-1, -5, -3) == -1);\n}\n",
+    },
+  },
 ];
 
 const SANDBOX_URL = process.env.SANDBOX_URL || "http://sandbox:3100";
@@ -202,15 +235,16 @@ export async function seedChallenges(): Promise<void> {
 
   for (const c of CHALLENGE_SEED) {
     await db.query(
-      `INSERT INTO wiserfiles_challenges (slug, language, difficulty, statement_md, starter_code, hidden_tests, points, season_id)
-       VALUES ($1, $2, $3, $4, $5, $6::jsonb, $7, $8)
+      `INSERT INTO wiserfiles_challenges (slug, language, difficulty, statement_md, starter_code, hidden_tests, points, test_mode, season_id)
+       VALUES ($1, $2, $3, $4, $5, $6::jsonb, $7, $8, $9)
        ON CONFLICT (slug) DO UPDATE SET
          statement_md = EXCLUDED.statement_md,
          starter_code = EXCLUDED.starter_code,
          hidden_tests = EXCLUDED.hidden_tests,
          points = EXCLUDED.points,
-         difficulty = EXCLUDED.difficulty`,
-      [c.slug, c.language, c.difficulty, c.statement_md, c.starter_code, JSON.stringify(c.hidden_tests), c.points, seasonId]
+         difficulty = EXCLUDED.difficulty,
+         test_mode = EXCLUDED.test_mode`,
+      [c.slug, c.language, c.difficulty, c.statement_md, c.starter_code, JSON.stringify(c.hidden_tests), c.points, c.test_mode || "io", seasonId]
     );
   }
 }
@@ -250,4 +284,36 @@ export async function gradeIoSubmission(
   }
 
   return { passed, total: tests.length, results };
+}
+
+// Run a unit-test submission (pytest or doctest) in the sandbox. Exit code 0
+// means all hidden tests passed.
+export async function gradeUnitSubmission(
+  mode: "pytest" | "doctest",
+  files: { path: string; content: string }[],
+  testFilePath: string,
+  testFileContent: string
+) {
+  let output = "";
+  let error: string | undefined;
+  let exitCode: number | undefined;
+  try {
+    const res = await fetch(`${SANDBOX_URL}/test`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ mode, files, testFilePath, testFileContent }),
+    });
+    const data = (await res.json().catch(() => null)) as { output?: string; error?: string; exitCode?: number } | null;
+    output = data?.output || "";
+    error = data?.error;
+    exitCode = data?.exitCode;
+  } catch (e) {
+    error = e instanceof Error ? e.message : "sandbox unavailable";
+  }
+  const ok = exitCode === 0;
+  return {
+    passed: ok ? 1 : 0,
+    total: 1,
+    results: [{ ok, input: "", expected: "all hidden tests pass", actual: output || error || "(no output)", exitCode, error }],
+  };
 }
