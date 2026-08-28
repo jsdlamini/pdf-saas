@@ -223,6 +223,35 @@ const MIGRATIONS: string[] = [
   END $$;`,
   `ALTER TABLE wiserfiles_leaderboard_opt_in DROP COLUMN IF EXISTS student_id`,
   `ALTER TABLE wiserfiles_leaderboard_opt_in DROP COLUMN IF EXISTS season_id`,
+
+  // ── Roster (institutional student IDs) ──────────────────────────
+  `CREATE TABLE IF NOT EXISTS wiserfiles_roster (
+    cohort_id INTEGER NOT NULL REFERENCES wiserfiles_cohorts(id) ON DELETE CASCADE,
+    student_id TEXT NOT NULL,
+    claimed_by TEXT,
+    claimed_at TIMESTAMPTZ,
+    PRIMARY KEY (cohort_id, student_id)
+  )`,
+
+  // ── Problem sets (assignments with due dates, owned by a course) ──
+  `CREATE TABLE IF NOT EXISTS wiserfiles_problem_sets (
+    id SERIAL PRIMARY KEY,
+    course_id INTEGER NOT NULL REFERENCES wiserfiles_courses(id) ON DELETE CASCADE,
+    title TEXT NOT NULL,
+    due_at TIMESTAMPTZ,
+    created_by TEXT NOT NULL,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+  )`,
+  `CREATE TABLE IF NOT EXISTS wiserfiles_problem_set_challenges (
+    problem_set_id INTEGER NOT NULL REFERENCES wiserfiles_problem_sets(id) ON DELETE CASCADE,
+    challenge_id INTEGER NOT NULL REFERENCES wiserfiles_challenges(id) ON DELETE CASCADE,
+    position INTEGER NOT NULL DEFAULT 0,
+    PRIMARY KEY (problem_set_id, challenge_id)
+  )`,
+
+  // ── Practice mode + integrity ─────────────────────────────────────
+  `ALTER TABLE wiserfiles_submissions ADD COLUMN IF NOT EXISTS practice BOOLEAN NOT NULL DEFAULT FALSE`,
+  `ALTER TABLE wiserfiles_submissions ADD COLUMN IF NOT EXISTS source_hash TEXT`,
 ];
 
 let migrationPromise: Promise<void> | null = null;

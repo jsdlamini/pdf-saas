@@ -1,4 +1,5 @@
 import { auth } from "@clerk/nextjs/server";
+import { createHash } from "node:crypto";
 import { db, ensureMigrated } from "@/lib/db";
 import { gradeIoSubmission, gradeUnitSubmission, resolveCohortId, activeSeasonId, type HiddenTest, type UnitTestSpec } from "@/lib/challenges";
 
@@ -20,6 +21,7 @@ export async function POST(request: Request) {
     language?: "python" | "cpp";
     files?: { path: string; content: string }[];
     mainPath?: string;
+    practice?: boolean;
   } | null;
 
   if (!body?.challengeId || !body.language || !Array.isArray(body.files) || !body.files.length) {
@@ -45,9 +47,15 @@ export async function POST(request: Request) {
   const cohortId = await resolveCohortId(userId);
   const seasonId = await activeSeasonId();
 
+  // Integrity: hash the (normalised) source so identical submissions within a
+  // cohort can be surfaced by the analytics view.
+  const sourceHash = createHash("sha256")
+    .update(body.files.map((f) => `${f.path}:${f.content}`).join("\u0000"))
+    .digest("hex");
+
   await db.query(
-    `INSERT INTO wiserfiles_submissions (user_id, challenge_id, cohort_id, season_id, language, passed, tests_passed, tests_total, output)
-     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
+    `INSERT INTO wiserfiles_submissions (user_id, challenge_id, cohort_id, season_id, language, passed, tests_passed, tests_total, output, practice, source_hash)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)`,
     [
       userId,
       body.challengeId,
@@ -58,11 +66,14 @@ export async function POST(request: Request) {
       result.passed,
       result.total,
       JSON.stringify(result.results),
+      Boolean(body.practice),
+      sourceHash,
     ]
   );
 
   let firstSolve = false;
-  if (passed) {
+  // Practice runs never record a solve — no points, no leaderboard entry.
+  if (passed && !body.practice) {
     const existing = await db.query(
       `SELECT 1 FROM wiserfiles_challenge_solves WHERE user_id = $1 AND challenge_id = $2 AND cohort_id = $3`,
       [userId, body.challengeId, cohortId]

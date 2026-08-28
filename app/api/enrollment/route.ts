@@ -69,10 +69,29 @@ export async function POST(request: Request) {
     }
   }
 
+  // If the cohort has an uploaded roster, a student may only claim an ID that
+  // appears on it (unclaimed, or already claimed by them). This fixes identity
+  // to real institutional IDs rather than self-declared ones.
+  const rosterExists = await db.query(`SELECT 1 FROM wiserfiles_roster WHERE cohort_id = $1 LIMIT 1`, [cohortId]);
+  if (rosterExists.rows.length) {
+    const match = await db.query(
+      `SELECT 1 FROM wiserfiles_roster WHERE cohort_id = $1 AND student_id = $2 AND (claimed_by IS NULL OR claimed_by = $3)`,
+      [cohortId, requested, userId]
+    );
+    if (!match.rows.length) {
+      return jsonError("That student ID isn't on this cohort's roster — check with your lecturer.", 403);
+    }
+  }
+
   await db.query(
     `INSERT INTO wiserfiles_enrollments (user_id, cohort_id, role, status, student_id)
      VALUES ($1, $2, 'student', 'active', $3)
      ON CONFLICT (user_id, cohort_id) DO UPDATE SET student_id = EXCLUDED.student_id`,
+    [userId, cohortId, requested]
+  );
+
+  await db.query(
+    `UPDATE wiserfiles_roster SET claimed_by = $1, claimed_at = NOW() WHERE cohort_id = $2 AND student_id = $3 AND claimed_by IS NULL`,
     [userId, cohortId, requested]
   );
 
