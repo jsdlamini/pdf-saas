@@ -9,6 +9,7 @@
 //   POST /code  { language, files, mainPath } -> { output, error, exitCode }
 
 import { execFile, spawn } from "node:child_process";
+import { randomBytes } from "node:crypto";
 import { chmod, mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { createServer } from "node:http";
 import { tmpdir } from "node:os";
@@ -49,7 +50,22 @@ function execWithStdin(command, args, { stdin = "", timeout = CODE_TIMEOUT_MS, m
 const PORT = Number(process.env.SANDBOX_PORT || 3100);
 const TIMEOUT_MS = 30_000;
 const CODE_TIMEOUT_MS = 15_000;
+const TERM_TIMEOUT_MS = 10 * 60_000;
 const MAX_OUTPUT = 64 * 1024;
+
+// Interactive terminal sessions: a live process with an open stdin, polled for
+// output and fed input over /term/stdin. Stored in-memory (single sandbox
+// replica) and cleaned up on exit or timeout.
+const termSessions = new Map();
+
+function cleanupTermSession(id) {
+  const s = termSessions.get(id);
+  if (!s) return;
+  if (s.killTimer) clearTimeout(s.killTimer);
+  if (s.cleanupTimer) clearTimeout(s.cleanupTimer);
+  termSessions.delete(id);
+  if (s.tempDir) rm(s.tempDir, { recursive: true, force: true }).catch(() => {});
+}
 
 const ALLOWED = new Set([
   "pdflatex", "latexmk", "lualatex", "xelatex", "bibtex", "biber",
@@ -250,6 +266,120 @@ const server = createServer(async (req, res) => {
       await rm(tempDir, { recursive: true, force: true });
     }
     return;
+  }
+
+  // Interactive terminal: start an allowlisted command with an OPEN stdin.
+  if (req.url === "/term") {
+    const body = await readBody(req);
+    if (body === null) return json(res, 400, { error: "invalid json" });
+
+    const command = String(body.command || "").trim();
+    const files = Array.isArray(body.files) ? body.files : [];
+    const folders = Array.isArray(body.folders) ? body.folders : [];
+
+    if (/[|;&<>`]|\$\(/.test(command)) {
+      return json(res, 403, { error: "Pipes, redirects and shell operators aren't supported here." });
+    }
+    const argv = splitCommand(command);
+    const full = argv[0] || "";
+    const name = full.split("/").pop() || full;
+    if (!name || !ALLOWED.has(name)) {
+      return json(res, 403, { error: `Command "${name}" is not allowed.` });
+    }
+
+    const tempDir = await mkdtemp(join(tmpdir(), "sandbox-term-"));
+    await writeProjectFiles(files, tempDir);
+    for (const folder of folders) {
+      if (typeof folder === "string") {
+        const safe = sanitizePath(folder);
+        if (safe) await mkdir(join(tempDir, safe), { recursive: true });
+      }
+    }
+
+    const child = spawn(name, argv.slice(1), {
+      cwd: tempDir,
+      env: sandboxedEnv(tempDir, { PYTHONUNBUFFERED: "1" }),
+      stdio: ["pipe", "pipe", "pipe"],
+    });
+
+    const id = randomBytes(8).toString("hex");
+    const session = {
+      child,
+      tempDir,
+      running: true,
+      exitCode: null,
+      stdout: "",
+      stderr: "",
+      killTimer: null,
+      cleanupTimer: null,
+    };
+    const cap = () => {
+      if (session.stdout.length > MAX_OUTPUT) session.stdout = session.stdout.slice(0, MAX_OUTPUT);
+      if (session.stderr.length > MAX_OUTPUT) session.stderr = session.stderr.slice(0, MAX_OUTPUT);
+    };
+    child.stdout.on("data", (d) => { session.stdout += d; cap(); });
+    child.stderr.on("data", (d) => { session.stderr += d; cap(); });
+    child.stdin.on("error", () => {});
+    child.on("error", (err) => {
+      session.stderr += `\n${err.message}\n`;
+      session.running = false;
+      session.exitCode = 1;
+    });
+    child.on("close", (code) => {
+      session.running = false;
+      session.exitCode = code ?? 0;
+      if (session.killTimer) clearTimeout(session.killTimer);
+      // Keep the result around for a short window so the client's final poll
+      // can read it, then clean up.
+      session.cleanupTimer = setTimeout(() => cleanupTermSession(id), 60_000);
+    });
+    session.killTimer = setTimeout(() => {
+      if (session.running) {
+        session.stderr += "\n[Terminal session timed out]\n";
+        child.kill("SIGKILL");
+      }
+    }, TERM_TIMEOUT_MS);
+
+    termSessions.set(id, session);
+    return json(res, 200, { sessionId: id });
+  }
+
+  if (req.url === "/term/stdin") {
+    const body = await readBody(req);
+    if (body === null) return json(res, 400, { error: "invalid json" });
+    const id = String(body.sessionId || "");
+    const s = termSessions.get(id);
+    if (!s) return json(res, 404, { error: "Session not found or expired." });
+    if (!s.running) return json(res, 200, { ok: true, closed: true });
+    const data = typeof body.data === "string" ? body.data : "";
+    s.child.stdin.write(data + "\n");
+    return json(res, 200, { ok: true });
+  }
+
+  if (req.url === "/term/poll") {
+    const body = await readBody(req);
+    if (body === null) return json(res, 400, { error: "invalid json" });
+    const id = String(body.sessionId || "");
+    const s = termSessions.get(id);
+    if (!s) return json(res, 404, { error: "Session not found or expired." });
+    return json(res, 200, {
+      running: s.running,
+      exitCode: s.exitCode,
+      stdout: s.stdout,
+      stderr: s.stderr,
+    });
+  }
+
+  if (req.url === "/term/kill") {
+    const body = await readBody(req);
+    if (body === null) return json(res, 400, { error: "invalid json" });
+    const id = String(body.sessionId || "");
+    const s = termSessions.get(id);
+    if (s) {
+      if (s.running) s.child.kill("SIGKILL");
+      cleanupTermSession(id);
+    }
+    return json(res, 200, { ok: true });
   }
 
   if (req.url === "/code") {

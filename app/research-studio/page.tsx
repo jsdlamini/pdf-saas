@@ -1230,14 +1230,33 @@ export default function ResearchStudioPage() {
   const [terminalStdin, setTerminalStdin] = useState("");
   const [terminalOutput, setTerminalOutput] = useState("");
   const [terminalBusy, setTerminalBusy] = useState(false);
+  const [termSessionId, setTermSessionId] = useState<string | null>(null);
+  const [termRunning, setTermRunning] = useState(false);
   const terminalInputRef = useRef<HTMLInputElement | null>(null);
   const terminalScrollRef = useRef<HTMLDivElement | null>(null);
+  const termSessionRef = useRef<string | null>(null);
+  const termPollTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const termSeenRef = useRef(0);
 
   // Keep the terminal scrolled to the latest line as output streams in.
   useEffect(() => {
     const el = terminalScrollRef.current;
     if (el) el.scrollTop = el.scrollHeight;
   }, [terminalOutput, terminalOpen]);
+
+  // Kill any live terminal session if the studio unmounts.
+  useEffect(() => {
+    return () => {
+      const id = termSessionRef.current;
+      if (id) {
+        void fetch("/api/terminal/kill", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ sessionId: id }),
+        }).catch(() => {});
+      }
+    };
+  }, []);
   const [compiledPdfFileName, setCompiledPdfFileName] = useState("compiled-main.pdf");
   const [compileMainLog, setCompileMainLog] = useState("");
   const [compileMainLogFileName, setCompileMainLogFileName] = useState("main.log");
@@ -3460,37 +3479,110 @@ export default function ResearchStudioPage() {
     await pushFilesToGithub(githubRepo, false, true);
   }
 
+  function stopTerminalSession() {
+    if (termPollTimerRef.current) {
+      clearTimeout(termPollTimerRef.current);
+      termPollTimerRef.current = null;
+    }
+    const id = termSessionRef.current;
+    if (id) {
+      termSessionRef.current = null;
+      void fetch("/api/terminal/kill", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ sessionId: id }),
+      }).catch(() => {});
+    }
+    setTermSessionId(null);
+    setTermRunning(false);
+  }
+
+  async function pollTerminal(sessionId: string) {
+    if (termSessionRef.current !== sessionId) return;
+    try {
+      const res = await fetch("/api/terminal/poll", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ sessionId }),
+      });
+      const data = (await res.json().catch(() => null)) as { running?: boolean; exitCode?: number; stdout?: string; stderr?: string; error?: string } | null;
+      if (!data || data.error) {
+        if (data?.error && !String(data.error).includes("not found")) {
+          setTerminalOutput((prev) => `${prev}${data.error}\n`);
+        }
+      } else {
+        const chunk = `${data.stdout || ""}${data.stderr || ""}`;
+        if (chunk.length > termSeenRef.current) {
+          const fresh = chunk.slice(termSeenRef.current);
+          termSeenRef.current = chunk.length;
+          setTerminalOutput((prev) => `${prev}${fresh}`);
+        }
+        if (!data.running) {
+          setTerminalOutput((prev) => `${prev}[exit ${data.exitCode ?? 0}]\n`);
+          termSessionRef.current = null;
+          termSeenRef.current = 0;
+          setTermSessionId(null);
+          setTermRunning(false);
+          return;
+        }
+      }
+    } catch { /* transient poll error; keep polling */ }
+    termPollTimerRef.current = setTimeout(() => void pollTerminal(sessionId), 150);
+  }
+
   async function runTerminalCommand() {
     const command = terminalCommand.trim();
     if (!command || terminalBusy) return;
+
+    // If a program is still running, Enter sends stdin instead of a new command.
+    if (termRunning) {
+      void sendTerminalStdin();
+      return;
+    }
+
     setTerminalBusy(true);
     setTerminalOutput((prev) => `${prev}$ ${command}\n`);
+    setTerminalCommand("");
     try {
-      const res = await fetch("/api/run-command", {
+      const res = await fetch("/api/terminal", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           command,
           files: projectEntries.filter((e) => e.kind === "file").map((e) => ({ path: e.path, content: e.content })),
           folders: projectEntries.filter((e) => e.kind === "folder").map((e) => e.path),
-          stdin: terminalStdin,
         }),
       });
-      const data = (await res.json().catch(() => null)) as { stdout?: string; stderr?: string; exitCode?: number; error?: string } | null;
-      if (!data) {
-        setTerminalOutput((prev) => `${prev}No response from server.\n`);
-      } else if (data.error) {
-        setTerminalOutput((prev) => `${prev}${data.error}\n`);
-      } else {
-        const out = [data.stdout, data.stderr].filter(Boolean).join("\n");
-        setTerminalOutput((prev) => `${prev}${out || "(no output)"}\n[exit ${data.exitCode ?? "?"}]\n`);
+      const data = (await res.json().catch(() => null)) as { sessionId?: string; error?: string } | null;
+      if (!data || data.error) {
+        setTerminalOutput((prev) => `${prev}${data?.error || "No response from server."}\n`);
+      } else if (data.sessionId) {
+        termSessionRef.current = data.sessionId;
+        termSeenRef.current = 0;
+        setTermSessionId(data.sessionId);
+        setTermRunning(true);
+        termPollTimerRef.current = setTimeout(() => void pollTerminal(data.sessionId!), 120);
       }
     } catch (error) {
       setTerminalOutput((prev) => `${prev}Error: ${error instanceof Error ? error.message : "failed"}\n`);
     } finally {
       setTerminalBusy(false);
-      setTerminalCommand("");
     }
+  }
+
+  async function sendTerminalStdin() {
+    const sessionId = termSessionRef.current;
+    if (!sessionId) return;
+    const line = terminalStdin;
+    setTerminalStdin("");
+    setTerminalOutput((prev) => `${prev}${line}\n`);
+    try {
+      await fetch("/api/terminal/stdin", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ sessionId, data: line }),
+      });
+    } catch { /* ignore */ }
   }
 
   async function openFromGithub() {
@@ -7764,7 +7856,8 @@ export default function ResearchStudioPage() {
         >
           <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "5px 10px", borderBottom: "1px solid #222", color: "#999", fontSize: 11 }}>
             <span style={{ fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.06em", color: "#ccc" }}>Terminal</span>
-            <button type="button" onClick={() => setTerminalOpen(false)} aria-label="Close terminal" style={{ marginLeft: "auto", background: "none", border: "none", color: "#999", cursor: "pointer", fontSize: 16 }}>×</button>
+            {termRunning ? <span style={{ color: "#4ade80" }}>● running</span> : null}
+            <button type="button" onClick={() => { stopTerminalSession(); setTerminalOpen(false); }} aria-label="Close terminal" style={{ marginLeft: "auto", background: "none", border: "none", color: "#999", cursor: "pointer", fontSize: 16 }}>×</button>
           </div>
           <div
             ref={terminalScrollRef}
@@ -7773,14 +7866,14 @@ export default function ResearchStudioPage() {
           >
             <pre style={{ margin: 0, whiteSpace: "pre-wrap", wordBreak: "break-word" }}>{terminalOutput}</pre>
             <div style={{ display: "flex", alignItems: "center" }}>
-              <span style={{ color: "#0f0" }}>$&nbsp;</span>
+              <span style={{ color: "#0f0" }}>{termRunning ? "» " : "$ "}</span>
               <input
                 ref={terminalInputRef}
-                value={terminalCommand}
-                onChange={(e) => setTerminalCommand(e.target.value)}
+                value={termRunning ? terminalStdin : terminalCommand}
+                onChange={(e) => (termRunning ? setTerminalStdin(e.target.value) : setTerminalCommand(e.target.value))}
                 onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); void runTerminalCommand(); } }}
-                placeholder="type a command…"
-                aria-label="Terminal command"
+                placeholder={termRunning ? "type input for the program, then Enter…" : "type a command…"}
+                aria-label={termRunning ? "Program input" : "Terminal command"}
                 autoFocus
                 spellCheck={false}
                 autoComplete="off"
@@ -7788,18 +7881,9 @@ export default function ResearchStudioPage() {
                 style={{ flex: 1, appearance: "none", WebkitAppearance: "none", background: "transparent", border: "none", boxShadow: "none", outline: "none", color: "#f0f0f0", caretColor: "#0f0", fontFamily: "var(--font-mono)", fontSize: 13, padding: 0 }}
               />
             </div>
-            <div style={{ display: "flex", alignItems: "center", marginTop: 6 }}>
-              <span style={{ color: "#666", fontSize: 12 }}>stdin&nbsp;</span>
-              <input
-                value={terminalStdin}
-                onChange={(e) => setTerminalStdin(e.target.value)}
-                placeholder="(optional) input for the program — e.g. 5 7"
-                aria-label="Program input (stdin)"
-                spellCheck={false}
-                autoComplete="off"
-                style={{ flex: 1, appearance: "none", WebkitAppearance: "none", background: "transparent", border: "none", boxShadow: "none", outline: "none", color: "#cbd5e1", caretColor: "#0f0", fontFamily: "var(--font-mono)", fontSize: 12, padding: 0 }}
-              />
-            </div>
+            {termRunning ? (
+              <div style={{ fontSize: 11, color: "#64748b", marginTop: 4 }}>Program is running — type its input and press Enter. Closing the terminal stops it.</div>
+            ) : null}
           </div>
         </div>
       ) : null}
