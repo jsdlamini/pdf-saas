@@ -1,4 +1,5 @@
 import { db, ensureMigrated } from "@/lib/db";
+import { clerkClient } from "@clerk/nextjs/server";
 
 export async function ensureUserRolesTable() {
   await ensureMigrated();
@@ -37,4 +38,32 @@ export async function setUserRole(userId: string, role: "admin" | "user", email:
      ON CONFLICT (user_id) DO UPDATE SET role = $3, updated_at = NOW()`,
     [userId, email, role]
   );
+}
+
+export async function getVerifiedEmail(userId: string): Promise<string> {
+  try {
+    const client = await clerkClient();
+    const user = await client.users.getUser(userId);
+    const primary = user.primaryEmailAddress?.emailAddress || "";
+    return user.primaryEmailAddress?.verification?.status === "verified" ? primary : "";
+  } catch {
+    return "";
+  }
+}
+
+// A lecturer is an admin, or someone whose verified email matches a configured
+// institutional domain (e.g. "uneswa.ac.sz" in wiserfiles_settings
+// 'lecturer_email_domains').
+export async function isLecturerOrAdmin(userId: string): Promise<boolean> {
+  const role = await getUserRole(userId);
+  if (role === "admin") return true;
+  const email = await getVerifiedEmail(userId);
+  if (!email) return false;
+  const r = await db.query(`SELECT value FROM wiserfiles_settings WHERE key = 'lecturer_email_domains'`);
+  const domains = (r.rows[0]?.value || "")
+    .split(",")
+    .map((s: string) => s.trim().toLowerCase())
+    .filter(Boolean);
+  if (!domains.length) return false;
+  return domains.some((d: string) => email.toLowerCase().endsWith(d));
 }

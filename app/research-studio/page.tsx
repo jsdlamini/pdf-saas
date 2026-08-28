@@ -3295,12 +3295,12 @@ export default function ResearchStudioPage() {
       const data = (await res.json()) as { cohortId: number; seasonId: number; entries: Array<{ userId: string; displayName: string; points: number; solved: number }>; me: { displayName: string; optedIn: boolean } };
       setLeaderboard(data);
       setOptInName(data.me?.displayName || "");
-      // Fetch the current student ID to pre-fill the opt-in form.
+      // Fetch the current student ID (lives on the enrollment, not consent).
       try {
-        const oi = await fetch("/api/challenges/opt-in");
-        const oiData = (await oi.json()) as { studentId?: string };
-        setOptInStudentId(oiData.studentId || "");
-        setStudentIdLocked(Boolean(oiData.studentId));
+        const en = await fetch("/api/enrollment");
+        const enData = (await en.json()) as { current?: { studentId?: string } } | null;
+        setOptInStudentId(enData?.current?.studentId || "");
+        setStudentIdLocked(Boolean(enData?.current?.studentId));
       } catch { /* ignore */ }
     } catch { /* ignore */ }
   }
@@ -3308,19 +3308,33 @@ export default function ResearchStudioPage() {
   async function saveOptIn() {
     setOptInBusy(true);
     try {
+      // 1) Leaderboard consent (display name + opt-in).
       const res = await fetch("/api/challenges/opt-in", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ displayName: optInName, studentId: optInStudentId, optedIn: true }),
+        body: JSON.stringify({ displayName: optInName, optedIn: true }),
       });
-      const data = (await res.json().catch(() => null)) as { ok?: boolean; error?: string; studentId?: string } | null;
+      const data = (await res.json().catch(() => null)) as { ok?: boolean; error?: string } | null;
       if (data?.error) {
         setCompileNotice(data.error);
         return;
       }
+      // 2) Student ID (set-once) — separate from consent.
+      if (!studentIdLocked && optInStudentId.trim()) {
+        const en = await fetch("/api/enrollment", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ studentId: optInStudentId.trim() }),
+        });
+        const enData = (await en.json().catch(() => null)) as { ok?: boolean; error?: string } | null;
+        if (enData?.error) {
+          setCompileNotice(enData.error);
+          return;
+        }
+      }
       setOptInOpen(false);
       await loadLeaderboard();
-      setCompileNotice("Leaderboard updated.");
+      setCompileNotice("Leaderboard settings saved.");
     } catch {
       setCompileNotice("Could not save leaderboard settings.");
     } finally {
