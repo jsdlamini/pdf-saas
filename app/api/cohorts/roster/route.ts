@@ -1,6 +1,6 @@
 import { auth } from "@clerk/nextjs/server";
 import { db, ensureMigrated } from "@/lib/db";
-import { getUserRole, isLecturerOrAdmin } from "@/lib/user-roles";
+import { isCohortLecturer } from "@/lib/user-roles";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -17,7 +17,7 @@ export async function GET(request: Request) {
   if (!cohortId) return jsonError("cohortId is required.", 400);
 
   await ensureMigrated();
-  if (!(await isLecturerOrAdmin(userId))) return jsonError("Lecturer access required.", 403);
+  if (!(await isCohortLecturer(userId, cohortId))) return jsonError("Lecturer access required.", 403);
 
   const rows = await db.query(
     `SELECT student_id, claimed_by, claimed_at FROM wiserfiles_roster WHERE cohort_id = $1 ORDER BY student_id`,
@@ -38,9 +38,8 @@ export async function POST(request: Request) {
   if (!body?.cohortId || typeof body.rosterText !== "string") return jsonError("cohortId and rosterText are required.", 400);
 
   await ensureMigrated();
-  if (!(await isLecturerOrAdmin(userId))) return jsonError("Lecturer access required.", 403);
-
   const cohortId = Number(body.cohortId);
+  if (!(await isCohortLecturer(userId, cohortId))) return jsonError("Lecturer access required.", 403);
 
   const lines = body.rosterText
     .split(/\r?\n/)

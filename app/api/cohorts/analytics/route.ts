@@ -1,6 +1,6 @@
 import { auth } from "@clerk/nextjs/server";
 import { db, ensureMigrated } from "@/lib/db";
-import { isLecturerOrAdmin } from "@/lib/user-roles";
+import { isCohortLecturer } from "@/lib/user-roles";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -19,7 +19,7 @@ export async function GET(request: Request) {
   if (!cohortId) return jsonError("cohortId is required.", 400);
 
   await ensureMigrated();
-  if (!(await isLecturerOrAdmin(userId))) return jsonError("Lecturer access required.", 403);
+  if (!(await isCohortLecturer(userId, cohortId))) return jsonError("Lecturer access required.", 403);
 
   // Per-challenge: attempts and pass rate (graded submissions only).
   const perChallenge = await db.query(
