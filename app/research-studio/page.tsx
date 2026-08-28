@@ -1227,7 +1227,6 @@ export default function ResearchStudioPage() {
   const [githubPushed, setGithubPushed] = useState<Record<string, string>>({});
   const [terminalOpen, setTerminalOpen] = useState(false);
   const [terminalCommand, setTerminalCommand] = useState("");
-  const [terminalStdin, setTerminalStdin] = useState("");
   const [terminalOutput, setTerminalOutput] = useState("");
   const [terminalBusy, setTerminalBusy] = useState(false);
   const [termSessionId, setTermSessionId] = useState<string | null>(null);
@@ -3530,52 +3529,45 @@ export default function ResearchStudioPage() {
     termPollTimerRef.current = setTimeout(() => void pollTerminal(sessionId), 150);
   }
 
-  async function runTerminalCommand() {
-    const command = terminalCommand.trim();
-    if (!command || terminalBusy) return;
-
-    // If a program is still running, Enter sends stdin instead of a new command.
-    if (termRunning) {
-      void sendTerminalStdin();
-      return;
-    }
-
+  async function ensureTerminalSession(): Promise<string | null> {
+    if (termSessionRef.current) return termSessionRef.current;
     setTerminalBusy(true);
-    setTerminalOutput((prev) => `${prev}$ ${command}\n`);
-    setTerminalCommand("");
     try {
       const res = await fetch("/api/terminal", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          command,
           files: projectEntries.filter((e) => e.kind === "file").map((e) => ({ path: e.path, content: e.content })),
           folders: projectEntries.filter((e) => e.kind === "folder").map((e) => e.path),
         }),
       });
       const data = (await res.json().catch(() => null)) as { sessionId?: string; error?: string } | null;
-      if (!data || data.error) {
-        setTerminalOutput((prev) => `${prev}${data?.error || "No response from server."}\n`);
-      } else if (data.sessionId) {
-        termSessionRef.current = data.sessionId;
-        termSeenRef.current = 0;
-        setTermSessionId(data.sessionId);
-        setTermRunning(true);
-        termPollTimerRef.current = setTimeout(() => void pollTerminal(data.sessionId!), 120);
+      if (!data || data.error || !data.sessionId) {
+        setTerminalOutput((prev) => `${prev}${data?.error || "Could not start the terminal."}\n`);
+        return null;
       }
+      termSessionRef.current = data.sessionId;
+      termSeenRef.current = 0;
+      setTermSessionId(data.sessionId);
+      setTermRunning(true);
+      termPollTimerRef.current = setTimeout(() => void pollTerminal(data.sessionId!), 120);
+      return data.sessionId;
     } catch (error) {
       setTerminalOutput((prev) => `${prev}Error: ${error instanceof Error ? error.message : "failed"}\n`);
+      return null;
     } finally {
       setTerminalBusy(false);
     }
   }
 
-  async function sendTerminalStdin() {
-    const sessionId = termSessionRef.current;
+  // The terminal is a real shell: every typed line is written to the shell's
+  // stdin, and the PTY echoes it back into the transcript (no manual echo).
+  async function runTerminalCommand() {
+    const line = terminalCommand;
+    if (!line.trim() && !termRunning) return;
+    setTerminalCommand("");
+    const sessionId = await ensureTerminalSession();
     if (!sessionId) return;
-    const line = terminalStdin;
-    setTerminalStdin("");
-    setTerminalOutput((prev) => `${prev}${line}\n`);
     try {
       await fetch("/api/terminal/stdin", {
         method: "POST",
@@ -7866,14 +7858,14 @@ export default function ResearchStudioPage() {
           >
             <pre style={{ margin: 0, whiteSpace: "pre-wrap", wordBreak: "break-word" }}>{terminalOutput}</pre>
             <div style={{ display: "flex", alignItems: "center" }}>
-              <span style={{ color: "#0f0" }}>{termRunning ? "» " : "$ "}</span>
+              <span style={{ color: "#0f0" }}>$&nbsp;</span>
               <input
                 ref={terminalInputRef}
-                value={termRunning ? terminalStdin : terminalCommand}
-                onChange={(e) => (termRunning ? setTerminalStdin(e.target.value) : setTerminalCommand(e.target.value))}
+                value={terminalCommand}
+                onChange={(e) => setTerminalCommand(e.target.value)}
                 onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); void runTerminalCommand(); } }}
-                placeholder={termRunning ? "type input for the program, then Enter…" : "type a command…"}
-                aria-label={termRunning ? "Program input" : "Terminal command"}
+                placeholder="type a command…"
+                aria-label="Terminal input"
                 autoFocus
                 spellCheck={false}
                 autoComplete="off"
@@ -7882,7 +7874,7 @@ export default function ResearchStudioPage() {
               />
             </div>
             {termRunning ? (
-              <div style={{ fontSize: 11, color: "#64748b", marginTop: 4 }}>Program is running — type its input and press Enter. Closing the terminal stops it.</div>
+              <div style={{ fontSize: 11, color: "#64748b", marginTop: 4 }}>Shell is running — type commands or program input, then Enter. Closing the terminal stops it.</div>
             ) : null}
           </div>
         </div>
