@@ -1312,6 +1312,7 @@ export default function ResearchStudioPage() {
   const [treeContextActiveIndex, setTreeContextActiveIndex] = useState(0);
   const [autoSaveStatus, setAutoSaveStatus] = useState<"saved" | "unsaved" | "saving">("saved");
   const [codeRunBusy, setCodeRunBusy] = useState(false);
+  const [codeStdin, setCodeStdin] = useState("");
   const [autoSaveTimestamp, setAutoSaveTimestamp] = useState<string | null>(null);
 
   // ── AI writing / citation / history state ─────
@@ -3002,6 +3003,7 @@ export default function ResearchStudioPage() {
   const [optInOpen, setOptInOpen] = useState(false);
   const [optInName, setOptInName] = useState("");
   const [optInStudentId, setOptInStudentId] = useState("");
+  const [studentIdLocked, setStudentIdLocked] = useState(false);
   const [optInBusy, setOptInBusy] = useState(false);
   const [joinCode, setJoinCode] = useState("");
   const [progressData, setProgressData] = useState<{ challenges: Array<{ id: number; slug: string; language: string }>; members: Array<{ userId: string; displayName: string; statuses: string[] }> } | null>(null);
@@ -3211,9 +3213,9 @@ export default function ResearchStudioPage() {
     }
   }
 
-  async function openChallengesPanel() {
+  async function openChallengesPanel(tab: "challenges" | "leaderboard" | "progress" = "challenges") {
     setChallengesOpen(true);
-    setChallengeTab("challenges");
+    setChallengeTab(tab);
     void loadLeaderboard();
     setChallengeResults(null);
     try {
@@ -3275,6 +3277,7 @@ export default function ResearchStudioPage() {
         const oi = await fetch("/api/challenges/opt-in");
         const oiData = (await oi.json()) as { studentId?: string };
         setOptInStudentId(oiData.studentId || "");
+        setStudentIdLocked(Boolean(oiData.studentId));
       } catch { /* ignore */ }
     } catch { /* ignore */ }
   }
@@ -4353,7 +4356,7 @@ export default function ResearchStudioPage() {
       const response = await fetch("/api/run-code", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ language: editorMode, files, mainPath: activeEntry.path }),
+        body: JSON.stringify({ language: editorMode, files, mainPath: activeEntry.path, stdin: codeStdin }),
       });
 
       const result = (await response.json()) as { output?: string; error?: string; exitCode?: number; message?: string };
@@ -5958,6 +5961,16 @@ export default function ResearchStudioPage() {
               <span style={{ fontSize: 11, fontWeight: 600, color: "var(--text-secondary, #94a3b8)" }}>
                 {editorMode === "python" ? "Python" : "C++"}
               </span>
+              <input
+                value={codeStdin}
+                onChange={(e) => setCodeStdin(e.target.value)}
+                placeholder="stdin…"
+                aria-label="Program input (stdin)"
+                title="Input for the program (e.g. 5 7). Sent to stdin when you Run."
+                spellCheck={false}
+                autoComplete="off"
+                style={{ width: 140, height: 28, padding: "0 8px", borderRadius: 6, border: "1px solid var(--border, #334155)", background: "var(--background, transparent)", color: "var(--foreground, #e2e8f0)", fontSize: 12, fontFamily: "var(--font-mono)", outline: "none" }}
+              />
               <button
                 type="button"
                 onClick={() => void compileProject()}
@@ -6166,9 +6179,6 @@ export default function ResearchStudioPage() {
               { label: <>Open Project</>, action: () => { setOpenMenu(""); openProjectsBoard(); } },
               "-",
               { label: <>Save</>, action: () => { setOpenMenu(""); saveCurrentProject(); } },
-              ...(isCodeMode ? [
-                { label: <>Challenges</>, action: () => { setOpenMenu(""); void openChallengesPanel(); } },
-              ] as any[] : []),
               { label: <>Download ZIP</>, action: () => { setOpenMenu(""); void downloadProjectBundle(); } },
               ...(!isCodeMode ? [
                 "-",
@@ -6242,6 +6252,14 @@ export default function ResearchStudioPage() {
               { label: "Review paper (peer review)", action: () => { setOpenMenu(""); void runAiReview(); } },
             ]
           },
+          ...(isCodeMode ? [{
+            label: "Challenges", key: "challenges", items: [
+              { label: "Open Challenges", action: () => { setOpenMenu(""); void openChallengesPanel(); } },
+              "-",
+              { label: "Leaderboard", action: () => { setOpenMenu(""); void openChallengesPanel("leaderboard"); } },
+              { label: "Progress (lecturer)", action: () => { setOpenMenu(""); void openChallengesPanel("progress"); } },
+            ]
+          }] as any[] : []),
           {
             label: "View", key: "view", items: [
               { label: rightPaneCollapsed ? (isCodeMode ? "Show Output" : "Show PDF Preview") : (isCodeMode ? "Hide Output" : "Hide PDF Preview"), action: () => { setOpenMenu(""); setRightPaneCollapsed(!rightPaneCollapsed); } },
@@ -7511,9 +7529,14 @@ export default function ResearchStudioPage() {
                       <input
                         value={optInStudentId}
                         onChange={(e) => setOptInStudentId(e.target.value)}
-                        placeholder="Student ID — you can only set this once"
-                        className="h-9 w-full rounded-md border bg-background px-2 text-sm"
+                        disabled={studentIdLocked}
+                        placeholder={studentIdLocked ? "Student ID (locked)" : "Student ID — you can only set this once"}
+                        title={studentIdLocked ? "Your student ID is locked. Only your teacher can change it." : undefined}
+                        className="h-9 w-full rounded-md border bg-background px-2 text-sm disabled:cursor-not-allowed disabled:opacity-60"
                       />
+                      {studentIdLocked ? (
+                        <p className="text-xs text-muted-foreground">🔒 Student ID locked — only your teacher can change it.</p>
+                      ) : null}
                       <div className="flex gap-2">
                         <Button size="sm" onClick={() => void saveOptIn()} disabled={optInBusy}>{optInBusy ? "Saving…" : "Save"}</Button>
                         <Button size="sm" variant="outline" onClick={() => setOptInOpen(false)}>Cancel</Button>
