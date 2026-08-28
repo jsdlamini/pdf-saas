@@ -131,7 +131,7 @@ async function runPython(mainPath, tempDir, stdin = "") {
     if (/\bEOFError\b/.test(stderr)) {
       return {
         output: "",
-        error: "Your program asked for input but none was provided — add input and run again.",
+        error: "Your program asked for input but none was provided — run it in the Terminal and type the input there.",
         exitCode: err.code ?? 1,
         needsInput: true,
       };
@@ -291,7 +291,7 @@ const server = createServer(async (req, res) => {
       if (usesStdin && !stdin) {
         result.needsInput = true;
         if (language === "cpp" && !result.output && !result.error) {
-          result.error = "Your program reads input (cin/scanf) but none was provided — add input and run again.";
+          result.error = "Your program reads input (cin/scanf) but none was provided — run it in the Terminal and type the input there.";
         }
       }
       json(res, 200, result);
