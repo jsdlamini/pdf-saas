@@ -1312,7 +1312,6 @@ export default function ResearchStudioPage() {
   const [treeContextActiveIndex, setTreeContextActiveIndex] = useState(0);
   const [autoSaveStatus, setAutoSaveStatus] = useState<"saved" | "unsaved" | "saving">("saved");
   const [codeRunBusy, setCodeRunBusy] = useState(false);
-  const [codeStdin, setCodeStdin] = useState("");
   const [autoSaveTimestamp, setAutoSaveTimestamp] = useState<string | null>(null);
 
   // ── AI writing / citation / history state ─────
@@ -3237,7 +3236,7 @@ export default function ResearchStudioPage() {
     setActiveChallenge({ id: ch.id, slug: ch.slug, language: ch.language, statement_md: ch.statement_md, test_mode: ch.test_mode });
     setChallengeResults(null);
     setChallengesOpen(false);
-    setCompileNotice(`Challenge loaded: ${ch.slug}. Edit and run tests.`);
+    setCompileNotice(`Challenge loaded: ${ch.slug}. Edit your code, then click "Submit for grading" to earn points.`);
   }
 
   async function runChallengeTests() {
@@ -3268,7 +3267,8 @@ export default function ResearchStudioPage() {
 
   async function loadLeaderboard() {
     try {
-      const res = await fetch("/api/leaderboard");
+      const lang = editorMode === "python" || editorMode === "cpp" ? editorMode : "";
+      const res = await fetch(`/api/leaderboard${lang ? `?language=${lang}` : ""}`);
       const data = (await res.json()) as { cohortId: number; seasonId: number; entries: Array<{ userId: string; displayName: string; points: number; solved: number }>; me: { displayName: string; optedIn: boolean } };
       setLeaderboard(data);
       setOptInName(data.me?.displayName || "");
@@ -4356,7 +4356,7 @@ export default function ResearchStudioPage() {
       const response = await fetch("/api/run-code", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ language: editorMode, files, mainPath: activeEntry.path, stdin: codeStdin }),
+        body: JSON.stringify({ language: editorMode, files, mainPath: activeEntry.path }),
       });
 
       const result = (await response.json()) as { output?: string; error?: string; exitCode?: number; message?: string };
@@ -5961,16 +5961,6 @@ export default function ResearchStudioPage() {
               <span style={{ fontSize: 11, fontWeight: 600, color: "var(--text-secondary, #94a3b8)" }}>
                 {editorMode === "python" ? "Python" : "C++"}
               </span>
-              <input
-                value={codeStdin}
-                onChange={(e) => setCodeStdin(e.target.value)}
-                placeholder="stdin…"
-                aria-label="Program input (stdin)"
-                title="Input for the program (e.g. 5 7). Sent to stdin when you Run."
-                spellCheck={false}
-                autoComplete="off"
-                style={{ width: 140, height: 28, padding: "0 8px", borderRadius: 6, border: "1px solid var(--border, #334155)", background: "var(--background, transparent)", color: "var(--foreground, #e2e8f0)", fontSize: 12, fontFamily: "var(--font-mono)", outline: "none" }}
-              />
               <button
                 type="button"
                 onClick={() => void compileProject()}
@@ -6676,6 +6666,45 @@ export default function ResearchStudioPage() {
                 </>
               ) : null}
               {findRegexError ? <span style={{ fontSize: 10, color: "#ef4444" }}>{findRegexError}</span> : null}
+            </div>
+          ) : null}
+
+          {/* Challenge mode banner */}
+          {isCodeMode && activeChallenge ? (
+            <div style={{ borderBottom: "1px solid var(--border-color, #334155)", background: "var(--background-elevated, rgba(30, 41, 59, 0.5))", padding: "8px 12px", fontSize: 12 }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+                <span style={{ fontWeight: 700, color: "var(--text-primary, #e2e8f0)" }}>Challenge: {activeChallenge.slug}</span>
+                <span style={{ fontSize: 11, color: "var(--text-muted, #64748b)" }}>{activeChallenge.language.toUpperCase()} · {activeChallenge.test_mode === "io" ? "input/output" : activeChallenge.test_mode} grading</span>
+                <button type="button" onClick={() => { setChallengesOpen(true); }} className="studio-btn studio-btn-ghost" style={{ height: 24, fontSize: 11, padding: "0 8px" }}>View statement</button>
+                <button type="button" onClick={() => void runChallengeTests()} disabled={challengeBusy} className="studio-btn studio-btn-primary" style={{ height: 24, fontSize: 11, padding: "0 10px", background: "#4ade80", color: "#000" }}>
+                  {challengeBusy ? "Grading…" : "Submit for grading"}
+                </button>
+                <button type="button" onClick={() => { setActiveChallenge(null); setChallengeResults(null); }} className="studio-btn studio-btn-ghost" style={{ height: 24, fontSize: 11, padding: "0 8px", marginLeft: "auto" }}>Exit challenge</button>
+              </div>
+              <p style={{ margin: "4px 0 0", fontSize: 11, color: "var(--text-muted, #94a3b8)" }}>
+                Edit the starter code in the editor, then submit. Passing every hidden test awards points and ranks you on the leaderboard.
+              </p>
+              {challengeResults ? (
+                <div style={{ marginTop: 6 }}>
+                  <span style={{ fontWeight: 600, color: challengeResults.passed ? "#4ade80" : "#f87171" }}>
+                    {challengeResults.passed
+                      ? `✓ Passed all ${challengeResults.total} test${challengeResults.total === 1 ? "" : "s"}${challengeResults.firstSolve ? " — first solve, points awarded!" : " — check the leaderboard."}`
+                      : `✗ ${challengeResults.results.filter((r) => r.ok).length}/${challengeResults.total} test${challengeResults.total === 1 ? "" : "s"} passing`}
+                  </span>
+                  {challengeResults.results.map((r, i) => (
+                    <div key={i} style={{ marginTop: 4, padding: "6px 8px", borderRadius: 6, border: "1px solid var(--border-color, #334155)", fontSize: 11 }}>
+                      <span style={{ fontWeight: 600 }}>Test {i + 1}: {r.ok ? "✓ pass" : "✗ fail"}</span>
+                      {!r.ok ? (
+                        <>
+                          {r.input ? <div style={{ color: "var(--text-muted, #94a3b8)" }}>input: {r.input}</div> : null}
+                          <div style={{ color: "var(--text-muted, #94a3b8)" }}>expected: {r.expected}</div>
+                          <div>got: {r.actual || "(empty)"}</div>
+                        </>
+                      ) : null}
+                    </div>
+                  ))}
+                </div>
+              ) : null}
             </div>
           ) : null}
 
@@ -7492,7 +7521,7 @@ export default function ResearchStudioPage() {
                   {challenges.length === 0 ? (
                     <p className="text-sm text-muted-foreground">Loading…</p>
                   ) : (
-                    challenges.map((ch) => (
+                    challenges.filter((ch) => ch.language === editorMode).map((ch) => (
                       <button
                         key={ch.id}
                         type="button"
