@@ -3215,3 +3215,11 @@ html[data-theme="light"] .studio-dark ::-webkit-scrollbar-thumb {
   .studio-dashboard-title,
   .studio-dashboard-subtitle { animation: none; }
 }
+
+/* Coding challenge statement markdown */
+.challenge-markdown p { margin: 0 0 0.5rem; }
+.challenge-markdown p:last-child { margin-bottom: 0; }
+.challenge-markdown code { font-family: var(--font-mono); font-size: 0.85em; background: rgba(100, 116, 139, 0.15); border-radius: 4px; padding: 1px 5px; }
+.challenge-markdown pre { background: rgba(15, 23, 42, 0.06); border-radius: 8px; padding: 8px 10px; overflow-x: auto; margin: 0.5rem 0; }
+.challenge-markdown pre code { background: transparent; padding: 0; }
+.challenge-markdown ul, .challenge-markdown ol { margin: 0 0 0.5rem; padding-left: 1.25rem; }

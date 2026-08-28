@@ -37,6 +37,7 @@ export async function POST(request: Request) {
     command?: string;
     files?: Array<{ path: string; content: string }>;
     folders?: string[];
+    stdin?: string;
   } | null;
   const command = (body?.command || "").trim();
   if (!command) return jsonError("Enter a command.", 400);
@@ -45,7 +46,7 @@ export async function POST(request: Request) {
     const res = await fetch(`${SANDBOX_URL}/run`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ command, files: body?.files ?? [], folders: body?.folders ?? [] }),
+      body: JSON.stringify({ command, files: body?.files ?? [], folders: body?.folders ?? [], stdin: body?.stdin ?? "" }),
     });
     const data = (await res.json().catch(() => null)) as {
       exitCode?: number;

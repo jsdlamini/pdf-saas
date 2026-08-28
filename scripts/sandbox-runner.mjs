@@ -192,6 +192,7 @@ const server = createServer(async (req, res) => {
     const command = String(body.command || "").trim();
     const files = Array.isArray(body.files) ? body.files : [];
     const folders = Array.isArray(body.folders) ? body.folders : [];
+    const stdin = typeof body.stdin === "string" ? body.stdin : "";
 
     // No shell is involved (execFile), so pipes/redirects would be passed as
     // literal arguments and fail confusingly. Reject them with a clear message.
@@ -217,11 +218,10 @@ const server = createServer(async (req, res) => {
         }
       }
       try {
-        const result = await execFileAsync(name, argv.slice(1), {
-          cwd: tempDir,
-          env: sandboxedEnv(tempDir),
+        const result = await execWithStdin(name, argv.slice(1), {
+          stdin,
           timeout: TIMEOUT_MS,
-          maxBuffer: MAX_OUTPUT,
+          env: sandboxedEnv(tempDir),
         });
         json(res, 200, { exitCode: 0, stdout: result.stdout.slice(0, MAX_OUTPUT), stderr: result.stderr.slice(0, MAX_OUTPUT) });
       } catch (err) {
