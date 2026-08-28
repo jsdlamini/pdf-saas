@@ -17,7 +17,7 @@ export async function GET() {
   await seedChallenges();
 
   const res = await db.query(
-    `SELECT id, slug, language, difficulty, points, statement_md, starter_code
+    `SELECT id, slug, language, difficulty, points, statement_md, starter_code, test_mode
      FROM wiserfiles_challenges
      ORDER BY CASE language WHEN 'python' THEN 0 ELSE 1 END, CASE difficulty WHEN 'easy' THEN 0 WHEN 'medium' THEN 1 ELSE 2 END, id`
   );

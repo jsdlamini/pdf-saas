@@ -180,6 +180,7 @@ const MIGRATIONS: string[] = [
     opted_in BOOLEAN NOT NULL DEFAULT TRUE,
     PRIMARY KEY (user_id, cohort_id)
   )`,
+  `ALTER TABLE wiserfiles_leaderboard_opt_in ADD COLUMN IF NOT EXISTS student_id TEXT`,
 ];
 
 let migrationPromise: Promise<void> | null = null;

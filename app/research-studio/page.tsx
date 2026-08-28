@@ -22,6 +22,8 @@ import { mergeAssetContents, unrecoverableAssetPaths, isBinaryAssetPath } from "
 import { renderPdfFirstPagePreview } from "@/lib/transforms/rasterize";
 import { classifyUpload, joinUploadPath } from "@/lib/project-upload";
 import { Button } from "@/components/ui/button";
+import ReactMarkdown from "react-markdown";
+import confetti from "canvas-confetti";
 import {
   Dialog,
   DialogContent,
@@ -1225,6 +1227,7 @@ export default function ResearchStudioPage() {
   const [githubPushed, setGithubPushed] = useState<Record<string, string>>({});
   const [terminalOpen, setTerminalOpen] = useState(false);
   const [terminalCommand, setTerminalCommand] = useState("");
+  const [terminalStdin, setTerminalStdin] = useState("");
   const [terminalOutput, setTerminalOutput] = useState("");
   const [terminalBusy, setTerminalBusy] = useState(false);
   const terminalInputRef = useRef<HTMLInputElement | null>(null);
@@ -2990,10 +2993,18 @@ export default function ResearchStudioPage() {
   const [pushProgress, setPushProgress] = useState<number | null>(null);
   const [pushBusy, setPushBusy] = useState(false);
   const [challengesOpen, setChallengesOpen] = useState(false);
-  const [challenges, setChallenges] = useState<Array<{ id: number; slug: string; language: string; difficulty: string; points: number; statement_md: string; starter_code: string }>>([]);
-  const [activeChallenge, setActiveChallenge] = useState<{ id: number; slug: string; language: string; statement_md: string } | null>(null);
+  const [challengeTab, setChallengeTab] = useState<"challenges" | "leaderboard" | "progress">("challenges");
+  const [challenges, setChallenges] = useState<Array<{ id: number; slug: string; language: string; difficulty: string; points: number; statement_md: string; starter_code: string; test_mode: string }>>([]);
+  const [activeChallenge, setActiveChallenge] = useState<{ id: number; slug: string; language: string; statement_md: string; test_mode: string } | null>(null);
   const [challengeResults, setChallengeResults] = useState<{ passed: boolean; firstSolve: boolean; total: number; results: Array<{ ok: boolean; input: string; expected: string; actual: string }> } | null>(null);
   const [challengeBusy, setChallengeBusy] = useState(false);
+  const [leaderboard, setLeaderboard] = useState<{ cohortId: number; seasonId: number; entries: Array<{ userId: string; displayName: string; points: number; solved: number }>; me: { displayName: string; optedIn: boolean } } | null>(null);
+  const [optInOpen, setOptInOpen] = useState(false);
+  const [optInName, setOptInName] = useState("");
+  const [optInStudentId, setOptInStudentId] = useState("");
+  const [optInBusy, setOptInBusy] = useState(false);
+  const [joinCode, setJoinCode] = useState("");
+  const [progressData, setProgressData] = useState<{ challenges: Array<{ id: number; slug: string; language: string }>; members: Array<{ userId: string; displayName: string; statuses: string[] }> } | null>(null);
 
   async function githubSettings() {
     if (!userId) return;
@@ -3202,6 +3213,8 @@ export default function ResearchStudioPage() {
 
   async function openChallengesPanel() {
     setChallengesOpen(true);
+    setChallengeTab("challenges");
+    void loadLeaderboard();
     setChallengeResults(null);
     try {
       const res = await fetch("/api/challenges");
@@ -3212,13 +3225,14 @@ export default function ResearchStudioPage() {
     }
   }
 
-  async function solveChallenge(ch: { id: number; slug: string; language: string; statement_md: string; starter_code: string }) {
-    const path = ch.language === "python" ? "main.py" : "main.cpp";
+  async function solveChallenge(ch: { id: number; slug: string; language: string; statement_md: string; starter_code: string; test_mode: string }) {
+    const unit = ch.test_mode === "pytest" || ch.test_mode === "doctest";
+    const path = unit ? (ch.language === "python" ? "solution.py" : "solution.cpp") : ch.language === "python" ? "main.py" : "main.cpp";
     const entry = { path, kind: "file" as const, content: ch.starter_code };
     setProjectEntries((prev) => (prev.some((e) => e.path === path) ? prev.map((e) => (e.path === path ? entry : e)) : [...prev, entry]));
     setSelectedPath(path);
     setEditorMode(ch.language === "python" ? "python" : "cpp");
-    setActiveChallenge({ id: ch.id, slug: ch.slug, language: ch.language, statement_md: ch.statement_md });
+    setActiveChallenge({ id: ch.id, slug: ch.slug, language: ch.language, statement_md: ch.statement_md, test_mode: ch.test_mode });
     setChallengeResults(null);
     setChallengesOpen(false);
     setCompileNotice(`Challenge loaded: ${ch.slug}. Edit and run tests.`);
@@ -3230,7 +3244,8 @@ export default function ResearchStudioPage() {
     setChallengeResults(null);
     try {
       const files = projectEntries.filter((e) => e.kind === "file").map((e) => ({ path: e.path, content: e.content }));
-      const mainPath = activeChallenge.language === "python" ? "main.py" : "main.cpp";
+      const unit = activeChallenge.test_mode === "pytest" || activeChallenge.test_mode === "doctest";
+      const mainPath = unit ? (activeChallenge.language === "python" ? "solution.py" : "solution.cpp") : activeChallenge.language === "python" ? "main.py" : "main.cpp";
       const res = await fetch("/api/challenges/submit", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -3238,10 +3253,96 @@ export default function ResearchStudioPage() {
       });
       const data = (await res.json()) as { passed: boolean; firstSolve: boolean; total: number; results: Array<{ ok: boolean; input: string; expected: string; actual: string }> };
       setChallengeResults(data);
+      if (data.passed) {
+        confetti({ particleCount: 90, spread: 70, origin: { y: 0.6 } });
+        if (data.firstSolve) setTimeout(() => confetti({ particleCount: 160, spread: 100, origin: { y: 0.4 } }), 250);
+      }
     } catch (error) {
       setChallengeResults({ passed: false, firstSolve: false, total: 0, results: [{ ok: false, input: "", expected: "", actual: error instanceof Error ? error.message : "error" }] });
     } finally {
       setChallengeBusy(false);
+    }
+  }
+
+  async function loadLeaderboard() {
+    try {
+      const res = await fetch("/api/leaderboard");
+      const data = (await res.json()) as { cohortId: number; seasonId: number; entries: Array<{ userId: string; displayName: string; points: number; solved: number }>; me: { displayName: string; optedIn: boolean } };
+      setLeaderboard(data);
+      setOptInName(data.me?.displayName || "");
+      // Fetch the current student ID to pre-fill the opt-in form.
+      try {
+        const oi = await fetch("/api/challenges/opt-in");
+        const oiData = (await oi.json()) as { studentId?: string };
+        setOptInStudentId(oiData.studentId || "");
+      } catch { /* ignore */ }
+    } catch { /* ignore */ }
+  }
+
+  async function saveOptIn() {
+    setOptInBusy(true);
+    try {
+      const res = await fetch("/api/challenges/opt-in", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ displayName: optInName, studentId: optInStudentId, optedIn: true }),
+      });
+      const data = (await res.json().catch(() => null)) as { ok?: boolean; error?: string; studentId?: string } | null;
+      if (data?.error) {
+        setCompileNotice(data.error);
+        return;
+      }
+      setOptInOpen(false);
+      await loadLeaderboard();
+      setCompileNotice("Leaderboard updated.");
+    } catch {
+      setCompileNotice("Could not save leaderboard settings.");
+    } finally {
+      setOptInBusy(false);
+    }
+  }
+
+  async function joinCohort() {
+    const code = joinCode.trim();
+    if (!code) return;
+    try {
+      const res = await fetch("/api/cohorts", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "join", joinCode: code }),
+      });
+      const data = (await res.json().catch(() => null)) as { ok?: boolean; error?: string } | null;
+      if (data?.error) {
+        setCompileNotice(data.error);
+        return;
+      }
+      setJoinCode("");
+      setCompileNotice("Cohort joined.");
+      await loadLeaderboard();
+    } catch {
+      setCompileNotice("Could not join cohort.");
+    }
+  }
+
+  async function loadProgress() {
+    try {
+      const me = await fetch("/api/cohorts");
+      const myCohorts = (await me.json().catch(() => null)) as { myCohortId?: number } | null;
+      const cohortId = myCohorts?.myCohortId;
+      if (!cohortId) {
+        setProgressData(null);
+        setCompileNotice("You don't have a cohort yet.");
+        return;
+      }
+      const res = await fetch(`/api/cohorts/progress?cohortId=${cohortId}`);
+      const data = (await res.json().catch(() => null)) as { error?: string; challenges: Array<{ id: number; slug: string; language: string }>; members: Array<{ userId: string; displayName: string; statuses: string[] }> } | null;
+      if (data?.error) {
+        setCompileNotice(data.error);
+        return;
+      }
+      setProgressData(data);
+    } catch {
+      setCompileNotice("Could not load progress.");
     }
   }
 
@@ -3306,6 +3407,7 @@ export default function ResearchStudioPage() {
           command,
           files: projectEntries.filter((e) => e.kind === "file").map((e) => ({ path: e.path, content: e.content })),
           folders: projectEntries.filter((e) => e.kind === "folder").map((e) => e.path),
+          stdin: terminalStdin,
         }),
       });
       const data = (await res.json().catch(() => null)) as { stdout?: string; stderr?: string; exitCode?: number; error?: string } | null;
@@ -7324,8 +7426,8 @@ export default function ResearchStudioPage() {
                 <DialogTitle>{activeChallenge.slug}</DialogTitle>
                 <DialogDescription>{activeChallenge.language.toUpperCase()} challenge</DialogDescription>
               </DialogHeader>
-              <div className="max-h-64 overflow-y-auto whitespace-pre-wrap rounded-lg border p-3 text-sm" style={{ fontFamily: "var(--font-mono)" }}>
-                {activeChallenge.statement_md}
+              <div className="max-h-64 overflow-y-auto rounded-lg border p-3 text-sm challenge-markdown">
+                <ReactMarkdown>{activeChallenge.statement_md}</ReactMarkdown>
               </div>
               <div className="flex items-center gap-2">
                 <Button onClick={() => void runChallengeTests()} disabled={challengeBusy}>
@@ -7359,25 +7461,126 @@ export default function ResearchStudioPage() {
             <>
               <DialogHeader>
                 <DialogTitle>Challenges</DialogTitle>
-                <DialogDescription>Python and C++ problems. Your code is graded against hidden tests.</DialogDescription>
+                <DialogDescription>Python and C++ problems graded against hidden tests. Opt in to appear on the leaderboard.</DialogDescription>
               </DialogHeader>
-              <div className="grid max-h-96 gap-1.5 overflow-y-auto">
-                {challenges.length === 0 ? (
-                  <p className="text-sm text-muted-foreground">Loading…</p>
-                ) : (
-                  challenges.map((ch) => (
-                    <button
-                      key={ch.id}
-                      type="button"
-                      onClick={() => void solveChallenge(ch)}
-                      className="flex items-center justify-between rounded-lg border px-3 py-2 text-left text-sm transition hover:bg-muted"
-                    >
-                      <span className="font-semibold">{ch.slug}</span>
-                      <span className="text-xs text-muted-foreground">{ch.language} · {ch.difficulty} · {ch.points} pts</span>
-                    </button>
-                  ))
-                )}
+              <div className="mb-3 flex gap-1.5">
+                <Button variant={challengeTab === "challenges" ? "default" : "outline"} size="sm" onClick={() => setChallengeTab("challenges")}>Challenges</Button>
+                <Button variant={challengeTab === "leaderboard" ? "default" : "outline"} size="sm" onClick={() => { setChallengeTab("leaderboard"); void loadLeaderboard(); }}>Leaderboard</Button>
+                <Button variant={challengeTab === "progress" ? "default" : "outline"} size="sm" onClick={() => { setChallengeTab("progress"); void loadProgress(); }}>Progress</Button>
               </div>
+
+              {challengeTab === "challenges" ? (
+                <div className="grid max-h-96 gap-1.5 overflow-y-auto">
+                  {challenges.length === 0 ? (
+                    <p className="text-sm text-muted-foreground">Loading…</p>
+                  ) : (
+                    challenges.map((ch) => (
+                      <button
+                        key={ch.id}
+                        type="button"
+                        onClick={() => void solveChallenge(ch)}
+                        className="flex items-center justify-between rounded-lg border px-3 py-2 text-left text-sm transition hover:bg-muted"
+                      >
+                        <span className="font-semibold">{ch.slug}</span>
+                        <span className="text-xs text-muted-foreground">{ch.language} · {ch.difficulty} · {ch.points} pts{ch.test_mode !== "io" ? ` · ${ch.test_mode}` : ""}</span>
+                      </button>
+                    ))
+                  )}
+                </div>
+              ) : challengeTab === "leaderboard" ? (
+                <div className="space-y-3">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <input
+                      value={joinCode}
+                      onChange={(e) => setJoinCode(e.target.value)}
+                      placeholder="join code"
+                      className="h-9 w-32 rounded-md border bg-background px-2 text-sm"
+                    />
+                    <Button variant="outline" size="sm" onClick={() => void joinCohort()}>Join cohort</Button>
+                    <Button size="sm" onClick={() => { setOptInOpen(true); setOptInName(leaderboard?.me?.displayName || ""); }}>{leaderboard?.me?.optedIn ? "Settings" : "Opt in"}</Button>
+                  </div>
+                  {optInOpen ? (
+                    <div className="space-y-2 rounded-lg border p-3">
+                      <p className="text-sm font-semibold">Leaderboard settings</p>
+                      <input
+                        value={optInName}
+                        onChange={(e) => setOptInName(e.target.value)}
+                        placeholder="Display name (shown on the board)"
+                        className="h-9 w-full rounded-md border bg-background px-2 text-sm"
+                      />
+                      <input
+                        value={optInStudentId}
+                        onChange={(e) => setOptInStudentId(e.target.value)}
+                        placeholder="Student ID — you can only set this once"
+                        className="h-9 w-full rounded-md border bg-background px-2 text-sm"
+                      />
+                      <div className="flex gap-2">
+                        <Button size="sm" onClick={() => void saveOptIn()} disabled={optInBusy}>{optInBusy ? "Saving…" : "Save"}</Button>
+                        <Button size="sm" variant="outline" onClick={() => setOptInOpen(false)}>Cancel</Button>
+                      </div>
+                    </div>
+                  ) : null}
+                  <div className="max-h-72 overflow-y-auto">
+                    {!leaderboard ? (
+                      <p className="text-sm text-muted-foreground">Loading…</p>
+                    ) : leaderboard.entries.length === 0 ? (
+                      <p className="text-sm text-muted-foreground">No one on the board yet — opt in and solve a challenge.</p>
+                    ) : (
+                      <table className="w-full border-collapse text-sm">
+                        <thead>
+                          <tr className="border-b text-left text-xs text-muted-foreground">
+                            <th className="py-1 pr-2">#</th>
+                            <th className="py-1 pr-2">Name</th>
+                            <th className="py-1 pr-2 text-right">Solved</th>
+                            <th className="py-1 text-right">Points</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {leaderboard.entries.map((e, i) => (
+                            <tr key={e.userId} className="border-b">
+                              <td className="py-1 pr-2">{i + 1}</td>
+                              <td className="py-1 pr-2">{e.displayName}</td>
+                              <td className="py-1 pr-2 text-right">{e.solved}</td>
+                              <td className="py-1 text-right font-semibold">{e.points}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    )}
+                  </div>
+                </div>
+              ) : (
+                <div className="max-h-96 overflow-auto">
+                  {!progressData ? (
+                    <p className="text-sm text-muted-foreground">Loading…</p>
+                  ) : progressData.members.length === 0 ? (
+                    <p className="text-sm text-muted-foreground">No students in your cohort yet. Only the cohort creator or an admin can see this.</p>
+                  ) : (
+                    <table className="w-full border-collapse text-xs">
+                      <thead>
+                        <tr className="border-b text-left text-muted-foreground">
+                          <th className="py-1 pr-2">Student</th>
+                          {progressData.challenges.map((c) => (
+                            <th key={c.id} className="py-1 pr-2" title={c.slug}>{c.slug.replace(/^(py|cpp)-/, "")}</th>
+                          ))}
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {progressData.members.map((m) => (
+                          <tr key={m.userId} className="border-b">
+                            <td className="py-1 pr-2">{m.displayName}</td>
+                            {m.statuses.map((s, i) => (
+                              <td key={i} className="py-1 pr-2 text-center" title={s}>
+                                {s === "solved" ? "✓" : s === "attempted" ? "•" : "·"}
+                              </td>
+                            ))}
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  )}
+                </div>
+              )}
             </>
           )}
         </DialogContent>
@@ -7419,6 +7622,18 @@ export default function ResearchStudioPage() {
                 autoComplete="off"
                 autoCapitalize="off"
                 style={{ flex: 1, appearance: "none", WebkitAppearance: "none", background: "transparent", border: "none", boxShadow: "none", outline: "none", color: "#f0f0f0", caretColor: "#0f0", fontFamily: "var(--font-mono)", fontSize: 13, padding: 0 }}
+              />
+            </div>
+            <div style={{ display: "flex", alignItems: "center", marginTop: 6 }}>
+              <span style={{ color: "#666", fontSize: 12 }}>stdin&nbsp;</span>
+              <input
+                value={terminalStdin}
+                onChange={(e) => setTerminalStdin(e.target.value)}
+                placeholder="(optional) input for the program — e.g. 5 7"
+                aria-label="Program input (stdin)"
+                spellCheck={false}
+                autoComplete="off"
+                style={{ flex: 1, appearance: "none", WebkitAppearance: "none", background: "transparent", border: "none", boxShadow: "none", outline: "none", color: "#cbd5e1", caretColor: "#0f0", fontFamily: "var(--font-mono)", fontSize: 12, padding: 0 }}
               />
             </div>
           </div>
