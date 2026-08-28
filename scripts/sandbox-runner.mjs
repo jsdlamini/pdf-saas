@@ -8,7 +8,7 @@
 //   POST /run   { command, files }            -> { stdout, stderr, exitCode }
 //   POST /code  { language, files, mainPath } -> { output, error, exitCode }
 
-import { execFile } from "node:child_process";
+import { execFile, spawn } from "node:child_process";
 import { chmod, mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { createServer } from "node:http";
 import { tmpdir } from "node:os";
@@ -16,6 +16,35 @@ import { dirname, join } from "node:path";
 import { promisify } from "node:util";
 
 const execFileAsync = promisify(execFile);
+
+// execFile's `input` option is unreliable (stdin never closes), so run
+// commands that need stdin via spawn and write to stdin manually.
+function execWithStdin(command, args, { stdin = "", timeout = CODE_TIMEOUT_MS, maxBuffer = MAX_OUTPUT, env } = {}) {
+  return new Promise((resolve, reject) => {
+    const child = spawn(command, args, { env, stdio: ["pipe", "pipe", "pipe"] });
+    let stdout = "";
+    let stderr = "";
+    let timedOut = false;
+    const cap = () => {
+      if (stdout.length > maxBuffer) stdout = stdout.slice(0, maxBuffer);
+      if (stderr.length > maxBuffer) stderr = stderr.slice(0, maxBuffer);
+    };
+    child.stdout.on("data", (d) => { stdout += d; cap(); });
+    child.stderr.on("data", (d) => { stderr += d; cap(); });
+    const timer = setTimeout(() => { timedOut = true; child.kill("SIGKILL"); }, timeout);
+    child.on("error", (err) => { clearTimeout(timer); reject(err); });
+    child.on("close", (code) => {
+      clearTimeout(timer);
+      const info = { stdout, stderr, code: code ?? 1, killed: timedOut };
+      if (timedOut) reject(Object.assign(new Error("Execution timed out"), info));
+      else if (code !== 0) reject(Object.assign(new Error(`exit ${code}`), info));
+      else resolve({ stdout, stderr, code: 0 });
+    });
+    child.stdin.on("error", () => {});
+    child.stdin.write(stdin);
+    child.stdin.end();
+  });
+}
 
 const PORT = Number(process.env.SANDBOX_PORT || 3100);
 const TIMEOUT_MS = 30_000;
@@ -90,11 +119,9 @@ function sandboxedEnv(tempDir, extra = {}) {
 async function runPython(mainPath, tempDir, stdin = "") {
   const scriptPath = join(tempDir, mainPath);
   try {
-    const result = await execFileAsync("python3", [scriptPath], {
-      cwd: tempDir,
+    const result = await execWithStdin("python3", [scriptPath], {
+      stdin,
       timeout: CODE_TIMEOUT_MS,
-      maxBuffer: MAX_OUTPUT,
-      input: stdin,
       env: sandboxedEnv(tempDir, { PYTHONDONTWRITEBYTECODE: "1" }),
     });
     return { output: truncateOutput(result.stdout || ""), error: result.stderr || "", exitCode: 0 };
@@ -121,11 +148,9 @@ async function runCpp(sourceFiles, tempDir, stdin = "") {
   }
   await chmod(binaryPath, 0o755);
   try {
-    const result = await execFileAsync(binaryPath, [], {
-      cwd: tempDir,
+    const result = await execWithStdin(binaryPath, [], {
+      stdin,
       timeout: CODE_TIMEOUT_MS,
-      maxBuffer: MAX_OUTPUT,
-      input: stdin,
       env: sandboxedEnv(tempDir),
     });
     return { output: truncateOutput(result.stdout || ""), error: result.stderr || "", exitCode: 0 };
