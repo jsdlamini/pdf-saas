@@ -196,14 +196,16 @@ export const CHALLENGE_SEED: ChallengeSeed[] = [
 
 const SANDBOX_URL = process.env.SANDBOX_URL || "http://sandbox:3100";
 
-// Resolve the user's cohort id (their joined cohort, or the default "general").
+// Resolve the user's current cohort id: their most recent active enrollment,
+// or the default "general" cohort. Enrollment is now a separate record from
+// leaderboard consent, so a user can hold multiple enrollments.
 export async function resolveCohortId(userId: string): Promise<number> {
   await ensureMigrated();
-  const joined = await db.query(
-    `SELECT cohort_id FROM wiserfiles_leaderboard_opt_in WHERE user_id = $1 LIMIT 1`,
+  const enrolled = await db.query(
+    `SELECT cohort_id FROM wiserfiles_enrollments WHERE user_id = $1 AND status = 'active' ORDER BY joined_at DESC LIMIT 1`,
     [userId]
   );
-  if (joined.rows.length) return Number(joined.rows[0].cohort_id);
+  if (enrolled.rows.length) return Number(enrolled.rows[0].cohort_id);
   const general = await db.query(`SELECT id FROM wiserfiles_cohorts WHERE join_code = 'general' LIMIT 1`);
   return general.rows.length ? Number(general.rows[0].id) : 0;
 }

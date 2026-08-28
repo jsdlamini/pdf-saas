@@ -32,7 +32,11 @@ export async function GET(request: Request) {
   );
 
   const members = await db.query(
-    `SELECT user_id, display_name, opted_in FROM wiserfiles_leaderboard_opt_in WHERE cohort_id = $1 ORDER BY user_id`,
+    `SELECT e.user_id, e.student_id, COALESCE(o.display_name, '') AS display_name, COALESCE(o.opted_in, FALSE) AS opted_in
+     FROM wiserfiles_enrollments e
+     LEFT JOIN wiserfiles_leaderboard_opt_in o ON o.user_id = e.user_id AND o.cohort_id = e.cohort_id
+     WHERE e.cohort_id = $1 AND e.status = 'active'
+     ORDER BY e.user_id`,
     [cohortId]
   );
 
@@ -51,6 +55,7 @@ export async function GET(request: Request) {
   const rows = members.rows.map((m) => ({
     userId: m.user_id,
     displayName: (m.display_name || "Student").trim() || "Student",
+    studentId: m.student_id || "",
     optedIn: Boolean(m.opted_in),
     statuses: challenges.rows.map((c) => {
       const key = `${m.user_id}:${c.id}`;

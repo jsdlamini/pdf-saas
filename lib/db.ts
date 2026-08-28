@@ -182,6 +182,47 @@ const MIGRATIONS: string[] = [
     PRIMARY KEY (user_id, cohort_id)
   )`,
   `ALTER TABLE wiserfiles_leaderboard_opt_in ADD COLUMN IF NOT EXISTS student_id TEXT`,
+
+  // ── Courses + enrollment split ───────────────────────────────────
+  // A course is a subject (persists across years); a cohort is course ×
+  // season × section; enrollment is the membership record (role + status +
+  // student_id). Leaderboard consent is a separate, shrinkable record.
+  `CREATE TABLE IF NOT EXISTS wiserfiles_courses (
+    id SERIAL PRIMARY KEY,
+    code TEXT NOT NULL,
+    title TEXT NOT NULL,
+    institution TEXT NOT NULL DEFAULT '',
+    owner_id TEXT NOT NULL,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    UNIQUE (code, institution)
+  )`,
+  `ALTER TABLE wiserfiles_cohorts ADD COLUMN IF NOT EXISTS course_id INTEGER REFERENCES wiserfiles_courses(id) ON DELETE SET NULL`,
+  `ALTER TABLE wiserfiles_cohorts ADD COLUMN IF NOT EXISTS join_code_expires_at TIMESTAMPTZ`,
+  `ALTER TABLE wiserfiles_cohorts ADD COLUMN IF NOT EXISTS join_code_max_uses INTEGER`,
+  `ALTER TABLE wiserfiles_cohorts ADD COLUMN IF NOT EXISTS join_code_uses INTEGER NOT NULL DEFAULT 0`,
+  `CREATE TABLE IF NOT EXISTS wiserfiles_enrollments (
+    user_id TEXT NOT NULL,
+    cohort_id INTEGER NOT NULL REFERENCES wiserfiles_cohorts(id) ON DELETE CASCADE,
+    role TEXT NOT NULL DEFAULT 'student',
+    status TEXT NOT NULL DEFAULT 'active',
+    joined_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    student_id TEXT,
+    PRIMARY KEY (user_id, cohort_id)
+  )`,
+  // One-time migration: carry existing opt-in rows (which doubled as
+  // enrollment) into enrollments. Guarded so a second run after the column is
+  // dropped is a no-op.
+  `DO $$
+  BEGIN
+    IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'wiserfiles_leaderboard_opt_in' AND column_name = 'student_id') THEN
+      INSERT INTO wiserfiles_enrollments (user_id, cohort_id, role, status, joined_at, student_id)
+      SELECT user_id, cohort_id, 'student', 'active', NOW(), student_id
+      FROM wiserfiles_leaderboard_opt_in
+      ON CONFLICT (user_id, cohort_id) DO NOTHING;
+    END IF;
+  END $$;`,
+  `ALTER TABLE wiserfiles_leaderboard_opt_in DROP COLUMN IF EXISTS student_id`,
+  `ALTER TABLE wiserfiles_leaderboard_opt_in DROP COLUMN IF EXISTS season_id`,
 ];
 
 let migrationPromise: Promise<void> | null = null;
