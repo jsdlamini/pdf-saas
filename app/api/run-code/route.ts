@@ -15,6 +15,7 @@ type RunCodePayload = {
   language: "python" | "cpp";
   files: ProjectFile[];
   mainPath: string;
+  stdin?: string;
 };
 
 const MAX_TOTAL_SOURCE_BYTES = 4 * 1024 * 1024;
@@ -82,7 +83,7 @@ export async function POST(request: Request) {
     const res = await fetch(`${SANDBOX_URL}/code`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ language: payload.language, files, mainPath: payload.mainPath || files[0].path }),
+      body: JSON.stringify({ language: payload.language, files, mainPath: payload.mainPath || files[0].path, stdin: payload.stdin || "" }),
     });
     const data = (await res.json().catch(() => null)) as { output?: string; error?: string; exitCode?: number } | null;
     if (!res.ok || !data) {

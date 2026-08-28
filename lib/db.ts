@@ -113,6 +113,72 @@ const MIGRATIONS: string[] = [
     access_level TEXT NOT NULL DEFAULT 'read',
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
   )`,
+
+  `CREATE TABLE IF NOT EXISTS wiserfiles_seasons (
+    id SERIAL PRIMARY KEY,
+    name TEXT NOT NULL,
+    starts_at TIMESTAMPTZ NOT NULL,
+    ends_at TIMESTAMPTZ NOT NULL,
+    is_active BOOLEAN NOT NULL DEFAULT TRUE,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+  )`,
+
+  `CREATE TABLE IF NOT EXISTS wiserfiles_cohorts (
+    id SERIAL PRIMARY KEY,
+    name TEXT NOT NULL,
+    join_code TEXT UNIQUE NOT NULL,
+    season_id INTEGER REFERENCES wiserfiles_seasons(id) ON DELETE SET NULL,
+    created_by TEXT NOT NULL,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+  )`,
+
+  `CREATE TABLE IF NOT EXISTS wiserfiles_challenges (
+    id SERIAL PRIMARY KEY,
+    slug TEXT UNIQUE NOT NULL,
+    language TEXT NOT NULL,
+    difficulty TEXT NOT NULL DEFAULT 'easy',
+    statement_md TEXT NOT NULL,
+    starter_code TEXT NOT NULL DEFAULT '',
+    hidden_tests JSONB NOT NULL DEFAULT '[]'::jsonb,
+    time_limit_ms INTEGER NOT NULL DEFAULT 15000,
+    points INTEGER NOT NULL DEFAULT 10,
+    season_id INTEGER REFERENCES wiserfiles_seasons(id) ON DELETE SET NULL,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+  )`,
+
+  `CREATE TABLE IF NOT EXISTS wiserfiles_submissions (
+    id SERIAL PRIMARY KEY,
+    user_id TEXT NOT NULL,
+    challenge_id INTEGER NOT NULL REFERENCES wiserfiles_challenges(id) ON DELETE CASCADE,
+    cohort_id INTEGER REFERENCES wiserfiles_cohorts(id) ON DELETE SET NULL,
+    season_id INTEGER REFERENCES wiserfiles_seasons(id) ON DELETE SET NULL,
+    language TEXT NOT NULL,
+    passed BOOLEAN NOT NULL DEFAULT FALSE,
+    tests_passed INTEGER NOT NULL DEFAULT 0,
+    tests_total INTEGER NOT NULL DEFAULT 0,
+    exit_code INTEGER,
+    output TEXT,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+  )`,
+
+  `CREATE TABLE IF NOT EXISTS wiserfiles_challenge_solves (
+    user_id TEXT NOT NULL,
+    challenge_id INTEGER NOT NULL REFERENCES wiserfiles_challenges(id) ON DELETE CASCADE,
+    cohort_id INTEGER NOT NULL REFERENCES wiserfiles_cohorts(id) ON DELETE CASCADE,
+    season_id INTEGER REFERENCES wiserfiles_seasons(id) ON DELETE SET NULL,
+    points INTEGER NOT NULL DEFAULT 0,
+    solved_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    PRIMARY KEY (user_id, challenge_id, cohort_id)
+  )`,
+
+  `CREATE TABLE IF NOT EXISTS wiserfiles_leaderboard_opt_in (
+    user_id TEXT NOT NULL,
+    cohort_id INTEGER NOT NULL REFERENCES wiserfiles_cohorts(id) ON DELETE CASCADE,
+    season_id INTEGER REFERENCES wiserfiles_seasons(id) ON DELETE SET NULL,
+    display_name TEXT NOT NULL,
+    opted_in BOOLEAN NOT NULL DEFAULT TRUE,
+    PRIMARY KEY (user_id, cohort_id)
+  )`,
 ];
 
 let migrationPromise: Promise<void> | null = null;
