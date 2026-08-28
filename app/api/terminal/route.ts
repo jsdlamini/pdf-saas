@@ -18,11 +18,10 @@ export async function POST(request: Request) {
   if (!checkRateLimit(`terminal:${userId}`)) return jsonError("Too many commands. Wait a minute and try again.", 429);
 
   const body = (await request.json().catch(() => null)) as {
-    command?: string;
     files?: Array<{ path: string; content: string }>;
     folders?: string[];
   } | null;
-  if (!body?.command?.trim()) return jsonError("Enter a command.", 400);
+  if (!body) return jsonError("Invalid payload.", 400);
 
-  return Response.json(await proxyTerminal("/term", { command: body.command.trim(), files: body.files ?? [], folders: body.folders ?? [] }));
+  return Response.json(await proxyTerminal("/term", { files: body.files ?? [], folders: body.folders ?? [] }));
 }

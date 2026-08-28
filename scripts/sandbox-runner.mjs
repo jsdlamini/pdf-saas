@@ -122,6 +122,17 @@ function truncateOutput(raw) {
   return Buffer.from(raw, "utf8").subarray(0, MAX_OUTPUT).toString("utf8") + "\n\n[Output truncated]";
 }
 
+// Strip ANSI escapes (bracketed-paste, colours, cursor) and normalise PTY CRLF
+// so the transcript renders as plain text in the client.
+function sanitizeTerminal(raw) {
+  return String(raw)
+    .replace(/\x1b\][^\x07]*(?:\x07|\x1b\\)/g, "") // OSC
+    .replace(/\x1b\[[0-9;?]*[A-Za-z]/g, "")            // CSI
+    .replace(/\x1b[()][A-Z0-9]/g, "")                    // charset
+    .replace(/\r\n/g, "\n")
+    .replace(/\r/g, "\n");
+}
+
 function sandboxedEnv(tempDir, extra = {}) {
   return {
     PATH: process.env.PATH || "/usr/bin:/bin",
@@ -268,24 +279,17 @@ const server = createServer(async (req, res) => {
     return;
   }
 
-  // Interactive terminal: start an allowlisted command with an OPEN stdin.
+  // Interactive terminal: a real minimal bash shell. We run `script` to
+  // allocate a PTY so bash prints its prompt, echoes input, and hands stdin to
+  // foreground programs like a normal terminal. The sandbox container is
+  // isolated (non-root, no secrets, no database, no internet) — that isolation
+  // is the safety boundary, replacing the per-command allowlist used elsewhere.
   if (req.url === "/term") {
     const body = await readBody(req);
     if (body === null) return json(res, 400, { error: "invalid json" });
 
-    const command = String(body.command || "").trim();
     const files = Array.isArray(body.files) ? body.files : [];
     const folders = Array.isArray(body.folders) ? body.folders : [];
-
-    if (/[|;&<>`]|\$\(/.test(command)) {
-      return json(res, 403, { error: "Pipes, redirects and shell operators aren't supported here." });
-    }
-    const argv = splitCommand(command);
-    const full = argv[0] || "";
-    const name = full.split("/").pop() || full;
-    if (!name || !ALLOWED.has(name)) {
-      return json(res, 403, { error: `Command "${name}" is not allowed.` });
-    }
 
     const tempDir = await mkdtemp(join(tmpdir(), "sandbox-term-"));
     await writeProjectFiles(files, tempDir);
@@ -296,10 +300,11 @@ const server = createServer(async (req, res) => {
       }
     }
 
-    const child = spawn(name, argv.slice(1), {
+    const child = spawn("script", ["-q", "-e", "-c", "bash --noprofile --norc", "/dev/null"], {
       cwd: tempDir,
-      env: sandboxedEnv(tempDir, { PYTHONUNBUFFERED: "1" }),
+      env: sandboxedEnv(tempDir, { PS1: "$ ", HOME: tempDir, TERM: "dumb" }),
       stdio: ["pipe", "pipe", "pipe"],
+      detached: true,
     });
 
     const id = randomBytes(8).toString("hex");
@@ -317,11 +322,11 @@ const server = createServer(async (req, res) => {
       if (session.stdout.length > MAX_OUTPUT) session.stdout = session.stdout.slice(0, MAX_OUTPUT);
       if (session.stderr.length > MAX_OUTPUT) session.stderr = session.stderr.slice(0, MAX_OUTPUT);
     };
-    child.stdout.on("data", (d) => { session.stdout += d; cap(); });
-    child.stderr.on("data", (d) => { session.stderr += d; cap(); });
+    child.stdout.on("data", (d) => { session.stdout += sanitizeTerminal(d); cap(); });
+    child.stderr.on("data", (d) => { session.stderr += sanitizeTerminal(d); cap(); });
     child.stdin.on("error", () => {});
     child.on("error", (err) => {
-      session.stderr += `\n${err.message}\n`;
+      session.stderr += `${err.message}\n`;
       session.running = false;
       session.exitCode = 1;
     });
@@ -329,14 +334,12 @@ const server = createServer(async (req, res) => {
       session.running = false;
       session.exitCode = code ?? 0;
       if (session.killTimer) clearTimeout(session.killTimer);
-      // Keep the result around for a short window so the client's final poll
-      // can read it, then clean up.
       session.cleanupTimer = setTimeout(() => cleanupTermSession(id), 60_000);
     });
     session.killTimer = setTimeout(() => {
       if (session.running) {
         session.stderr += "\n[Terminal session timed out]\n";
-        child.kill("SIGKILL");
+        try { process.kill(-child.pid, "SIGKILL"); } catch { child.kill("SIGKILL"); }
       }
     }, TERM_TIMEOUT_MS);
 
@@ -376,7 +379,9 @@ const server = createServer(async (req, res) => {
     const id = String(body.sessionId || "");
     const s = termSessions.get(id);
     if (s) {
-      if (s.running) s.child.kill("SIGKILL");
+      if (s.running) {
+        try { process.kill(-s.child.pid, "SIGKILL"); } catch { s.child.kill("SIGKILL"); }
+      }
       cleanupTermSession(id);
     }
     return json(res, 200, { ok: true });
