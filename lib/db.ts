@@ -146,6 +146,7 @@ const MIGRATIONS: string[] = [
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
   )`,
   `ALTER TABLE wiserfiles_challenges ADD COLUMN IF NOT EXISTS test_mode TEXT NOT NULL DEFAULT 'io'`,
+  `ALTER TABLE wiserfiles_challenges ADD COLUMN IF NOT EXISTS sample_input TEXT NOT NULL DEFAULT ''`,
 
   `CREATE TABLE IF NOT EXISTS wiserfiles_submissions (
     id SERIAL PRIMARY KEY,
