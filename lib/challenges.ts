@@ -13,6 +13,7 @@ export type ChallengeSeed = {
   statement_md: string;
   starter_code: string;
   test_mode?: "io" | "pytest" | "doctest";
+  sample_input?: string;
   hidden_tests: HiddenTest[] | UnitTestSpec;
 };
 
@@ -36,6 +37,7 @@ export const CHALLENGE_SEED: ChallengeSeed[] = [
     statement_md:
       "Read **two integers**, each on its own line, from standard input. Print their sum.",
     starter_code: "a = int(input())\nb = int(input())\n# print a + b\n",
+    sample_input: "5\n7\n",
     hidden_tests: [
       { input: "5\n7\n", expected: "12" },
       { input: "-3\n10\n", expected: "7" },
@@ -50,6 +52,7 @@ export const CHALLENGE_SEED: ChallengeSeed[] = [
     statement_md:
       "Read an integer `N`. For every number from `1` to `N` inclusive, print one line:\n\n- `Fizz` if the number is divisible by 3\n- `Buzz` if divisible by 5\n- `FizzBuzz` if divisible by both\n- otherwise the number itself",
     starter_code: "n = int(input())\n# loop from 1 to n\n",
+    sample_input: "15\n",
     hidden_tests: [
       {
         input: "15\n",
@@ -66,6 +69,7 @@ export const CHALLENGE_SEED: ChallengeSeed[] = [
     statement_md:
       "Read a single word (no spaces) from standard input. Print `yes` if it is a palindrome (reads the same forwards and backwards, ignoring case), otherwise print `no`.",
     starter_code: "s = input().strip().lower()\n# check if s == reversed(s)\n",
+    sample_input: "Racecar\n",
     hidden_tests: [
       { input: "Racecar\n", expected: "yes" },
       { input: "hello\n", expected: "no" },
@@ -80,6 +84,7 @@ export const CHALLENGE_SEED: ChallengeSeed[] = [
     statement_md:
       "Read all of standard input until end-of-file, then print the total number of whitespace-separated words.",
     starter_code: "import sys\ntext = sys.stdin.read()\n# count the words\n",
+    sample_input: "the quick brown fox\n",
     hidden_tests: [
       { input: "the quick brown fox\n", expected: "4" },
       { input: "one\ntwo three\n", expected: "3" },
@@ -106,6 +111,7 @@ export const CHALLENGE_SEED: ChallengeSeed[] = [
     statement_md:
       "Read **two integers** from standard input and print their sum.",
     starter_code: '#include <iostream>\nint main() {\n  int a, b;\n  std::cin >> a >> b;\n  // print a + b\n  return 0;\n}\n',
+    sample_input: "5 7\n",
     hidden_tests: [
       { input: "5 7\n", expected: "12" },
       { input: "-3 10\n", expected: "7" },
@@ -120,6 +126,7 @@ export const CHALLENGE_SEED: ChallengeSeed[] = [
     statement_md:
       "Read an integer `N`. Print `even` if it is even, otherwise `odd`.",
     starter_code: '#include <iostream>\nint main() {\n  int n;\n  std::cin >> n;\n  // print even or odd\n  return 0;\n}\n',
+    sample_input: "4\n",
     hidden_tests: [
       { input: "4\n", expected: "even" },
       { input: "7\n", expected: "odd" },
@@ -134,6 +141,7 @@ export const CHALLENGE_SEED: ChallengeSeed[] = [
     statement_md:
       "Read **three integers** from standard input and print the largest one.",
     starter_code: '#include <iostream>\nint main() {\n  int a, b, c;\n  std::cin >> a >> b >> c;\n  // print the max\n  return 0;\n}\n',
+    sample_input: "1 5 3\n",
     hidden_tests: [
       { input: "1 5 3\n", expected: "5" },
       { input: "10 10 2\n", expected: "10" },
@@ -148,6 +156,7 @@ export const CHALLENGE_SEED: ChallengeSeed[] = [
     statement_md:
       "Read a single word (no spaces) from standard input and print it reversed.",
     starter_code: '#include <iostream>\n#include <string>\nint main() {\n  std::string s;\n  std::cin >> s;\n  // print s reversed\n  return 0;\n}\n',
+    sample_input: "hello\n",
     hidden_tests: [
       { input: "hello\n", expected: "olleh" },
       { input: "abc\n", expected: "cba" },
@@ -235,16 +244,17 @@ export async function seedChallenges(): Promise<void> {
 
   for (const c of CHALLENGE_SEED) {
     await db.query(
-      `INSERT INTO wiserfiles_challenges (slug, language, difficulty, statement_md, starter_code, hidden_tests, points, test_mode, season_id)
-       VALUES ($1, $2, $3, $4, $5, $6::jsonb, $7, $8, $9)
+      `INSERT INTO wiserfiles_challenges (slug, language, difficulty, statement_md, starter_code, hidden_tests, points, test_mode, sample_input, season_id)
+       VALUES ($1, $2, $3, $4, $5, $6::jsonb, $7, $8, $9, $10)
        ON CONFLICT (slug) DO UPDATE SET
          statement_md = EXCLUDED.statement_md,
          starter_code = EXCLUDED.starter_code,
          hidden_tests = EXCLUDED.hidden_tests,
          points = EXCLUDED.points,
          difficulty = EXCLUDED.difficulty,
-         test_mode = EXCLUDED.test_mode`,
-      [c.slug, c.language, c.difficulty, c.statement_md, c.starter_code, JSON.stringify(c.hidden_tests), c.points, c.test_mode || "io", seasonId]
+         test_mode = EXCLUDED.test_mode,
+         sample_input = EXCLUDED.sample_input`,
+      [c.slug, c.language, c.difficulty, c.statement_md, c.starter_code, JSON.stringify(c.hidden_tests), c.points, c.test_mode || "io", c.sample_input || "", seasonId]
     );
   }
 }

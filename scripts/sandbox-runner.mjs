@@ -127,9 +127,18 @@ async function runPython(mainPath, tempDir, stdin = "") {
     return { output: truncateOutput(result.stdout || ""), error: result.stderr || "", exitCode: 0 };
   } catch (err) {
     if (err.killed) return { output: "", error: "Execution timed out after 15 seconds.", exitCode: 124 };
+    const stderr = err.stderr || "";
+    if (/\bEOFError\b/.test(stderr)) {
+      return {
+        output: "",
+        error: "Your program asked for input but none was provided — add input and run again.",
+        exitCode: err.code ?? 1,
+        needsInput: true,
+      };
+    }
     return {
       output: truncateOutput(err.stdout || ""),
-      error: err.stderr || `Process exited with code ${err.code ?? 1}`,
+      error: stderr || `Process exited with code ${err.code ?? 1}`,
       exitCode: err.code ?? 1,
     };
   }
@@ -226,11 +235,15 @@ const server = createServer(async (req, res) => {
         });
         json(res, 200, { exitCode: 0, stdout: result.stdout.slice(0, MAX_OUTPUT), stderr: result.stderr.slice(0, MAX_OUTPUT) });
       } catch (err) {
+        const stderr = (err.stderr || "").slice(0, MAX_OUTPUT);
         json(res, 200, {
           exitCode: typeof err.code === "number" ? err.code : 1,
           killed: Boolean(err.killed),
           stdout: (err.stdout || "").slice(0, MAX_OUTPUT),
-          stderr: (err.stderr || "").slice(0, MAX_OUTPUT),
+          stderr: /\bEOFError\b/.test(stderr)
+            ? "Your program asked for input but none was provided — type it in the stdin line and run again."
+            : stderr,
+          needsInput: /\bEOFError\b/.test(stderr),
         });
       }
     } finally {
@@ -258,6 +271,9 @@ const server = createServer(async (req, res) => {
       await writeProjectFiles(files, tempDir);
       const main = findMainPath(files, mainPath);
 
+      const sourceText = files.map((f) => f.content || "").join("\n");
+      const usesStdin = /\binput\s*\(/.test(sourceText) || /cin\s*>>/.test(sourceText) || /\bscanf\s*\(/.test(sourceText);
+
       let result;
       if (language === "python") {
         result = await runPython(main, tempDir, stdin);
@@ -267,6 +283,16 @@ const server = createServer(async (req, res) => {
           .filter((p) => /\.(cpp|cc|cxx|c)$/i.test(p));
         const sources = sourceFiles.includes(main) ? sourceFiles : [main, ...sourceFiles];
         result = await runCpp(sources, tempDir, stdin);
+      }
+      // A program that reads stdin but was given none either crashes (Python
+      // EOFError, already handled) or fails silently (C++ cin/scanf leaves the
+      // stream in a fail state and the variable uninitialised). Flag both so the
+      // client can explain instead of showing a wrong answer.
+      if (usesStdin && !stdin) {
+        result.needsInput = true;
+        if (language === "cpp" && !result.output && !result.error) {
+          result.error = "Your program reads input (cin/scanf) but none was provided — add input and run again.";
+        }
       }
       json(res, 200, result);
     } finally {

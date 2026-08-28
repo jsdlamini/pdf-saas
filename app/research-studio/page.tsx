@@ -990,6 +990,16 @@ function makeProjectId() {
   return `project-${Math.random().toString(36).slice(2, 10)}`;
 }
 
+// Count how many stdin reads a code snippet makes, so we can nudge the
+// student to provide input (Python `input()`, C++ `cin >>` / `scanf`).
+function detectInputNeeds(code: string, language: string): number {
+  if (!code) return 0;
+  if (language === "python") return (code.match(/\binput\s*\(/g) || []).length;
+  const cin = (code.match(/cin\s*>>/g) || []).length;
+  const scanf = (code.match(/\bscanf\s*\(/g) || []).length;
+  return cin + scanf;
+}
+
 export default function ResearchStudioPage() {
   const initialState = useMemo(() => loadInitialResearchStudioState(), []);
   const { isLoaded: authLoaded, userId } = useAuth();
@@ -1145,7 +1155,7 @@ export default function ResearchStudioPage() {
     } catch { return "latex"; }
   });
 
-  const [codeOutput, setCodeOutput] = useState<{ stdout: string; stderr: string; exitCode: number } | null>(null);
+  const [codeOutput, setCodeOutput] = useState<{ stdout: string; stderr: string; exitCode: number; needsInput?: boolean } | null>(null);
   const [codeOutputCollapsed, setCodeOutputCollapsed] = useState(false);
 
   const [editorTheme, setEditorTheme] = useState<EditorThemeId>(() => {
@@ -1312,6 +1322,8 @@ export default function ResearchStudioPage() {
   const [treeContextActiveIndex, setTreeContextActiveIndex] = useState(0);
   const [autoSaveStatus, setAutoSaveStatus] = useState<"saved" | "unsaved" | "saving">("saved");
   const [codeRunBusy, setCodeRunBusy] = useState(false);
+  const [codeStdin, setCodeStdin] = useState("");
+  const [lastRunStdin, setLastRunStdin] = useState("");
   const [autoSaveTimestamp, setAutoSaveTimestamp] = useState<string | null>(null);
 
   // ── AI writing / citation / history state ─────
@@ -1397,6 +1409,11 @@ export default function ResearchStudioPage() {
 
   const isCodeMode = editorMode === "python" || editorMode === "cpp";
   const activeSource = activeEntry?.content ?? "";
+
+  const inputNeeds = useMemo(
+    () => (activeEntry && isCodeMode ? detectInputNeeds(activeEntry.content, editorMode) : 0),
+    [activeEntry, isCodeMode, editorMode]
+  );
 
   const preview = useMemo(() => buildPreview(activeSource), [activeSource]);
   const projectTree = useMemo(() => buildProjectTree(projectEntries), [projectEntries]);
@@ -2994,8 +3011,8 @@ export default function ResearchStudioPage() {
   const [pushBusy, setPushBusy] = useState(false);
   const [challengesOpen, setChallengesOpen] = useState(false);
   const [challengeTab, setChallengeTab] = useState<"challenges" | "leaderboard" | "progress">("challenges");
-  const [challenges, setChallenges] = useState<Array<{ id: number; slug: string; language: string; difficulty: string; points: number; statement_md: string; starter_code: string; test_mode: string }>>([]);
-  const [activeChallenge, setActiveChallenge] = useState<{ id: number; slug: string; language: string; statement_md: string; test_mode: string } | null>(null);
+  const [challenges, setChallenges] = useState<Array<{ id: number; slug: string; language: string; difficulty: string; points: number; statement_md: string; starter_code: string; test_mode: string; sample_input: string }>>([]);
+  const [activeChallenge, setActiveChallenge] = useState<{ id: number; slug: string; language: string; statement_md: string; test_mode: string; sample_input: string } | null>(null);
   const [challengeResults, setChallengeResults] = useState<{ passed: boolean; firstSolve: boolean; total: number; results: Array<{ ok: boolean; input: string; expected: string; actual: string }> } | null>(null);
   const [challengeBusy, setChallengeBusy] = useState(false);
   const [leaderboard, setLeaderboard] = useState<{ cohortId: number; seasonId: number; entries: Array<{ userId: string; displayName: string; points: number; solved: number }>; me: { displayName: string; optedIn: boolean } } | null>(null);
@@ -3226,16 +3243,22 @@ export default function ResearchStudioPage() {
     }
   }
 
-  async function solveChallenge(ch: { id: number; slug: string; language: string; statement_md: string; starter_code: string; test_mode: string }) {
+  async function solveChallenge(ch: { id: number; slug: string; language: string; statement_md: string; starter_code: string; test_mode: string; sample_input: string }) {
     const unit = ch.test_mode === "pytest" || ch.test_mode === "doctest";
     const path = unit ? (ch.language === "python" ? "solution.py" : "solution.cpp") : ch.language === "python" ? "main.py" : "main.cpp";
     const entry = { path, kind: "file" as const, content: ch.starter_code };
     setProjectEntries((prev) => (prev.some((e) => e.path === path) ? prev.map((e) => (e.path === path ? entry : e)) : [...prev, entry]));
     setSelectedPath(path);
     setEditorMode(ch.language === "python" ? "python" : "cpp");
-    setActiveChallenge({ id: ch.id, slug: ch.slug, language: ch.language, statement_md: ch.statement_md, test_mode: ch.test_mode });
+    setActiveChallenge({ id: ch.id, slug: ch.slug, language: ch.language, statement_md: ch.statement_md, test_mode: ch.test_mode, sample_input: ch.sample_input });
     setChallengeResults(null);
     setChallengesOpen(false);
+    // Prefill the Run input box from the challenge's sample input, or n blank
+    // lines when the starter reads n values but has no sample.
+    const needs = detectInputNeeds(ch.starter_code, ch.language);
+    if (ch.sample_input) setCodeStdin(ch.sample_input);
+    else if (needs > 0) setCodeStdin(Array.from({ length: needs }, () => "").join("\n") + "\n");
+    else setCodeStdin("");
     setCompileNotice(`Challenge loaded: ${ch.slug}. Edit your code, then click "Submit for grading" to earn points.`);
   }
 
@@ -4356,13 +4379,15 @@ export default function ResearchStudioPage() {
       const response = await fetch("/api/run-code", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ language: editorMode, files, mainPath: activeEntry.path }),
+        body: JSON.stringify({ language: editorMode, files, mainPath: activeEntry.path, stdin: codeStdin }),
       });
 
-      const result = (await response.json()) as { output?: string; error?: string; exitCode?: number; message?: string };
+      const result = (await response.json()) as { output?: string; error?: string; exitCode?: number; message?: string; needsInput?: boolean };
+
+      setLastRunStdin(codeStdin);
 
       if (!response.ok) {
-        setCodeOutput({ stdout: "", stderr: result.error || result.message || `Server error: ${response.status}`, exitCode: result.exitCode ?? 1 });
+        setCodeOutput({ stdout: "", stderr: result.error || result.message || `Server error: ${response.status}`, exitCode: result.exitCode ?? 1, needsInput: result.needsInput });
         setCompileNotice("Code execution failed.");
         return;
       }
@@ -4371,9 +4396,10 @@ export default function ResearchStudioPage() {
         stdout: result.output || "",
         stderr: result.error || "",
         exitCode: result.exitCode ?? 0,
+        needsInput: result.needsInput,
       });
       setCodeOutputCollapsed(false);
-      setCompileNotice(`Code executed (exit code: ${result.exitCode ?? 0}).`);
+      setCompileNotice(result.needsInput ? "Your program reads input — provide it in the Input box and run again." : `Code executed (exit code: ${result.exitCode ?? 0}).`);
       trackStudioEvent("run-code", editorMode);
     } catch (runError) {
       const message = runError instanceof Error ? runError.message : "Code execution failed.";
@@ -6795,6 +6821,32 @@ export default function ResearchStudioPage() {
             </div>
           </div>
 
+          {/* Input (stdin) pane — code mode only */}
+          {isCodeMode ? (
+            <div className="studio-code-output" style={{ borderColor: inputNeeds > 0 && !codeStdin.trim() ? "#f59e0b" : undefined }}>
+              <div className="studio-code-output-header">
+                <span>Input (stdin)</span>
+                <span style={{ fontSize: 10, color: "var(--text-muted, #64748b)" }}>
+                  {inputNeeds > 0 ? `${inputNeeds} value${inputNeeds === 1 ? "" : "s"} expected` : "optional"}
+                </span>
+              </div>
+              <textarea
+                value={codeStdin}
+                onChange={(e) => setCodeStdin(e.target.value)}
+                placeholder={inputNeeds > 0 ? "Provide input, one value per line…" : "Program input (optional)"}
+                aria-label="Program input (stdin)"
+                spellCheck={false}
+                autoComplete="off"
+                style={{ width: "100%", minHeight: 44, maxHeight: 120, resize: "vertical", background: "transparent", border: "none", outline: "none", color: "var(--text-primary, #e2e8f0)", fontFamily: "var(--font-mono)", fontSize: 12, padding: "8px 10px", lineHeight: 1.5 }}
+              />
+              {inputNeeds > 0 && !codeStdin.trim() ? (
+                <div style={{ padding: "0 10px 8px", fontSize: 11, color: "#f59e0b" }}>
+                  Your program reads input — add it above, then run. (Interactive REPL-style loops aren't supported yet; provide all input up front.)
+                </div>
+              ) : null}
+            </div>
+          ) : null}
+
           {/* Code output panel */}
           {isCodeMode && codeOutput ? (
             <div className={`studio-code-output ${codeOutputCollapsed ? "studio-code-output-collapsed" : ""}`}>
@@ -6822,6 +6874,11 @@ export default function ResearchStudioPage() {
               </div>
               {!codeOutputCollapsed ? (
                 <>
+                  {lastRunStdin ? (
+                    <pre className="studio-code-output-body" style={{ color: "#60a5fa" }}>
+                      {lastRunStdin.split("\n").map((line) => `> ${line}`).join("\n")}
+                    </pre>
+                  ) : null}
                   {codeOutput.stdout ? (
                     <pre className="studio-code-output-body" style={{ color: "#4ade80" }}>{codeOutput.stdout}</pre>
                   ) : null}
