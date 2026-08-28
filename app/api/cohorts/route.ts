@@ -2,7 +2,7 @@ import { auth } from "@clerk/nextjs/server";
 import { randomBytes } from "node:crypto";
 import { db, ensureMigrated } from "@/lib/db";
 import { activeSeasonId, resolveCohortId } from "@/lib/challenges";
-import { getUserRole, isLecturerOrAdmin } from "@/lib/user-roles";
+import { isCohortLecturer, isLecturerOrAdmin } from "@/lib/user-roles";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -149,9 +149,7 @@ export async function POST(request: Request) {
     const cohort = await db.query(`SELECT id, created_by FROM wiserfiles_cohorts WHERE id = $1`, [cohortId]);
     if (!cohort.rows.length) return jsonError("Cohort not found.", 404);
 
-    const role = await getUserRole(userId);
-    const isOwner = cohort.rows[0].created_by === userId;
-    if (role !== "admin" && !isOwner) return jsonError("Only the cohort creator or an admin can regenerate the code.", 403);
+    if (!(await isCohortLecturer(userId, cohortId))) return jsonError("Only a lecturer of this cohort can regenerate the code.", 403);
 
     const maxUses = body.joinCodeMaxUses ? Math.max(1, Number(body.joinCodeMaxUses)) : null;
     const expiresInDays = body.joinCodeExpiresInDays ? Number(body.joinCodeExpiresInDays) : null;

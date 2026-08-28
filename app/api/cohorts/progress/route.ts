@@ -1,6 +1,6 @@
 import { auth } from "@clerk/nextjs/server";
 import { db, ensureMigrated } from "@/lib/db";
-import { getUserRole } from "@/lib/user-roles";
+import { isCohortLecturer } from "@/lib/user-roles";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -23,9 +23,7 @@ export async function GET(request: Request) {
   const cohort = await db.query(`SELECT created_by FROM wiserfiles_cohorts WHERE id = $1`, [cohortId]);
   if (!cohort.rows.length) return jsonError("Cohort not found.", 404);
 
-  const role = await getUserRole(userId);
-  const isOwner = cohort.rows[0].created_by === userId;
-  if (!isOwner && role !== "admin") return jsonError("Only the cohort creator can view progress.", 403);
+  if (!(await isCohortLecturer(userId, cohortId))) return jsonError("Only a lecturer of this cohort can view progress.", 403);
 
   const challenges = await db.query(
     `SELECT id, slug, language, difficulty, points FROM wiserfiles_challenges ORDER BY CASE language WHEN 'python' THEN 0 ELSE 1 END, difficulty, id`

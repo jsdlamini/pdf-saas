@@ -67,3 +67,18 @@ export async function isLecturerOrAdmin(userId: string): Promise<boolean> {
   if (!domains.length) return false;
   return domains.some((d: string) => email.toLowerCase().endsWith(d));
 }
+
+// Per-cohort lecturer: an admin, the cohort creator, or anyone enrolled with
+// role = 'lecturer' in that cohort. Used to gate cohort management (roster,
+// analytics, progress, join-code regeneration).
+export async function isCohortLecturer(userId: string, cohortId: number): Promise<boolean> {
+  const role = await getUserRole(userId);
+  if (role === "admin") return true;
+  const cohort = await db.query(`SELECT created_by FROM wiserfiles_cohorts WHERE id = $1`, [cohortId]);
+  if (cohort.rows[0]?.created_by === userId) return true;
+  const enr = await db.query(
+    `SELECT 1 FROM wiserfiles_enrollments WHERE cohort_id = $1 AND user_id = $2 AND role = 'lecturer'`,
+    [cohortId, userId]
+  );
+  return enr.rows.length > 0;
+}
