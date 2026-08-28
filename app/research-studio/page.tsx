@@ -990,16 +990,6 @@ function makeProjectId() {
   return `project-${Math.random().toString(36).slice(2, 10)}`;
 }
 
-// Count how many stdin reads a code snippet makes, so we can nudge the
-// student to provide input (Python `input()`, C++ `cin >>` / `scanf`).
-function detectInputNeeds(code: string, language: string): number {
-  if (!code) return 0;
-  if (language === "python") return (code.match(/\binput\s*\(/g) || []).length;
-  const cin = (code.match(/cin\s*>>/g) || []).length;
-  const scanf = (code.match(/\bscanf\s*\(/g) || []).length;
-  return cin + scanf;
-}
-
 export default function ResearchStudioPage() {
   const initialState = useMemo(() => loadInitialResearchStudioState(), []);
   const { isLoaded: authLoaded, userId } = useAuth();
@@ -1322,8 +1312,6 @@ export default function ResearchStudioPage() {
   const [treeContextActiveIndex, setTreeContextActiveIndex] = useState(0);
   const [autoSaveStatus, setAutoSaveStatus] = useState<"saved" | "unsaved" | "saving">("saved");
   const [codeRunBusy, setCodeRunBusy] = useState(false);
-  const [codeStdin, setCodeStdin] = useState("");
-  const [lastRunStdin, setLastRunStdin] = useState("");
   const [autoSaveTimestamp, setAutoSaveTimestamp] = useState<string | null>(null);
 
   // ── AI writing / citation / history state ─────
@@ -1410,10 +1398,6 @@ export default function ResearchStudioPage() {
   const isCodeMode = editorMode === "python" || editorMode === "cpp";
   const activeSource = activeEntry?.content ?? "";
 
-  const inputNeeds = useMemo(
-    () => (activeEntry && isCodeMode ? detectInputNeeds(activeEntry.content, editorMode) : 0),
-    [activeEntry, isCodeMode, editorMode]
-  );
 
   const preview = useMemo(() => buildPreview(activeSource), [activeSource]);
   const projectTree = useMemo(() => buildProjectTree(projectEntries), [projectEntries]);
@@ -3010,7 +2994,7 @@ export default function ResearchStudioPage() {
   const [pushProgress, setPushProgress] = useState<number | null>(null);
   const [pushBusy, setPushBusy] = useState(false);
   const [challengesOpen, setChallengesOpen] = useState(false);
-  const [challengeTab, setChallengeTab] = useState<"challenges" | "leaderboard" | "progress">("challenges");
+  const [challengeTab, setChallengeTab] = useState<"challenges" | "cohorts" | "leaderboard" | "progress">("challenges");
   const [challenges, setChallenges] = useState<Array<{ id: number; slug: string; language: string; difficulty: string; points: number; statement_md: string; starter_code: string; test_mode: string; sample_input: string }>>([]);
   const [activeChallenge, setActiveChallenge] = useState<{ id: number; slug: string; language: string; statement_md: string; test_mode: string; sample_input: string } | null>(null);
   const [challengeResults, setChallengeResults] = useState<{ passed: boolean; firstSolve: boolean; total: number; results: Array<{ ok: boolean; input: string; expected: string; actual: string }> } | null>(null);
@@ -3023,6 +3007,11 @@ export default function ResearchStudioPage() {
   const [optInBusy, setOptInBusy] = useState(false);
   const [joinCode, setJoinCode] = useState("");
   const [progressData, setProgressData] = useState<{ challenges: Array<{ id: number; slug: string; language: string }>; members: Array<{ userId: string; displayName: string; statuses: string[] }> } | null>(null);
+  const [cohortsData, setCohortsData] = useState<{ courses: Array<{ id: number; code: string; title: string; institution: string }>; cohorts: Array<{ id: number; name: string; join_code: string; course_id: number | null; course_code: string | null; course_title: string | null; member_count: number }>; myCohortId: number; enrollments: Array<{ cohort_id: number; role: string; status: string; student_id: string | null }> } | null>(null);
+  const [newCohortName, setNewCohortName] = useState("");
+  const [newCohortCode, setNewCohortCode] = useState("");
+  const [newCohortTitle, setNewCohortTitle] = useState("");
+  const [cohortBusy, setCohortBusy] = useState(false);
 
   async function githubSettings() {
     if (!userId) return;
@@ -3229,7 +3218,7 @@ export default function ResearchStudioPage() {
     }
   }
 
-  async function openChallengesPanel(tab: "challenges" | "leaderboard" | "progress" = "challenges") {
+  async function openChallengesPanel(tab: "challenges" | "cohorts" | "leaderboard" | "progress" = "challenges") {
     setChallengesOpen(true);
     setChallengeTab(tab);
     void loadLeaderboard();
@@ -3253,12 +3242,6 @@ export default function ResearchStudioPage() {
     setActiveChallenge({ id: ch.id, slug: ch.slug, language: ch.language, statement_md: ch.statement_md, test_mode: ch.test_mode, sample_input: ch.sample_input });
     setChallengeResults(null);
     setChallengesOpen(false);
-    // Prefill the Run input box from the challenge's sample input, or n blank
-    // lines when the starter reads n values but has no sample.
-    const needs = detectInputNeeds(ch.starter_code, ch.language);
-    if (ch.sample_input) setCodeStdin(ch.sample_input);
-    else if (needs > 0) setCodeStdin(Array.from({ length: needs }, () => "").join("\n") + "\n");
-    else setCodeStdin("");
     setCompileNotice(`Challenge loaded: ${ch.slug}. Edit your code, then click "Submit for grading" to earn points.`);
   }
 
@@ -3362,9 +3345,48 @@ export default function ResearchStudioPage() {
       }
       setJoinCode("");
       setCompileNotice("Cohort joined.");
+      await loadCohorts();
       await loadLeaderboard();
     } catch {
       setCompileNotice("Could not join cohort.");
+    }
+  }
+
+  async function loadCohorts() {
+    try {
+      const res = await fetch("/api/cohorts");
+      const data = (await res.json().catch(() => null)) as { courses: Array<{ id: number; code: string; title: string; institution: string }>; cohorts: Array<{ id: number; name: string; join_code: string; course_id: number | null; course_code: string | null; course_title: string | null; member_count: number }>; myCohortId: number; enrollments: Array<{ cohort_id: number; role: string; status: string; student_id: string | null }> } | null;
+      setCohortsData(data);
+    } catch { /* ignore */ }
+  }
+
+  async function createCohort() {
+    const name = newCohortName.trim();
+    if (!name) {
+      setCompileNotice("Enter a cohort name.");
+      return;
+    }
+    setCohortBusy(true);
+    try {
+      const res = await fetch("/api/cohorts", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "create", name, code: newCohortCode.trim(), title: newCohortTitle.trim() }),
+      });
+      const data = (await res.json().catch(() => null)) as { cohort?: { name: string; join_code: string }; error?: string } | null;
+      if (data?.error) {
+        setCompileNotice(data.error);
+        return;
+      }
+      setNewCohortName("");
+      setNewCohortCode("");
+      setNewCohortTitle("");
+      setCompileNotice(`Cohort created — share join code ${data?.cohort?.join_code}.`);
+      await loadCohorts();
+    } catch {
+      setCompileNotice("Could not create cohort.");
+    } finally {
+      setCohortBusy(false);
     }
   }
 
@@ -4397,12 +4419,10 @@ export default function ResearchStudioPage() {
       const response = await fetch("/api/run-code", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ language: editorMode, files, mainPath: activeEntry.path, stdin: codeStdin }),
+        body: JSON.stringify({ language: editorMode, files, mainPath: activeEntry.path }),
       });
 
       const result = (await response.json()) as { output?: string; error?: string; exitCode?: number; message?: string; needsInput?: boolean };
-
-      setLastRunStdin(codeStdin);
 
       if (!response.ok) {
         setCodeOutput({ stdout: "", stderr: result.error || result.message || `Server error: ${response.status}`, exitCode: result.exitCode ?? 1, needsInput: result.needsInput });
@@ -4417,7 +4437,7 @@ export default function ResearchStudioPage() {
         needsInput: result.needsInput,
       });
       setCodeOutputCollapsed(false);
-      setCompileNotice(result.needsInput ? "Your program reads input — provide it in the Input box and run again." : `Code executed (exit code: ${result.exitCode ?? 0}).`);
+      setCompileNotice(result.needsInput ? "Your program reads input — run it in the Terminal with input instead of the Run button." : `Code executed (exit code: ${result.exitCode ?? 0}).`);
       trackStudioEvent("run-code", editorMode);
     } catch (runError) {
       const message = runError instanceof Error ? runError.message : "Code execution failed.";
@@ -6289,6 +6309,7 @@ export default function ResearchStudioPage() {
           ...(isCodeMode ? [{
             label: "Challenges", key: "challenges", items: [
               { label: "Open Challenges", action: () => { setOpenMenu(""); void openChallengesPanel(); } },
+              { label: "Cohorts (join / create)", action: () => { setOpenMenu(""); void openChallengesPanel("cohorts"); } },
               "-",
               { label: "Leaderboard", action: () => { setOpenMenu(""); void openChallengesPanel("leaderboard"); } },
               { label: "Progress (lecturer)", action: () => { setOpenMenu(""); void openChallengesPanel("progress"); } },
@@ -6842,32 +6863,6 @@ export default function ResearchStudioPage() {
             </div>
           </div>
 
-          {/* Input (stdin) pane — code mode only */}
-          {isCodeMode ? (
-            <div className="studio-code-output" style={{ borderColor: inputNeeds > 0 && !codeStdin.trim() ? "#f59e0b" : undefined }}>
-              <div className="studio-code-output-header">
-                <span>Input (stdin)</span>
-                <span style={{ fontSize: 10, color: "var(--text-muted, #64748b)" }}>
-                  {inputNeeds > 0 ? `${inputNeeds} value${inputNeeds === 1 ? "" : "s"} expected` : "optional"}
-                </span>
-              </div>
-              <textarea
-                value={codeStdin}
-                onChange={(e) => setCodeStdin(e.target.value)}
-                placeholder={inputNeeds > 0 ? "Provide input, one value per line…" : "Program input (optional)"}
-                aria-label="Program input (stdin)"
-                spellCheck={false}
-                autoComplete="off"
-                style={{ width: "100%", minHeight: 44, maxHeight: 120, resize: "vertical", background: "transparent", border: "none", outline: "none", color: "var(--text-primary, #e2e8f0)", fontFamily: "var(--font-mono)", fontSize: 12, padding: "8px 10px", lineHeight: 1.5 }}
-              />
-              {inputNeeds > 0 && !codeStdin.trim() ? (
-                <div style={{ padding: "0 10px 8px", fontSize: 11, color: "#f59e0b" }}>
-                  Your program reads input — add it above, then run. (Interactive REPL-style loops aren't supported yet; provide all input up front.)
-                </div>
-              ) : null}
-            </div>
-          ) : null}
-
           {/* Code output panel */}
           {isCodeMode && codeOutput ? (
             <div className={`studio-code-output ${codeOutputCollapsed ? "studio-code-output-collapsed" : ""}`}>
@@ -6895,11 +6890,6 @@ export default function ResearchStudioPage() {
               </div>
               {!codeOutputCollapsed ? (
                 <>
-                  {lastRunStdin ? (
-                    <pre className="studio-code-output-body" style={{ color: "#60a5fa" }}>
-                      {lastRunStdin.split("\n").map((line) => `> ${line}`).join("\n")}
-                    </pre>
-                  ) : null}
                   {codeOutput.stdout ? (
                     <pre className="studio-code-output-body" style={{ color: "#4ade80" }}>{codeOutput.stdout}</pre>
                   ) : null}
@@ -7590,6 +7580,7 @@ export default function ResearchStudioPage() {
               </DialogHeader>
               <div className="mb-3 flex gap-1.5">
                 <Button variant={challengeTab === "challenges" ? "default" : "outline"} size="sm" onClick={() => setChallengeTab("challenges")}>Challenges</Button>
+                <Button variant={challengeTab === "cohorts" ? "default" : "outline"} size="sm" onClick={() => { setChallengeTab("cohorts"); void loadCohorts(); }}>Cohorts</Button>
                 <Button variant={challengeTab === "leaderboard" ? "default" : "outline"} size="sm" onClick={() => { setChallengeTab("leaderboard"); void loadLeaderboard(); }}>Leaderboard</Button>
                 <Button variant={challengeTab === "progress" ? "default" : "outline"} size="sm" onClick={() => { setChallengeTab("progress"); void loadProgress(); }}>Progress</Button>
               </div>
@@ -7611,6 +7602,49 @@ export default function ResearchStudioPage() {
                       </button>
                     ))
                   )}
+                </div>
+              ) : challengeTab === "cohorts" ? (
+                <div className="space-y-3">
+                  <div className="rounded-lg border p-3">
+                    <p className="text-sm font-semibold">Join a cohort</p>
+                    <div className="mt-1.5 flex gap-2">
+                      <input value={joinCode} onChange={(e) => setJoinCode(e.target.value)} placeholder="Join code from your lecturer" className="h-9 flex-1 rounded-md border bg-background px-2 text-sm" />
+                      <Button size="sm" onClick={() => void joinCohort()}>Join</Button>
+                    </div>
+                  </div>
+
+                  <div className="rounded-lg border p-3">
+                    <p className="text-sm font-semibold">Create a cohort (lecturers)</p>
+                    <div className="mt-1.5 space-y-2">
+                      <input value={newCohortName} onChange={(e) => setNewCohortName(e.target.value)} placeholder="Cohort name — e.g. CSC111 S1 2026 Group A" className="h-9 w-full rounded-md border bg-background px-2 text-sm" />
+                      <div className="flex gap-2">
+                        <input value={newCohortCode} onChange={(e) => setNewCohortCode(e.target.value)} placeholder="Course code — e.g. CSC111" className="h-9 flex-1 rounded-md border bg-background px-2 text-sm" />
+                        <input value={newCohortTitle} onChange={(e) => setNewCohortTitle(e.target.value)} placeholder="Course title (optional)" className="h-9 flex-1 rounded-md border bg-background px-2 text-sm" />
+                      </div>
+                      <Button size="sm" onClick={() => void createCohort()} disabled={cohortBusy}>{cohortBusy ? "Creating…" : "Create cohort"}</Button>
+                    </div>
+                  </div>
+
+                  <div className="max-h-64 space-y-1.5 overflow-y-auto">
+                    {!cohortsData ? (
+                      <p className="text-sm text-muted-foreground">Loading…</p>
+                    ) : cohortsData.cohorts.length === 0 ? (
+                      <p className="text-sm text-muted-foreground">No cohorts yet — create one or join with a code.</p>
+                    ) : (
+                      cohortsData.cohorts.map((c) => {
+                        const mine = cohortsData.enrollments.some((e) => e.cohort_id === c.id);
+                        return (
+                          <div key={c.id} className="flex items-center justify-between rounded-lg border px-3 py-2 text-sm">
+                            <div>
+                              <span className="font-semibold">{c.name}</span>
+                              <span className="text-xs text-muted-foreground"> · {c.course_code || "no course"} · {c.member_count} member{c.member_count === 1 ? "" : "s"}{mine ? " · you're enrolled" : ""}</span>
+                            </div>
+                            <span className="font-mono text-xs text-muted-foreground">{c.join_code}</span>
+                          </div>
+                        );
+                      })
+                    )}
+                  </div>
                 </div>
               ) : challengeTab === "leaderboard" ? (
                 <div className="space-y-3">
