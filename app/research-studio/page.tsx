@@ -3262,7 +3262,7 @@ export default function ResearchStudioPage() {
     setCompileNotice(`Challenge loaded: ${ch.slug}. Edit your code, then click "Submit for grading" to earn points.`);
   }
 
-  async function runChallengeTests() {
+  async function runChallengeTests(practice = false) {
     if (!activeChallenge) return;
     setChallengeBusy(true);
     setChallengeResults(null);
@@ -3273,13 +3273,17 @@ export default function ResearchStudioPage() {
       const res = await fetch("/api/challenges/submit", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ challengeId: activeChallenge.id, language: activeChallenge.language, files, mainPath }),
+        body: JSON.stringify({ challengeId: activeChallenge.id, language: activeChallenge.language, files, mainPath, practice }),
       });
       const data = (await res.json()) as { passed: boolean; firstSolve: boolean; total: number; results: Array<{ ok: boolean; input: string; expected: string; actual: string }> };
       setChallengeResults(data);
       if (data.passed) {
-        confetti({ particleCount: 90, spread: 70, origin: { y: 0.6 } });
-        if (data.firstSolve) setTimeout(() => confetti({ particleCount: 160, spread: 100, origin: { y: 0.4 } }), 250);
+        if (practice) {
+          setCompileNotice("Practice passed — no points recorded, not on the leaderboard.");
+        } else {
+          confetti({ particleCount: 90, spread: 70, origin: { y: 0.6 } });
+          if (data.firstSolve) setTimeout(() => confetti({ particleCount: 160, spread: 100, origin: { y: 0.4 } }), 250);
+        }
       }
     } catch (error) {
       setChallengeResults({ passed: false, firstSolve: false, total: 0, results: [{ ok: false, input: "", expected: "", actual: error instanceof Error ? error.message : "error" }] });
@@ -6718,6 +6722,9 @@ export default function ResearchStudioPage() {
                 <button type="button" onClick={() => { setChallengesOpen(true); }} className="studio-btn studio-btn-ghost" style={{ height: 24, fontSize: 11, padding: "0 8px" }}>View statement</button>
                 <button type="button" onClick={() => void runChallengeTests()} disabled={challengeBusy} className="studio-btn studio-btn-primary" style={{ height: 24, fontSize: 11, padding: "0 10px", background: "#4ade80", color: "#000" }}>
                   {challengeBusy ? "Grading…" : "Submit for grading"}
+                </button>
+                <button type="button" onClick={() => void runChallengeTests(true)} disabled={challengeBusy} className="studio-btn studio-btn-ghost" style={{ height: 24, fontSize: 11, padding: "0 8px" }} title="Grade against hidden tests without recording a solve or points">
+                  Practice (no points)
                 </button>
                 <button type="button" onClick={() => { setActiveChallenge(null); setChallengeResults(null); }} className="studio-btn studio-btn-ghost" style={{ height: 24, fontSize: 11, padding: "0 8px", marginLeft: "auto" }}>Exit challenge</button>
               </div>
