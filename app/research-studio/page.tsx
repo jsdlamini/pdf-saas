@@ -2989,6 +2989,11 @@ export default function ResearchStudioPage() {
   const [shareBusy, setShareBusy] = useState(false);
   const [pushProgress, setPushProgress] = useState<number | null>(null);
   const [pushBusy, setPushBusy] = useState(false);
+  const [challengesOpen, setChallengesOpen] = useState(false);
+  const [challenges, setChallenges] = useState<Array<{ id: number; slug: string; language: string; difficulty: string; points: number; statement_md: string; starter_code: string }>>([]);
+  const [activeChallenge, setActiveChallenge] = useState<{ id: number; slug: string; language: string; statement_md: string } | null>(null);
+  const [challengeResults, setChallengeResults] = useState<{ passed: boolean; firstSolve: boolean; total: number; results: Array<{ ok: boolean; input: string; expected: string; actual: string }> } | null>(null);
+  const [challengeBusy, setChallengeBusy] = useState(false);
 
   async function githubSettings() {
     if (!userId) return;
@@ -3192,6 +3197,51 @@ export default function ResearchStudioPage() {
       await pushFilesToGithub(githubRepo, false, false);
     } else {
       await pushToGithub();
+    }
+  }
+
+  async function openChallengesPanel() {
+    setChallengesOpen(true);
+    setChallengeResults(null);
+    try {
+      const res = await fetch("/api/challenges");
+      const data = (await res.json()) as { challenges?: typeof challenges };
+      setChallenges(data.challenges || []);
+    } catch {
+      setChallenges([]);
+    }
+  }
+
+  async function solveChallenge(ch: { id: number; slug: string; language: string; statement_md: string; starter_code: string }) {
+    const path = ch.language === "python" ? "main.py" : "main.cpp";
+    const entry = { path, kind: "file" as const, content: ch.starter_code };
+    setProjectEntries((prev) => (prev.some((e) => e.path === path) ? prev.map((e) => (e.path === path ? entry : e)) : [...prev, entry]));
+    setSelectedPath(path);
+    setEditorMode(ch.language === "python" ? "python" : "cpp");
+    setActiveChallenge({ id: ch.id, slug: ch.slug, language: ch.language, statement_md: ch.statement_md });
+    setChallengeResults(null);
+    setChallengesOpen(false);
+    setCompileNotice(`Challenge loaded: ${ch.slug}. Edit and run tests.`);
+  }
+
+  async function runChallengeTests() {
+    if (!activeChallenge) return;
+    setChallengeBusy(true);
+    setChallengeResults(null);
+    try {
+      const files = projectEntries.filter((e) => e.kind === "file").map((e) => ({ path: e.path, content: e.content }));
+      const mainPath = activeChallenge.language === "python" ? "main.py" : "main.cpp";
+      const res = await fetch("/api/challenges/submit", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ challengeId: activeChallenge.id, language: activeChallenge.language, files, mainPath }),
+      });
+      const data = (await res.json()) as { passed: boolean; firstSolve: boolean; total: number; results: Array<{ ok: boolean; input: string; expected: string; actual: string }> };
+      setChallengeResults(data);
+    } catch (error) {
+      setChallengeResults({ passed: false, firstSolve: false, total: 0, results: [{ ok: false, input: "", expected: "", actual: error instanceof Error ? error.message : "error" }] });
+    } finally {
+      setChallengeBusy(false);
     }
   }
 
@@ -6014,6 +6064,9 @@ export default function ResearchStudioPage() {
               { label: <>Open Project</>, action: () => { setOpenMenu(""); openProjectsBoard(); } },
               "-",
               { label: <>Save</>, action: () => { setOpenMenu(""); saveCurrentProject(); } },
+              ...(isCodeMode ? [
+                { label: <>Challenges</>, action: () => { setOpenMenu(""); void openChallengesPanel(); } },
+              ] as any[] : []),
               { label: <>Download ZIP</>, action: () => { setOpenMenu(""); void downloadProjectBundle(); } },
               ...(!isCodeMode ? [
                 "-",
@@ -7260,6 +7313,73 @@ export default function ResearchStudioPage() {
           <DialogFooter>
             <Button variant="outline" onClick={() => setCollaborateOpen(false)}>Close</Button>
           </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={challengesOpen} onOpenChange={setChallengesOpen}>
+        <DialogContent className="sm:max-w-lg">
+          {activeChallenge ? (
+            <>
+              <DialogHeader>
+                <DialogTitle>{activeChallenge.slug}</DialogTitle>
+                <DialogDescription>{activeChallenge.language.toUpperCase()} challenge</DialogDescription>
+              </DialogHeader>
+              <div className="max-h-64 overflow-y-auto whitespace-pre-wrap rounded-lg border p-3 text-sm" style={{ fontFamily: "var(--font-mono)" }}>
+                {activeChallenge.statement_md}
+              </div>
+              <div className="flex items-center gap-2">
+                <Button onClick={() => void runChallengeTests()} disabled={challengeBusy}>
+                  {challengeBusy ? "Running…" : "Run tests"}
+                </Button>
+                <Button variant="outline" onClick={() => setActiveChallenge(null)}>Back to list</Button>
+              </div>
+              {challengeResults ? (
+                <div className="space-y-1.5">
+                  <p className={`text-sm font-semibold ${challengeResults.passed ? "text-emerald-600" : "text-rose-600"}`}>
+                    {challengeResults.passed
+                      ? `Solved! ${challengeResults.firstSolve ? "First solve — points awarded." : ""}`
+                      : `Not passing: ${challengeResults.results.filter((r) => r.ok).length}/${challengeResults.total} tests`}
+                  </p>
+                  {challengeResults.results.map((r, i) => (
+                    <div key={i} className="rounded-lg border px-3 py-2 text-xs">
+                      <p className="font-mono">Test {i + 1}: {r.ok ? "✓ pass" : "✗ fail"}</p>
+                      {!r.ok ? (
+                        <>
+                          <p className="font-mono text-muted-foreground">input: {r.input || "(none)"}</p>
+                          <p className="font-mono text-muted-foreground">expected: {r.expected}</p>
+                          <p className="font-mono">got: {r.actual || "(empty)"}</p>
+                        </>
+                      ) : null}
+                    </div>
+                  ))}
+                </div>
+              ) : null}
+            </>
+          ) : (
+            <>
+              <DialogHeader>
+                <DialogTitle>Challenges</DialogTitle>
+                <DialogDescription>Python and C++ problems. Your code is graded against hidden tests.</DialogDescription>
+              </DialogHeader>
+              <div className="grid max-h-96 gap-1.5 overflow-y-auto">
+                {challenges.length === 0 ? (
+                  <p className="text-sm text-muted-foreground">Loading…</p>
+                ) : (
+                  challenges.map((ch) => (
+                    <button
+                      key={ch.id}
+                      type="button"
+                      onClick={() => void solveChallenge(ch)}
+                      className="flex items-center justify-between rounded-lg border px-3 py-2 text-left text-sm transition hover:bg-muted"
+                    >
+                      <span className="font-semibold">{ch.slug}</span>
+                      <span className="text-xs text-muted-foreground">{ch.language} · {ch.difficulty} · {ch.points} pts</span>
+                    </button>
+                  ))
+                )}
+              </div>
+            </>
+          )}
         </DialogContent>
       </Dialog>
 

@@ -87,13 +87,14 @@ function sandboxedEnv(tempDir, extra = {}) {
   };
 }
 
-async function runPython(mainPath, tempDir) {
+async function runPython(mainPath, tempDir, stdin = "") {
   const scriptPath = join(tempDir, mainPath);
   try {
     const result = await execFileAsync("python3", [scriptPath], {
       cwd: tempDir,
       timeout: CODE_TIMEOUT_MS,
       maxBuffer: MAX_OUTPUT,
+      input: stdin,
       env: sandboxedEnv(tempDir, { PYTHONDONTWRITEBYTECODE: "1" }),
     });
     return { output: truncateOutput(result.stdout || ""), error: result.stderr || "", exitCode: 0 };
@@ -107,7 +108,7 @@ async function runPython(mainPath, tempDir) {
   }
 }
 
-async function runCpp(sourceFiles, tempDir) {
+async function runCpp(sourceFiles, tempDir, stdin = "") {
   const binaryPath = join(tempDir, "program");
   try {
     await execFileAsync("g++", ["-std=c++17", "-O2", "-Wall", "-o", binaryPath, ...sourceFiles.map((f) => join(tempDir, f))], {
@@ -124,6 +125,7 @@ async function runCpp(sourceFiles, tempDir) {
       cwd: tempDir,
       timeout: CODE_TIMEOUT_MS,
       maxBuffer: MAX_OUTPUT,
+      input: stdin,
       env: sandboxedEnv(tempDir),
     });
     return { output: truncateOutput(result.stdout || ""), error: result.stderr || "", exitCode: 0 };
@@ -218,6 +220,7 @@ const server = createServer(async (req, res) => {
     const language = body.language;
     const files = Array.isArray(body.files) ? body.files : [];
     const mainPath = body.mainPath || "";
+    const stdin = typeof body.stdin === "string" ? body.stdin : "";
 
     if (language !== "python" && language !== "cpp") {
       return json(res, 400, { error: "Language must be 'python' or 'cpp'." });
@@ -231,13 +234,13 @@ const server = createServer(async (req, res) => {
 
       let result;
       if (language === "python") {
-        result = await runPython(main, tempDir);
+        result = await runPython(main, tempDir, stdin);
       } else {
         const sourceFiles = files
           .map((f) => sanitizeRelPath(f.path))
           .filter((p) => /\.(cpp|cc|cxx|c)$/i.test(p));
         const sources = sourceFiles.includes(main) ? sourceFiles : [main, ...sourceFiles];
-        result = await runCpp(sources, tempDir);
+        result = await runCpp(sources, tempDir, stdin);
       }
       json(res, 200, result);
     } finally {
