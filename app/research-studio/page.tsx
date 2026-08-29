@@ -991,6 +991,14 @@ function makeProjectId() {
   return `project-${Math.random().toString(36).slice(2, 10)}`;
 }
 
+const DIFFICULTY_RANK: Record<string, number> = { easy: 0, medium: 1, hard: 2 };
+
+function difficultyBadgeClass(difficulty: string): string {
+  if (difficulty === "easy") return "bg-emerald-500/15 text-emerald-600 dark:text-emerald-400";
+  if (difficulty === "medium") return "bg-amber-500/15 text-amber-600 dark:text-amber-400";
+  return "bg-rose-500/15 text-rose-600 dark:text-rose-400";
+}
+
 export default function ResearchStudioPage() {
   const initialState = useMemo(() => loadInitialResearchStudioState(), []);
   const { isLoaded: authLoaded, userId } = useAuth();
@@ -7672,17 +7680,32 @@ export default function ResearchStudioPage() {
                   {challenges.length === 0 ? (
                     <p className="text-sm text-muted-foreground">Loading…</p>
                   ) : (
-                    challenges.filter((ch) => ch.language === editorMode).map((ch) => (
-                      <button
-                        key={ch.id}
-                        type="button"
-                        onClick={() => void solveChallenge(ch)}
-                        className="flex items-center justify-between rounded-lg border px-3 py-2 text-left text-sm transition hover:bg-muted"
-                      >
-                        <span className="font-semibold">{ch.slug}</span>
-                        <span className="text-xs text-muted-foreground">{ch.language} · {ch.difficulty} · {ch.points} pts{ch.test_mode !== "io" ? ` · ${ch.test_mode}` : ""}</span>
-                      </button>
-                    ))
+                    challenges
+                      .filter((ch) => ch.language === editorMode)
+                      .sort((a, b) => {
+                        const ra = DIFFICULTY_RANK[a.difficulty] ?? 3;
+                        const rb = DIFFICULTY_RANK[b.difficulty] ?? 3;
+                        if (ra !== rb) return ra - rb;
+                        if (a.points !== b.points) return a.points - b.points;
+                        return a.id - b.id;
+                      })
+                      .map((ch, i) => (
+                        <button
+                          key={ch.id}
+                          type="button"
+                          onClick={() => void solveChallenge(ch)}
+                          className="flex items-center justify-between rounded-lg border px-3 py-2 text-left text-sm transition hover:bg-muted"
+                        >
+                          <span className="flex items-center gap-2">
+                            <span className="w-5 shrink-0 text-xs text-muted-foreground">{i + 1}</span>
+                            <span className="font-semibold">{ch.slug}</span>
+                          </span>
+                          <span className="flex items-center gap-2 text-xs text-muted-foreground">
+                            <span className={`rounded-full px-2 py-0.5 text-[10px] font-semibold ${difficultyBadgeClass(ch.difficulty)}`}>{ch.difficulty}</span>
+                            {ch.language} · {ch.points} pts{ch.test_mode !== "io" ? ` · ${ch.test_mode}` : ""}
+                          </span>
+                        </button>
+                      ))
                   )}
                 </div>
               ) : challengeTab === "cohorts" ? (
