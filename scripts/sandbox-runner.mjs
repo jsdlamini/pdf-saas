@@ -133,6 +133,14 @@ function sanitizeTerminal(raw) {
     .replace(/\r/g, "\n");
 }
 
+// Render the transcript: strip ANSI, then put the shell prompt on its own line
+// when a program exited without printing a trailing newline (e.g. "8$ " ->
+// "8\n$ ") so the prompt is never glued to program output.
+function renderTerminal(raw) {
+  const cleaned = sanitizeTerminal(raw);
+  return cleaned.replace(/([^\n])\$ /g, "$1\n$ ");
+}
+
 function sandboxedEnv(tempDir, extra = {}) {
   return {
     PATH: process.env.PATH || "/usr/bin:/bin",
@@ -322,8 +330,8 @@ const server = createServer(async (req, res) => {
       if (session.stdout.length > MAX_OUTPUT) session.stdout = session.stdout.slice(0, MAX_OUTPUT);
       if (session.stderr.length > MAX_OUTPUT) session.stderr = session.stderr.slice(0, MAX_OUTPUT);
     };
-    child.stdout.on("data", (d) => { session.stdout += sanitizeTerminal(d); cap(); });
-    child.stderr.on("data", (d) => { session.stderr += sanitizeTerminal(d); cap(); });
+    child.stdout.on("data", (d) => { session.stdout += d; cap(); });
+    child.stderr.on("data", (d) => { session.stderr += d; cap(); });
     child.stdin.on("error", () => {});
     child.on("error", (err) => {
       session.stderr += `${err.message}\n`;
@@ -386,8 +394,8 @@ const server = createServer(async (req, res) => {
     return json(res, 200, {
       running: s.running,
       exitCode: s.exitCode,
-      stdout: s.stdout,
-      stderr: s.stderr,
+      stdout: renderTerminal(s.stdout),
+      stderr: renderTerminal(s.stderr),
     });
   }
 
