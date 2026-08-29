@@ -3075,8 +3075,10 @@ export default function ResearchStudioPage() {
   const [pushBusy, setPushBusy] = useState(false);
   const [challengesOpen, setChallengesOpen] = useState(false);
   const [challengeTab, setChallengeTab] = useState<"challenges" | "cohorts" | "leaderboard" | "progress">("challenges");
-  const [challenges, setChallenges] = useState<Array<{ id: number; slug: string; language: string; difficulty: string; points: number; statement_md: string; starter_code: string; test_mode: string; sample_input: string }>>([]);
-  const [activeChallenge, setActiveChallenge] = useState<{ id: number; slug: string; language: string; statement_md: string; test_mode: string; sample_input: string } | null>(null);
+  const [challenges, setChallenges] = useState<Array<{ id: number; slug: string; language: string; difficulty: string; points: number; statement_md: string; starter_code: string; test_mode: string; sample_input: string; hints: string[]; hint_cost: number }>>([]);
+  const [activeChallenge, setActiveChallenge] = useState<{ id: number; slug: string; language: string; statement_md: string; test_mode: string; sample_input: string; hints: string[]; hint_cost: number } | null>(null);
+  const [hintText, setHintText] = useState("");
+  const [hintBusy, setHintBusy] = useState(false);
   const [challengeResults, setChallengeResults] = useState<{ passed: boolean; firstSolve: boolean; total: number; results: Array<{ ok: boolean; input: string; expected: string; actual: string }> } | null>(null);
   const [challengeBusy, setChallengeBusy] = useState(false);
   const [leaderboard, setLeaderboard] = useState<{ cohortId: number; seasonId: number; scoringMode: string; frozen: boolean; entries: Array<{ userId: string; displayName: string; points: number; solved: number; penalty?: number }>; me: { displayName: string; optedIn: boolean } } | null>(null);
@@ -3326,17 +3328,37 @@ export default function ResearchStudioPage() {
     }
   }
 
-  async function solveChallenge(ch: { id: number; slug: string; language: string; statement_md: string; starter_code: string; test_mode: string; sample_input: string }) {
+  async function solveChallenge(ch: { id: number; slug: string; language: string; statement_md: string; starter_code: string; test_mode: string; sample_input: string; hints: string[]; hint_cost: number }) {
     const unit = ch.test_mode === "pytest" || ch.test_mode === "doctest";
     const path = unit ? (ch.language === "python" ? "solution.py" : "solution.cpp") : ch.language === "python" ? "main.py" : "main.cpp";
     const entry = { path, kind: "file" as const, content: ch.starter_code };
     setProjectEntries((prev) => (prev.some((e) => e.path === path) ? prev.map((e) => (e.path === path ? entry : e)) : [...prev, entry]));
     setSelectedPath(path);
     setEditorMode(ch.language === "python" ? "python" : "cpp");
-    setActiveChallenge({ id: ch.id, slug: ch.slug, language: ch.language, statement_md: ch.statement_md, test_mode: ch.test_mode, sample_input: ch.sample_input });
+    setActiveChallenge({ id: ch.id, slug: ch.slug, language: ch.language, statement_md: ch.statement_md, test_mode: ch.test_mode, sample_input: ch.sample_input, hints: ch.hints, hint_cost: ch.hint_cost });
     setChallengeResults(null);
+    setHintText("");
     setChallengesOpen(false);
     setCompileNotice(`Challenge loaded: ${ch.slug}. Edit your code, then click "Submit for grading" to earn points.`);
+  }
+
+  async function revealHint() {
+    if (!activeChallenge) return;
+    setHintBusy(true);
+    try {
+      const res = await fetch("/api/challenges/hint", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ challengeId: activeChallenge.id }),
+      });
+      const data = (await res.json().catch(() => null)) as { hint?: string; cost?: number; hintsRevealed?: number; hintsTotal?: number; error?: string } | null;
+      if (data?.error) setCompileNotice(data.error);
+      else if (data?.hint) setHintText(`Hint (${data.hintsRevealed ?? 1}/${data.hintsTotal ?? 1}, -${data.cost ?? 0} pts): ${data.hint}`);
+    } catch {
+      setCompileNotice("Could not reveal hint.");
+    } finally {
+      setHintBusy(false);
+    }
   }
 
   async function runChallengeTests(practice = false) {
@@ -6969,8 +6991,16 @@ export default function ResearchStudioPage() {
                 <button type="button" onClick={() => void runChallengeTests(true)} disabled={challengeBusy} className="studio-btn studio-btn-ghost" style={{ height: 24, fontSize: 11, padding: "0 8px" }} title="Grade against hidden tests without recording a solve or points">
                   Practice (no points)
                 </button>
+                {activeChallenge.hints.length > 0 ? (
+                  <button type="button" onClick={() => void revealHint()} disabled={hintBusy} className="studio-btn studio-btn-ghost" style={{ height: 24, fontSize: 11, padding: "0 8px" }} title={`Reveals the next hint (-${activeChallenge.hint_cost} points)`}>
+                    {hintBusy ? "…" : `Hint (-${activeChallenge.hint_cost})`}
+                  </button>
+                ) : null}
                 <button type="button" onClick={() => { setActiveChallenge(null); setChallengeResults(null); }} className="studio-btn studio-btn-ghost" style={{ height: 24, fontSize: 11, padding: "0 8px", marginLeft: "auto" }}>Exit challenge</button>
               </div>
+              {hintText ? (
+                <p style={{ margin: "6px 0 0", fontSize: 11, color: "#f59e0b" }}>{hintText}</p>
+              ) : null}
               <p style={{ margin: "4px 0 0", fontSize: 11, color: "var(--text-muted, #94a3b8)" }}>
                 Edit the starter code in the editor, then submit. Passing every hidden test awards points and ranks you on the leaderboard.
               </p>
