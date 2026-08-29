@@ -7805,7 +7805,6 @@ export default function ResearchStudioPage() {
           >
             <pre style={{ margin: 0, whiteSpace: "pre-wrap", wordBreak: "break-word" }}>{terminalOutput}</pre>
             <div style={{ display: "flex", alignItems: "center" }}>
-              <span style={{ color: "#0f0" }}>$&nbsp;</span>
               <input
                 ref={terminalInputRef}
                 value={terminalCommand}
