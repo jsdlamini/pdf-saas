@@ -271,6 +271,11 @@ const MIGRATIONS: string[] = [
     position INTEGER NOT NULL DEFAULT 0,
     PRIMARY KEY (contest_id, challenge_id)
   )`,
+
+  // ── ICPC scoring + leaderboard freeze ───────────────────────────
+  `ALTER TABLE wiserfiles_challenge_solves ADD COLUMN IF NOT EXISTS wrong_attempts INTEGER NOT NULL DEFAULT 0`,
+  `ALTER TABLE wiserfiles_challenge_solves ADD COLUMN IF NOT EXISTS penalty_minutes INTEGER`,
+  `ALTER TABLE wiserfiles_cohorts ADD COLUMN IF NOT EXISTS freeze_at TIMESTAMPTZ`,
 ];
 
 let migrationPromise: Promise<void> | null = null;

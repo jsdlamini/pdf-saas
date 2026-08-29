@@ -3063,7 +3063,14 @@ export default function ResearchStudioPage() {
   const [activeChallenge, setActiveChallenge] = useState<{ id: number; slug: string; language: string; statement_md: string; test_mode: string; sample_input: string } | null>(null);
   const [challengeResults, setChallengeResults] = useState<{ passed: boolean; firstSolve: boolean; total: number; results: Array<{ ok: boolean; input: string; expected: string; actual: string }> } | null>(null);
   const [challengeBusy, setChallengeBusy] = useState(false);
-  const [leaderboard, setLeaderboard] = useState<{ cohortId: number; seasonId: number; entries: Array<{ userId: string; displayName: string; points: number; solved: number }>; me: { displayName: string; optedIn: boolean } } | null>(null);
+  const [leaderboard, setLeaderboard] = useState<{ cohortId: number; seasonId: number; scoringMode: string; frozen: boolean; entries: Array<{ userId: string; displayName: string; points: number; solved: number; penalty?: number }>; me: { displayName: string; optedIn: boolean } } | null>(null);
+
+  // Live leaderboard: refresh while the Leaderboard tab is open.
+  useEffect(() => {
+    if (!challengesOpen || challengeTab !== "leaderboard") return;
+    const t = setInterval(() => void loadLeaderboard(), 4000);
+    return () => clearInterval(t);
+  }, [challengesOpen, challengeTab, editorMode]);
   const [optInOpen, setOptInOpen] = useState(false);
   const [optInName, setOptInName] = useState("");
   const [optInStudentId, setOptInStudentId] = useState("");
@@ -3347,7 +3354,7 @@ export default function ResearchStudioPage() {
     try {
       const lang = editorMode === "python" || editorMode === "cpp" ? editorMode : "";
       const res = await fetch(`/api/leaderboard${lang ? `?language=${lang}` : ""}`);
-      const data = (await res.json()) as { cohortId: number; seasonId: number; entries: Array<{ userId: string; displayName: string; points: number; solved: number }>; me: { displayName: string; optedIn: boolean } };
+      const data = (await res.json()) as { cohortId: number; seasonId: number; scoringMode: string; frozen: boolean; entries: Array<{ userId: string; displayName: string; points: number; solved: number; penalty?: number }>; me: { displayName: string; optedIn: boolean } };
       setLeaderboard(data);
       setOptInName(data.me?.displayName || "");
       // Fetch the current student ID (lives on the enrollment, not consent).
@@ -7816,26 +7823,31 @@ export default function ResearchStudioPage() {
                     ) : leaderboard.entries.length === 0 ? (
                       <p className="text-sm text-muted-foreground">No one on the board yet — opt in and solve a challenge.</p>
                     ) : (
-                      <table className="w-full border-collapse text-sm">
-                        <thead>
-                          <tr className="border-b text-left text-xs text-muted-foreground">
-                            <th className="py-1 pr-2">#</th>
-                            <th className="py-1 pr-2">Name</th>
-                            <th className="py-1 pr-2 text-right">Solved</th>
-                            <th className="py-1 text-right">Points</th>
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {leaderboard.entries.map((e, i) => (
-                            <tr key={e.userId} className="border-b">
-                              <td className="py-1 pr-2">{i + 1}</td>
-                              <td className="py-1 pr-2">{e.displayName}</td>
-                              <td className="py-1 pr-2 text-right">{e.solved}</td>
-                              <td className="py-1 text-right font-semibold">{e.points}</td>
+                      <>
+                        {leaderboard.frozen ? (
+                          <p className="mb-2 text-xs text-amber-500">⏸️ Leaderboard frozen — new solves are hidden until the end.</p>
+                        ) : null}
+                        <table className="w-full border-collapse text-sm">
+                          <thead>
+                            <tr className="border-b text-left text-xs text-muted-foreground">
+                              <th className="py-1 pr-2">#</th>
+                              <th className="py-1 pr-2">Name</th>
+                              <th className="py-1 pr-2 text-right">Solved</th>
+                              <th className="py-1 text-right">{leaderboard.scoringMode === "icpc" ? "Penalty" : "Points"}</th>
                             </tr>
-                          ))}
-                        </tbody>
-                      </table>
+                          </thead>
+                          <tbody>
+                            {leaderboard.entries.map((e, i) => (
+                              <tr key={e.userId} className="border-b">
+                                <td className="py-1 pr-2">{i + 1}</td>
+                                <td className="py-1 pr-2">{e.displayName}</td>
+                                <td className="py-1 pr-2 text-right">{e.solved}</td>
+                                <td className="py-1 text-right font-semibold">{leaderboard.scoringMode === "icpc" ? e.penalty : e.points}</td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </>
                     )}
                   </div>
                 </div>

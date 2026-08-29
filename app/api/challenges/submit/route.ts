@@ -79,10 +79,29 @@ export async function POST(request: Request) {
       [userId, body.challengeId, cohortId]
     );
     if (!existing.rows.length) {
+      // ICPC penalty: wrong attempts before this solve, and minutes elapsed
+      // since the contest started (+20 per wrong attempt).
+      const wrong = await db.query(
+        `SELECT COUNT(*)::int AS n FROM wiserfiles_submissions
+         WHERE user_id = $1 AND challenge_id = $2 AND cohort_id = $3 AND passed = FALSE`,
+        [userId, body.challengeId, cohortId]
+      );
+      const wrongAttempts = wrong.rows[0]?.n || 0;
+
+      let penaltyMinutes: number | null = null;
+      const contest = await db.query(
+        `SELECT starts_at, scoring_mode FROM wiserfiles_cohorts WHERE id = $1`,
+        [cohortId]
+      );
+      if (contest.rows.length && contest.rows[0].scoring_mode === "icpc" && contest.rows[0].starts_at) {
+        const elapsedMin = Math.max(0, Math.floor((Date.now() - new Date(contest.rows[0].starts_at).getTime()) / 60000));
+        penaltyMinutes = elapsedMin + 20 * wrongAttempts;
+      }
+
       await db.query(
-        `INSERT INTO wiserfiles_challenge_solves (user_id, challenge_id, cohort_id, season_id, points)
-         VALUES ($1, $2, $3, $4, $5)`,
-        [userId, body.challengeId, cohortId, seasonId || null, challenge.points]
+        `INSERT INTO wiserfiles_challenge_solves (user_id, challenge_id, cohort_id, season_id, points, wrong_attempts, penalty_minutes)
+         VALUES ($1, $2, $3, $4, $5, $6, $7)`,
+        [userId, body.challengeId, cohortId, seasonId || null, challenge.points, wrongAttempts, penaltyMinutes]
       );
       firstSolve = true;
     }
