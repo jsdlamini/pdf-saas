@@ -42,6 +42,7 @@ export async function GET(request: Request) {
            AND (NOT EXISTS (SELECT 1 FROM wiserfiles_contest_challenges cc WHERE cc.contest_id = $1)
                 OR s.challenge_id IN (SELECT challenge_id FROM wiserfiles_contest_challenges WHERE contest_id = $1))
            AND ($4::timestamptz IS NULL OR s.solved_at <= $4)
+           AND NOT EXISTS (SELECT 1 FROM wiserfiles_enrollments e WHERE e.user_id = s.user_id AND e.cohort_id = s.cohort_id AND e.is_disqualified)
          GROUP BY s.user_id, o.display_name
          ORDER BY solved DESC, total_penalty ASC, s.user_id ASC
          LIMIT 100`,
@@ -60,6 +61,7 @@ export async function GET(request: Request) {
            AND (NOT EXISTS (SELECT 1 FROM wiserfiles_contest_challenges cc WHERE cc.contest_id = $1)
                 OR s.challenge_id IN (SELECT challenge_id FROM wiserfiles_contest_challenges WHERE contest_id = $1))
            AND ($4::timestamptz IS NULL OR s.solved_at <= $4)
+           AND NOT EXISTS (SELECT 1 FROM wiserfiles_enrollments e WHERE e.user_id = s.user_id AND e.cohort_id = s.cohort_id AND e.is_disqualified)
          GROUP BY s.user_id, o.display_name
          ORDER BY total_points DESC, first_solve_at ASC, s.user_id ASC
          LIMIT 100`,

@@ -999,6 +999,22 @@ function difficultyBadgeClass(difficulty: string): string {
   return "bg-rose-500/15 text-rose-600 dark:text-rose-400";
 }
 
+function DiffText({ expected, actual }: { expected: string; actual: string }) {
+  const parts = diffLines(expected, actual);
+  return (
+    <pre className="whitespace-pre-wrap break-words font-mono text-[11px]">
+      {parts.map((p, i) => (
+        <span
+          key={i}
+          className={p.type === "add" ? "bg-emerald-500/15 text-emerald-600 dark:text-emerald-400" : p.type === "remove" ? "bg-rose-500/15 text-rose-600 dark:text-rose-400" : undefined}
+        >
+          {p.type === "add" ? `+ ${p.text}` : p.type === "remove" ? `- ${p.text}` : `  ${p.text}`}
+        </span>
+      ))}
+    </pre>
+  );
+}
+
 export default function ResearchStudioPage() {
   const initialState = useMemo(() => loadInitialResearchStudioState(), []);
   const { isLoaded: authLoaded, userId } = useAuth();
@@ -3087,6 +3103,9 @@ export default function ResearchStudioPage() {
   const [newContestPublic, setNewContestPublic] = useState(false);
   const [newContestPrizes, setNewContestPrizes] = useState("");
   const [cohortBusy, setCohortBusy] = useState(false);
+  const [manageContest, setManageContest] = useState<{ id: number; slug: string | null; name: string } | null>(null);
+  const [manageSlugs, setManageSlugs] = useState<Set<string>>(new Set());
+  const [manageBusy, setManageBusy] = useState(false);
 
   async function githubSettings() {
     if (!userId) return;
@@ -3478,6 +3497,62 @@ export default function ResearchStudioPage() {
       setCompileNotice("Could not create contest.");
     } finally {
       setCohortBusy(false);
+    }
+  }
+
+  async function openManageContest(c: { id: number; slug: string | null; name: string }) {
+    setManageContest(c);
+    setManageSlugs(new Set());
+    if (c.slug) {
+      try {
+        const res = await fetch(`/api/contest/${c.slug}`);
+        const data = (await res.json().catch(() => null)) as { challenges?: Array<{ slug: string }> } | null;
+        if (data?.challenges) setManageSlugs(new Set(data.challenges.map((ch) => ch.slug)));
+      } catch { /* ignore */ }
+    }
+  }
+
+  function toggleManageSlug(slug: string) {
+    setManageSlugs((prev) => {
+      const next = new Set(prev);
+      if (next.has(slug)) next.delete(slug);
+      else next.add(slug);
+      return next;
+    });
+  }
+
+  async function updateContestField(contestId: number, fields: Record<string, unknown>) {
+    try {
+      const res = await fetch("/api/cohorts", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "update", contestId, ...fields }),
+      });
+      const data = (await res.json().catch(() => null)) as { ok?: boolean; error?: string } | null;
+      if (data?.error) setCompileNotice(data.error);
+      else setCompileNotice("Contest updated.");
+      await loadContests();
+    } catch {
+      setCompileNotice("Could not update contest.");
+    }
+  }
+
+  async function saveContestProblems() {
+    if (!manageContest) return;
+    setManageBusy(true);
+    try {
+      await fetch("/api/cohorts", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "setChallenges", contestId: manageContest.id, challengeSlugs: [...manageSlugs] }),
+      });
+      setCompileNotice("Problems updated.");
+      setManageContest(null);
+      await loadContests();
+    } catch {
+      setCompileNotice("Could not update problems.");
+    } finally {
+      setManageBusy(false);
     }
   }
 
@@ -6912,8 +6987,7 @@ export default function ResearchStudioPage() {
                       {!r.ok ? (
                         <>
                           {r.input ? <div style={{ color: "var(--text-muted, #94a3b8)" }}>input: {r.input}</div> : null}
-                          <div style={{ color: "var(--text-muted, #94a3b8)" }}>expected: {r.expected}</div>
-                          <div>got: {r.actual || "(empty)"}</div>
+                          <DiffText expected={r.expected} actual={r.actual || "(empty)"} />
                         </>
                       ) : null}
                     </div>
@@ -7660,8 +7734,7 @@ export default function ResearchStudioPage() {
                       {!r.ok ? (
                         <>
                           <p className="font-mono text-muted-foreground">input: {r.input || "(none)"}</p>
-                          <p className="font-mono text-muted-foreground">expected: {r.expected}</p>
-                          <p className="font-mono">got: {r.actual || "(empty)"}</p>
+                          <DiffText expected={r.expected} actual={r.actual || "(empty)"} />
                         </>
                       ) : null}
                     </div>
@@ -7773,11 +7846,40 @@ export default function ResearchStudioPage() {
                             {c.prizes && c.prizes.length ? (
                               <div className="mt-1 text-xs text-amber-500">🏆 {c.prizes.map((p) => p.label).join(" · ")}</div>
                             ) : null}
+                            {c.slug && c.is_public ? (
+                              <a href={`/contest/${c.slug}`} target="_blank" rel="noreferrer" className="mt-1 inline-block text-xs text-blue-500 hover:underline">Public page ↗</a>
+                            ) : null}
+                            {c.created_by === userId ? (
+                              <div className="mt-2 flex flex-wrap gap-1.5">
+                                <Button size="sm" variant="outline" onClick={() => void updateContestField(c.id, { endsAt: new Date().toISOString() })}>Close now</Button>
+                                <Button size="sm" variant="outline" onClick={() => void updateContestField(c.id, { freezeAt: new Date().toISOString() })}>Freeze</Button>
+                                <Button size="sm" variant="outline" onClick={() => void openManageContest(c)}>Problems</Button>
+                              </div>
+                            ) : null}
                           </div>
                         );
                       })
                     )}
                   </div>
+                  {manageContest ? (
+                    <div className="rounded-lg border p-3">
+                      <p className="text-sm font-semibold">Problems — {manageContest.name}</p>
+                      <p className="text-xs text-muted-foreground">Check the problems in this contest. Unchecked problems won't count toward its leaderboard.</p>
+                      <div className="mt-2 max-h-48 space-y-1 overflow-y-auto">
+                        {challenges.map((ch) => (
+                          <label key={ch.id} className="flex items-center gap-2 rounded px-1 py-0.5 text-xs hover:bg-muted">
+                            <input type="checkbox" checked={manageSlugs.has(ch.slug)} onChange={() => toggleManageSlug(ch.slug)} />
+                            <span>{ch.slug}</span>
+                            <span className="text-muted-foreground">{ch.language} · {ch.difficulty} · {ch.points} pts</span>
+                          </label>
+                        ))}
+                      </div>
+                      <div className="mt-2 flex gap-2">
+                        <Button size="sm" onClick={() => void saveContestProblems()} disabled={manageBusy}>{manageBusy ? "Saving…" : "Save problems"}</Button>
+                        <Button size="sm" variant="outline" onClick={() => setManageContest(null)}>Cancel</Button>
+                      </div>
+                    </div>
+                  ) : null}
                 </div>
               ) : challengeTab === "leaderboard" ? (
                 <div className="space-y-3">

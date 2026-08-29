@@ -166,5 +166,60 @@ export async function POST(request: Request) {
     return Response.json({ joinCode: updated.rows[0].join_code });
   }
 
+  // ── Update contest settings (host only) ───────────────────────
+  if (body.action === "update") {
+    const contestId = Number(body.contestId);
+    if (!contestId) return jsonError("contestId is required.", 400);
+    if (!(await isCohortLecturer(userId, contestId))) return jsonError("Only the host can update this contest.", 403);
+
+    const fields: string[] = [];
+    const values: unknown[] = [];
+    const push = (col: string, val: unknown) => { fields.push(`${col} = $${values.length + 2}`); values.push(val); };
+
+    if (body.name !== undefined) push("name", String(body.name).trim());
+    if (body.description !== undefined) push("description", String(body.description).trim());
+    if (body.endsAt !== undefined) push("ends_at", body.endsAt ? new Date(String(body.endsAt)).toISOString() : null);
+    if (body.freezeAt !== undefined) push("freeze_at", body.freezeAt ? new Date(String(body.freezeAt)).toISOString() : null);
+    if (body.scoringMode !== undefined) push("scoring_mode", body.scoringMode === "icpc" ? "icpc" : "solve");
+    if (body.isPublic !== undefined) push("is_public", Boolean(body.isPublic));
+    if (body.prizes !== undefined) push("prizes", Array.isArray(body.prizes) ? JSON.stringify(body.prizes) : null);
+
+    if (!fields.length) return jsonError("Nothing to update.", 400);
+    await db.query(`UPDATE wiserfiles_cohorts SET ${fields.join(", ")} WHERE id = $1`, [contestId, ...values]);
+    return Response.json({ ok: true });
+  }
+
+  // ── Replace the contest's problem set (host only) ─────────────
+  if (body.action === "setChallenges") {
+    const contestId = Number(body.contestId);
+    if (!contestId) return jsonError("contestId is required.", 400);
+    if (!(await isCohortLecturer(userId, contestId))) return jsonError("Only the host can change problems.", 403);
+
+    const slugs = (Array.isArray(body.challengeSlugs) ? body.challengeSlugs : []).map((s) => String(s).trim()).filter(Boolean);
+    await db.query(`DELETE FROM wiserfiles_contest_challenges WHERE contest_id = $1`, [contestId]);
+    for (let i = 0; i < slugs.length; i++) {
+      const ch = await db.query(`SELECT id FROM wiserfiles_challenges WHERE slug = $1`, [slugs[i]]);
+      if (ch.rows.length) {
+        await db.query(
+          `INSERT INTO wiserfiles_contest_challenges (contest_id, challenge_id, position) VALUES ($1, $2, $3)`,
+          [contestId, ch.rows[0].id, i]
+        );
+      }
+    }
+    return Response.json({ ok: true });
+  }
+
+  // ── Disqualify / reinstate a competitor (host only) ───────────
+  if (body.action === "disqualify") {
+    const contestId = Number(body.contestId);
+    if (!contestId || !body.userId) return jsonError("contestId and userId are required.", 400);
+    if (!(await isCohortLecturer(userId, contestId))) return jsonError("Only the host can disqualify competitors.", 403);
+    await db.query(
+      `UPDATE wiserfiles_enrollments SET is_disqualified = $3 WHERE cohort_id = $1 AND user_id = $2`,
+      [contestId, String(body.userId), Boolean(body.disqualified)]
+    );
+    return Response.json({ ok: true });
+  }
+
   return jsonError("Unknown action.", 400);
 }

@@ -64,6 +64,7 @@ export async function GET(request: Request, { params }: { params: Promise<{ slug
              AND (NOT EXISTS (SELECT 1 FROM wiserfiles_contest_challenges cc WHERE cc.contest_id = $1)
                   OR s.challenge_id IN (SELECT challenge_id FROM wiserfiles_contest_challenges WHERE contest_id = $1))
              AND ($2::timestamptz IS NULL OR s.solved_at <= $2)
+             AND NOT EXISTS (SELECT 1 FROM wiserfiles_enrollments e WHERE e.user_id = s.user_id AND e.cohort_id = s.cohort_id AND e.is_disqualified)
            GROUP BY s.user_id, o.display_name
          )
          SELECT *, ROW_NUMBER() OVER (ORDER BY solved DESC, total_penalty ASC, user_id ASC) AS rank
@@ -82,6 +83,7 @@ export async function GET(request: Request, { params }: { params: Promise<{ slug
              AND (NOT EXISTS (SELECT 1 FROM wiserfiles_contest_challenges cc WHERE cc.contest_id = $1)
                   OR s.challenge_id IN (SELECT challenge_id FROM wiserfiles_contest_challenges WHERE contest_id = $1))
              AND ($2::timestamptz IS NULL OR s.solved_at <= $2)
+             AND NOT EXISTS (SELECT 1 FROM wiserfiles_enrollments e WHERE e.user_id = s.user_id AND e.cohort_id = s.cohort_id AND e.is_disqualified)
            GROUP BY s.user_id, o.display_name
          )
          SELECT *, ROW_NUMBER() OVER (ORDER BY total_points DESC, first_solve_at ASC, user_id ASC) AS rank
