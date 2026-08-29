@@ -122,25 +122,6 @@ function truncateOutput(raw) {
   return Buffer.from(raw, "utf8").subarray(0, MAX_OUTPUT).toString("utf8") + "\n\n[Output truncated]";
 }
 
-// Strip ANSI escapes (bracketed-paste, colours, cursor) and normalise PTY CRLF
-// so the transcript renders as plain text in the client.
-function sanitizeTerminal(raw) {
-  return String(raw)
-    .replace(/\x1b\][^\x07]*(?:\x07|\x1b\\)/g, "") // OSC
-    .replace(/\x1b\[[0-9;?]*[A-Za-z]/g, "")            // CSI
-    .replace(/\x1b[()][A-Z0-9]/g, "")                    // charset
-    .replace(/\r\n/g, "\n")
-    .replace(/\r/g, "\n");
-}
-
-// Render the transcript: strip ANSI, then put the shell prompt on its own line
-// when a program exited without printing a trailing newline (e.g. "8$ " ->
-// "8\n$ ") so the prompt is never glued to program output.
-function renderTerminal(raw) {
-  const cleaned = sanitizeTerminal(raw);
-  return cleaned.replace(/([^\n])\$ /g, "$1\n$ ");
-}
-
 function sandboxedEnv(tempDir, extra = {}) {
   return {
     PATH: process.env.PATH || "/usr/bin:/bin",
@@ -310,7 +291,7 @@ const server = createServer(async (req, res) => {
 
     const child = spawn("script", ["-q", "-e", "-c", "bash --noprofile --norc", "/dev/null"], {
       cwd: tempDir,
-      env: sandboxedEnv(tempDir, { PS1: "$ ", HOME: tempDir, TERM: "dumb" }),
+      env: sandboxedEnv(tempDir, { PS1: "$ ", HOME: tempDir, TERM: "xterm-256color" }),
       stdio: ["pipe", "pipe", "pipe"],
       detached: true,
     });
@@ -363,7 +344,7 @@ const server = createServer(async (req, res) => {
     if (!s) return json(res, 404, { error: "Session not found or expired." });
     if (!s.running) return json(res, 200, { ok: true, closed: true });
     const data = typeof body.data === "string" ? body.data : "";
-    s.child.stdin.write(data + "\n");
+    s.child.stdin.write(data);
     return json(res, 200, { ok: true });
   }
 
@@ -394,8 +375,8 @@ const server = createServer(async (req, res) => {
     return json(res, 200, {
       running: s.running,
       exitCode: s.exitCode,
-      stdout: renderTerminal(s.stdout),
-      stderr: renderTerminal(s.stderr),
+      stdout: s.stdout,
+      stderr: s.stderr,
     });
   }
 
