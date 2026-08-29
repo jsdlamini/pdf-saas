@@ -252,6 +252,25 @@ const MIGRATIONS: string[] = [
   // ── Practice mode + integrity ─────────────────────────────────────
   `ALTER TABLE wiserfiles_submissions ADD COLUMN IF NOT EXISTS practice BOOLEAN NOT NULL DEFAULT FALSE`,
   `ALTER TABLE wiserfiles_submissions ADD COLUMN IF NOT EXISTS source_hash TEXT`,
+
+  // ── Contests ───────────────────────────────────────────────────
+  // A cohort doubles as a contest: anyone can host one, with a time window,
+  // scoring mode, prize tiers, an optional public page, and an assigned set of
+  // challenges.
+  `ALTER TABLE wiserfiles_cohorts ADD COLUMN IF NOT EXISTS slug TEXT`,
+  `ALTER TABLE wiserfiles_cohorts ADD COLUMN IF NOT EXISTS description TEXT NOT NULL DEFAULT ''`,
+  `ALTER TABLE wiserfiles_cohorts ADD COLUMN IF NOT EXISTS starts_at TIMESTAMPTZ`,
+  `ALTER TABLE wiserfiles_cohorts ADD COLUMN IF NOT EXISTS ends_at TIMESTAMPTZ`,
+  `ALTER TABLE wiserfiles_cohorts ADD COLUMN IF NOT EXISTS scoring_mode TEXT NOT NULL DEFAULT 'solve'`,
+  `ALTER TABLE wiserfiles_cohorts ADD COLUMN IF NOT EXISTS is_public BOOLEAN NOT NULL DEFAULT FALSE`,
+  `ALTER TABLE wiserfiles_cohorts ADD COLUMN IF NOT EXISTS prizes JSONB`,
+  `CREATE UNIQUE INDEX IF NOT EXISTS wiserfiles_cohorts_slug_key ON wiserfiles_cohorts (slug) WHERE slug IS NOT NULL`,
+  `CREATE TABLE IF NOT EXISTS wiserfiles_contest_challenges (
+    contest_id INTEGER NOT NULL REFERENCES wiserfiles_cohorts(id) ON DELETE CASCADE,
+    challenge_id INTEGER NOT NULL REFERENCES wiserfiles_challenges(id) ON DELETE CASCADE,
+    position INTEGER NOT NULL DEFAULT 0,
+    PRIMARY KEY (contest_id, challenge_id)
+  )`,
 ];
 
 let migrationPromise: Promise<void> | null = null;
