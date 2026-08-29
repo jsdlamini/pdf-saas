@@ -1,4 +1,4 @@
-import { auth } from "@clerk/nextjs/server";
+import { auth, currentUser } from "@clerk/nextjs/server";
 import { db, ensureMigrated } from "@/lib/db";
 
 export const runtime = "nodejs";
@@ -8,8 +8,9 @@ function jsonError(msg: string, status: number) {
   return Response.json({ error: msg }, { status });
 }
 
-// Public (or member-only) contest page: contest info, its problem set, and the
-// leaderboard. Hidden tests and starter code are never exposed here.
+// Public (or member-only) contest page: contest info, problem set, and a
+// ranked leaderboard with winners. Hidden tests and starter code are never
+// exposed here.
 export async function GET(request: Request, { params }: { params: Promise<{ slug: string }> }) {
   const { slug } = await params;
   const { userId } = await auth();
@@ -25,15 +26,17 @@ export async function GET(request: Request, { params }: { params: Promise<{ slug
   if (!contest.rows.length) return jsonError("Contest not found.", 404);
   const row = contest.rows[0];
 
-  // Private contests require membership or hosting.
-  if (!row.is_public) {
-    if (!userId) return jsonError("Sign in required.", 401);
+  let isMember = false;
+  if (userId) {
     const member = await db.query(
       `SELECT 1 FROM wiserfiles_enrollments WHERE cohort_id = $1 AND user_id = $2 AND status = 'active'`,
       [row.id, userId]
     );
-    if (!member.rows.length) return jsonError("This contest is private.", 403);
+    isMember = member.rows.length > 0;
   }
+
+  // Private contests require membership or hosting.
+  if (!row.is_public && !isMember) return jsonError("This contest is private.", 403);
 
   const challenges = await db.query(
     `SELECT ch.id, ch.slug, ch.language, ch.difficulty, ch.points, ch.statement_md
@@ -45,15 +48,39 @@ export async function GET(request: Request, { params }: { params: Promise<{ slug
   );
 
   const board = await db.query(
-    `SELECT s.user_id, o.display_name, SUM(s.points) AS total_points, COUNT(*) AS solved_count
-     FROM wiserfiles_challenge_solves s
-     JOIN wiserfiles_leaderboard_opt_in o ON o.user_id = s.user_id AND o.cohort_id = s.cohort_id
-     WHERE s.cohort_id = $1 AND o.opted_in = TRUE
-     GROUP BY s.user_id, o.display_name
-     ORDER BY total_points DESC, MIN(s.solved_at) ASC, s.user_id ASC
+    `WITH ranked AS (
+       SELECT s.user_id, o.display_name,
+              SUM(s.points) AS total_points,
+              COUNT(*) AS solved_count,
+              MIN(s.solved_at) AS first_solve_at
+       FROM wiserfiles_challenge_solves s
+       JOIN wiserfiles_leaderboard_opt_in o ON o.user_id = s.user_id AND o.cohort_id = s.cohort_id
+       WHERE s.cohort_id = $1 AND o.opted_in = TRUE
+         AND (NOT EXISTS (SELECT 1 FROM wiserfiles_contest_challenges cc WHERE cc.contest_id = $1)
+              OR s.challenge_id IN (SELECT challenge_id FROM wiserfiles_contest_challenges WHERE contest_id = $1))
+       GROUP BY s.user_id, o.display_name
+     )
+     SELECT *, ROW_NUMBER() OVER (ORDER BY total_points DESC, first_solve_at ASC, user_id ASC) AS rank
+     FROM ranked
+     ORDER BY rank
      LIMIT 100`,
     [row.id]
   );
+
+  const prizes = Array.isArray(row.prizes) ? row.prizes : [];
+  const winnerCount = prizes.length;
+  const leaderboard = board.rows.map((r) => {
+    const rank = Number(r.rank);
+    return {
+      rank,
+      userId: r.user_id,
+      displayName: r.display_name,
+      points: Number(r.total_points),
+      solved: Number(r.solved_count),
+      isWinner: winnerCount > 0 && rank <= winnerCount,
+      prize: winnerCount > 0 && rank <= winnerCount ? prizes[rank - 1]?.label || null : null,
+    };
+  });
 
   return Response.json({
     contest: {
@@ -65,17 +92,59 @@ export async function GET(request: Request, { params }: { params: Promise<{ slug
       endsAt: row.ends_at,
       scoringMode: row.scoring_mode,
       isPublic: row.is_public,
-      prizes: row.prizes,
+      prizes,
       joinCode: row.is_public ? null : row.join_code, // never leak the code publicly
       memberCount: row.member_count,
       isHost: row.created_by === userId,
+      isMember,
     },
     challenges: challenges.rows,
-    leaderboard: board.rows.map((r) => ({
-      userId: r.user_id,
-      displayName: r.display_name,
-      points: Number(r.total_points),
-      solved: Number(r.solved_count),
-    })),
+    leaderboard,
   });
+}
+
+// Join a public contest directly from its page (frictionless: sign in and go).
+export async function POST(request: Request, { params }: { params: Promise<{ slug: string }> }) {
+  const { slug } = await params;
+  const { userId } = await auth();
+  if (!userId) return jsonError("Sign in required.", 401);
+
+  await ensureMigrated();
+
+  const contest = await db.query(
+    `SELECT id, is_public, join_code_expires_at, join_code_max_uses, join_code_uses FROM wiserfiles_cohorts WHERE slug = $1`,
+    [slug]
+  );
+  if (!contest.rows.length) return jsonError("Contest not found.", 404);
+  const row = contest.rows[0];
+  if (!row.is_public) return jsonError("This contest is private — enter the invite code to join.", 403);
+
+  if (row.join_code_expires_at && new Date(row.join_code_expires_at).getTime() < Date.now()) {
+    return jsonError("Registration has closed for this contest.", 410);
+  }
+  if (row.join_code_max_uses != null && Number(row.join_code_uses) >= Number(row.join_code_max_uses)) {
+    return jsonError("This contest is full.", 410);
+  }
+
+  const contestId = Number(row.id);
+  await db.query(
+    `INSERT INTO wiserfiles_enrollments (user_id, cohort_id, role, status)
+     VALUES ($1, $2, 'student', 'active')
+     ON CONFLICT (user_id, cohort_id) DO UPDATE SET status = 'active', joined_at = NOW()`,
+    [userId, contestId]
+  );
+  await db.query(`UPDATE wiserfiles_cohorts SET join_code_uses = join_code_uses + 1 WHERE id = $1`, [contestId]);
+
+  // Auto-opt the competitor into the leaderboard with a default display name,
+  // so they show up without a separate opt-in step.
+  const user = await currentUser();
+  const displayName = user?.username || user?.firstName || "Competitor";
+  await db.query(
+    `INSERT INTO wiserfiles_leaderboard_opt_in (user_id, cohort_id, display_name, opted_in)
+     VALUES ($1, $2, $3, TRUE)
+     ON CONFLICT (user_id, cohort_id) DO NOTHING`,
+    [userId, contestId, displayName]
+  );
+
+  return Response.json({ ok: true, contestId });
 }

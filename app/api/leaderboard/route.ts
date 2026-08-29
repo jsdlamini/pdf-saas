@@ -31,6 +31,8 @@ export async function GET(request: Request) {
      JOIN wiserfiles_challenges c ON c.id = s.challenge_id
      WHERE s.cohort_id = $1 AND ($2::int IS NULL OR s.season_id = $2) AND o.opted_in = TRUE
        AND ($3::text IS NULL OR c.language = $3)
+       AND (NOT EXISTS (SELECT 1 FROM wiserfiles_contest_challenges cc WHERE cc.contest_id = $1)
+            OR s.challenge_id IN (SELECT challenge_id FROM wiserfiles_contest_challenges WHERE contest_id = $1))
      GROUP BY s.user_id, o.display_name
      ORDER BY total_points DESC, first_solve_at ASC, s.user_id ASC
      LIMIT 100`,

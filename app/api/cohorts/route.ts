@@ -1,4 +1,4 @@
-import { auth } from "@clerk/nextjs/server";
+import { auth, currentUser } from "@clerk/nextjs/server";
 import { randomBytes } from "node:crypto";
 import { db, ensureMigrated } from "@/lib/db";
 import { activeSeasonId, resolveCohortId } from "@/lib/challenges";
@@ -128,6 +128,16 @@ export async function POST(request: Request) {
       [userId, contestId]
     );
     await db.query(`UPDATE wiserfiles_cohorts SET join_code_uses = join_code_uses + 1 WHERE id = $1`, [contestId]);
+
+    // Auto-opt the competitor into the leaderboard with a default display name.
+    const user = await currentUser();
+    const displayName = user?.username || user?.firstName || "Competitor";
+    await db.query(
+      `INSERT INTO wiserfiles_leaderboard_opt_in (user_id, cohort_id, display_name, opted_in)
+       VALUES ($1, $2, $3, TRUE)
+       ON CONFLICT (user_id, cohort_id) DO NOTHING`,
+      [userId, contestId, displayName]
+    );
 
     return Response.json({ ok: true, contestId, seasonId });
   }
