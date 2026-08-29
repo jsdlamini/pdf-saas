@@ -276,6 +276,7 @@ const MIGRATIONS: string[] = [
   `ALTER TABLE wiserfiles_challenge_solves ADD COLUMN IF NOT EXISTS wrong_attempts INTEGER NOT NULL DEFAULT 0`,
   `ALTER TABLE wiserfiles_challenge_solves ADD COLUMN IF NOT EXISTS penalty_minutes INTEGER`,
   `ALTER TABLE wiserfiles_cohorts ADD COLUMN IF NOT EXISTS freeze_at TIMESTAMPTZ`,
+  `ALTER TABLE wiserfiles_enrollments ADD COLUMN IF NOT EXISTS is_disqualified BOOLEAN NOT NULL DEFAULT FALSE`,
 ];
 
 let migrationPromise: Promise<void> | null = null;
