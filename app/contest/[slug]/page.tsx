@@ -16,13 +16,15 @@ type ContestData = {
     endsAt: string | null;
     scoringMode: string;
     isPublic: boolean;
+    freezeAt: string | null;
+    frozen: boolean;
     prizes: Array<{ place: number; label: string }>;
     memberCount: number;
     isHost: boolean;
     isMember: boolean;
   };
   challenges: Array<{ id: number; slug: string; language: string; difficulty: string; points: number; statement_md: string }>;
-  leaderboard: Array<{ rank: number; userId: string; displayName: string; points: number; solved: number; isWinner: boolean; prize: string | null }>;
+  leaderboard: Array<{ rank: number; userId: string; displayName: string; points: number; solved: number; penalty?: number; isWinner: boolean; prize: string | null }>;
 };
 
 function fmt(iso: string | null) {
@@ -44,18 +46,22 @@ export default function ContestPage() {
   const [error, setError] = useState("");
   const [joining, setJoining] = useState(false);
 
+  async function load() {
+    try {
+      const res = await fetch(`/api/contest/${slug}`);
+      const json = await res.json();
+      if (!res.ok) setError(json?.error || "Contest not found.");
+      else setData(json);
+    } catch {
+      setError("Could not load this contest.");
+    }
+  }
+
   useEffect(() => {
     if (!slug) return;
-    (async () => {
-      try {
-        const res = await fetch(`/api/contest/${slug}`);
-        const json = await res.json();
-        if (!res.ok) setError(json?.error || "Contest not found.");
-        else setData(json);
-      } catch {
-        setError("Could not load this contest.");
-      }
-    })();
+    void load();
+    const t = setInterval(() => void load(), 4000);
+    return () => clearInterval(t);
   }, [slug]);
 
   async function join() {
@@ -64,10 +70,7 @@ export default function ContestPage() {
       const res = await fetch(`/api/contest/${slug}`, { method: "POST" });
       const json = await res.json();
       if (!res.ok) setError(json?.error || "Could not join.");
-      else {
-        const again = await fetch(`/api/contest/${slug}`);
-        setData(await again.json());
-      }
+      else await load();
     } catch {
       setError("Could not join.");
     } finally {
@@ -149,6 +152,9 @@ export default function ContestPage() {
 
         <section>
           <h2 className="mb-3 text-lg font-semibold">Leaderboard</h2>
+          {data.contest.frozen ? (
+            <p className="mb-2 text-sm text-amber-500">⏸️ Frozen — results hidden until the contest ends.</p>
+          ) : null}
           {data.leaderboard.length === 0 ? (
             <p className="text-sm text-muted-foreground">No scores yet.</p>
           ) : (
@@ -158,7 +164,7 @@ export default function ContestPage() {
                   <th className="py-1 pr-2">#</th>
                   <th className="py-1 pr-2">Competitor</th>
                   <th className="py-1 pr-2 text-right">Solved</th>
-                  <th className="py-1 text-right">Points</th>
+                  <th className="py-1 text-right">{data.contest.scoringMode === "icpc" ? "Penalty" : "Points"}</th>
                 </tr>
               </thead>
               <tbody>
@@ -167,7 +173,7 @@ export default function ContestPage() {
                     <td className="py-1 pr-2">{medal(e.rank) || e.rank}</td>
                     <td className="py-1 pr-2">{e.displayName}{e.prize ? <span className="ml-1.5 text-xs text-amber-500">🏆 {e.prize}</span> : null}</td>
                     <td className="py-1 pr-2 text-right">{e.solved}</td>
-                    <td className="py-1 text-right font-semibold">{e.points}</td>
+                    <td className="py-1 text-right font-semibold">{data.contest.scoringMode === "icpc" ? e.penalty : e.points}</td>
                   </tr>
                 ))}
               </tbody>

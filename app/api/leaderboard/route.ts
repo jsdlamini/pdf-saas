@@ -9,8 +9,8 @@ function jsonError(msg: string, status: number) {
   return Response.json({ error: msg }, { status });
 }
 
-// Season + cohort bounded leaderboard. Only opted-in users appear; ranking is
-// total points desc, then earliest first-solve asc.
+// Season + contest bounded leaderboard. Only opted-in competitors appear.
+// "solve" ranks by total points; "icpc" ranks by solved count then penalty.
 export async function GET(request: Request) {
   const { userId } = await auth();
   if (!userId) return jsonError("Sign in required.", 401);
@@ -21,23 +21,50 @@ export async function GET(request: Request) {
   const cohortId = await resolveCohortId(userId);
   const seasonId = await activeSeasonId();
 
-  const board = await db.query(
-    `SELECT s.user_id, o.display_name,
-            SUM(s.points) AS total_points,
-            COUNT(*) AS solved_count,
-            MIN(s.solved_at) AS first_solve_at
-     FROM wiserfiles_challenge_solves s
-     JOIN wiserfiles_leaderboard_opt_in o ON o.user_id = s.user_id AND o.cohort_id = s.cohort_id
-     JOIN wiserfiles_challenges c ON c.id = s.challenge_id
-     WHERE s.cohort_id = $1 AND ($2::int IS NULL OR s.season_id = $2) AND o.opted_in = TRUE
-       AND ($3::text IS NULL OR c.language = $3)
-       AND (NOT EXISTS (SELECT 1 FROM wiserfiles_contest_challenges cc WHERE cc.contest_id = $1)
-            OR s.challenge_id IN (SELECT challenge_id FROM wiserfiles_contest_challenges WHERE contest_id = $1))
-     GROUP BY s.user_id, o.display_name
-     ORDER BY total_points DESC, first_solve_at ASC, s.user_id ASC
-     LIMIT 100`,
-    [cohortId, seasonId || null, language]
+  const contest = await db.query(
+    `SELECT scoring_mode, freeze_at FROM wiserfiles_cohorts WHERE id = $1`,
+    [cohortId]
   );
+  const scoringMode = contest.rows[0]?.scoring_mode || "solve";
+  const freezeAt = contest.rows[0]?.freeze_at || null;
+  const frozen = freezeAt ? new Date(freezeAt).getTime() < Date.now() : false;
+
+  const board = scoringMode === "icpc"
+    ? await db.query(
+        `SELECT s.user_id, o.display_name,
+                COUNT(*)::int AS solved,
+                COALESCE(SUM(s.penalty_minutes), 0)::int AS total_penalty
+         FROM wiserfiles_challenge_solves s
+         JOIN wiserfiles_leaderboard_opt_in o ON o.user_id = s.user_id AND o.cohort_id = s.cohort_id
+         JOIN wiserfiles_challenges c ON c.id = s.challenge_id
+         WHERE s.cohort_id = $1 AND ($2::int IS NULL OR s.season_id = $2) AND o.opted_in = TRUE
+           AND ($3::text IS NULL OR c.language = $3)
+           AND (NOT EXISTS (SELECT 1 FROM wiserfiles_contest_challenges cc WHERE cc.contest_id = $1)
+                OR s.challenge_id IN (SELECT challenge_id FROM wiserfiles_contest_challenges WHERE contest_id = $1))
+           AND ($4::timestamptz IS NULL OR s.solved_at <= $4)
+         GROUP BY s.user_id, o.display_name
+         ORDER BY solved DESC, total_penalty ASC, s.user_id ASC
+         LIMIT 100`,
+        [cohortId, seasonId || null, language, frozen ? freezeAt : null]
+      )
+    : await db.query(
+        `SELECT s.user_id, o.display_name,
+                SUM(s.points) AS total_points,
+                COUNT(*)::int AS solved_count,
+                MIN(s.solved_at) AS first_solve_at
+         FROM wiserfiles_challenge_solves s
+         JOIN wiserfiles_leaderboard_opt_in o ON o.user_id = s.user_id AND o.cohort_id = s.cohort_id
+         JOIN wiserfiles_challenges c ON c.id = s.challenge_id
+         WHERE s.cohort_id = $1 AND ($2::int IS NULL OR s.season_id = $2) AND o.opted_in = TRUE
+           AND ($3::text IS NULL OR c.language = $3)
+           AND (NOT EXISTS (SELECT 1 FROM wiserfiles_contest_challenges cc WHERE cc.contest_id = $1)
+                OR s.challenge_id IN (SELECT challenge_id FROM wiserfiles_contest_challenges WHERE contest_id = $1))
+           AND ($4::timestamptz IS NULL OR s.solved_at <= $4)
+         GROUP BY s.user_id, o.display_name
+         ORDER BY total_points DESC, first_solve_at ASC, s.user_id ASC
+         LIMIT 100`,
+        [cohortId, seasonId || null, language, frozen ? freezeAt : null]
+      );
 
   const me = await db.query(
     `SELECT display_name, opted_in FROM wiserfiles_leaderboard_opt_in WHERE user_id = $1 AND cohort_id = $2`,
@@ -47,11 +74,14 @@ export async function GET(request: Request) {
   return Response.json({
     cohortId,
     seasonId,
+    scoringMode,
+    frozen,
     entries: board.rows.map((r) => ({
       userId: r.user_id,
       displayName: r.display_name,
-      points: Number(r.total_points),
-      solved: Number(r.solved_count),
+      points: scoringMode === "icpc" ? Number(r.solved) : Number(r.total_points),
+      solved: Number(r.solved ?? r.solved_count ?? 0),
+      penalty: scoringMode === "icpc" ? Number(r.total_penalty) : undefined,
       firstSolveAt: r.first_solve_at,
     })),
     me: me.rows.length
