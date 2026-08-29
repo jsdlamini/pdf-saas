@@ -74,11 +74,13 @@ export async function GET(request: Request, { params }: { params: Promise<{ slug
     : await db.query(
         `WITH ranked AS (
            SELECT s.user_id, o.display_name,
-                  SUM(s.points) AS total_points,
+                  SUM(s.points) - COALESCE(MAX(h.hint_cost), 0) AS total_points,
                   COUNT(*)::int AS solved_count,
                   MIN(s.solved_at) AS first_solve_at
            FROM wiserfiles_challenge_solves s
            JOIN wiserfiles_leaderboard_opt_in o ON o.user_id = s.user_id AND o.cohort_id = s.cohort_id
+           LEFT JOIN (SELECT user_id, cohort_id, SUM(cost) AS hint_cost FROM wiserfiles_hint_reveals GROUP BY user_id, cohort_id) h
+             ON h.user_id = s.user_id AND h.cohort_id = s.cohort_id
            WHERE s.cohort_id = $1 AND o.opted_in = TRUE
              AND (NOT EXISTS (SELECT 1 FROM wiserfiles_contest_challenges cc WHERE cc.contest_id = $1)
                   OR s.challenge_id IN (SELECT challenge_id FROM wiserfiles_contest_challenges WHERE contest_id = $1))

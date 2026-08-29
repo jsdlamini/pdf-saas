@@ -277,6 +277,19 @@ const MIGRATIONS: string[] = [
   `ALTER TABLE wiserfiles_challenge_solves ADD COLUMN IF NOT EXISTS penalty_minutes INTEGER`,
   `ALTER TABLE wiserfiles_cohorts ADD COLUMN IF NOT EXISTS freeze_at TIMESTAMPTZ`,
   `ALTER TABLE wiserfiles_enrollments ADD COLUMN IF NOT EXISTS is_disqualified BOOLEAN NOT NULL DEFAULT FALSE`,
+
+  // ── Hints that cost points ─────────────────────────────────────
+  `ALTER TABLE wiserfiles_challenges ADD COLUMN IF NOT EXISTS hints JSONB NOT NULL DEFAULT '[]'::jsonb`,
+  `ALTER TABLE wiserfiles_challenges ADD COLUMN IF NOT EXISTS hint_cost INTEGER NOT NULL DEFAULT 5`,
+  `CREATE TABLE IF NOT EXISTS wiserfiles_hint_reveals (
+    user_id TEXT NOT NULL,
+    challenge_id INTEGER NOT NULL REFERENCES wiserfiles_challenges(id) ON DELETE CASCADE,
+    cohort_id INTEGER NOT NULL REFERENCES wiserfiles_cohorts(id) ON DELETE CASCADE,
+    hint_index INTEGER NOT NULL DEFAULT 0,
+    cost INTEGER NOT NULL DEFAULT 0,
+    revealed_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    PRIMARY KEY (user_id, challenge_id, cohort_id, hint_index)
+  )`,
 ];
 
 let migrationPromise: Promise<void> | null = null;
