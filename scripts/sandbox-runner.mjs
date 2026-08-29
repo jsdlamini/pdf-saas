@@ -359,6 +359,24 @@ const server = createServer(async (req, res) => {
     return json(res, 200, { ok: true });
   }
 
+  if (req.url === "/term/files") {
+    const body = await readBody(req);
+    if (body === null) return json(res, 400, { error: "invalid json" });
+    const id = String(body.sessionId || "");
+    const s = termSessions.get(id);
+    if (!s) return json(res, 404, { error: "Session not found or expired." });
+    const files = Array.isArray(body.files) ? body.files : [];
+    const folders = Array.isArray(body.folders) ? body.folders : [];
+    await writeProjectFiles(files, s.tempDir);
+    for (const folder of folders) {
+      if (typeof folder === "string") {
+        const safe = sanitizePath(folder);
+        if (safe) await mkdir(join(s.tempDir, safe), { recursive: true });
+      }
+    }
+    return json(res, 200, { ok: true });
+  }
+
   if (req.url === "/term/poll") {
     const body = await readBody(req);
     if (body === null) return json(res, 400, { error: "invalid json" });

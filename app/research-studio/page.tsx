@@ -1145,8 +1145,6 @@ export default function ResearchStudioPage() {
     } catch { return "latex"; }
   });
 
-  const [codeOutput, setCodeOutput] = useState<{ stdout: string; stderr: string; exitCode: number; needsInput?: boolean } | null>(null);
-  const [codeOutputCollapsed, setCodeOutputCollapsed] = useState(false);
 
   const [editorTheme, setEditorTheme] = useState<EditorThemeId>(() => {
     if (typeof window === "undefined") return "one-dark";
@@ -2560,7 +2558,6 @@ export default function ResearchStudioPage() {
       : nextActive.entries?.some((e: ProjectEntry) => e.path.endsWith(".cpp")) ? "cpp"
       : "latex"
     ));
-    setCodeOutput(null);
     setCodeRunBusy(false);
     setCompileNotice(notice);
   });
@@ -3692,7 +3689,6 @@ export default function ResearchStudioPage() {
       setAiFixSuggestions([]);
       setLastCompileAt("Not compiled yet");
       setEditorMode(editorMode);
-      setCodeOutput(null);
       setCodeRunBusy(false);
       setCompileNotice(`Imported ${entries.length} file${entries.length !== 1 ? "s" : ""} from ${repoName}${data.truncated ? " (some binary/large files were skipped)" : ""}.`);
       trackStudioEvent("github-import", repoName);
@@ -3770,7 +3766,6 @@ export default function ResearchStudioPage() {
       : saved.entries?.some((e) => e.path.endsWith(".cpp")) ? "cpp"
       : "latex"
     ));
-    setCodeOutput(null);
     setCodeRunBusy(false);
     setCompileNotice(`Loaded project: ${saved.name}`);
     setWorkspaceScreen("editor");
@@ -4122,7 +4117,6 @@ export default function ResearchStudioPage() {
     setAiFixSuggestions([]);
     setLastCompileAt("Not compiled yet");
     setEditorMode(detectedMode);
-    setCodeOutput(null);
     setCodeRunBusy(false);
     setCompileNotice(`Created project from "${template.name}" template.`);
     setWorkspaceScreen("editor");
@@ -4246,7 +4240,6 @@ export default function ResearchStudioPage() {
     setAiFixSuggestions([]);
     setLastCompileAt("Not compiled yet");
     setEditorMode(type);
-    setCodeOutput(null);
     setCodeRunBusy(false);
     setCompileNotice("New project created and saved. Add files and compile when ready.");
     trackStudioEvent("project-create", type);
@@ -4476,57 +4469,61 @@ export default function ResearchStudioPage() {
     setAddFileError("");
   }
 
-  async function runCode() {
+  async function runCodeInTerminal() {
     if (!activeEntry) {
       setCompileNotice("No file selected to run.");
       return;
     }
-
     const code = activeEntry.content;
     if (!code.trim()) {
       setCompileNotice("Code file is empty.");
       return;
     }
 
+    const lang = activeEntry.path.endsWith(".py") ? "python"
+      : activeEntry.path.endsWith(".cpp") ? "cpp"
+      : editorMode;
+
+    // Build the command the terminal shell should run.
+    let command: string;
+    if (lang === "python") {
+      command = `python3 ${activeEntry.path}`;
+    } else {
+      const sources = projectEntries
+        .filter((e) => e.kind === "file" && /\.(cpp|cc|cxx|c)$/i.test(e.path))
+        .map((e) => e.path);
+      if (!sources.length) sources.push(activeEntry.path);
+      command = `g++ -std=c++17 -O2 -Wall -o program ${sources.join(" ")} && ./program`;
+    }
+
+    setCodeRunBusy(true);
     try {
-      setCodeRunBusy(true);
-      setCodeOutput(null);
-      setCompileNotice(`Running ${editorMode} code on server...`);
+      setTerminalOpen(true);
+      const sessionId = await ensureTerminalSession();
+      if (!sessionId) return;
 
-      // Send every non-binary project file so sibling headers/sources
-      // (e.g. #include "samples.h") resolve against the same directory.
-      const BINARY_EXT = /\.(png|jpe?g|gif|bmp|webp|ico|svg|pdf|zip|gz|tar|woff2?|ttf|otf|eot|mp3|mp4|mov)$/i;
-      const files = projectEntries
-        .filter((e) => e.kind === "file" && !BINARY_EXT.test(e.path))
-        .map((e) => ({ path: e.path, content: e.content }));
-
-      const response = await fetch("/api/run-code", {
+      // Re-sync the latest files into the session's working dir (the session
+      // may have been started earlier, before these edits).
+      await fetch("/api/terminal/files", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ language: editorMode, files, mainPath: activeEntry.path }),
-      });
+        body: JSON.stringify({
+          sessionId,
+          files: projectEntries.filter((e) => e.kind === "file").map((e) => ({ path: e.path, content: e.content })),
+          folders: projectEntries.filter((e) => e.kind === "folder").map((e) => e.path),
+        }),
+      }).catch(() => {});
 
-      const result = (await response.json()) as { output?: string; error?: string; exitCode?: number; message?: string; needsInput?: boolean };
+      await fetch("/api/terminal/stdin", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ sessionId, data: command }),
+      }).catch(() => {});
 
-      if (!response.ok) {
-        setCodeOutput({ stdout: "", stderr: result.error || result.message || `Server error: ${response.status}`, exitCode: result.exitCode ?? 1, needsInput: result.needsInput });
-        setCompileNotice("Code execution failed.");
-        return;
-      }
-
-      setCodeOutput({
-        stdout: result.output || "",
-        stderr: result.error || "",
-        exitCode: result.exitCode ?? 0,
-        needsInput: result.needsInput,
-      });
-      setCodeOutputCollapsed(false);
-      setCompileNotice(result.needsInput ? "Your program reads input — run it in the Terminal with input instead of the Run button." : `Code executed (exit code: ${result.exitCode ?? 0}).`);
-      trackStudioEvent("run-code", editorMode);
+      setCompileNotice(`Running ${lang} code in the terminal.`);
+      trackStudioEvent("run-code", lang);
     } catch (runError) {
-      const message = runError instanceof Error ? runError.message : "Code execution failed.";
-      setCodeOutput({ stdout: "", stderr: `Error: ${message}`, exitCode: 1 });
-      setCompileNotice("Code execution failed.");
+      setCompileNotice(runError instanceof Error ? runError.message : "Code execution failed.");
     } finally {
       setCodeRunBusy(false);
     }
@@ -4566,7 +4563,7 @@ export default function ResearchStudioPage() {
       : activeEntry?.path?.endsWith(".cpp") ? "cpp"
       : editorMode;
     if (activeMode === "python" || activeMode === "cpp") {
-      await runCode();
+      await runCodeInTerminal();
       return;
     }
     const rootPath = editableFiles.some((entry) => entry.path === "main.tex") ? "main.tex" : activeEntry?.path;
@@ -6946,56 +6943,6 @@ export default function ResearchStudioPage() {
               ) : null}
             </div>
           </div>
-
-          {/* Code output panel */}
-          {isCodeMode && codeOutput ? (
-            <div className={`studio-code-output ${codeOutputCollapsed ? "studio-code-output-collapsed" : ""}`}>
-              <div className="studio-code-output-header">
-                <span>Output {codeOutput.exitCode !== undefined ? `(exit: ${codeOutput.exitCode})` : ""}</span>
-                <div style={{ display: "flex", gap: 4 }}>
-                  <button
-                    type="button"
-                    onClick={() => setCodeOutputCollapsed((c) => !c)}
-                    className="studio-btn studio-btn-ghost"
-                    style={{ height: 20, fontSize: 10, padding: "0 6px" }}
-                    title={codeOutputCollapsed ? "Expand output" : "Collapse output"}
-                  >
-                    {codeOutputCollapsed ? "Expand" : "Collapse"}
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setCodeOutput(null)}
-                    className="studio-btn studio-btn-ghost"
-                    style={{ height: 20, fontSize: 10, padding: "0 6px" }}
-                  >
-                    Clear
-                  </button>
-                </div>
-              </div>
-              {!codeOutputCollapsed ? (
-                <>
-                  {codeOutput.stdout ? (
-                    <pre className="studio-code-output-body" style={{ color: "#4ade80" }}>{codeOutput.stdout}</pre>
-                  ) : null}
-                  {codeOutput.stderr ? (
-                    <pre className="studio-code-output-body" style={{ color: "#f87171" }}>{codeOutput.stderr}</pre>
-                  ) : null}
-                  {!codeOutput.stdout && !codeOutput.stderr ? (
-                    <pre className="studio-code-output-body" style={{ color: "#94a3b8" }}>No output.</pre>
-                  ) : null}
-                </>
-              ) : null}
-            </div>
-          ) : null}
-          {/* Running indicator */}
-          {isCodeMode && codeRunBusy && !codeOutput ? (
-            <div className="studio-code-output">
-              <div className="studio-code-output-header">
-                <span>Output</span>
-              </div>
-              <pre className="studio-code-output-body" style={{ color: "#fbbf24" }}>Running...</pre>
-            </div>
-          ) : null}
 
           {/* Status bar */}
           <div className="studio-statusbar">
