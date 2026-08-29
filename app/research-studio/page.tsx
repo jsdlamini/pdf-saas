@@ -3063,10 +3063,14 @@ export default function ResearchStudioPage() {
   const [optInBusy, setOptInBusy] = useState(false);
   const [joinCode, setJoinCode] = useState("");
   const [progressData, setProgressData] = useState<{ challenges: Array<{ id: number; slug: string; language: string }>; members: Array<{ userId: string; displayName: string; statuses: string[] }> } | null>(null);
-  const [cohortsData, setCohortsData] = useState<{ courses: Array<{ id: number; code: string; title: string; institution: string }>; cohorts: Array<{ id: number; name: string; join_code: string; course_id: number | null; course_code: string | null; course_title: string | null; member_count: number }>; myCohortId: number; enrollments: Array<{ cohort_id: number; role: string; status: string; student_id: string | null }> } | null>(null);
-  const [newCohortName, setNewCohortName] = useState("");
-  const [newCohortCode, setNewCohortCode] = useState("");
-  const [newCohortTitle, setNewCohortTitle] = useState("");
+  const [contestsData, setContestsData] = useState<{ contests: Array<{ id: number; name: string; join_code: string; slug: string | null; description: string; starts_at: string | null; ends_at: string | null; scoring_mode: string; is_public: boolean; prizes: Array<{ place: number; label: string }> | null; member_count: number; challenge_count: number; created_by: string }>; myCohortId: number; enrollments: Array<{ cohort_id: number; role: string; status: string; student_id: string | null }> } | null>(null);
+  const [newContestName, setNewContestName] = useState("");
+  const [newContestDesc, setNewContestDesc] = useState("");
+  const [newContestStartsAt, setNewContestStartsAt] = useState("");
+  const [newContestEndsAt, setNewContestEndsAt] = useState("");
+  const [newContestScoring, setNewContestScoring] = useState<"solve" | "icpc">("solve");
+  const [newContestPublic, setNewContestPublic] = useState(false);
+  const [newContestPrizes, setNewContestPrizes] = useState("");
   const [cohortBusy, setCohortBusy] = useState(false);
 
   async function githubSettings() {
@@ -3385,7 +3389,7 @@ export default function ResearchStudioPage() {
     }
   }
 
-  async function joinCohort() {
+  async function joinContest() {
     const code = joinCode.trim();
     if (!code) return;
     try {
@@ -3400,47 +3404,63 @@ export default function ResearchStudioPage() {
         return;
       }
       setJoinCode("");
-      setCompileNotice("Cohort joined.");
-      await loadCohorts();
+      setCompileNotice("Contest joined.");
+      await loadContests();
       await loadLeaderboard();
     } catch {
-      setCompileNotice("Could not join cohort.");
+      setCompileNotice("Could not join contest.");
     }
   }
 
-  async function loadCohorts() {
+  async function loadContests() {
     try {
       const res = await fetch("/api/cohorts");
-      const data = (await res.json().catch(() => null)) as { courses: Array<{ id: number; code: string; title: string; institution: string }>; cohorts: Array<{ id: number; name: string; join_code: string; course_id: number | null; course_code: string | null; course_title: string | null; member_count: number }>; myCohortId: number; enrollments: Array<{ cohort_id: number; role: string; status: string; student_id: string | null }> } | null;
-      setCohortsData(data);
+      const data = (await res.json().catch(() => null)) as typeof contestsData | null;
+      setContestsData(data);
     } catch { /* ignore */ }
   }
 
-  async function createCohort() {
-    const name = newCohortName.trim();
+  async function createContest() {
+    const name = newContestName.trim();
     if (!name) {
-      setCompileNotice("Enter a cohort name.");
+      setCompileNotice("Enter a contest name.");
       return;
     }
     setCohortBusy(true);
     try {
+      const prizes = newContestPrizes
+        .split(/\r?\n/)
+        .map((line) => line.trim())
+        .filter(Boolean)
+        .map((line, i) => ({ place: i + 1, label: line }));
       const res = await fetch("/api/cohorts", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ action: "create", name, code: newCohortCode.trim(), title: newCohortTitle.trim() }),
+        body: JSON.stringify({
+          action: "create",
+          name,
+          description: newContestDesc.trim(),
+          startsAt: newContestStartsAt || null,
+          endsAt: newContestEndsAt || null,
+          scoringMode: newContestScoring,
+          isPublic: newContestPublic,
+          prizes,
+        }),
       });
-      const data = (await res.json().catch(() => null)) as { cohort?: { name: string; join_code: string }; error?: string } | null;
+      const data = (await res.json().catch(() => null)) as { contest?: { name: string; join_code: string; slug: string }; error?: string } | null;
       if (data?.error) {
         setCompileNotice(data.error);
         return;
       }
-      setNewCohortName("");
-      setNewCohortCode("");
-      setNewCohortTitle("");
-      setCompileNotice(`Cohort created — share join code ${data?.cohort?.join_code}.`);
-      await loadCohorts();
+      setNewContestName("");
+      setNewContestDesc("");
+      setNewContestStartsAt("");
+      setNewContestEndsAt("");
+      setNewContestPrizes("");
+      setCompileNotice(`Contest created — invite code ${data?.contest?.join_code}.`);
+      await loadContests();
     } catch {
-      setCompileNotice("Could not create cohort.");
+      setCompileNotice("Could not create contest.");
     } finally {
       setCohortBusy(false);
     }
@@ -3453,7 +3473,7 @@ export default function ResearchStudioPage() {
       const cohortId = myCohorts?.myCohortId;
       if (!cohortId) {
         setProgressData(null);
-        setCompileNotice("You don't have a cohort yet.");
+        setCompileNotice("You're not in a contest yet.");
         return;
       }
       const res = await fetch(`/api/cohorts/progress?cohortId=${cohortId}`);
@@ -6421,10 +6441,10 @@ export default function ResearchStudioPage() {
           ...(isCodeMode ? [{
             label: "Challenges", key: "challenges", items: [
               { label: "Open Challenges", action: () => { setOpenMenu(""); void openChallengesPanel(); } },
-              { label: "Cohorts (join / create)", action: () => { setOpenMenu(""); void openChallengesPanel("cohorts"); } },
+              { label: "Contests (join / create)", action: () => { setOpenMenu(""); void openChallengesPanel("cohorts"); } },
               "-",
               { label: "Leaderboard", action: () => { setOpenMenu(""); void openChallengesPanel("leaderboard"); } },
-              { label: "Progress (lecturer)", action: () => { setOpenMenu(""); void openChallengesPanel("progress"); } },
+              { label: "Results (host)", action: () => { setOpenMenu(""); void openChallengesPanel("progress"); } },
             ]
           }] as any[] : []),
           {
@@ -7642,9 +7662,9 @@ export default function ResearchStudioPage() {
               </DialogHeader>
               <div className="mb-3 flex gap-1.5">
                 <Button variant={challengeTab === "challenges" ? "default" : "outline"} size="sm" onClick={() => setChallengeTab("challenges")}>Challenges</Button>
-                <Button variant={challengeTab === "cohorts" ? "default" : "outline"} size="sm" onClick={() => { setChallengeTab("cohorts"); void loadCohorts(); }}>Cohorts</Button>
+                <Button variant={challengeTab === "cohorts" ? "default" : "outline"} size="sm" onClick={() => { setChallengeTab("cohorts"); void loadContests(); }}>Contests</Button>
                 <Button variant={challengeTab === "leaderboard" ? "default" : "outline"} size="sm" onClick={() => { setChallengeTab("leaderboard"); void loadLeaderboard(); }}>Leaderboard</Button>
-                <Button variant={challengeTab === "progress" ? "default" : "outline"} size="sm" onClick={() => { setChallengeTab("progress"); void loadProgress(); }}>Progress</Button>
+                <Button variant={challengeTab === "progress" ? "default" : "outline"} size="sm" onClick={() => { setChallengeTab("progress"); void loadProgress(); }}>Results</Button>
               </div>
 
               {challengeTab === "challenges" ? (
@@ -7668,40 +7688,61 @@ export default function ResearchStudioPage() {
               ) : challengeTab === "cohorts" ? (
                 <div className="space-y-3">
                   <div className="rounded-lg border p-3">
-                    <p className="text-sm font-semibold">Join a cohort</p>
+                    <p className="text-sm font-semibold">Join a contest</p>
                     <div className="mt-1.5 flex gap-2">
-                      <input value={joinCode} onChange={(e) => setJoinCode(e.target.value)} placeholder="Join code from your lecturer" className="h-9 flex-1 rounded-md border bg-background px-2 text-sm" />
-                      <Button size="sm" onClick={() => void joinCohort()}>Join</Button>
+                      <input value={joinCode} onChange={(e) => setJoinCode(e.target.value)} placeholder="Invite code from the host" className="h-9 flex-1 rounded-md border bg-background px-2 text-sm" />
+                      <Button size="sm" onClick={() => void joinContest()}>Join</Button>
                     </div>
                   </div>
 
                   <div className="rounded-lg border p-3">
-                    <p className="text-sm font-semibold">Create a cohort (lecturers)</p>
+                    <p className="text-sm font-semibold">Host a contest</p>
                     <div className="mt-1.5 space-y-2">
-                      <input value={newCohortName} onChange={(e) => setNewCohortName(e.target.value)} placeholder="Cohort name — e.g. CSC111 S1 2026 Group A" className="h-9 w-full rounded-md border bg-background px-2 text-sm" />
+                      <input value={newContestName} onChange={(e) => setNewContestName(e.target.value)} placeholder="Contest name — e.g. Friday Night Sprint" className="h-9 w-full rounded-md border bg-background px-2 text-sm" />
+                      <input value={newContestDesc} onChange={(e) => setNewContestDesc(e.target.value)} placeholder="Description (optional)" className="h-9 w-full rounded-md border bg-background px-2 text-sm" />
                       <div className="flex gap-2">
-                        <input value={newCohortCode} onChange={(e) => setNewCohortCode(e.target.value)} placeholder="Course code — e.g. CSC111" className="h-9 flex-1 rounded-md border bg-background px-2 text-sm" />
-                        <input value={newCohortTitle} onChange={(e) => setNewCohortTitle(e.target.value)} placeholder="Course title (optional)" className="h-9 flex-1 rounded-md border bg-background px-2 text-sm" />
+                        <input type="datetime-local" value={newContestStartsAt} onChange={(e) => setNewContestStartsAt(e.target.value)} className="h-9 flex-1 rounded-md border bg-background px-2 text-sm" aria-label="Starts at" />
+                        <input type="datetime-local" value={newContestEndsAt} onChange={(e) => setNewContestEndsAt(e.target.value)} className="h-9 flex-1 rounded-md border bg-background px-2 text-sm" aria-label="Ends at" />
                       </div>
-                      <Button size="sm" onClick={() => void createCohort()} disabled={cohortBusy}>{cohortBusy ? "Creating…" : "Create cohort"}</Button>
+                      <div className="flex flex-wrap items-center gap-4">
+                        <label className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                          <input type="checkbox" checked={newContestPublic} onChange={(e) => setNewContestPublic(e.target.checked)} /> Public page
+                        </label>
+                        <label className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                          Scoring
+                          <select value={newContestScoring} onChange={(e) => setNewContestScoring(e.target.value as "solve" | "icpc")} className="h-8 rounded-md border bg-background px-1 text-xs">
+                            <option value="solve">Most points</option>
+                            <option value="icpc">ICPC (penalty)</option>
+                          </select>
+                        </label>
+                      </div>
+                      <textarea value={newContestPrizes} onChange={(e) => setNewContestPrizes(e.target.value)} placeholder={"Prizes — one per line\ne.g. 1st place — $100\n2nd place — $50"} rows={3} className="w-full rounded-md border bg-background px-2 py-1 text-sm" />
+                      <Button size="sm" onClick={() => void createContest()} disabled={cohortBusy}>{cohortBusy ? "Creating…" : "Create contest"}</Button>
                     </div>
                   </div>
 
                   <div className="max-h-64 space-y-1.5 overflow-y-auto">
-                    {!cohortsData ? (
+                    {!contestsData ? (
                       <p className="text-sm text-muted-foreground">Loading…</p>
-                    ) : cohortsData.cohorts.length === 0 ? (
-                      <p className="text-sm text-muted-foreground">No cohorts yet — create one or join with a code.</p>
+                    ) : contestsData.contests.length === 0 ? (
+                      <p className="text-sm text-muted-foreground">No contests yet — host one or join with a code.</p>
                     ) : (
-                      cohortsData.cohorts.map((c) => {
-                        const mine = cohortsData.enrollments.some((e) => e.cohort_id === c.id);
+                      contestsData.contests.map((c) => {
+                        const mine = contestsData.enrollments.some((e) => e.cohort_id === c.id);
                         return (
-                          <div key={c.id} className="flex items-center justify-between rounded-lg border px-3 py-2 text-sm">
-                            <div>
+                          <div key={c.id} className="rounded-lg border px-3 py-2 text-sm">
+                            <div className="flex items-center justify-between">
                               <span className="font-semibold">{c.name}</span>
-                              <span className="text-xs text-muted-foreground"> · {c.course_code || "no course"} · {c.member_count} member{c.member_count === 1 ? "" : "s"}{mine ? " · you're enrolled" : ""}</span>
+                              <span className="font-mono text-xs text-muted-foreground">{c.join_code}</span>
                             </div>
-                            <span className="font-mono text-xs text-muted-foreground">{c.join_code}</span>
+                            <div className="text-xs text-muted-foreground">
+                              {c.challenge_count} problem{c.challenge_count === 1 ? "" : "s"} · {c.member_count} competitor{c.member_count === 1 ? "" : "s"}
+                              {mine ? " · you're in" : ""}
+                              {c.starts_at ? ` · ${new Date(c.starts_at).toLocaleString()}` : ""}
+                            </div>
+                            {c.prizes && c.prizes.length ? (
+                              <div className="mt-1 text-xs text-amber-500">🏆 {c.prizes.map((p) => p.label).join(" · ")}</div>
+                            ) : null}
                           </div>
                         );
                       })
@@ -7717,7 +7758,7 @@ export default function ResearchStudioPage() {
                       placeholder="join code"
                       className="h-9 w-32 rounded-md border bg-background px-2 text-sm"
                     />
-                    <Button variant="outline" size="sm" onClick={() => void joinCohort()}>Join cohort</Button>
+                    <Button variant="outline" size="sm" onClick={() => void joinContest()}>Join contest</Button>
                     <Button size="sm" onClick={() => { setOptInOpen(true); setOptInName(leaderboard?.me?.displayName || ""); }}>{leaderboard?.me?.optedIn ? "Settings" : "Opt in"}</Button>
                   </div>
                   {optInOpen ? (
@@ -7780,12 +7821,12 @@ export default function ResearchStudioPage() {
                   {!progressData ? (
                     <p className="text-sm text-muted-foreground">Loading…</p>
                   ) : progressData.members.length === 0 ? (
-                    <p className="text-sm text-muted-foreground">No students in your cohort yet. Only the cohort creator or an admin can see this.</p>
+                    <p className="text-sm text-muted-foreground">No competitors in your contest yet. Only the host can see this.</p>
                   ) : (
                     <table className="w-full border-collapse text-xs">
                       <thead>
                         <tr className="border-b text-left text-muted-foreground">
-                          <th className="py-1 pr-2">Student</th>
+                          <th className="py-1 pr-2">Competitor</th>
                           {progressData.challenges.map((c) => (
                             <th key={c.id} className="py-1 pr-2" title={c.slug}>{c.slug.replace(/^(py|cpp)-/, "")}</th>
                           ))}
