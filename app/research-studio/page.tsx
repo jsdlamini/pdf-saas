@@ -34,6 +34,7 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import "@xterm/xterm/css/xterm.css";
 
 type StudioEditorAdapter = {
   selectionStart: number;
@@ -1224,22 +1225,62 @@ export default function ResearchStudioPage() {
   const [githubRepo, setGithubRepo] = useState("");
   const [githubPushed, setGithubPushed] = useState<Record<string, string>>({});
   const [terminalOpen, setTerminalOpen] = useState(false);
-  const [terminalCommand, setTerminalCommand] = useState("");
-  const [terminalOutput, setTerminalOutput] = useState("");
   const [terminalBusy, setTerminalBusy] = useState(false);
   const [termSessionId, setTermSessionId] = useState<string | null>(null);
   const [termRunning, setTermRunning] = useState(false);
-  const terminalInputRef = useRef<HTMLInputElement | null>(null);
-  const terminalScrollRef = useRef<HTMLDivElement | null>(null);
+  const termContainerRef = useRef<HTMLDivElement | null>(null);
+  const xtermRef = useRef<{ term: any; fit: any; onResize: () => void } | null>(null);
   const termSessionRef = useRef<string | null>(null);
   const termPollTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const termSeenRef = useRef(0);
 
-  // Keep the terminal scrolled to the latest line as output streams in.
+  // Initialise the xterm.js terminal (and start the shell session) when the
+  // panel opens. xterm renders the prompt, echoes input, and keeps the cursor
+  // inline exactly like a real terminal.
   useEffect(() => {
-    const el = terminalScrollRef.current;
-    if (el) el.scrollTop = el.scrollHeight;
-  }, [terminalOutput, terminalOpen]);
+    if (!terminalOpen) return;
+    let disposed = false;
+    (async () => {
+      void ensureTerminalSession();
+      const [{ Terminal }, { FitAddon }] = await Promise.all([
+        import("@xterm/xterm"),
+        import("@xterm/addon-fit"),
+      ]);
+      if (disposed || !termContainerRef.current || xtermRef.current) return;
+      const term = new Terminal({
+        cursorBlink: true,
+        fontSize: 13,
+        fontFamily: "var(--font-mono), monospace",
+        theme: { background: "#000000", foreground: "#f0f0f0", cursor: "#4ade80" },
+      });
+      const fit = new FitAddon();
+      term.loadAddon(fit);
+      term.open(termContainerRef.current);
+      fit.fit();
+      term.onData((data: string) => {
+        const id = termSessionRef.current;
+        if (id) {
+          void fetch("/api/terminal/stdin", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ sessionId: id, data }),
+          }).catch(() => {});
+        }
+      });
+      const onResize = () => { try { fit.fit(); } catch { /* ignore */ } };
+      window.addEventListener("resize", onResize);
+      xtermRef.current = { term, fit, onResize };
+    })();
+    return () => {
+      disposed = true;
+      const x = xtermRef.current;
+      if (x) {
+        window.removeEventListener("resize", x.onResize);
+        try { x.term.dispose(); } catch { /* ignore */ }
+        xtermRef.current = null;
+      }
+    };
+  }, [terminalOpen]);
 
   // Kill any live terminal session if the studio unmounts.
   useEffect(() => {
@@ -3493,6 +3534,10 @@ export default function ResearchStudioPage() {
     setTermRunning(false);
   }
 
+  function writeToTerm(data: string) {
+    if (xtermRef.current) xtermRef.current.term.write(data);
+  }
+
   async function pollTerminal(sessionId: string) {
     if (termSessionRef.current !== sessionId) return;
     try {
@@ -3504,17 +3549,20 @@ export default function ResearchStudioPage() {
       const data = (await res.json().catch(() => null)) as { running?: boolean; exitCode?: number; stdout?: string; stderr?: string; error?: string } | null;
       if (!data || data.error) {
         if (data?.error && !String(data.error).includes("not found")) {
-          setTerminalOutput((prev) => `${prev}${data.error}\n`);
+          writeToTerm(`\r\n${data.error}\r\n`);
         }
       } else {
         const chunk = `${data.stdout || ""}${data.stderr || ""}`;
         if (chunk.length > termSeenRef.current) {
           const fresh = chunk.slice(termSeenRef.current);
-          termSeenRef.current = chunk.length;
-          setTerminalOutput((prev) => `${prev}${fresh}`);
+          // If xterm isn't initialised yet, don't advance the offset so the
+          // next poll re-sends the backlog once it is.
+          if (xtermRef.current) {
+            xtermRef.current.term.write(fresh);
+            termSeenRef.current = chunk.length;
+          }
         }
         if (!data.running) {
-          setTerminalOutput((prev) => `${prev}[exit ${data.exitCode ?? 0}]\n`);
           termSessionRef.current = null;
           termSeenRef.current = 0;
           setTermSessionId(null);
@@ -3523,7 +3571,7 @@ export default function ResearchStudioPage() {
         }
       }
     } catch { /* transient poll error; keep polling */ }
-    termPollTimerRef.current = setTimeout(() => void pollTerminal(sessionId), 150);
+    termPollTimerRef.current = setTimeout(() => void pollTerminal(sessionId), 120);
   }
 
   async function ensureTerminalSession(): Promise<string | null> {
@@ -3540,7 +3588,7 @@ export default function ResearchStudioPage() {
       });
       const data = (await res.json().catch(() => null)) as { sessionId?: string; error?: string } | null;
       if (!data || data.error || !data.sessionId) {
-        setTerminalOutput((prev) => `${prev}${data?.error || "Could not start the terminal."}\n`);
+        writeToTerm(`\r\n${data?.error || "Could not start the terminal."}\r\n`);
         return null;
       }
       termSessionRef.current = data.sessionId;
@@ -3550,28 +3598,11 @@ export default function ResearchStudioPage() {
       termPollTimerRef.current = setTimeout(() => void pollTerminal(data.sessionId!), 120);
       return data.sessionId;
     } catch (error) {
-      setTerminalOutput((prev) => `${prev}Error: ${error instanceof Error ? error.message : "failed"}\n`);
+      writeToTerm(`\r\nError: ${error instanceof Error ? error.message : "failed"}\r\n`);
       return null;
     } finally {
       setTerminalBusy(false);
     }
-  }
-
-  // The terminal is a real shell: every typed line is written to the shell's
-  // stdin, and the PTY echoes it back into the transcript (no manual echo).
-  async function runTerminalCommand() {
-    const line = terminalCommand;
-    if (!line.trim() && !termRunning) return;
-    setTerminalCommand("");
-    const sessionId = await ensureTerminalSession();
-    if (!sessionId) return;
-    try {
-      await fetch("/api/terminal/stdin", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ sessionId, data: line }),
-      });
-    } catch { /* ignore */ }
   }
 
   async function openFromGithub() {
@@ -4517,7 +4548,7 @@ export default function ResearchStudioPage() {
       await fetch("/api/terminal/stdin", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ sessionId, data: command }),
+        body: JSON.stringify({ sessionId, data: command + "\r" }),
       }).catch(() => {});
 
       setCompileNotice(`Running ${lang} code in the terminal.`);
@@ -7790,7 +7821,6 @@ export default function ResearchStudioPage() {
             color: "#f0f0f0",
             height: "42vh", display: "flex", flexDirection: "column",
             overflow: "hidden",
-            fontFamily: "var(--font-mono)",
           }}
         >
           <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "5px 10px", borderBottom: "1px solid #222", color: "#999", fontSize: 11 }}>
@@ -7799,30 +7829,9 @@ export default function ResearchStudioPage() {
             <button type="button" onClick={() => { stopTerminalSession(); setTerminalOpen(false); }} aria-label="Close terminal" style={{ marginLeft: "auto", background: "none", border: "none", color: "#999", cursor: "pointer", fontSize: 16 }}>×</button>
           </div>
           <div
-            ref={terminalScrollRef}
-            onClick={() => terminalInputRef.current?.focus()}
-            style={{ flex: 1, minHeight: 0, overflowY: "auto", padding: "10px 12px", fontSize: 13, lineHeight: 1.5, cursor: "text" }}
-          >
-            <pre style={{ margin: 0, whiteSpace: "pre-wrap", wordBreak: "break-word" }}>{terminalOutput}</pre>
-            <div style={{ display: "flex", alignItems: "center" }}>
-              <input
-                ref={terminalInputRef}
-                value={terminalCommand}
-                onChange={(e) => setTerminalCommand(e.target.value)}
-                onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); void runTerminalCommand(); } }}
-                placeholder="type a command…"
-                aria-label="Terminal input"
-                autoFocus
-                spellCheck={false}
-                autoComplete="off"
-                autoCapitalize="off"
-                style={{ flex: 1, appearance: "none", WebkitAppearance: "none", background: "transparent", border: "none", boxShadow: "none", outline: "none", color: "#f0f0f0", caretColor: "#0f0", fontFamily: "var(--font-mono)", fontSize: 13, padding: 0 }}
-              />
-            </div>
-            {termRunning ? (
-              <div style={{ fontSize: 11, color: "#64748b", marginTop: 4 }}>Shell is running — type commands or program input, then Enter. Closing the terminal stops it.</div>
-            ) : null}
-          </div>
+            ref={termContainerRef}
+            style={{ flex: 1, minHeight: 0, padding: "4px 6px" }}
+          />
         </div>
       ) : null}
     </main>
