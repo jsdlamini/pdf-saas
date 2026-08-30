@@ -66,78 +66,81 @@ export async function GET(request: Request, { params }: { params: Promise<{ slug
         ? await db.query(
             `WITH ranked AS (
                SELECT t.id AS team_id, t.name AS display_name,
-                      COUNT(*)::int AS solved,
+                      COUNT(s.challenge_id)::int AS solved,
                       COALESCE(SUM(s.penalty_minutes), 0)::int AS total_penalty
-               FROM wiserfiles_challenge_solves s
-               JOIN wiserfiles_teams t ON t.id = s.team_id
-               WHERE s.cohort_id = $1
-                 AND (NOT EXISTS (SELECT 1 FROM wiserfiles_contest_challenges cc WHERE cc.contest_id = $1)
-                      OR s.challenge_id IN (SELECT challenge_id FROM wiserfiles_contest_challenges WHERE contest_id = $1))
-                 AND ($2::timestamptz IS NULL OR s.solved_at <= $2)
+               FROM wiserfiles_teams t
+               LEFT JOIN wiserfiles_challenge_solves s
+                 ON s.team_id = t.id AND s.cohort_id = t.contest_id
+                AND (NOT EXISTS (SELECT 1 FROM wiserfiles_contest_challenges cc WHERE cc.contest_id = t.contest_id)
+                     OR s.challenge_id IN (SELECT challenge_id FROM wiserfiles_contest_challenges WHERE contest_id = t.contest_id))
+                AND ($1::timestamptz IS NULL OR s.solved_at <= $1)
+               WHERE t.contest_id = $2
                GROUP BY t.id, t.name
              )
              SELECT *, ROW_NUMBER() OVER (ORDER BY solved DESC, total_penalty ASC, team_id ASC) AS rank
-             FROM ranked ORDER BY rank LIMIT 100`,
-            [row.id, frozen ? freezeAt : null]
+             FROM ranked ORDER BY rank LIMIT 200`,
+            [frozen ? freezeAt : null, row.id]
           )
         : await db.query(
             `WITH ranked AS (
                SELECT t.id AS team_id, t.name AS display_name,
-                      SUM(s.points) AS total_points,
-                      COUNT(*)::int AS solved_count,
+                      COALESCE(SUM(s.points), 0) AS total_points,
+                      COUNT(s.challenge_id)::int AS solved_count,
                       MIN(s.solved_at) AS first_solve_at
-               FROM wiserfiles_challenge_solves s
-               JOIN wiserfiles_teams t ON t.id = s.team_id
-               WHERE s.cohort_id = $1
-                 AND (NOT EXISTS (SELECT 1 FROM wiserfiles_contest_challenges cc WHERE cc.contest_id = $1)
-                      OR s.challenge_id IN (SELECT challenge_id FROM wiserfiles_contest_challenges WHERE contest_id = $1))
-                 AND ($2::timestamptz IS NULL OR s.solved_at <= $2)
+               FROM wiserfiles_teams t
+               LEFT JOIN wiserfiles_challenge_solves s
+                 ON s.team_id = t.id AND s.cohort_id = t.contest_id
+                AND (NOT EXISTS (SELECT 1 FROM wiserfiles_contest_challenges cc WHERE cc.contest_id = t.contest_id)
+                     OR s.challenge_id IN (SELECT challenge_id FROM wiserfiles_contest_challenges WHERE contest_id = t.contest_id))
+                AND ($1::timestamptz IS NULL OR s.solved_at <= $1)
+               WHERE t.contest_id = $2
                GROUP BY t.id, t.name
              )
              SELECT *, ROW_NUMBER() OVER (ORDER BY total_points DESC, first_solve_at ASC, team_id ASC) AS rank
-             FROM ranked ORDER BY rank LIMIT 100`,
-            [row.id, frozen ? freezeAt : null]
+             FROM ranked ORDER BY rank LIMIT 200`,
+            [frozen ? freezeAt : null, row.id]
           ))
     : (scoringMode === "icpc"
         ? await db.query(
             `WITH ranked AS (
-               SELECT s.user_id, o.display_name,
-                      COUNT(*)::int AS solved,
-                      COALESCE(SUM(s.penalty_minutes), 0)::int AS total_penalty,
-                      MIN(s.solved_at) AS first_solve_at
-               FROM wiserfiles_challenge_solves s
-               JOIN wiserfiles_leaderboard_opt_in o ON o.user_id = s.user_id AND o.cohort_id = s.cohort_id
-               WHERE s.cohort_id = $1 AND o.opted_in = TRUE
-                 AND (NOT EXISTS (SELECT 1 FROM wiserfiles_contest_challenges cc WHERE cc.contest_id = $1)
-                      OR s.challenge_id IN (SELECT challenge_id FROM wiserfiles_contest_challenges WHERE contest_id = $1))
-                 AND ($2::timestamptz IS NULL OR s.solved_at <= $2)
-                 AND NOT EXISTS (SELECT 1 FROM wiserfiles_enrollments e WHERE e.user_id = s.user_id AND e.cohort_id = s.cohort_id AND e.is_disqualified)
-               GROUP BY s.user_id, o.display_name
+               SELECT o.user_id, o.display_name,
+                      COUNT(s.challenge_id)::int AS solved,
+                      COALESCE(SUM(s.penalty_minutes), 0)::int AS total_penalty
+               FROM wiserfiles_leaderboard_opt_in o
+               LEFT JOIN wiserfiles_challenge_solves s
+                 ON s.user_id = o.user_id AND s.cohort_id = o.cohort_id
+                AND (NOT EXISTS (SELECT 1 FROM wiserfiles_contest_challenges cc WHERE cc.contest_id = o.cohort_id)
+                     OR s.challenge_id IN (SELECT challenge_id FROM wiserfiles_contest_challenges WHERE contest_id = o.cohort_id))
+                AND ($1::timestamptz IS NULL OR s.solved_at <= $1)
+               WHERE o.cohort_id = $2 AND o.opted_in = TRUE
+                 AND NOT EXISTS (SELECT 1 FROM wiserfiles_enrollments e WHERE e.user_id = o.user_id AND e.cohort_id = o.cohort_id AND e.is_disqualified)
+               GROUP BY o.user_id, o.display_name
              )
              SELECT *, ROW_NUMBER() OVER (ORDER BY solved DESC, total_penalty ASC, user_id ASC) AS rank
-             FROM ranked ORDER BY rank LIMIT 100`,
-            [row.id, frozen ? freezeAt : null]
+             FROM ranked ORDER BY rank LIMIT 200`,
+            [frozen ? freezeAt : null, row.id]
           )
         : await db.query(
             `WITH ranked AS (
-               SELECT s.user_id, o.display_name,
-                      SUM(s.points) - COALESCE(MAX(h.hint_cost), 0) AS total_points,
-                      COUNT(*)::int AS solved_count,
+               SELECT o.user_id, o.display_name,
+                      COALESCE(SUM(s.points), 0) - COALESCE(MAX(h.hint_cost), 0) AS total_points,
+                      COUNT(s.challenge_id)::int AS solved_count,
                       MIN(s.solved_at) AS first_solve_at
-               FROM wiserfiles_challenge_solves s
-               JOIN wiserfiles_leaderboard_opt_in o ON o.user_id = s.user_id AND o.cohort_id = s.cohort_id
+               FROM wiserfiles_leaderboard_opt_in o
+               LEFT JOIN wiserfiles_challenge_solves s
+                 ON s.user_id = o.user_id AND s.cohort_id = o.cohort_id
+                AND (NOT EXISTS (SELECT 1 FROM wiserfiles_contest_challenges cc WHERE cc.contest_id = o.cohort_id)
+                     OR s.challenge_id IN (SELECT challenge_id FROM wiserfiles_contest_challenges WHERE contest_id = o.cohort_id))
+                AND ($1::timestamptz IS NULL OR s.solved_at <= $1)
                LEFT JOIN (SELECT user_id, cohort_id, SUM(cost) AS hint_cost FROM wiserfiles_hint_reveals GROUP BY user_id, cohort_id) h
-                 ON h.user_id = s.user_id AND h.cohort_id = s.cohort_id
-               WHERE s.cohort_id = $1 AND o.opted_in = TRUE
-                 AND (NOT EXISTS (SELECT 1 FROM wiserfiles_contest_challenges cc WHERE cc.contest_id = $1)
-                      OR s.challenge_id IN (SELECT challenge_id FROM wiserfiles_contest_challenges WHERE contest_id = $1))
-                 AND ($2::timestamptz IS NULL OR s.solved_at <= $2)
-                 AND NOT EXISTS (SELECT 1 FROM wiserfiles_enrollments e WHERE e.user_id = s.user_id AND e.cohort_id = s.cohort_id AND e.is_disqualified)
-               GROUP BY s.user_id, o.display_name
+                 ON h.user_id = o.user_id AND h.cohort_id = o.cohort_id
+               WHERE o.cohort_id = $2 AND o.opted_in = TRUE
+                 AND NOT EXISTS (SELECT 1 FROM wiserfiles_enrollments e WHERE e.user_id = o.user_id AND e.cohort_id = o.cohort_id AND e.is_disqualified)
+               GROUP BY o.user_id, o.display_name
              )
              SELECT *, ROW_NUMBER() OVER (ORDER BY total_points DESC, first_solve_at ASC, user_id ASC) AS rank
-             FROM ranked ORDER BY rank LIMIT 100`,
-            [row.id, frozen ? freezeAt : null]
+             FROM ranked ORDER BY rank LIMIT 200`,
+            [frozen ? freezeAt : null, row.id]
           ));
 
   const prizes = Array.isArray(row.prizes) ? row.prizes : [];
