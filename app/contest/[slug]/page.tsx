@@ -51,7 +51,7 @@ export default function ContestPage() {
 
   async function load() {
     try {
-      const res = await fetch(`/api/contest/${slug}`);
+      const res = await fetch(`/api/contest/${slug}${code ? `?code=${encodeURIComponent(code)}` : ""}`);
       const json = await res.json();
       if (!res.ok) setError(json?.error || "Contest not found.");
       else setData(json);
