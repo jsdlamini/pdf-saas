@@ -336,9 +336,10 @@ export async function seedDemoContest(): Promise<void> {
     { id: "demo-player-alice", name: "Alice", solves: 4 },
     { id: "demo-player-bob", name: "Bob", solves: 3 },
     { id: "demo-player-charlie", name: "Charlie", solves: 5 },
+    { id: "demo-player-dana", name: "Dana", solves: 0 },
   ];
   await db.query(
-    `DELETE FROM wiserfiles_challenge_solves WHERE cohort_id = $1 AND user_id IN ('demo-player-alice', 'demo-player-bob', 'demo-player-charlie')`,
+    `DELETE FROM wiserfiles_challenge_solves WHERE cohort_id = $1 AND user_id IN ('demo-player-alice', 'demo-player-bob', 'demo-player-charlie', 'demo-player-dana')`,
     [contestId]
   );
   for (let p = 0; p < players.length; p++) {
