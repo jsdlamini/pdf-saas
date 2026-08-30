@@ -7918,7 +7918,7 @@ export default function ResearchStudioPage() {
                               <span className="flex items-center gap-2">
                                 <span className="font-mono text-xs text-muted-foreground">{c.join_code}</span>
                                 {c.slug ? (
-                                  <QRCodeSVG value={`${process.env.NEXT_PUBLIC_SITE_URL || ""}/contest/${c.slug}?code=${c.join_code}`} size={64} bgColor="transparent" fgColor="#e2e8f0" title="Scan to join" />
+                                  <QRCodeSVG value={`${(process.env.NEXT_PUBLIC_SITE_URL || "").replace(/\/$/, "")}/contest/${c.slug}?code=${c.join_code}`} size={72} bgColor="#ffffff" fgColor="#000000" title="Scan to join" />
                                 ) : null}
                               </span>
                             </div>
