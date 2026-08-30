@@ -290,6 +290,26 @@ const MIGRATIONS: string[] = [
     revealed_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     PRIMARY KEY (user_id, challenge_id, cohort_id, hint_index)
   )`,
+
+  // ── Teams ──────────────────────────────────────────────────────
+  `ALTER TABLE wiserfiles_cohorts ADD COLUMN IF NOT EXISTS team_mode BOOLEAN NOT NULL DEFAULT FALSE`,
+  `CREATE TABLE IF NOT EXISTS wiserfiles_teams (
+    id SERIAL PRIMARY KEY,
+    contest_id INTEGER NOT NULL REFERENCES wiserfiles_cohorts(id) ON DELETE CASCADE,
+    name TEXT NOT NULL,
+    captain_user_id TEXT NOT NULL,
+    join_code TEXT NOT NULL,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    UNIQUE (contest_id, name)
+  )`,
+  `CREATE TABLE IF NOT EXISTS wiserfiles_team_members (
+    team_id INTEGER NOT NULL REFERENCES wiserfiles_teams(id) ON DELETE CASCADE,
+    user_id TEXT NOT NULL,
+    joined_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    PRIMARY KEY (team_id, user_id)
+  )`,
+  `ALTER TABLE wiserfiles_challenge_solves ADD COLUMN IF NOT EXISTS team_id INTEGER`,
+  `ALTER TABLE wiserfiles_submissions ADD COLUMN IF NOT EXISTS team_id INTEGER`,
 ];
 
 let migrationPromise: Promise<void> | null = null;

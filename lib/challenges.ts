@@ -226,6 +226,21 @@ export async function activeSeasonId(): Promise<number> {
   return res.rows.length ? Number(res.rows[0].id) : 0;
 }
 
+// If a contest is team-based, return the user's team id within it; otherwise
+// return null (individual contests).
+export async function resolveTeamId(userId: string, cohortId: number): Promise<number | null> {
+  await ensureMigrated();
+  const contest = await db.query(`SELECT team_mode FROM wiserfiles_cohorts WHERE id = $1`, [cohortId]);
+  if (!contest.rows.length || !contest.rows[0].team_mode) return null;
+  const team = await db.query(
+    `SELECT tm.team_id FROM wiserfiles_team_members tm
+     JOIN wiserfiles_teams t ON t.id = tm.team_id
+     WHERE t.contest_id = $1 AND tm.user_id = $2 LIMIT 1`,
+    [cohortId, userId]
+  );
+  return team.rows.length ? Number(team.rows[0].team_id) : null;
+}
+
 // Seed the challenges and a default season + cohort so the panel works out of
 // the box. Idempotent.
 export async function seedChallenges(): Promise<void> {
