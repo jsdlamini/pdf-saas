@@ -330,12 +330,17 @@ export async function seedDemoContest(): Promise<void> {
     );
   }
 
-  // Seed three competitors who each solved at least three problems.
+  // Seed three competitors who each solved several problems (different totals
+  // so the leaderboard has a clear 1st/2nd/3rd). Re-seed fresh each run.
   const players = [
-    { id: "demo-player-alice", name: "Alice" },
-    { id: "demo-player-bob", name: "Bob" },
-    { id: "demo-player-charlie", name: "Charlie" },
+    { id: "demo-player-alice", name: "Alice", solves: 4 },
+    { id: "demo-player-bob", name: "Bob", solves: 3 },
+    { id: "demo-player-charlie", name: "Charlie", solves: 5 },
   ];
+  await db.query(
+    `DELETE FROM wiserfiles_challenge_solves WHERE cohort_id = $1 AND user_id IN ('demo-player-alice', 'demo-player-bob', 'demo-player-charlie')`,
+    [contestId]
+  );
   for (let p = 0; p < players.length; p++) {
     const player = players[p];
     await db.query(
@@ -346,14 +351,14 @@ export async function seedDemoContest(): Promise<void> {
       `INSERT INTO wiserfiles_leaderboard_opt_in (user_id, cohort_id, display_name, opted_in) VALUES ($1, $2, $3, TRUE) ON CONFLICT DO NOTHING`,
       [player.id, contestId, player.name]
     );
-    for (let c = 0; c < 4; c++) {
+    for (let c = 0; c < player.solves; c++) {
       const challenge = challenges.rows[c];
       if (!challenge) continue;
       await db.query(
         `INSERT INTO wiserfiles_challenge_solves (user_id, challenge_id, cohort_id, points, solved_at)
          VALUES ($1, $2, $3, $4, NOW() - make_interval(mins => $5::int))
          ON CONFLICT DO NOTHING`,
-        [player.id, challenge.id, contestId, challenge.points, (p * 4 + c) * 3 + 5]
+        [player.id, challenge.id, contestId, challenge.points, (p * 5 + c) * 4 + 6]
       );
     }
   }
