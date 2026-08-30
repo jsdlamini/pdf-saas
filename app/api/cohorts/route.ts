@@ -27,7 +27,7 @@ export async function GET() {
 
   const contests = await db.query(
     `SELECT c.id, c.name, c.join_code, c.slug, c.description, c.starts_at, c.ends_at,
-            c.scoring_mode, c.is_public, c.team_mode, c.prizes, c.course_id, c.season_id, c.created_by,
+            c.scoring_mode, c.is_public, c.team_mode, c.freeze_at, c.prizes, c.course_id, c.season_id, c.created_by,
             (SELECT COUNT(*)::int FROM wiserfiles_enrollments e WHERE e.cohort_id = c.id AND e.status = 'active') AS member_count,
             (SELECT COUNT(*)::int FROM wiserfiles_contest_challenges cc WHERE cc.contest_id = c.id) AS challenge_count
      FROM wiserfiles_cohorts c
