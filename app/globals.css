@@ -580,8 +580,7 @@ html[data-theme="dark"] .ai-workflow-card:hover {
   display: grid;
   flex: 1;
   min-height: 0;
-  /* First column is the Projects activity bar (44px, keep in sync with PROJECTS_RAIL_WIDTH in page.tsx). */
-  grid-template-columns: 44px var(--left-width, 240px) 1px minmax(0, 1fr) 1px var(--right-width, 300px);
+  grid-template-columns: var(--left-width, 240px) 1px minmax(0, 1fr) 1px var(--right-width, 300px);
 }
 
 .studio-panes-left-collapsed {
@@ -594,7 +593,7 @@ html[data-theme="dark"] .ai-workflow-card:hover {
 
 /* Code mode: hide right pane entirely */
 .studio-panes-code {
-  grid-template-columns: 44px var(--left-width, 240px) 1px minmax(0, 1fr) !important;
+  grid-template-columns: var(--left-width, 240px) 1px minmax(0, 1fr) !important;
 }
 
 /* ── Projects activity bar + auto-hiding pane ───── */
@@ -862,6 +861,152 @@ html[data-theme="light"] .studio-projects-panel {
   text-transform: uppercase;
   letter-spacing: 0.08em;
   color: var(--text-muted, #64748b);
+}
+
+/* ── Project switcher (unified with Files pane) ───── */
+.studio-project-switcher {
+  position: relative;
+  flex: 1;
+  min-width: 0;
+  display: flex;
+}
+
+.studio-project-switcher-trigger {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex: 1;
+  min-width: 0;
+  height: 24px;
+  padding: 0 6px;
+  background: transparent;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  color: var(--text-primary, #e2e8f0);
+  transition: background 0.12s;
+}
+
+.studio-project-switcher-trigger:hover {
+  background: rgba(255, 255, 255, 0.06);
+}
+
+.studio-project-switcher-name {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 12px;
+  font-weight: 600;
+  text-align: left;
+}
+
+.studio-project-switcher-menu {
+  position: absolute;
+  top: calc(100% + 6px);
+  left: 0;
+  width: 230px;
+  max-height: 320px;
+  overflow-y: auto;
+  background: var(--bg-surface, #1a1f2c);
+  border: 1px solid var(--border-color, #2a3140);
+  border-radius: 10px;
+  padding: 6px;
+  z-index: 60;
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.5), 0 2px 8px rgba(0, 0, 0, 0.3);
+}
+
+.studio-project-switcher-menu-actions {
+  display: flex;
+  gap: 6px;
+  padding: 2px 4px 8px;
+  border-bottom: 1px solid var(--border-color, #2a3140);
+  margin-bottom: 6px;
+}
+
+.studio-project-switcher-menu-actions button {
+  flex: 1;
+  height: 26px;
+  border-radius: 6px;
+  border: 1px solid var(--border-color, #2a3140);
+  background: transparent;
+  color: var(--text-secondary, #a8b3c4);
+  font-size: 11px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.12s, color 0.12s;
+}
+
+.studio-project-switcher-menu-actions button:hover {
+  background: rgba(255, 255, 255, 0.06);
+  color: var(--text-primary, #e6ebf2);
+}
+
+.studio-project-switcher-empty {
+  padding: 10px;
+  text-align: center;
+  font-size: 12px;
+  color: var(--text-muted, #7c8798);
+  margin: 0;
+}
+
+.studio-project-switcher-group {
+  margin-bottom: 8px;
+}
+
+.studio-project-switcher-group-label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 2px 6px;
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--text-muted, #7c8798);
+}
+
+.studio-project-switcher-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  width: 100%;
+  height: 28px;
+  padding: 0 8px;
+  background: transparent;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  text-align: left;
+  font-size: 12px;
+  color: var(--text-secondary, #a8b3c4);
+  transition: background 0.1s, color 0.1s;
+}
+
+.studio-project-switcher-item span:first-child {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.studio-project-switcher-item:hover {
+  background: rgba(255, 255, 255, 0.04);
+  color: var(--text-primary, #e6ebf2);
+}
+
+.studio-project-switcher-item-active {
+  background: var(--accent-dim, rgba(96, 165, 250, 0.16));
+  color: var(--accent-color, #60a5fa);
+  font-weight: 500;
+}
+
+.studio-project-switcher-current {
+  font-size: 8px;
+  color: var(--accent-color, #60a5fa);
 }
 
 .studio-filetree-body {
