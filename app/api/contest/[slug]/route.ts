@@ -56,6 +56,17 @@ export async function GET(request: Request, { params }: { params: Promise<{ slug
     [row.id]
   );
 
+  // Mark which challenges the viewer has already solved.
+  const solvedSet = new Set<number>();
+  if (userId) {
+    const solves = await db.query(
+      `SELECT challenge_id FROM wiserfiles_challenge_solves WHERE user_id = $1 AND cohort_id = $2`,
+      [userId, row.id]
+    );
+    for (const s of solves.rows) solvedSet.add(Number(s.challenge_id));
+  }
+  const challengeList = challenges.rows.map((c) => ({ ...c, solved: solvedSet.has(Number(c.id)) }));
+
   const scoringMode = row.scoring_mode || "solve";
   const teamMode = Boolean(row.team_mode);
   const freezeAt = row.freeze_at || null;
@@ -179,7 +190,7 @@ export async function GET(request: Request, { params }: { params: Promise<{ slug
       isMember,
       canJoin,
     },
-    challenges: challenges.rows,
+    challenges: challengeList,
     leaderboard,
   });
 }

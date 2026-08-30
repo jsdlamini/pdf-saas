@@ -1099,6 +1099,7 @@ export default function ResearchStudioPage() {
   const searchParams = useSearchParams();
   const shareId = searchParams.get("share");
   const githubResult = searchParams.get("github");
+  const challengeParam = searchParams.get("challenge");
   const [sharedProject, setSharedProject] = useState<any>(null);
   const [shareLoading, setShareLoading] = useState(!!shareId);
 
@@ -1110,6 +1111,30 @@ export default function ResearchStudioPage() {
       setCompileNotice("Could not connect the GitHub App.");
     }
   }, [githubResult]);
+
+  // Deep link: open a specific challenge in the editor (?challenge=<slug>).
+  useEffect(() => {
+    if (!challengeParam) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await fetch("/api/challenges");
+        const data = (await res.json().catch(() => null)) as { challenges?: typeof challenges } | null;
+        const list = data?.challenges || [];
+        const ch = list.find((c) => c.slug === challengeParam);
+        if (cancelled) return;
+        if (ch) {
+          setWorkspaceScreen("editor");
+          setChallenges(list);
+          void solveChallenge(ch);
+        } else {
+          setCompileNotice(`Challenge "${challengeParam}" not found.`);
+        }
+      } catch { /* ignore */ }
+    })();
+    return () => { cancelled = true; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [challengeParam]);
 
   // Load shared project on mount
   useEffect(() => {
