@@ -27,7 +27,7 @@ export async function GET() {
 
   const contests = await db.query(
     `SELECT c.id, c.name, c.join_code, c.slug, c.description, c.starts_at, c.ends_at,
-            c.scoring_mode, c.is_public, c.prizes, c.course_id, c.season_id, c.created_by,
+            c.scoring_mode, c.is_public, c.team_mode, c.prizes, c.course_id, c.season_id, c.created_by,
             (SELECT COUNT(*)::int FROM wiserfiles_enrollments e WHERE e.cohort_id = c.id AND e.status = 'active') AS member_count,
             (SELECT COUNT(*)::int FROM wiserfiles_contest_challenges cc WHERE cc.contest_id = c.id) AS challenge_count
      FROM wiserfiles_cohorts c
@@ -68,12 +68,13 @@ export async function POST(request: Request) {
     const endsAt = body.endsAt ? new Date(String(body.endsAt)).toISOString() : null;
     const scoringMode = body.scoringMode === "icpc" ? "icpc" : "solve";
     const isPublic = Boolean(body.isPublic);
+    const teamMode = Boolean(body.teamMode);
     const prizes = Array.isArray(body.prizes) ? JSON.stringify(body.prizes) : null;
 
     const ins = await db.query(
-      `INSERT INTO wiserfiles_cohorts (name, join_code, slug, description, starts_at, ends_at, scoring_mode, is_public, prizes, season_id, created_by)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9::jsonb, $10, $11) RETURNING id, name, join_code, slug`,
-      [name, joinCode(), slug(), description, startsAt, endsAt, scoringMode, isPublic, prizes, seasonId || null, userId]
+      `INSERT INTO wiserfiles_cohorts (name, join_code, slug, description, starts_at, ends_at, scoring_mode, is_public, prizes, season_id, created_by, team_mode)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9::jsonb, $10, $11, $12) RETURNING id, name, join_code, slug`,
+      [name, joinCode(), slug(), description, startsAt, endsAt, scoringMode, isPublic, prizes, seasonId || null, userId, teamMode]
     );
 
     // The creator is the host of their own contest.

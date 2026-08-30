@@ -3096,13 +3096,17 @@ export default function ResearchStudioPage() {
   const [optInBusy, setOptInBusy] = useState(false);
   const [joinCode, setJoinCode] = useState("");
   const [progressData, setProgressData] = useState<{ challenges: Array<{ id: number; slug: string; language: string }>; members: Array<{ userId: string; displayName: string; statuses: string[] }> } | null>(null);
-  const [contestsData, setContestsData] = useState<{ contests: Array<{ id: number; name: string; join_code: string; slug: string | null; description: string; starts_at: string | null; ends_at: string | null; scoring_mode: string; is_public: boolean; prizes: Array<{ place: number; label: string }> | null; member_count: number; challenge_count: number; created_by: string }>; myCohortId: number; enrollments: Array<{ cohort_id: number; role: string; status: string; student_id: string | null }> } | null>(null);
+  const [contestsData, setContestsData] = useState<{ contests: Array<{ id: number; name: string; join_code: string; slug: string | null; description: string; starts_at: string | null; ends_at: string | null; scoring_mode: string; is_public: boolean; team_mode: boolean; prizes: Array<{ place: number; label: string }> | null; member_count: number; challenge_count: number; created_by: string }>; myCohortId: number; enrollments: Array<{ cohort_id: number; role: string; status: string; student_id: string | null }> } | null>(null);
   const [newContestName, setNewContestName] = useState("");
   const [newContestDesc, setNewContestDesc] = useState("");
   const [newContestStartsAt, setNewContestStartsAt] = useState("");
   const [newContestEndsAt, setNewContestEndsAt] = useState("");
   const [newContestScoring, setNewContestScoring] = useState<"solve" | "icpc">("solve");
   const [newContestPublic, setNewContestPublic] = useState(false);
+  const [newContestTeamMode, setNewContestTeamMode] = useState(false);
+  const [teamName, setTeamName] = useState("");
+  const [teamCode, setTeamCode] = useState("");
+  const [teamBusy, setTeamBusy] = useState(false);
   const [newContestPrizes, setNewContestPrizes] = useState("");
   const [cohortBusy, setCohortBusy] = useState(false);
   const [manageContest, setManageContest] = useState<{ id: number; slug: string | null; name: string } | null>(null);
@@ -3500,6 +3504,7 @@ export default function ResearchStudioPage() {
           endsAt: newContestEndsAt || null,
           scoringMode: newContestScoring,
           isPublic: newContestPublic,
+          teamMode: newContestTeamMode,
           prizes,
         }),
       });
@@ -3576,6 +3581,32 @@ export default function ResearchStudioPage() {
     } finally {
       setManageBusy(false);
     }
+  }
+
+  async function createTeam(contestId: number) {
+    const name = teamName.trim();
+    if (!name) { setCompileNotice("Enter a team name."); return; }
+    setTeamBusy(true);
+    try {
+      const res = await fetch("/api/teams", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: "create", contestId, name }) });
+      const data = (await res.json().catch(() => null)) as { team?: { name: string; join_code: string }; error?: string } | null;
+      if (data?.error) setCompileNotice(data.error);
+      else { setTeamName(""); setCompileNotice(`Team created — share team code ${data?.team?.join_code}.`); }
+    } catch { setCompileNotice("Could not create team."); }
+    finally { setTeamBusy(false); }
+  }
+
+  async function joinTeam(contestId: number) {
+    const code = teamCode.trim();
+    if (!code) return;
+    setTeamBusy(true);
+    try {
+      const res = await fetch("/api/teams", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: "join", contestId, joinCode: code }) });
+      const data = (await res.json().catch(() => null)) as { ok?: boolean; error?: string } | null;
+      if (data?.error) setCompileNotice(data.error);
+      else { setTeamCode(""); setCompileNotice("Team joined."); }
+    } catch { setCompileNotice("Could not join team."); }
+    finally { setTeamBusy(false); }
   }
 
   async function loadProgress() {
@@ -7842,6 +7873,9 @@ export default function ResearchStudioPage() {
                           <input type="checkbox" checked={newContestPublic} onChange={(e) => setNewContestPublic(e.target.checked)} /> Public page
                         </label>
                         <label className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                          <input type="checkbox" checked={newContestTeamMode} onChange={(e) => setNewContestTeamMode(e.target.checked)} /> Team contest
+                        </label>
+                        <label className="flex items-center gap-1.5 text-xs text-muted-foreground">
                           Scoring
                           <select value={newContestScoring} onChange={(e) => setNewContestScoring(e.target.value as "solve" | "icpc")} className="h-8 rounded-md border bg-background px-1 text-xs">
                             <option value="solve">Most points</option>
@@ -7870,11 +7904,20 @@ export default function ResearchStudioPage() {
                             </div>
                             <div className="text-xs text-muted-foreground">
                               {c.challenge_count} problem{c.challenge_count === 1 ? "" : "s"} · {c.member_count} competitor{c.member_count === 1 ? "" : "s"}
+                              {c.team_mode ? " · team contest" : ""}
                               {mine ? " · you're in" : ""}
                               {c.starts_at ? ` · ${new Date(c.starts_at).toLocaleString()}` : ""}
                             </div>
                             {c.prizes && c.prizes.length ? (
                               <div className="mt-1 text-xs text-amber-500">🏆 {c.prizes.map((p) => p.label).join(" · ")}</div>
+                            ) : null}
+                            {c.team_mode && mine ? (
+                              <div className="mt-2 flex flex-wrap items-center gap-1.5">
+                                <input value={teamName} onChange={(e) => setTeamName(e.target.value)} placeholder="Team name" className="h-7 w-28 rounded-md border bg-background px-2 text-xs" />
+                                <Button size="sm" variant="outline" onClick={() => void createTeam(c.id)} disabled={teamBusy}>Create team</Button>
+                                <input value={teamCode} onChange={(e) => setTeamCode(e.target.value)} placeholder="Team code" className="h-7 w-24 rounded-md border bg-background px-2 text-xs" />
+                                <Button size="sm" variant="outline" onClick={() => void joinTeam(c.id)} disabled={teamBusy}>Join</Button>
+                              </div>
                             ) : null}
                             {c.slug && c.is_public ? (
                               <a href={`/contest/${c.slug}`} target="_blank" rel="noreferrer" className="mt-1 inline-block text-xs text-blue-500 hover:underline">Public page ↗</a>
