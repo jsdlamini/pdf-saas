@@ -26,6 +26,7 @@ services:
         # Passed into the build so next build can inline it into the client bundle.
         # Compose substitutes this from the project .env file.
         NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY: ${NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY:-}
+        NEXT_PUBLIC_SITE_URL: ${NEXT_PUBLIC_SITE_URL:-https://pdf.idealsoftwaresolutions.com}
     container_name: pdf-saas
     restart: unless-stopped
     # Non-root runtime; the Dockerfile sets USER app with scoped sudo for apt/tlmgr.

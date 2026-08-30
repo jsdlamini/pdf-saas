@@ -93,6 +93,18 @@ export default function ContestPage() {
     return (!start || now >= start) && (!end || now <= end);
   }, [data]);
 
+  // Arriving via a QR deep link (?code=...) should join straight away.
+  useEffect(() => {
+    if (!code || !isLoaded || !isSignedIn || !data || joining) return;
+    if (data.contest.isMember) return;
+    if (!(data.contest.isPublic || data.contest.canJoin)) return;
+    const now = Date.now();
+    const start = data.contest.startsAt ? new Date(data.contest.startsAt).getTime() : 0;
+    const end = data.contest.endsAt ? new Date(data.contest.endsAt).getTime() : 0;
+    if ((!start || now >= start) && (!end || now <= end)) void join();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [code, isLoaded, isSignedIn, data]);
+
   if (error) {
     return <div className="mx-auto max-w-3xl px-4 py-16 text-center text-rose-500">{error}</div>;
   }

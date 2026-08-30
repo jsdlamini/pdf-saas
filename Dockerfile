@@ -13,7 +13,9 @@ COPY . .
 # Clerk publishable key MUST be present here (not just at runtime). It is a
 # public key, so baking it into the image is safe; the secret key stays runtime-only.
 ARG NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY
+ARG NEXT_PUBLIC_SITE_URL
 ENV NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY=$NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY
+ENV NEXT_PUBLIC_SITE_URL=$NEXT_PUBLIC_SITE_URL
 RUN npm run build
 
 FROM node:22-bookworm-slim AS runner
