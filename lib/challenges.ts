@@ -1,5 +1,6 @@
 // Coding challenges: hand-written seed data, grading, and seeding.
 import { db, ensureMigrated } from "./db";
+import { generateChallenges } from "./challenge-generator";
 
 export type HiddenTest = { input: string; expected: string };
 
@@ -202,6 +203,9 @@ export const CHALLENGE_SEED: ChallengeSeed[] = [
       test_file: "#define DOCTEST_CONFIG_IMPLEMENT_WITH_MAIN\n#include \"doctest.h\"\n#include \"solution.cpp\"\n\nTEST_CASE(\"max_of_three\") {\n  CHECK(max_of_three(1, 5, 3) == 5);\n  CHECK(max_of_three(10, 10, 2) == 10);\n  CHECK(max_of_three(-1, -5, -3) == -1);\n}\n",
     },
   },
+
+  // Programmatically generated library (100 additional graded problems).
+  ...generateChallenges(),
 ];
 
 const SANDBOX_URL = process.env.SANDBOX_URL || "http://sandbox:3100";
@@ -285,6 +289,73 @@ export async function seedChallenges(): Promise<void> {
          hint_cost = EXCLUDED.hint_cost`,
       [c.slug, c.language, c.difficulty, c.statement_md, c.starter_code, JSON.stringify(c.hidden_tests), c.points, c.test_mode || "io", c.sample_input || "", JSON.stringify(c.hints || []), c.hint_cost ?? 5, seasonId]
     );
+  }
+
+  await seedDemoContest();
+}
+
+// Seed a public demo contest with three competitors who each solved several
+// problems, so the contest page and leaderboard are populated out of the box.
+export async function seedDemoContest(): Promise<void> {
+  await ensureMigrated();
+  const seasonId = await activeSeasonId();
+
+  const existing = await db.query(`SELECT id FROM wiserfiles_cohorts WHERE slug = 'demo-sprint'`);
+  let contestId: number;
+  if (existing.rows.length) {
+    contestId = Number(existing.rows[0].id);
+  } else {
+    const ins = await db.query(
+      `INSERT INTO wiserfiles_cohorts (name, join_code, slug, description, starts_at, ends_at, scoring_mode, is_public, prizes, season_id, created_by)
+       VALUES ($1, $2, 'demo-sprint', $3, $4, $5, 'solve', TRUE, $6::jsonb, $7, 'system') RETURNING id`,
+      [
+        "Demo Sprint — Coding Contest",
+        "DEMO2024",
+        "A public demo contest with three seeded competitors.",
+        new Date(Date.now() - 3600_000).toISOString(),
+        new Date(Date.now() + 7 * 86_400_000).toISOString(),
+        JSON.stringify([{ place: 1, label: "1st — $100" }, { place: 2, label: "2nd — $50" }, { place: 3, label: "3rd — $25" }]),
+        seasonId || null,
+      ]
+    );
+    contestId = Number(ins.rows[0].id);
+  }
+
+  // Assign the first ten challenges to the contest.
+  const challenges = await db.query(`SELECT id, points FROM wiserfiles_challenges ORDER BY id LIMIT 10`);
+  for (let i = 0; i < challenges.rows.length; i++) {
+    await db.query(
+      `INSERT INTO wiserfiles_contest_challenges (contest_id, challenge_id, position) VALUES ($1, $2, $3) ON CONFLICT DO NOTHING`,
+      [contestId, challenges.rows[i].id, i]
+    );
+  }
+
+  // Seed three competitors who each solved at least three problems.
+  const players = [
+    { id: "demo-player-alice", name: "Alice" },
+    { id: "demo-player-bob", name: "Bob" },
+    { id: "demo-player-charlie", name: "Charlie" },
+  ];
+  for (let p = 0; p < players.length; p++) {
+    const player = players[p];
+    await db.query(
+      `INSERT INTO wiserfiles_enrollments (user_id, cohort_id, role, status) VALUES ($1, $2, 'student', 'active') ON CONFLICT DO NOTHING`,
+      [player.id, contestId]
+    );
+    await db.query(
+      `INSERT INTO wiserfiles_leaderboard_opt_in (user_id, cohort_id, display_name, opted_in) VALUES ($1, $2, $3, TRUE) ON CONFLICT DO NOTHING`,
+      [player.id, contestId, player.name]
+    );
+    for (let c = 0; c < 4; c++) {
+      const challenge = challenges.rows[c];
+      if (!challenge) continue;
+      await db.query(
+        `INSERT INTO wiserfiles_challenge_solves (user_id, challenge_id, cohort_id, points, solved_at)
+         VALUES ($1, $2, $3, $4, NOW() - make_interval(mins => $5::int))
+         ON CONFLICT DO NOTHING`,
+        [player.id, challenge.id, contestId, challenge.points, (p * 4 + c) * 3 + 5]
+      );
+    }
   }
 }
 
