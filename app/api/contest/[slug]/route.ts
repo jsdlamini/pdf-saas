@@ -14,6 +14,7 @@ function jsonError(msg: string, status: number) {
 export async function GET(request: Request, { params }: { params: Promise<{ slug: string }> }) {
   const { slug } = await params;
   const { userId } = await auth();
+  const code = new URL(request.url).searchParams.get("code") || "";
 
   await ensureMigrated();
 
@@ -35,8 +36,16 @@ export async function GET(request: Request, { params }: { params: Promise<{ slug
     isMember = member.rows.length > 0;
   }
 
-  // Private contests require membership or hosting.
-  if (!row.is_public && !isMember) return jsonError("This contest is private.", 403);
+  // Private contests require membership, hosting, or a valid invite code
+  // (so a QR/deep link carrying ?code= can open the page and allow joining).
+  let canJoin = false;
+  if (!row.is_public && !isMember) {
+    if (code && code.toUpperCase() === String(row.join_code || "").toUpperCase()) {
+      canJoin = true;
+    } else {
+      return jsonError("This contest is private.", 403);
+    }
+  }
 
   const challenges = await db.query(
     `SELECT ch.id, ch.slug, ch.language, ch.difficulty, ch.points, ch.statement_md
@@ -165,6 +174,7 @@ export async function GET(request: Request, { params }: { params: Promise<{ slug
       memberCount: row.member_count,
       isHost: row.created_by === userId,
       isMember,
+      canJoin,
     },
     challenges: challenges.rows,
     leaderboard,
@@ -180,12 +190,19 @@ export async function POST(request: Request, { params }: { params: Promise<{ slu
   await ensureMigrated();
 
   const contest = await db.query(
-    `SELECT id, is_public, join_code_expires_at, join_code_max_uses, join_code_uses FROM wiserfiles_cohorts WHERE slug = $1`,
+    `SELECT id, is_public, join_code, join_code_expires_at, join_code_max_uses, join_code_uses FROM wiserfiles_cohorts WHERE slug = $1`,
     [slug]
   );
   if (!contest.rows.length) return jsonError("Contest not found.", 404);
   const row = contest.rows[0];
-  if (!row.is_public) return jsonError("This contest is private — enter the invite code to join.", 403);
+
+  // Private contests require the invite code (carried by the QR/deep link).
+  if (!row.is_public) {
+    const code = String((await request.json().catch(() => null))?.code || "").trim().toUpperCase();
+    if (!code || code !== String(row.join_code || "").toUpperCase()) {
+      return jsonError("This contest is private — enter the invite code to join.", 403);
+    }
+  }
 
   if (row.join_code_expires_at && new Date(row.join_code_expires_at).getTime() < Date.now()) {
     return jsonError("Registration has closed for this contest.", 410);

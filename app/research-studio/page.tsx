@@ -35,6 +35,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import "@xterm/xterm/css/xterm.css";
+import { QRCodeSVG } from "qrcode.react";
 
 type StudioEditorAdapter = {
   selectionStart: number;
@@ -3104,6 +3105,7 @@ export default function ResearchStudioPage() {
   const [newContestScoring, setNewContestScoring] = useState<"solve" | "icpc">("solve");
   const [newContestPublic, setNewContestPublic] = useState(false);
   const [newContestTeamMode, setNewContestTeamMode] = useState(false);
+  const [showHostForm, setShowHostForm] = useState(false);
   const [teamName, setTeamName] = useState("");
   const [teamCode, setTeamCode] = useState("");
   const [teamBusy, setTeamBusy] = useState(false);
@@ -7013,13 +7015,13 @@ export default function ResearchStudioPage() {
           {isCodeMode && activeChallenge ? (
             <div style={{ borderBottom: "1px solid var(--border-color, #334155)", background: "var(--background-elevated, rgba(30, 41, 59, 0.5))", padding: "8px 12px", fontSize: 12, display: "flex", gap: 12, alignItems: "flex-start" }}>
               <div style={{ flex: "0 0 36%", maxHeight: 260, overflowY: "auto", paddingRight: 10, borderRight: "1px solid var(--border-color, #334155)" }}>
-                <p style={{ margin: "0 0 4px", fontWeight: 700, fontSize: 11, color: "var(--text-muted, #64748b)" }}>Problem — {activeChallenge.slug}</p>
+                <p style={{ margin: "0 0 4px", fontWeight: 700, fontSize: 11, color: "#cbd5e1" }}>Problem — {activeChallenge.slug}</p>
                 <div className="challenge-markdown"><ReactMarkdown>{activeChallenge.statement_md}</ReactMarkdown></div>
               </div>
               <div style={{ flex: 1, minWidth: 0 }}>
                 <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
                   <span style={{ fontWeight: 700, color: "var(--text-primary, #e2e8f0)" }}>{activeChallenge.slug}</span>
-                  <span style={{ fontSize: 11, color: "var(--text-muted, #64748b)" }}>{activeChallenge.language.toUpperCase()} · {activeChallenge.test_mode === "io" ? "input/output" : activeChallenge.test_mode} grading</span>
+                  <span style={{ fontSize: 11, color: "#cbd5e1" }}>{activeChallenge.language.toUpperCase()} · {activeChallenge.test_mode === "io" ? "input/output" : activeChallenge.test_mode} grading</span>
                   <button type="button" onClick={() => void runChallengeTests()} disabled={challengeBusy} className="studio-btn studio-btn-primary" style={{ height: 24, fontSize: 11, padding: "0 10px", background: "#4ade80", color: "#000" }}>
                     {challengeBusy ? "Grading…" : "Submit for grading"}
                   </button>
@@ -7036,22 +7038,25 @@ export default function ResearchStudioPage() {
                 {hintText ? (
                   <p style={{ margin: "6px 0 0", fontSize: 11, color: "#f59e0b" }}>{hintText}</p>
                 ) : null}
-                <p style={{ margin: "4px 0 0", fontSize: 11, color: "var(--text-muted, #94a3b8)" }}>
+                <p style={{ margin: "4px 0 0", fontSize: 11, color: "#cbd5e1" }}>
                   Edit the starter code in the editor, then submit. Passing every hidden test awards points and ranks you on the leaderboard.
                 </p>
                 {challengeResults ? (
                   <div style={{ marginTop: 6 }}>
-                    <span style={{ fontWeight: 600, color: challengeResults.passed ? "#4ade80" : "#f87171" }}>
-                      {challengeResults.passed
-                        ? `✓ Passed all ${challengeResults.total} test${challengeResults.total === 1 ? "" : "s"}${challengeResults.firstSolve ? " — first solve, points awarded!" : " — check the leaderboard."}`
-                        : `✗ ${challengeResults.results.filter((r) => r.ok).length}/${challengeResults.total} test${challengeResults.total === 1 ? "" : "s"} passing`}
-                    </span>
+                    <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                      <span style={{ fontWeight: 600, color: challengeResults.passed ? "#4ade80" : "#f87171" }}>
+                        {challengeResults.passed
+                          ? `✓ Passed all ${challengeResults.total} test${challengeResults.total === 1 ? "" : "s"}${challengeResults.firstSolve ? " — first solve, points awarded!" : " — check the leaderboard."}`
+                          : `✗ ${challengeResults.results.filter((r) => r.ok).length}/${challengeResults.total} test${challengeResults.total === 1 ? "" : "s"} passing`}
+                      </span>
+                      <button type="button" onClick={() => setChallengeResults(null)} className="studio-btn studio-btn-ghost" style={{ height: 20, fontSize: 10, padding: "0 6px", marginLeft: "auto", color: "#cbd5e1" }}>Clear results</button>
+                    </div>
                     {challengeResults.results.map((r, i) => (
-                      <div key={i} style={{ marginTop: 4, padding: "6px 8px", borderRadius: 6, border: "1px solid var(--border-color, #334155)", fontSize: 11 }}>
+                      <div key={i} style={{ marginTop: 4, padding: "6px 8px", borderRadius: 6, border: "1px solid var(--border-color, #334155)", fontSize: 11, color: "#e2e8f0" }}>
                         <span style={{ fontWeight: 600 }}>Test {i + 1}: {r.ok ? "✓ pass" : "✗ fail"}</span>
                         {!r.ok ? (
                           <>
-                            {r.input ? <div style={{ color: "var(--text-muted, #94a3b8)" }}>input: {r.input}</div> : null}
+                            {r.input ? <div style={{ color: "#cbd5e1" }}>input: {r.input}</div> : null}
                             <DiffText expected={r.expected} actual={r.actual || "(empty)"} />
                           </>
                         ) : null}
@@ -7856,42 +7861,47 @@ export default function ResearchStudioPage() {
                 </div>
               ) : challengeTab === "cohorts" ? (
                 <div className="space-y-3">
-                  <div className="rounded-lg border p-3">
-                    <p className="text-sm font-semibold">Join a contest</p>
+                  <div className="rounded-lg border border-blue-500/40 bg-blue-500/5 p-3">
+                    <p className="text-sm font-semibold text-blue-500">Join a contest</p>
                     <div className="mt-1.5 flex gap-2">
                       <input value={joinCode} onChange={(e) => setJoinCode(e.target.value)} placeholder="Invite code from the host" className="h-9 flex-1 rounded-md border bg-background px-2 text-sm" />
                       <Button size="sm" onClick={() => void joinContest()}>Join</Button>
                     </div>
                   </div>
 
-                  <div className="rounded-lg border p-3">
-                    <p className="text-sm font-semibold">Host a contest</p>
-                    <div className="mt-1.5 space-y-2">
-                      <input value={newContestName} onChange={(e) => setNewContestName(e.target.value)} placeholder="Contest name — e.g. Friday Night Sprint" className="h-9 w-full rounded-md border bg-background px-2 text-sm" />
-                      <input value={newContestDesc} onChange={(e) => setNewContestDesc(e.target.value)} placeholder="Description (optional)" className="h-9 w-full rounded-md border bg-background px-2 text-sm" />
-                      <div className="flex gap-2">
-                        <input type="datetime-local" value={newContestStartsAt} onChange={(e) => setNewContestStartsAt(e.target.value)} className="h-9 flex-1 rounded-md border bg-background px-2 text-sm" aria-label="Starts at" />
-                        <input type="datetime-local" value={newContestEndsAt} onChange={(e) => setNewContestEndsAt(e.target.value)} className="h-9 flex-1 rounded-md border bg-background px-2 text-sm" aria-label="Ends at" />
+                  <label className="flex cursor-pointer items-center gap-2 rounded-lg border border-amber-500/40 bg-amber-500/5 px-3 py-2 text-sm font-semibold text-amber-500">
+                    <input type="checkbox" checked={showHostForm} onChange={(e) => setShowHostForm(e.target.checked)} /> Host a contest
+                  </label>
+                  {showHostForm ? (
+                    <div className="rounded-lg border border-amber-500/40 bg-amber-500/5 p-3">
+                      <p className="text-sm font-semibold text-amber-500">Host a contest</p>
+                      <div className="mt-1.5 space-y-2">
+                        <input value={newContestName} onChange={(e) => setNewContestName(e.target.value)} placeholder="Contest name — e.g. Friday Night Sprint" className="h-9 w-full rounded-md border bg-background px-2 text-sm" />
+                        <input value={newContestDesc} onChange={(e) => setNewContestDesc(e.target.value)} placeholder="Description (optional)" className="h-9 w-full rounded-md border bg-background px-2 text-sm" />
+                        <div className="flex gap-2">
+                          <input type="datetime-local" value={newContestStartsAt} onChange={(e) => setNewContestStartsAt(e.target.value)} className="h-9 flex-1 rounded-md border bg-background px-2 text-sm" aria-label="Starts at" />
+                          <input type="datetime-local" value={newContestEndsAt} onChange={(e) => setNewContestEndsAt(e.target.value)} className="h-9 flex-1 rounded-md border bg-background px-2 text-sm" aria-label="Ends at" />
+                        </div>
+                        <div className="flex flex-wrap items-center gap-4">
+                          <label className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                            <input type="checkbox" checked={newContestPublic} onChange={(e) => setNewContestPublic(e.target.checked)} /> Public page
+                          </label>
+                          <label className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                            <input type="checkbox" checked={newContestTeamMode} onChange={(e) => setNewContestTeamMode(e.target.checked)} /> Team contest
+                          </label>
+                          <label className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                            Scoring
+                            <select value={newContestScoring} onChange={(e) => setNewContestScoring(e.target.value as "solve" | "icpc")} className="h-8 rounded-md border bg-background px-1 text-xs">
+                              <option value="solve">Most points</option>
+                              <option value="icpc">ICPC (penalty)</option>
+                            </select>
+                          </label>
+                        </div>
+                        <textarea value={newContestPrizes} onChange={(e) => setNewContestPrizes(e.target.value)} placeholder={"Prizes — one per line\ne.g. 1st place — $100\n2nd place — $50"} rows={3} className="w-full rounded-md border bg-background px-2 py-1 text-sm" />
+                        <Button size="sm" onClick={() => void createContest()} disabled={cohortBusy}>{cohortBusy ? "Creating…" : "Create contest"}</Button>
                       </div>
-                      <div className="flex flex-wrap items-center gap-4">
-                        <label className="flex items-center gap-1.5 text-xs text-muted-foreground">
-                          <input type="checkbox" checked={newContestPublic} onChange={(e) => setNewContestPublic(e.target.checked)} /> Public page
-                        </label>
-                        <label className="flex items-center gap-1.5 text-xs text-muted-foreground">
-                          <input type="checkbox" checked={newContestTeamMode} onChange={(e) => setNewContestTeamMode(e.target.checked)} /> Team contest
-                        </label>
-                        <label className="flex items-center gap-1.5 text-xs text-muted-foreground">
-                          Scoring
-                          <select value={newContestScoring} onChange={(e) => setNewContestScoring(e.target.value as "solve" | "icpc")} className="h-8 rounded-md border bg-background px-1 text-xs">
-                            <option value="solve">Most points</option>
-                            <option value="icpc">ICPC (penalty)</option>
-                          </select>
-                        </label>
-                      </div>
-                      <textarea value={newContestPrizes} onChange={(e) => setNewContestPrizes(e.target.value)} placeholder={"Prizes — one per line\ne.g. 1st place — $100\n2nd place — $50"} rows={3} className="w-full rounded-md border bg-background px-2 py-1 text-sm" />
-                      <Button size="sm" onClick={() => void createContest()} disabled={cohortBusy}>{cohortBusy ? "Creating…" : "Create contest"}</Button>
                     </div>
-                  </div>
+                  ) : null}
 
                   <div className="max-h-64 space-y-1.5 overflow-y-auto">
                     {!contestsData ? (
@@ -7903,9 +7913,14 @@ export default function ResearchStudioPage() {
                         const mine = contestsData.enrollments.some((e) => e.cohort_id === c.id);
                         return (
                           <div key={c.id} className="rounded-lg border px-3 py-2 text-sm">
-                            <div className="flex items-center justify-between">
+                            <div className="flex items-center justify-between gap-2">
                               <span className="font-semibold">{c.name}</span>
-                              <span className="font-mono text-xs text-muted-foreground">{c.join_code}</span>
+                              <span className="flex items-center gap-2">
+                                <span className="font-mono text-xs text-muted-foreground">{c.join_code}</span>
+                                {c.slug ? (
+                                  <QRCodeSVG value={`${process.env.NEXT_PUBLIC_SITE_URL || ""}/contest/${c.slug}?code=${c.join_code}`} size={64} bgColor="transparent" fgColor="#e2e8f0" title="Scan to join" />
+                                ) : null}
+                              </span>
                             </div>
                             <div className="text-xs text-muted-foreground">
                               {c.challenge_count} problem{c.challenge_count === 1 ? "" : "s"} · {c.member_count} competitor{c.member_count === 1 ? "" : "s"}

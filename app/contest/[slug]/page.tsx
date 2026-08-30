@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { useParams } from "next/navigation";
+import { useParams, useSearchParams } from "next/navigation";
 import { useAuth } from "@clerk/nextjs";
 import { Button } from "@/components/ui/button";
 import ReactMarkdown from "react-markdown";
@@ -22,6 +22,7 @@ type ContestData = {
     memberCount: number;
     isHost: boolean;
     isMember: boolean;
+    canJoin: boolean;
   };
   challenges: Array<{ id: number; slug: string; language: string; difficulty: string; points: number; statement_md: string }>;
   leaderboard: Array<{ rank: number; userId: string; displayName: string; points: number; solved: number; penalty?: number; isWinner: boolean; prize: string | null }>;
@@ -41,6 +42,8 @@ function medal(rank: number) {
 export default function ContestPage() {
   const params = useParams<{ slug: string }>();
   const slug = params?.slug || "";
+  const searchParams = useSearchParams();
+  const code = searchParams?.get("code") || "";
   const { isSignedIn, isLoaded } = useAuth();
   const [data, setData] = useState<ContestData | null>(null);
   const [error, setError] = useState("");
@@ -67,7 +70,11 @@ export default function ContestPage() {
   async function join() {
     setJoining(true);
     try {
-      const res = await fetch(`/api/contest/${slug}`, { method: "POST" });
+      const res = await fetch(`/api/contest/${slug}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ code }),
+      });
       const json = await res.json();
       if (!res.ok) setError(json?.error || "Could not join.");
       else await load();
@@ -122,7 +129,7 @@ export default function ContestPage() {
             ))}
           </div>
         ) : null}
-        {isLoaded && isSignedIn && !contest.isMember && contest.isPublic && live ? (
+        {isLoaded && isSignedIn && !contest.isMember && (contest.isPublic || contest.canJoin) && live ? (
           <div className="mt-4">
             <Button onClick={join} disabled={joining}>{joining ? "Joining…" : "Join this contest"}</Button>
           </div>
