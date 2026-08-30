@@ -7009,52 +7009,57 @@ export default function ResearchStudioPage() {
             </div>
           ) : null}
 
-          {/* Challenge mode banner */}
+          {/* Challenge mode banner — three-pane: statement left, controls/results right, editor below */}
           {isCodeMode && activeChallenge ? (
-            <div style={{ borderBottom: "1px solid var(--border-color, #334155)", background: "var(--background-elevated, rgba(30, 41, 59, 0.5))", padding: "8px 12px", fontSize: 12 }}>
-              <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
-                <span style={{ fontWeight: 700, color: "var(--text-primary, #e2e8f0)" }}>Challenge: {activeChallenge.slug}</span>
-                <span style={{ fontSize: 11, color: "var(--text-muted, #64748b)" }}>{activeChallenge.language.toUpperCase()} · {activeChallenge.test_mode === "io" ? "input/output" : activeChallenge.test_mode} grading</span>
-                <button type="button" onClick={() => { setChallengesOpen(true); }} className="studio-btn studio-btn-ghost" style={{ height: 24, fontSize: 11, padding: "0 8px" }}>View statement</button>
-                <button type="button" onClick={() => void runChallengeTests()} disabled={challengeBusy} className="studio-btn studio-btn-primary" style={{ height: 24, fontSize: 11, padding: "0 10px", background: "#4ade80", color: "#000" }}>
-                  {challengeBusy ? "Grading…" : "Submit for grading"}
-                </button>
-                <button type="button" onClick={() => void runChallengeTests(true)} disabled={challengeBusy} className="studio-btn studio-btn-ghost" style={{ height: 24, fontSize: 11, padding: "0 8px" }} title="Grade against hidden tests without recording a solve or points">
-                  Practice (no points)
-                </button>
-                {activeChallenge.hints.length > 0 ? (
-                  <button type="button" onClick={() => void revealHint()} disabled={hintBusy} className="studio-btn studio-btn-ghost" style={{ height: 24, fontSize: 11, padding: "0 8px" }} title={`Reveals the next hint (-${activeChallenge.hint_cost} points)`}>
-                    {hintBusy ? "…" : `Hint (-${activeChallenge.hint_cost})`}
-                  </button>
-                ) : null}
-                <button type="button" onClick={() => { setActiveChallenge(null); setChallengeResults(null); }} className="studio-btn studio-btn-ghost" style={{ height: 24, fontSize: 11, padding: "0 8px", marginLeft: "auto" }}>Exit challenge</button>
+            <div style={{ borderBottom: "1px solid var(--border-color, #334155)", background: "var(--background-elevated, rgba(30, 41, 59, 0.5))", padding: "8px 12px", fontSize: 12, display: "flex", gap: 12, alignItems: "flex-start" }}>
+              <div style={{ flex: "0 0 36%", maxHeight: 260, overflowY: "auto", paddingRight: 10, borderRight: "1px solid var(--border-color, #334155)" }}>
+                <p style={{ margin: "0 0 4px", fontWeight: 700, fontSize: 11, color: "var(--text-muted, #64748b)" }}>Problem — {activeChallenge.slug}</p>
+                <div className="challenge-markdown"><ReactMarkdown>{activeChallenge.statement_md}</ReactMarkdown></div>
               </div>
-              {hintText ? (
-                <p style={{ margin: "6px 0 0", fontSize: 11, color: "#f59e0b" }}>{hintText}</p>
-              ) : null}
-              <p style={{ margin: "4px 0 0", fontSize: 11, color: "var(--text-muted, #94a3b8)" }}>
-                Edit the starter code in the editor, then submit. Passing every hidden test awards points and ranks you on the leaderboard.
-              </p>
-              {challengeResults ? (
-                <div style={{ marginTop: 6 }}>
-                  <span style={{ fontWeight: 600, color: challengeResults.passed ? "#4ade80" : "#f87171" }}>
-                    {challengeResults.passed
-                      ? `✓ Passed all ${challengeResults.total} test${challengeResults.total === 1 ? "" : "s"}${challengeResults.firstSolve ? " — first solve, points awarded!" : " — check the leaderboard."}`
-                      : `✗ ${challengeResults.results.filter((r) => r.ok).length}/${challengeResults.total} test${challengeResults.total === 1 ? "" : "s"} passing`}
-                  </span>
-                  {challengeResults.results.map((r, i) => (
-                    <div key={i} style={{ marginTop: 4, padding: "6px 8px", borderRadius: 6, border: "1px solid var(--border-color, #334155)", fontSize: 11 }}>
-                      <span style={{ fontWeight: 600 }}>Test {i + 1}: {r.ok ? "✓ pass" : "✗ fail"}</span>
-                      {!r.ok ? (
-                        <>
-                          {r.input ? <div style={{ color: "var(--text-muted, #94a3b8)" }}>input: {r.input}</div> : null}
-                          <DiffText expected={r.expected} actual={r.actual || "(empty)"} />
-                        </>
-                      ) : null}
-                    </div>
-                  ))}
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+                  <span style={{ fontWeight: 700, color: "var(--text-primary, #e2e8f0)" }}>{activeChallenge.slug}</span>
+                  <span style={{ fontSize: 11, color: "var(--text-muted, #64748b)" }}>{activeChallenge.language.toUpperCase()} · {activeChallenge.test_mode === "io" ? "input/output" : activeChallenge.test_mode} grading</span>
+                  <button type="button" onClick={() => void runChallengeTests()} disabled={challengeBusy} className="studio-btn studio-btn-primary" style={{ height: 24, fontSize: 11, padding: "0 10px", background: "#4ade80", color: "#000" }}>
+                    {challengeBusy ? "Grading…" : "Submit for grading"}
+                  </button>
+                  <button type="button" onClick={() => void runChallengeTests(true)} disabled={challengeBusy} className="studio-btn studio-btn-ghost" style={{ height: 24, fontSize: 11, padding: "0 8px" }} title="Grade against hidden tests without recording a solve or points">
+                    Practice (no points)
+                  </button>
+                  {activeChallenge.hints.length > 0 ? (
+                    <button type="button" onClick={() => void revealHint()} disabled={hintBusy} className="studio-btn studio-btn-ghost" style={{ height: 24, fontSize: 11, padding: "0 8px" }} title={`Reveals the next hint (-${activeChallenge.hint_cost} points)`}>
+                      {hintBusy ? "…" : `Hint (-${activeChallenge.hint_cost})`}
+                    </button>
+                  ) : null}
+                  <button type="button" onClick={() => { setActiveChallenge(null); setChallengeResults(null); }} className="studio-btn studio-btn-ghost" style={{ height: 24, fontSize: 11, padding: "0 8px", marginLeft: "auto" }}>Exit challenge</button>
                 </div>
-              ) : null}
+                {hintText ? (
+                  <p style={{ margin: "6px 0 0", fontSize: 11, color: "#f59e0b" }}>{hintText}</p>
+                ) : null}
+                <p style={{ margin: "4px 0 0", fontSize: 11, color: "var(--text-muted, #94a3b8)" }}>
+                  Edit the starter code in the editor, then submit. Passing every hidden test awards points and ranks you on the leaderboard.
+                </p>
+                {challengeResults ? (
+                  <div style={{ marginTop: 6 }}>
+                    <span style={{ fontWeight: 600, color: challengeResults.passed ? "#4ade80" : "#f87171" }}>
+                      {challengeResults.passed
+                        ? `✓ Passed all ${challengeResults.total} test${challengeResults.total === 1 ? "" : "s"}${challengeResults.firstSolve ? " — first solve, points awarded!" : " — check the leaderboard."}`
+                        : `✗ ${challengeResults.results.filter((r) => r.ok).length}/${challengeResults.total} test${challengeResults.total === 1 ? "" : "s"} passing`}
+                    </span>
+                    {challengeResults.results.map((r, i) => (
+                      <div key={i} style={{ marginTop: 4, padding: "6px 8px", borderRadius: 6, border: "1px solid var(--border-color, #334155)", fontSize: 11 }}>
+                        <span style={{ fontWeight: 600 }}>Test {i + 1}: {r.ok ? "✓ pass" : "✗ fail"}</span>
+                        {!r.ok ? (
+                          <>
+                            {r.input ? <div style={{ color: "var(--text-muted, #94a3b8)" }}>input: {r.input}</div> : null}
+                            <DiffText expected={r.expected} actual={r.actual || "(empty)"} />
+                          </>
+                        ) : null}
+                      </div>
+                    ))}
+                  </div>
+                ) : null}
+              </div>
             </div>
           ) : null}
 
