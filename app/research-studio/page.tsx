@@ -3097,7 +3097,7 @@ export default function ResearchStudioPage() {
   const [optInBusy, setOptInBusy] = useState(false);
   const [joinCode, setJoinCode] = useState("");
   const [progressData, setProgressData] = useState<{ challenges: Array<{ id: number; slug: string; language: string }>; members: Array<{ userId: string; displayName: string; statuses: string[] }> } | null>(null);
-  const [contestsData, setContestsData] = useState<{ contests: Array<{ id: number; name: string; join_code: string; slug: string | null; description: string; starts_at: string | null; ends_at: string | null; scoring_mode: string; is_public: boolean; team_mode: boolean; prizes: Array<{ place: number; label: string }> | null; member_count: number; challenge_count: number; created_by: string }>; myCohortId: number; enrollments: Array<{ cohort_id: number; role: string; status: string; student_id: string | null }> } | null>(null);
+  const [contestsData, setContestsData] = useState<{ contests: Array<{ id: number; name: string; join_code: string; slug: string | null; description: string; starts_at: string | null; ends_at: string | null; freeze_at: string | null; scoring_mode: string; is_public: boolean; team_mode: boolean; prizes: Array<{ place: number; label: string }> | null; member_count: number; challenge_count: number; created_by: string }>; myCohortId: number; enrollments: Array<{ cohort_id: number; role: string; status: string; student_id: string | null }> } | null>(null);
   const [newContestName, setNewContestName] = useState("");
   const [newContestDesc, setNewContestDesc] = useState("");
   const [newContestStartsAt, setNewContestStartsAt] = useState("");
@@ -3532,6 +3532,14 @@ export default function ResearchStudioPage() {
   async function openManageContest(c: { id: number; slug: string | null; name: string }) {
     setManageContest(c);
     setManageSlugs(new Set());
+    // Make sure the global challenge list is loaded for the picker.
+    if (!challenges.length) {
+      try {
+        const res = await fetch("/api/challenges");
+        const data = (await res.json().catch(() => null)) as { challenges?: typeof challenges } | null;
+        if (data?.challenges) setChallenges(data.challenges);
+      } catch { /* ignore */ }
+    }
     if (c.slug) {
       try {
         const res = await fetch(`/api/contest/${c.slug}`);
@@ -3558,11 +3566,11 @@ export default function ResearchStudioPage() {
         body: JSON.stringify({ action: "update", contestId, ...fields }),
       });
       const data = (await res.json().catch(() => null)) as { ok?: boolean; error?: string } | null;
-      if (data?.error) setCompileNotice(data.error);
-      else setCompileNotice("Contest updated.");
+      if (data?.error) showToast(data.error, "error");
+      else showToast(fields.endsAt ? "Contest closed." : fields.freezeAt ? "Leaderboard frozen." : "Contest updated.", "success");
       await loadContests();
     } catch {
-      setCompileNotice("Could not update contest.");
+      showToast("Could not update contest.", "error");
     }
   }
 
@@ -3579,7 +3587,7 @@ export default function ResearchStudioPage() {
       setManageContest(null);
       await loadContests();
     } catch {
-      setCompileNotice("Could not update problems.");
+      showToast("Could not update problems.", "error");
     } finally {
       setManageBusy(false);
     }
@@ -7927,6 +7935,8 @@ export default function ResearchStudioPage() {
                               {c.team_mode ? " · team contest" : ""}
                               {mine ? " · you're in" : ""}
                               {c.starts_at ? ` · ${new Date(c.starts_at).toLocaleString()}` : ""}
+                              {c.ends_at && new Date(c.ends_at).getTime() < Date.now() ? <span className="text-rose-500"> · closed</span> : null}
+                              {c.freeze_at && new Date(c.freeze_at).getTime() < Date.now() ? <span className="text-amber-500"> · frozen</span> : null}
                             </div>
                             {c.prizes && c.prizes.length ? (
                               <div className="mt-1 text-xs text-amber-500">🏆 {c.prizes.map((p) => p.label).join(" · ")}</div>
