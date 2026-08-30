@@ -24,7 +24,7 @@ type ContestData = {
     isMember: boolean;
     canJoin: boolean;
   };
-  challenges: Array<{ id: number; slug: string; language: string; difficulty: string; points: number; statement_md: string }>;
+  challenges: Array<{ id: number; slug: string; language: string; difficulty: string; points: number; statement_md: string; solved: boolean }>;
   leaderboard: Array<{ rank: number; userId: string; displayName: string; points: number; solved: number; penalty?: number; isWinner: boolean; prize: string | null }>;
 };
 
@@ -156,14 +156,28 @@ export default function ContestPage() {
               <p className="text-sm text-muted-foreground">No problems listed yet.</p>
             ) : (
               data.challenges.map((ch) => (
-                <details key={ch.id} className="rounded-lg border p-3">
-                  <summary className="cursor-pointer text-sm font-semibold">
-                    {ch.slug} <span className="ml-2 text-xs font-normal text-muted-foreground">{ch.language} · {ch.difficulty} · {ch.points} pts</span>
-                  </summary>
-                  <div className="mt-2 text-sm challenge-markdown">
-                    <ReactMarkdown>{ch.statement_md}</ReactMarkdown>
+                <div key={ch.id} className={`rounded-lg border p-3 ${ch.solved ? "opacity-60" : ""}`}>
+                  <div className="flex items-center justify-between gap-2">
+                    <button
+                      type="button"
+                      onClick={() => { window.location.href = `/research-studio?challenge=${encodeURIComponent(ch.slug)}`; }}
+                      className={`text-left text-sm font-semibold hover:underline ${ch.solved ? "text-muted-foreground" : ""}`}
+                      title="Open in editor"
+                    >
+                      {ch.slug}
+                    </button>
+                    <span className={`shrink-0 rounded-full px-2 py-0.5 text-[10px] font-semibold ${ch.solved ? "bg-emerald-500/15 text-emerald-500" : "bg-slate-500/15 text-muted-foreground"}`}>
+                      {ch.solved ? "✓ Solved" : "Unsolved"}
+                    </span>
                   </div>
-                </details>
+                  <div className="text-xs text-muted-foreground">{ch.language} · {ch.difficulty} · {ch.points} pts</div>
+                  <details className="mt-2">
+                    <summary className="cursor-pointer text-xs text-muted-foreground">Statement</summary>
+                    <div className="mt-2 text-sm challenge-markdown">
+                      <ReactMarkdown>{ch.statement_md}</ReactMarkdown>
+                    </div>
+                  </details>
+                </div>
               ))
             )}
           </div>
