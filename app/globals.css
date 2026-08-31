@@ -580,7 +580,7 @@ html[data-theme="dark"] .ai-workflow-card:hover {
   display: grid;
   flex: 1;
   min-height: 0;
-  grid-template-columns: var(--left-width, 240px) 1px minmax(0, 1fr) 1px var(--right-width, 300px);
+  grid-template-columns: var(--left-width, 240px) 6px minmax(0, 1fr) 6px var(--right-width, 300px);
 }
 
 .studio-panes-left-collapsed {
@@ -593,7 +593,7 @@ html[data-theme="dark"] .ai-workflow-card:hover {
 
 /* Code mode: hide right pane entirely */
 .studio-panes-code {
-  grid-template-columns: var(--left-width, 240px) 1px minmax(0, 1fr) !important;
+  grid-template-columns: var(--left-width, 240px) 6px minmax(0, 1fr) !important;
 }
 
 /* ── Projects activity bar + auto-hiding pane ───── */
@@ -1085,6 +1085,7 @@ html[data-theme="light"] .studio-projects-panel {
 
 /* ── Resize handles ───── */
 .studio-resize-handle {
+  position: relative;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -1094,15 +1095,33 @@ html[data-theme="light"] .studio-projects-panel {
   flex-shrink: 0;
 }
 
-.studio-resize-handle:hover {
-  background: var(--border-color, #334155);
+/* Widen the effective grab area without changing layout. */
+.studio-resize-handle::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: -4px;
+  right: -4px;
+}
+
+.studio-resize-handle:hover,
+.studio-resize-handle-active {
+  background: var(--accent-dim, rgba(96, 165, 250, 0.14));
 }
 
 .studio-resize-handle-inner {
   width: 1px;
   height: 32px;
   border-radius: 1px;
-  background: var(--border-color, #334155);
+  background: var(--border-color, #2a3140);
+  transition: background 0.15s, height 0.15s;
+}
+
+.studio-resize-handle:hover .studio-resize-handle-inner,
+.studio-resize-handle-active .studio-resize-handle-inner {
+  background: var(--accent-color, #60a5fa);
+  height: 44px;
 }
 
 /* ── Tab bar ───── */
@@ -1393,6 +1412,98 @@ body[data-studio-editor="true"] footer {
 
 .studio-preview-errors::-webkit-scrollbar-thumb {
   background: var(--border-color, #334155);
+}
+
+/* ── PDF preview (pdf.js) ───── */
+.studio-pdf-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 8px;
+  border-bottom: 1px solid var(--border-color, #2a3140);
+  background: var(--bg-secondary, #10131b);
+  flex-shrink: 0;
+  flex-wrap: wrap;
+}
+
+.studio-pdf-tool-btn {
+  height: 22px;
+  padding: 0 8px;
+  border-radius: 5px;
+  border: 1px solid transparent;
+  background: transparent;
+  color: var(--text-secondary, #a8b3c4);
+  font-size: 11px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.12s, color 0.12s;
+}
+
+.studio-pdf-tool-btn:hover {
+  background: rgba(255, 255, 255, 0.06);
+  color: var(--text-primary, #e6ebf2);
+}
+
+.studio-pdf-tool-btn.active {
+  background: var(--accent-dim, rgba(96, 165, 250, 0.16));
+  color: var(--accent-color, #60a5fa);
+}
+
+.studio-pdf-tool-sep {
+  width: 1px;
+  height: 14px;
+  background: var(--border-color, #2a3140);
+  margin: 0 2px;
+}
+
+.studio-pdf-tool-pct {
+  font-size: 11px;
+  color: var(--text-muted, #7c8798);
+  min-width: 34px;
+  text-align: center;
+}
+
+.studio-pdf-scroll {
+  flex: 1;
+  overflow: auto;
+  padding: 14px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 14px;
+  background: #3b3f46;
+}
+
+.studio-pdf-page {
+  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.5);
+  border-radius: 2px;
+  background: #ffffff;
+  cursor: text;
+}
+
+.studio-pdf-marker {
+  position: absolute;
+  width: 14px;
+  height: 14px;
+  margin: -7px 0 0 -7px;
+  border-radius: 50%;
+  border: 2px solid #60a5fa;
+  background: rgba(96, 165, 250, 0.35);
+  box-shadow: 0 0 10px rgba(96, 165, 250, 0.9);
+  pointer-events: none;
+  animation: studio-pdf-marker-pulse 0.6s ease-in-out infinite alternate;
+}
+
+@keyframes studio-pdf-marker-pulse {
+  from { transform: scale(1); }
+  to { transform: scale(1.3); }
+}
+
+.studio-pdf-error {
+  color: #f87171;
+  font-size: 12px;
+  text-align: center;
+  padding: 16px;
 }
 
 /* ── Editor toolbar ───── */

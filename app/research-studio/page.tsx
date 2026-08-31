@@ -36,6 +36,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import "@xterm/xterm/css/xterm.css";
 import { QRCodeSVG } from "qrcode.react";
+import PdfPreview, { type PdfHighlight } from "../components/pdf-preview";
 
 type StudioEditorAdapter = {
   selectionStart: number;
@@ -1453,6 +1454,7 @@ export default function ResearchStudioPage() {
   const [loadingProject, setLoadingProject] = useState(false);
   const [synctexRecords, setSynctexRecords] = useState<SynctexRecord[]>([]);
   const [synctexNotice, setSynctexNotice] = useState("");
+  const [pdfHighlight, setPdfHighlight] = useState<PdfHighlight>(null);
   const [showShortcuts, setShowShortcuts] = useState(false);
   const [openMenu, setOpenMenu] = useState("");
 
@@ -1987,6 +1989,92 @@ export default function ResearchStudioPage() {
 
   function handleEditorCursorChange(cursor: number) {
     updateIntellisenseFromInput(activeSource, cursor);
+  }
+
+  function navigateToSynctexRecord(record: SynctexRecord) {
+    const targetFile = record.file.replace(/^\.\//, "");
+    const fileEntry = projectEntries.find(
+      (e) => e.kind === "file" && (e.path === targetFile || e.path.endsWith("/" + targetFile.split("/").pop() || ""))
+    );
+    if (!fileEntry) {
+      setSynctexNotice(`File ${targetFile} not found in project.`);
+      return;
+    }
+    setSelectedPath(fileEntry.path);
+    setOpenTabs((prev) => (prev.includes(fileEntry.path) ? prev : [...prev, fileEntry.path]));
+    setSynctexNotice(`Navigated to ${targetFile} line ${record.line}`);
+    window.requestAnimationFrame(() => {
+      const textarea = editorRef.current;
+      if (!textarea) return;
+      textarea.focus();
+      const lines = activeSource.split("\n");
+      let targetLinePos = 0;
+      for (let i = 0; i < Math.min(record.line - 1, lines.length); i++) targetLinePos += lines[i].length + 1;
+      textarea.setSelectionRange(targetLinePos, targetLinePos);
+    });
+  }
+
+  // Forward sync: double-click in the PDF -> nearest source line.
+  function handlePdfDoubleClick(page: number, xPt: number, yPt: number) {
+    if (!synctexRecords.length) {
+      setSynctexNotice("No SyncTeX data available. Recompile with synctex enabled.");
+      return;
+    }
+    const h = xPt * 65536;
+    const v = yPt * 65536;
+    let best: SynctexRecord | null = null;
+    let bestDist = Infinity;
+    for (const r of synctexRecords) {
+      if (r.page !== page) continue;
+      const dx = r.x - h;
+      const dy = r.y - v;
+      const dist = dx * dx + dy * dy;
+      if (dist < bestDist) {
+        bestDist = dist;
+        best = r;
+      }
+    }
+    if (best) navigateToSynctexRecord(best);
+    else setSynctexNotice(`No source mapping for page ${page}.`);
+  }
+
+  // Inverse sync: current editor line -> PDF position.
+  function syncToPdf() {
+    if (!synctexRecords.length) {
+      setSynctexNotice("No SyncTeX data available. Recompile with synctex enabled.");
+      return;
+    }
+    const cursorPos = editorRef.current?.selectionStart ?? 0;
+    const lines = activeSource.split("\n");
+    let line = 1;
+    let acc = 0;
+    for (let i = 0; i < lines.length; i++) {
+      if (cursorPos <= acc + lines[i].length) {
+        line = i + 1;
+        break;
+      }
+      acc += lines[i].length + 1;
+    }
+    const norm = selectedPath.replace(/^\.\//, "");
+    const candidates = synctexRecords.filter((r) => {
+      const rf = r.file.replace(/^\.\//, "");
+      return rf === norm || norm.endsWith("/" + rf.split("/").pop() || "");
+    });
+    let best: SynctexRecord | null = null;
+    let bestDiff = Infinity;
+    for (const r of candidates) {
+      const diff = Math.abs(r.line - line);
+      if (diff < bestDiff) {
+        bestDiff = diff;
+        best = r;
+      }
+    }
+    if (best) {
+      setPdfHighlight({ page: best.page, x: best.x / 65536, y: best.y / 65536 });
+      setSynctexNotice(`Synced to page ${best.page}.`);
+    } else {
+      setSynctexNotice("No PDF position for this line.");
+    }
   }
 
   function onEditorMouseMove(event: MouseEvent) {
@@ -6898,7 +6986,7 @@ export default function ResearchStudioPage() {
 
         {/* Left resize */}
         <div
-          className="studio-resize-handle"
+          className={`studio-resize-handle ${activeResizer === "left" ? "studio-resize-handle-active" : ""}`}
           onMouseDown={() => { if (!leftPaneCollapsed) setActiveResizer("left"); }}
         >
           <div className="studio-resize-handle-inner" />
@@ -7465,7 +7553,7 @@ export default function ResearchStudioPage() {
         {!isCodeMode && (
         <>
         <div
-          className="studio-resize-handle"
+          className={`studio-resize-handle ${activeResizer === "right" ? "studio-resize-handle-active" : ""}`}
           onMouseDown={() => { if (!rightPaneCollapsed) setActiveResizer("right"); }}
         >
           <div className="studio-resize-handle-inner" />
@@ -7486,11 +7574,16 @@ export default function ResearchStudioPage() {
                 <span className="studio-preview-title">{isCodeMode ? "Output" : "PDF Preview"}</span>
                 <div style={{ display: "flex", gap: 4 }}>
                   {compiledPdfUrl ? (
-                    <a href={compiledPdfUrl} download={compiledPdfFileName} className="studio-btn studio-btn-ghost" style={{ height: 24, fontSize: 10, padding: "0 6px", textDecoration: "none" }}>
-                      <svg viewBox="0 0 20 20" style={{ width: 12, height: 12 }} fill="none" stroke="currentColor" strokeWidth="2">
-                        <path d="M10 3v9m0 0l-3-3m3 3l3-3M4 14v2h12v-2" strokeLinecap="round" strokeLinejoin="round" />
-                      </svg>
-                    </a>
+                    <>
+                      <button type="button" onClick={syncToPdf} className="studio-btn studio-btn-ghost" style={{ height: 24, fontSize: 10, padding: "0 6px" }} title="Jump to the PDF position of the current editor line">
+                        Sync
+                      </button>
+                      <a href={compiledPdfUrl} download={compiledPdfFileName} className="studio-btn studio-btn-ghost" style={{ height: 24, fontSize: 10, padding: "0 6px", textDecoration: "none" }}>
+                        <svg viewBox="0 0 20 20" style={{ width: 12, height: 12 }} fill="none" stroke="currentColor" strokeWidth="2">
+                          <path d="M10 3v9m0 0l-3-3m3 3l3-3M4 14v2h12v-2" strokeLinecap="round" strokeLinejoin="round" />
+                        </svg>
+                      </a>
+                    </>
                   ) : null}
                   <button type="button" onClick={() => setRightPaneCollapsed(true)} className="studio-btn studio-btn-ghost" style={{ width: 24, height: 24, padding: 0 }}>
                     <svg viewBox="0 0 20 20" style={{ width: 14, height: 14 }} fill="none" stroke="currentColor" strokeWidth="2">
@@ -7594,48 +7687,10 @@ export default function ResearchStudioPage() {
                 ) : null}
 
                 {compiledPdfUrl ? (
-                  <iframe
-                    src={compiledPdfUrl}
-                    title="Compiled LaTeX PDF preview"
-                    className="studio-preview-iframe"
-                    onClick={(event) => {
-                      if (!event.ctrlKey && !event.metaKey) return;
-                      if (!synctexRecords.length) {
-                        setSynctexNotice("No SyncTeX data available. Recompile with synctex enabled.");
-                        return;
-                      }
-                      const iframe = event.currentTarget;
-                      const rect = iframe.getBoundingClientRect();
-                      const relY = event.clientY - rect.top;
-                      const approxPage = Math.floor(relY / (rect.height / Math.max(1, synctexRecords.reduce((max, r) => Math.max(max, r.page), 0)))) + 1;
-                      const match = synctexRecords.find((r) => r.page === approxPage);
-                      if (match) {
-                        const targetFile = match.file.replace(/^\.\//, "");
-                        const fileEntry = projectEntries.find(
-                          (e) => e.kind === "file" && (e.path === targetFile || e.path.endsWith("/" + targetFile.split("/").pop() || ""))
-                        );
-                        if (fileEntry) {
-                          setSelectedPath(fileEntry.path);
-                          setOpenTabs((prev) => prev.includes(fileEntry.path) ? prev : [...prev, fileEntry.path]);
-                          setSynctexNotice(`Navigated to ${targetFile} line ${match.line}`);
-                          window.requestAnimationFrame(() => {
-                            const textarea = editorRef.current;
-                            if (!textarea) return;
-                            textarea.focus();
-                            const lines = activeSource.split("\n");
-                            let targetLinePos = 0;
-                            for (let i = 0; i < Math.min(match.line - 1, lines.length); i++) {
-                              targetLinePos += lines[i].length + 1;
-                            }
-                            textarea.setSelectionRange(targetLinePos, targetLinePos);
-                          });
-                        } else {
-                          setSynctexNotice(`File ${targetFile} not found in project.`);
-                        }
-                      } else {
-                        setSynctexNotice(`No source mapping for page ${approxPage}.`);
-                      }
-                    }}
+                  <PdfPreview
+                    url={compiledPdfUrl}
+                    onPageDoubleClick={handlePdfDoubleClick}
+                    highlight={pdfHighlight}
                   />
                 ) : (
                   <div className="studio-preview-empty">
