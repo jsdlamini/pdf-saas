@@ -3110,6 +3110,23 @@ export default function ResearchStudioPage() {
   const [joinCode, setJoinCode] = useState("");
   const [progressData, setProgressData] = useState<{ challenges: Array<{ id: number; slug: string; language: string }>; members: Array<{ userId: string; displayName: string; statuses: string[] }> } | null>(null);
   const [contestsData, setContestsData] = useState<{ contests: Array<{ id: number; name: string; join_code: string; slug: string | null; description: string; starts_at: string | null; ends_at: string | null; freeze_at: string | null; scoring_mode: string; is_public: boolean; team_mode: boolean; prizes: Array<{ place: number; label: string }> | null; member_count: number; challenge_count: number; created_by: string }>; myCohortId: number; enrollments: Array<{ cohort_id: number; role: string; status: string; student_id: string | null }> } | null>(null);
+
+  // Load contest + leaderboard context while a challenge is being worked on.
+  useEffect(() => {
+    if (!activeChallenge || !userId) return;
+    void loadContests();
+    void loadLeaderboard();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeChallenge, userId]);
+
+  const myContest = useMemo(
+    () => (contestsData ? contestsData.contests.find((c) => c.id === contestsData.myCohortId) ?? null : null),
+    [contestsData]
+  );
+  const myPoints = useMemo(
+    () => leaderboard?.entries.find((e) => e.userId === userId)?.points ?? 0,
+    [leaderboard, userId]
+  );
   const [newContestName, setNewContestName] = useState("");
   const [newContestDesc, setNewContestDesc] = useState("");
   const [newContestStartsAt, setNewContestStartsAt] = useState("");
@@ -3413,6 +3430,7 @@ export default function ResearchStudioPage() {
     try {
       const lang = editorMode === "python" || editorMode === "cpp" ? editorMode : "";
       const res = await fetch(`/api/leaderboard${lang ? `?language=${lang}` : ""}`);
+      if (!res.ok) { setLeaderboard(null); return; }
       const data = (await res.json()) as { cohortId: number; seasonId: number; scoringMode: string; frozen: boolean; entries: Array<{ userId: string; displayName: string; points: number; solved: number; penalty?: number }>; me: { displayName: string; optedIn: boolean } };
       setLeaderboard(data);
       setOptInName(data.me?.displayName || "");
@@ -3489,6 +3507,7 @@ export default function ResearchStudioPage() {
   async function loadContests() {
     try {
       const res = await fetch("/api/cohorts");
+      if (!res.ok) { setContestsData(null); return; }
       const data = (await res.json().catch(() => null)) as typeof contestsData | null;
       setContestsData(data);
     } catch { /* ignore */ }
@@ -6987,6 +7006,28 @@ export default function ResearchStudioPage() {
                   ) : null}
                   <button type="button" onClick={() => { setActiveChallenge(null); setChallengeResults(null); }} className="studio-btn studio-btn-ghost" style={{ height: 24, fontSize: 11, padding: "0 8px", marginLeft: "auto" }}>Exit challenge</button>
                 </div>
+                <div style={{ margin: "6px 0 0", display: "flex", flexWrap: "wrap", gap: 14, alignItems: "center", fontSize: 11, color: "#cbd5e1" }}>
+                  {myContest ? (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        if (myContest.slug && myContest.is_public) window.open(`/contest/${myContest.slug}`, "_blank");
+                        else { setChallengesOpen(true); setChallengeTab("cohorts"); }
+                      }}
+                      style={{ background: "none", border: "none", padding: 0, cursor: "pointer", color: "#60a5fa", fontSize: 11 }}
+                    >
+                      🏁 Contest: {myContest.name}
+                    </button>
+                  ) : null}
+                  <button
+                    type="button"
+                    onClick={() => { setChallengesOpen(true); setChallengeTab("leaderboard"); }}
+                    style={{ background: "none", border: "none", padding: 0, cursor: "pointer", color: "#60a5fa", fontSize: 11 }}
+                  >
+                    🏆 Leaderboard
+                  </button>
+                  <span>Your points: <strong style={{ color: "#e2e8f0" }}>{myPoints}</strong></span>
+                </div>
                 {hintText ? (
                   <p style={{ margin: "6px 0 0", fontSize: 11, color: "#f59e0b" }}>{hintText}</p>
                 ) : null}
@@ -7766,6 +7807,16 @@ export default function ResearchStudioPage() {
             </>
           ) : (
             <>
+              {!userId ? (
+                <div className="flex flex-col items-center gap-3 py-10 text-center">
+                  <p className="text-sm text-muted-foreground">Sign in to compete in contests and climb the leaderboard.</p>
+                  <div className="flex gap-2">
+                    <SignInButton mode="modal"><Button>Sign in</Button></SignInButton>
+                    <SignUpButton mode="modal"><Button variant="outline">Register</Button></SignUpButton>
+                  </div>
+                </div>
+              ) : (
+              <>
               <DialogHeader>
                 <DialogTitle>Challenges</DialogTitle>
                 <DialogDescription>Python and C++ problems graded against hidden tests. Opt in to appear on the leaderboard.</DialogDescription>
@@ -8030,6 +8081,8 @@ export default function ResearchStudioPage() {
                     </table>
                   )}
                 </div>
+              )}
+              </>
               )}
             </>
           )}
