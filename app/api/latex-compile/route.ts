@@ -186,7 +186,7 @@ const ENGINES: LatexEngine[] = [
   {
     name: "latexmk",
     binary: "latexmk",
-    buildArgs: (rootFile) => ["-pdf", "-interaction=nonstopmode", "-file-line-error", rootFile],
+    buildArgs: (rootFile) => ["-pdf", "-synctex=1", "-interaction=nonstopmode", "-file-line-error", rootFile],
   },
   {
     name: "texliveonfly",
@@ -195,7 +195,7 @@ const ENGINES: LatexEngine[] = [
       "--compiler",
       "latexmk",
       "--arguments",
-      "-pdf -interaction=nonstopmode -file-line-error",
+      "-pdf -synctex=1 -interaction=nonstopmode -file-line-error",
       rootFile,
     ],
   },
@@ -245,6 +245,13 @@ function buildLogOutputPath(rootFile: string) {
   const extensionIndex = normalized.lastIndexOf(".");
   if (extensionIndex === -1) return `${normalized}.log`;
   return `${normalized.slice(0, extensionIndex)}.log`;
+}
+
+function buildSynctexPath(rootFile: string) {
+  const normalized = normalize(rootFile);
+  const extensionIndex = normalized.lastIndexOf(".");
+  if (extensionIndex === -1) return `${normalized}.synctex.gz`;
+  return `${normalized.slice(0, extensionIndex)}.synctex.gz`;
 }
 
 async function readMainLogIfAvailable(tempDir: string, rootFile: string) {
@@ -637,6 +644,39 @@ async function prepareCompileDir(
   }
 
   return tempDir;
+}
+
+// Serve the compiled project's SyncTeX data (main.synctex.gz) so the client can
+// map PDF text <-> source lines. Reads from the persistent per-project build
+// dir used by the latexmk engine.
+export async function GET(request: Request) {
+  const { userId } = await auth();
+  if (!userId) return jsonError("Sign in required.", 401);
+
+  const url = new URL(request.url);
+  if (url.searchParams.get("synctex") !== "1") return jsonError("Missing synctex parameter.", 400);
+  const rootFile = (url.searchParams.get("root") || "main.tex").trim();
+  const projectId = url.searchParams.get("projectId");
+  if (!projectId) return jsonError("projectId is required.", 400);
+  if (!isSafeProjectPath(rootFile) || !rootFile.toLowerCase().endsWith(".tex")) {
+    return jsonError("Invalid root LaTeX file path.", 400);
+  }
+
+  const synctexFileName = buildSynctexPath(rootFile);
+  const synctexPath = join(buildDirPath(userId, projectId), synctexFileName);
+  try {
+    const bytes = await readFile(synctexPath);
+    return new Response(new Uint8Array(bytes), {
+      status: 200,
+      headers: {
+        "Content-Type": "application/gzip",
+        "Content-Disposition": `attachment; filename="${synctexFileName}"`,
+        "Cache-Control": "no-store",
+      },
+    });
+  } catch {
+    return jsonError("SyncTeX data not found. Recompile the project.", 404);
+  }
 }
 
 export async function POST(request: Request) {

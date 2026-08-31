@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { getDocument, GlobalWorkerOptions, type PDFDocumentProxy } from "pdfjs-dist";
+import { getDocument, GlobalWorkerOptions, Util, type PDFDocumentProxy } from "pdfjs-dist";
 
 GlobalWorkerOptions.workerSrc = new URL("pdfjs-dist/build/pdf.worker.min.mjs", import.meta.url).toString();
 
@@ -34,8 +34,11 @@ export default function PdfPreview({
     if (mode === "fit-width" || mode === "fit-page") {
       const first = await pdf.getPage(1);
       const base = first.getViewport({ scale: 1 });
-      if (mode === "fit-width") return Math.max(0.2, (container.clientWidth - 28) / base.width);
-      return Math.max(0.2, Math.min((container.clientWidth - 28) / base.width, (container.clientHeight - 28) / base.height));
+      // Use border-box dims (stable regardless of scrollbar) to avoid a
+      // render -> scrollbar -> resize -> render flicker loop.
+      const rect = container.getBoundingClientRect();
+      if (mode === "fit-width") return Math.max(0.2, (rect.width - 28) / base.width);
+      return Math.max(0.2, Math.min((rect.width - 28) / base.width, (rect.height - 28) / base.height));
     }
     return Math.max(0.2, Math.min(4, mode));
   }, []);
@@ -55,17 +58,54 @@ export default function PdfPreview({
         if (token !== tokenRef.current) return;
         const page = await pdf.getPage(p);
         const viewport = page.getViewport({ scale: s * dpr });
+        const cssW = viewport.width / dpr;
+        const cssH = viewport.height / dpr;
+
+        const wrapper = document.createElement("div");
+        wrapper.className = "studio-pdf-page";
+        wrapper.style.position = "relative";
+        wrapper.style.width = `${cssW}px`;
+        wrapper.style.height = `${cssH}px`;
+        wrapper.dataset.page = String(p);
+
         const canvas = document.createElement("canvas");
         canvas.width = viewport.width;
         canvas.height = viewport.height;
-        canvas.style.width = `${viewport.width / dpr}px`;
-        canvas.style.height = `${viewport.height / dpr}px`;
-        canvas.className = "studio-pdf-page";
-        canvas.dataset.page = String(p);
+        canvas.style.width = "100%";
+        canvas.style.height = "100%";
+        canvas.style.display = "block";
         const ctx = canvas.getContext("2d");
         if (ctx) await page.render({ canvas, viewport }).promise;
-        container.appendChild(canvas);
-        pageMetasRef.current.push({ canvas, width: viewport.width / dpr, height: viewport.height / dpr });
+        wrapper.appendChild(canvas);
+
+        // Selectable + copyable text layer (transparent, positioned over the canvas).
+        const textLayer = document.createElement("div");
+        textLayer.className = "textLayer";
+        wrapper.appendChild(textLayer);
+        try {
+          const textContent = await page.getTextContent();
+          const cssViewport = page.getViewport({ scale: s });
+          for (const item of textContent.items as Array<{ str?: string; transform?: number[]; hasEOL?: boolean }>) {
+            if (!item || !item.str || !item.transform) continue;
+            const tx = Util.transform(cssViewport.transform, item.transform);
+            const angle = Math.atan2(tx[1], tx[0]);
+            const fontHeight = Math.hypot(tx[2], tx[3]);
+            if (fontHeight <= 0) continue;
+            const span = document.createElement("span");
+            span.textContent = item.str + (item.hasEOL ? "\n" : "");
+            span.style.left = `${tx[4]}px`;
+            span.style.top = `${tx[5] - fontHeight}px`;
+            span.style.fontSize = `${fontHeight}px`;
+            if (angle !== 0) {
+              span.style.transformOrigin = "0% 0%";
+              span.style.transform = `rotate(${angle}rad)`;
+            }
+            textLayer.appendChild(span);
+          }
+        } catch { /* text layer is best-effort */ }
+
+        container.appendChild(wrapper);
+        pageMetasRef.current.push({ canvas, width: cssW, height: cssH });
       }
     },
     [computeScale]
@@ -122,15 +162,13 @@ export default function PdfPreview({
     const container = containerRef.current;
     if (!container || !onPageDoubleClick) return;
     const onDblClick = (e: MouseEvent) => {
-      const target = (e.target as HTMLElement).closest("canvas.studio-pdf-page") as HTMLCanvasElement | null;
+      const target = (e.target as HTMLElement).closest("div.studio-pdf-page") as HTMLDivElement | null;
       if (!target) return;
       const page = Number(target.dataset.page || "1");
       const rect = target.getBoundingClientRect();
       const xCss = e.clientX - rect.left;
       const yCss = e.clientY - rect.top;
-      const meta = pageMetasRef.current.find((m) => m.canvas === target);
-      if (!meta) return;
-      // meta.width is CSS px = pdfWidth * scale, so xPt = xCss / scale.
+      // Wrapper CSS width = pdfWidth * scale, so xPt = xCss / scale.
       onPageDoubleClick(page, xCss / scale, yCss / scale);
     };
     container.addEventListener("dblclick", onDblClick);
