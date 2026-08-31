@@ -3669,6 +3669,7 @@ export default function ToolWorkbench({ tool }: WorkbenchProps) {
   // Drag / resize / rotate placed signatures directly on the preview.
   type SignatureDragMode = "move" | "resize" | "resize-h" | "rotate";
   const signaturePreviewRef = useRef<HTMLDivElement | null>(null);
+  const [signaturePreviewHeight, setSignaturePreviewHeight] = useState(0);
   const signatureDragRef = useRef<{
     id: string;
     mode: SignatureDragMode;
@@ -3681,6 +3682,19 @@ export default function ToolWorkbench({ tool }: WorkbenchProps) {
     origHeight: number;
     rect: { width: number; height: number; left: number; top: number };
   } | null>(null);
+
+  // Track the preview pane's rendered height so the signature box can size its
+  // height in pixels (percentage heights don't resolve against an auto-height
+  // container).
+  useEffect(() => {
+    const el = signaturePreviewRef.current;
+    if (!el) return;
+    const update = () => setSignaturePreviewHeight(el.getBoundingClientRect().height);
+    update();
+    const ro = new ResizeObserver(update);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
 
   function applySignatureDrag(clientX: number, clientY: number) {
     const drag = signatureDragRef.current;
@@ -7087,7 +7101,7 @@ export default function ToolWorkbench({ tool }: WorkbenchProps) {
                             left: `${sig.xRatio * 100}%`,
                             top: `${(1 - sig.yRatio) * 100}%`,
                             width: `${widthRatio * 100}%`,
-                            height: heightRatio > 0 ? `${heightRatio * 100}%` : "auto",
+                            height: heightRatio > 0 ? `${heightRatio * signaturePreviewHeight}px` : "auto",
                             transform: `translate(-50%, -50%) rotate(${rotation}deg)`,
                             cursor: "move",
                             touchAction: "none",

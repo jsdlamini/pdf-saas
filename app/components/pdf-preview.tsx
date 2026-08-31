@@ -23,6 +23,7 @@ export default function PdfPreview({
   const taskRef = useRef<{ destroy: () => Promise<void> } | null>(null);
   const pageMetasRef = useRef<{ canvas: HTMLCanvasElement; width: number; height: number }[]>([]);
   const tokenRef = useRef(0);
+  const lastScaleRef = useRef(0);
   const [zoom, setZoom] = useState<Zoom>("fit-width");
   const [scale, setScale] = useState(1);
   const [pageCount, setPageCount] = useState(0);
@@ -50,6 +51,7 @@ export default function PdfPreview({
       if (!pdf || !container) return;
       const token = ++tokenRef.current;
       const s = await computeScale(pdf, mode);
+      lastScaleRef.current = s;
       setScale(s);
       const dpr = window.devicePixelRatio || 1;
       container.innerHTML = "";
@@ -149,13 +151,29 @@ export default function PdfPreview({
   useEffect(() => {
     const container = containerRef.current;
     if (!container) return;
+    let timeout: ReturnType<typeof setTimeout> | null = null;
     const ro = new ResizeObserver(() => {
-      if (zoom === "fit-width" || zoom === "fit-page") void render(zoom);
+      if (zoom !== "fit-width" && zoom !== "fit-page") return;
+      if (timeout) clearTimeout(timeout);
+      timeout = setTimeout(() => {
+        void (async () => {
+          const pdf = pdfRef.current;
+          if (!pdf) return;
+          const next = await computeScale(pdf, zoom);
+          // Only re-render when the scale actually changes (a scrollbar
+          // appearing/disappearing changes the content box but not the border
+          // box we measure against, so this stops the render flicker loop).
+          if (Math.abs(next - lastScaleRef.current) > 0.01) void render(zoom);
+        })();
+      }, 150);
     });
     ro.observe(container);
-    return () => ro.disconnect();
+    return () => {
+      if (timeout) clearTimeout(timeout);
+      ro.disconnect();
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [zoom, render]);
+  }, [zoom, render, computeScale]);
 
   // Forward sync: double-click reports the clicked point in PDF points.
   useEffect(() => {
