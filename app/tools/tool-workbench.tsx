@@ -664,7 +664,7 @@ export default function ToolWorkbench({ tool }: WorkbenchProps) {
   const [compressPreset, setCompressPreset] = useState<"screen" | "ebook" | "print" | "custom">("screen");
   const [signatureMode, setSignatureMode] = useState<"text" | "draw">("text");
   const [signatureDrawn, setSignatureDrawn] = useState(false);
-  const [signatures, setSignatures] = useState<Array<{ id: string; kind: "text" | "draw"; text?: string; dataUrl?: string; xRatio: number; yRatio: number; pageNumber: number | null; rotation?: number; widthRatio?: number }>>([]);
+  const [signatures, setSignatures] = useState<Array<{ id: string; kind: "text" | "draw"; text?: string; dataUrl?: string; xRatio: number; yRatio: number; pageNumber: number | null; rotation?: number; widthRatio?: number; heightRatio?: number }>>([]);
   const [activeSignatureId, setActiveSignatureId] = useState("");
   const [savedSignatures, setSavedSignatures] = useState<Array<{ id: string; kind: "text" | "draw"; label: string; text?: string; dataUrl?: string }>>(() => {
     if (typeof window === "undefined") return [];
@@ -3667,7 +3667,7 @@ export default function ToolWorkbench({ tool }: WorkbenchProps) {
   }
 
   // Drag / resize / rotate placed signatures directly on the preview.
-  type SignatureDragMode = "move" | "resize" | "rotate";
+  type SignatureDragMode = "move" | "resize" | "resize-h" | "rotate";
   const signaturePreviewRef = useRef<HTMLDivElement | null>(null);
   const signatureDragRef = useRef<{
     id: string;
@@ -3678,6 +3678,7 @@ export default function ToolWorkbench({ tool }: WorkbenchProps) {
     origY: number;
     origRotation: number;
     origWidth: number;
+    origHeight: number;
     rect: { width: number; height: number; left: number; top: number };
   } | null>(null);
 
@@ -3691,13 +3692,16 @@ export default function ToolWorkbench({ tool }: WorkbenchProps) {
       const dx = (clientX - drag.startClientX) / rect.width;
       const dy = (clientY - drag.startClientY) / rect.height;
       const xRatio = clamp(drag.origX + dx, 0.02, 0.98);
-      const yTop = 1 - drag.origY + dy;
-      const yRatio = clamp(1 - yTop, 0.02, 0.98);
+      const yRatio = clamp(drag.origY - dy, 0.02, 0.98);
       setSignatures((prev) => prev.map((s) => (s.id === drag.id ? { ...s, xRatio, yRatio } : s)));
     } else if (drag.mode === "resize") {
       const dx = (clientX - drag.startClientX) / rect.width;
       const widthRatio = clamp(drag.origWidth + dx, 0.06, 0.9);
       setSignatures((prev) => prev.map((s) => (s.id === drag.id ? { ...s, widthRatio } : s)));
+    } else if (drag.mode === "resize-h") {
+      const dy = (clientY - drag.startClientY) / rect.height;
+      const heightRatio = clamp(drag.origHeight + dy, 0.04, 0.8);
+      setSignatures((prev) => prev.map((s) => (s.id === drag.id ? { ...s, heightRatio } : s)));
     } else {
       const cx = drag.origX * rect.width;
       const cy = (1 - drag.origY) * rect.height;
@@ -3724,6 +3728,7 @@ export default function ToolWorkbench({ tool }: WorkbenchProps) {
       origY: sig.yRatio,
       origRotation: sig.rotation ?? 0,
       origWidth: sig.widthRatio ?? (sig.kind === "draw" ? 0.28 : 0.24),
+      origHeight: sig.heightRatio ?? (sig.kind === "draw" ? 0.16 : 0.08),
       rect: { width: rect.width, height: rect.height, left: rect.left, top: rect.top },
     };
     event.preventDefault();
@@ -7072,6 +7077,7 @@ export default function ToolWorkbench({ tool }: WorkbenchProps) {
                     {signaturesForPage(signPageNumber).map((sig) => {
                       const isActive = activeSignatureId === sig.id;
                       const widthRatio = sig.widthRatio ?? (sig.kind === "draw" ? 0.28 : 0.24);
+                      const heightRatio = sig.heightRatio ?? 0;
                       const rotation = sig.rotation ?? 0;
                       return (
                         <div
@@ -7081,6 +7087,7 @@ export default function ToolWorkbench({ tool }: WorkbenchProps) {
                             left: `${sig.xRatio * 100}%`,
                             top: `${(1 - sig.yRatio) * 100}%`,
                             width: `${widthRatio * 100}%`,
+                            height: heightRatio > 0 ? `${heightRatio * 100}%` : "auto",
                             transform: `translate(-50%, -50%) rotate(${rotation}deg)`,
                             cursor: "move",
                             touchAction: "none",
@@ -7090,7 +7097,7 @@ export default function ToolWorkbench({ tool }: WorkbenchProps) {
                         >
                           {sig.kind === "draw" && sig.dataUrl ? (
                             // eslint-disable-next-line @next/next/no-img-element
-                            <img src={sig.dataUrl} alt="Placed signature" draggable={false} className="w-full rounded-sm border border-cyan-400/70 bg-white shadow-sm" />
+                            <img src={sig.dataUrl} alt="Placed signature" draggable={false} className="w-full rounded-sm border border-cyan-400/70 bg-transparent shadow-sm" style={{ height: heightRatio > 0 ? "100%" : "auto", display: "block" }} />
                           ) : (
                             <span className="block w-full text-center italic text-indigo-900 drop-shadow-sm" style={{ fontFamily: 'Georgia, "Times New Roman", serif', fontSize: "clamp(10px, 4vw, 24px)" }}>{sig.text}</span>
                           )}
@@ -7101,6 +7108,12 @@ export default function ToolWorkbench({ tool }: WorkbenchProps) {
                                 className="absolute -bottom-1.5 -right-1.5 h-3.5 w-3.5 rounded-sm border border-cyan-600 bg-white"
                                 style={{ cursor: "nwse-resize" }}
                                 onPointerDown={(e) => beginSignatureDrag(sig.id, "resize", e)}
+                              />
+                              <span
+                                aria-hidden="true"
+                                className="absolute -bottom-1.5 left-1/2 h-3 w-3.5 -translate-x-1/2 rounded-sm border border-cyan-600 bg-white"
+                                style={{ cursor: "ns-resize" }}
+                                onPointerDown={(e) => beginSignatureDrag(sig.id, "resize-h", e)}
                               />
                               <span
                                 aria-hidden="true"

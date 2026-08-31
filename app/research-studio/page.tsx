@@ -2483,10 +2483,10 @@ export default function ResearchStudioPage() {
       const rect = container.getBoundingClientRect();
 
       if (activeResizer === "left") {
-        const nextWidth = clamp(event.clientX - rect.left, 160, 380);
+        const nextWidth = clamp(event.clientX - rect.left, 160, Math.max(200, rect.width - 220));
         setLeftPaneWidth(nextWidth);
       } else {
-        const nextWidth = clamp(rect.right - event.clientX, 220, 480);
+        const nextWidth = clamp(rect.right - event.clientX, 200, Math.max(220, rect.width - 220));
         setRightPaneWidth(nextWidth);
       }
     };
@@ -4987,8 +4987,7 @@ export default function ResearchStudioPage() {
       setCompiledPdfBlob(blob);
       setCompiledPdfUrl(nextUrl);
 
-      const downloadName =
-        getFileNameFromDisposition(response.headers.get("Content-Disposition")) || "compiled-main.pdf";
+      const downloadName = `${(projectName || "document").replace(/[^\w\- ]+/g, "").trim().replace(/\s+/g, "-") || "document"}.pdf`;
       setCompiledPdfFileName(downloadName);
       setCompileMainLog("");
       setCompileMainLogFileName("main.log");
@@ -5033,7 +5032,7 @@ export default function ResearchStudioPage() {
 
       // Try to fetch SyncTeX data
       try {
-        const synctexRes = await fetch(`/api/latex-compile?synctex=1&root=${encodeURIComponent(rootPath)}`, {
+        const synctexRes = await fetch(`/api/latex-compile?synctex=1&root=${encodeURIComponent(rootPath)}&projectId=${encodeURIComponent(activeProjectId || "")}`, {
           cache: "no-store",
         });
         if (synctexRes.ok) {

@@ -1478,7 +1478,35 @@ body[data-studio-editor="true"] footer {
   box-shadow: 0 2px 12px rgba(0, 0, 0, 0.5);
   border-radius: 2px;
   background: #ffffff;
+}
+
+/* Selectable text layer (transparent spans over the rendered page). */
+.textLayer {
+  position: absolute;
+  left: 0;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  overflow: hidden;
+  line-height: 1;
+  text-size-adjust: none;
+  forced-color-adjust: none;
+  transform-origin: 0 0;
+  caret-color: CanvasText;
+  z-index: 1;
+}
+
+.textLayer span,
+.textLayer br {
+  color: transparent;
+  position: absolute;
+  white-space: pre;
   cursor: text;
+  transform-origin: 0% 0%;
+}
+
+.textLayer ::selection {
+  background: rgba(59, 130, 246, 0.35);
 }
 
 .studio-pdf-marker {

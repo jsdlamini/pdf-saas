@@ -230,18 +230,6 @@ export default function Home() {
         .filter(Boolean) as typeof TOOL_ITEMS,
     [dropSuggestions],
   );
-  const otherCompatibleTools = useMemo(() => {
-    if (!dropFile) return [];
-    const slugs = new Set(dropSuggestions);
-    const isPdfFile = isPdf(dropFile);
-    return ACTIVE_TOOL_ITEMS.filter((t) => {
-      if (slugs.has(t.slug)) return false;
-      if (t.slug === "ocr-pdf") return true; // OCR works with both
-      if (isPdfFile) return t.slug.includes("pdf") || t.slug === "merge-pdf" || t.slug === "split-pdf" || t.slug === "compress-pdf" || t.slug === "sign-pdf" || t.slug === "protect-pdf" || t.slug === "unlock-pdf" || t.slug === "redact-pdf" || t.slug === "edit-pdf" || t.slug === "crop-pdf" || t.slug === "rotate-pdf" || t.slug === "organize-pdf" || t.slug === "remove-pages" || t.slug === "extract-pages" || t.slug === "repair-pdf" || t.slug === "page-numbers" || t.slug === "compare-pdf" || t.slug === "pdf-to-pdfa" || t.slug === "pdf-to-latex";
-      return t.slug === "convert-to-pdf" || t.slug === "ocr-pdf" || t.slug === "scan-to-pdf";
-    }).slice(0, 10);
-  }, [dropFile, dropSuggestions]);
-
   useEffect(() => {
     if (!dropFiles.length) return;
 
@@ -382,7 +370,8 @@ export default function Home() {
   // Searchable grid dialog for the full tool list — replaces the long
   // vertical dropdown that overflowed the viewport.
   function openAllToolsDialog() {
-    const tools = otherCompatibleTools.length ? otherCompatibleTools : ACTIVE_TOOL_ITEMS;
+    // Always show the full catalogue so every tool (e.g. Sign PDF) is reachable.
+    const tools = ACTIVE_TOOL_ITEMS;
     const cards = tools
       .map(
         (t) => `
