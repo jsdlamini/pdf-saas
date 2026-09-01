@@ -1113,16 +1113,14 @@ html[data-theme="light"] .studio-projects-panel {
 
 .studio-resize-handle-inner {
   width: 1px;
-  height: 32px;
-  border-radius: 1px;
+  height: 100%;
   background: var(--border-color, #2a3140);
-  transition: background 0.15s, height 0.15s;
+  transition: background 0.15s;
 }
 
 .studio-resize-handle:hover .studio-resize-handle-inner,
 .studio-resize-handle-active .studio-resize-handle-inner {
   background: var(--accent-color, #60a5fa);
-  height: 44px;
 }
 
 /* ── Tab bar ───── */
