@@ -1093,6 +1093,7 @@ html[data-theme="light"] .studio-projects-panel {
   background: transparent;
   transition: background 0.15s;
   flex-shrink: 0;
+  touch-action: none;
 }
 
 /* Widen the effective grab area without changing layout. */
