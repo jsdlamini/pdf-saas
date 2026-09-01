@@ -3685,7 +3685,7 @@ export default function ToolWorkbench({ tool }: WorkbenchProps) {
 
   // Track the preview pane's rendered height so the signature box can size its
   // height in pixels (percentage heights don't resolve against an auto-height
-  // container).
+  // container). Re-attach once the preview image has loaded.
   useEffect(() => {
     const el = signaturePreviewRef.current;
     if (!el) return;
@@ -3694,7 +3694,7 @@ export default function ToolWorkbench({ tool }: WorkbenchProps) {
     const ro = new ResizeObserver(update);
     ro.observe(el);
     return () => ro.disconnect();
-  }, []);
+  }, [signaturePlacementPreview]);
 
   function applySignatureDrag(clientX: number, clientY: number) {
     const drag = signatureDragRef.current;

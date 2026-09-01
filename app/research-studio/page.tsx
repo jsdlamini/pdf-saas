@@ -2477,7 +2477,7 @@ export default function ResearchStudioPage() {
   useEffect(() => {
     if (!activeResizer) return;
 
-    const onMouseMove = (event: MouseEvent) => {
+    const onPointerMove = (event: PointerEvent) => {
       const container = panesRef.current;
       if (!container) return;
       const rect = container.getBoundingClientRect();
@@ -2491,15 +2491,18 @@ export default function ResearchStudioPage() {
       }
     };
 
-    const onMouseUp = () => {
+    const onPointerUp = () => {
       setActiveResizer(null);
     };
 
-    window.addEventListener("mousemove", onMouseMove);
-    window.addEventListener("mouseup", onMouseUp);
+    // Pointer events work for both mouse and touch.
+    window.addEventListener("pointermove", onPointerMove);
+    window.addEventListener("pointerup", onPointerUp);
+    window.addEventListener("pointercancel", onPointerUp);
     return () => {
-      window.removeEventListener("mousemove", onMouseMove);
-      window.removeEventListener("mouseup", onMouseUp);
+      window.removeEventListener("pointermove", onPointerMove);
+      window.removeEventListener("pointerup", onPointerUp);
+      window.removeEventListener("pointercancel", onPointerUp);
     };
   }, [activeResizer]);
 
@@ -6519,6 +6522,19 @@ export default function ResearchStudioPage() {
               </button>
               <button
                 type="button"
+                onClick={syncToPdf}
+                className="studio-btn studio-btn-ghost"
+                aria-label="Sync to PDF"
+                title="Jump to the PDF position for the current editor line"
+                style={{ height: 32, padding: "0 10px" }}
+              >
+                <svg viewBox="0 0 20 20" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="1.8">
+                  <path d="M13 7l-6 6M8 7h5v5" strokeLinecap="round" strokeLinejoin="round" />
+                </svg>
+                <span className="hidden sm:inline">Sync</span>
+              </button>
+              <button
+                type="button"
                 onClick={() => void downloadProjectBundle()}
                 className="studio-btn studio-btn-secondary"
                 aria-label="Download project bundle"
@@ -6986,7 +7002,7 @@ export default function ResearchStudioPage() {
         {/* Left resize */}
         <div
           className={`studio-resize-handle ${activeResizer === "left" ? "studio-resize-handle-active" : ""}`}
-          onMouseDown={() => { if (!leftPaneCollapsed) setActiveResizer("left"); }}
+          onPointerDown={() => { if (!leftPaneCollapsed) setActiveResizer("left"); }}
         >
           <div className="studio-resize-handle-inner" />
         </div>
@@ -7553,7 +7569,7 @@ export default function ResearchStudioPage() {
         <>
         <div
           className={`studio-resize-handle ${activeResizer === "right" ? "studio-resize-handle-active" : ""}`}
-          onMouseDown={() => { if (!rightPaneCollapsed) setActiveResizer("right"); }}
+          onPointerDown={() => { if (!rightPaneCollapsed) setActiveResizer("right"); }}
         >
           <div className="studio-resize-handle-inner" />
         </div>
