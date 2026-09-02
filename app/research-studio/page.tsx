@@ -1469,6 +1469,7 @@ export default function ResearchStudioPage() {
   const [synctexRecords, setSynctexRecords] = useState<SynctexRecord[]>([]);
   const [synctexNotice, setSynctexNotice] = useState("");
   const [pdfHighlight, setPdfHighlight] = useState<PdfHighlight>(null);
+  const [pdfAnchor, setPdfAnchor] = useState<{ page: number; x: number; y: number } | null>(null);
   const [showShortcuts, setShowShortcuts] = useState(false);
   const [openMenu, setOpenMenu] = useState("");
 
@@ -2089,6 +2090,38 @@ export default function ResearchStudioPage() {
     } else {
       setSynctexNotice("No PDF position for this line.");
     }
+  }
+
+  // <- button: jump the editor to the PDF anchor (last-clicked point).
+  function handlePdfClick(page: number, xPt: number, yPt: number) {
+    setPdfAnchor({ page, x: xPt, y: yPt });
+  }
+
+  function jumpToPdfAnchor() {
+    if (!pdfAnchor) {
+      setSynctexNotice("Click a spot in the PDF first, then press the left arrow.");
+      return;
+    }
+    if (!synctexRecords.length) {
+      setSynctexNotice("No SyncTeX data available. Recompile with synctex enabled.");
+      return;
+    }
+    const h = pdfAnchor.x * 65536;
+    const v = pdfAnchor.y * 65536;
+    let best: SynctexRecord | null = null;
+    let bestDist = Infinity;
+    for (const r of synctexRecords) {
+      if (r.page !== pdfAnchor.page) continue;
+      const dx = r.x - h;
+      const dy = r.y - v;
+      const dist = dx * dx + dy * dy;
+      if (dist < bestDist) {
+        bestDist = dist;
+        best = r;
+      }
+    }
+    if (best) navigateToSynctexRecord(best);
+    else setSynctexNotice(`No source mapping for page ${pdfAnchor.page}.`);
   }
 
   function onEditorMouseMove(event: MouseEvent) {
@@ -7586,6 +7619,18 @@ export default function ResearchStudioPage() {
           onPointerDown={() => { if (!rightPaneCollapsed) setActiveResizer("right"); }}
         >
           <div className="studio-resize-handle-inner" />
+          <div className="studio-sync-arrows">
+            <button type="button" className="studio-sync-arrow" onClick={jumpToPdfAnchor} title="Jump from PDF to editor (click a PDF spot first)" aria-label="Jump from PDF to editor">
+              <svg viewBox="0 0 20 20" style={{ width: 12, height: 12 }} fill="none" stroke="currentColor" strokeWidth="2">
+                <path d="M14 10H5m5-4l-4 4 4 4" strokeLinecap="round" strokeLinejoin="round" />
+              </svg>
+            </button>
+            <button type="button" className="studio-sync-arrow" onClick={syncToPdf} title="Jump from editor cursor to PDF" aria-label="Jump from editor cursor to PDF">
+              <svg viewBox="0 0 20 20" style={{ width: 12, height: 12 }} fill="none" stroke="currentColor" strokeWidth="2">
+                <path d="M6 10h9m-5-4l4 4-4 4" strokeLinecap="round" strokeLinejoin="round" />
+              </svg>
+            </button>
+          </div>
         </div>
 
         {/* Preview pane */}
@@ -7719,6 +7764,7 @@ export default function ResearchStudioPage() {
                   <PdfPreview
                     url={compiledPdfUrl}
                     onPageDoubleClick={handlePdfDoubleClick}
+                    onPageClick={handlePdfClick}
                     highlight={pdfHighlight}
                   />
                 ) : (
