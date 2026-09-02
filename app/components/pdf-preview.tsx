@@ -12,10 +12,12 @@ type Zoom = "fit-width" | "fit-page" | number;
 export default function PdfPreview({
   url,
   onPageDoubleClick,
+  onPageClick,
   highlight,
 }: {
   url: string;
   onPageDoubleClick?: (page: number, xPt: number, yPt: number) => void;
+  onPageClick?: (page: number, xPt: number, yPt: number) => void;
   highlight?: PdfHighlight;
 }) {
   const containerRef = useRef<HTMLDivElement | null>(null);
@@ -192,6 +194,23 @@ export default function PdfPreview({
     container.addEventListener("dblclick", onDblClick);
     return () => container.removeEventListener("dblclick", onDblClick);
   }, [onPageDoubleClick, scale]);
+
+  // Single click reports the anchor point for the <- jump button.
+  useEffect(() => {
+    const container = containerRef.current;
+    if (!container || !onPageClick) return;
+    const onClick = (e: MouseEvent) => {
+      const target = (e.target as HTMLElement).closest("div.studio-pdf-page") as HTMLDivElement | null;
+      if (!target) return;
+      const page = Number(target.dataset.page || "1");
+      const rect = target.getBoundingClientRect();
+      const xCss = e.clientX - rect.left;
+      const yCss = e.clientY - rect.top;
+      onPageClick(page, xCss / scale, yCss / scale);
+    };
+    container.addEventListener("click", onClick);
+    return () => container.removeEventListener("click", onClick);
+  }, [onPageClick, scale]);
 
   // Inverse sync: scroll to the highlighted page/point and flash a marker.
   useEffect(() => {
