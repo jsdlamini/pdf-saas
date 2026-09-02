@@ -634,6 +634,8 @@ export default function ToolWorkbench({ tool }: WorkbenchProps) {
   const [editOpacity, setEditOpacity] = useState(45);
   const [editFillShape, setEditFillShape] = useState(false);
   const [editZoom, setEditZoom] = useState(100);
+  const [editSpanTarget, setEditSpanTarget] = useState<EditTextSpan | null>(null);
+  const [editSpanReplacement, setEditSpanReplacement] = useState("");
   const [editStrokes, setEditStrokes] = useState<EditStroke[]>([]);
   const [editTextNotes, setEditTextNotes] = useState<EditTextNote[]>([]);
   const [editHighlights, setEditHighlights] = useState<EditHighlight[]>([]);
@@ -2992,7 +2994,7 @@ export default function ToolWorkbench({ tool }: WorkbenchProps) {
     if (editMode === "edit-text") {
       const canvas = editCanvasRef.current;
       if (!canvas) return;
-      void replaceTextSpanAt(getEditCanvasPoint(canvas, event));
+      selectEditSpanAt(getEditCanvasPoint(canvas, event));
       return;
     }
 
@@ -3018,11 +3020,13 @@ export default function ToolWorkbench({ tool }: WorkbenchProps) {
   }
 
   // Feature 2 — click-to-edit existing text: whiteout the clicked word's bbox and
-  // place a text note with the replacement at the same position/font size.
-  async function replaceTextSpanAt(point: CanvasPoint) {
+  // place a text note with the replacement at the same position/font size. The
+  // replacement is typed inline (no dialog).
+  function selectEditSpanAt(point: CanvasPoint) {
     const spans = editTextSpansRef.current[editPageNumber] ?? [];
     if (!spans.length) {
       setStatus("No selectable text was found on this page.");
+      setEditSpanTarget(null);
       return;
     }
 
@@ -3046,22 +3050,23 @@ export default function ToolWorkbench({ tool }: WorkbenchProps) {
         span = nearest;
       } else {
         setStatus("Click closer to a word to edit it.");
+        setEditSpanTarget(null);
         return;
       }
     }
 
-    const result = await Swal.fire({
-      title: "Replace text",
-      text: "Type the replacement for the selected word.",
-      input: "text",
-      inputValue: span.text,
-      showCancelButton: true,
-      confirmButtonText: "Replace",
-      cancelButtonText: "Cancel",
-    });
-    if (!result.isConfirmed) return;
-    const replacement = String(result.value ?? "").trim();
-    if (!replacement) return;
+    setEditSpanTarget(span);
+    setEditSpanReplacement(span.text);
+  }
+
+  function applyEditSpanReplacement() {
+    const span = editSpanTarget;
+    if (!span) return;
+    const replacement = editSpanReplacement.trim();
+    if (!replacement) {
+      setStatus("Type the replacement text first.");
+      return;
+    }
 
     const pad = 2;
     commitEditLayer(editPageNumber, (layer) => ({
@@ -3088,6 +3093,8 @@ export default function ToolWorkbench({ tool }: WorkbenchProps) {
         },
       ],
     }));
+    setEditSpanTarget(null);
+    setEditSpanReplacement("");
   }
 
   function changeEditZoom(direction: -1 | 1) {
@@ -5982,7 +5989,13 @@ export default function ToolWorkbench({ tool }: WorkbenchProps) {
         </div>
       </div>
 
-      <div className="grid gap-3 xl:grid-cols-[minmax(240px,0.95fr)_minmax(0,3.05fr)_minmax(240px,1fr)] xl:items-start">
+      <div
+        className={
+          isEditTool
+            ? "grid gap-3"
+            : "grid gap-3 xl:grid-cols-[minmax(240px,0.95fr)_minmax(0,3.05fr)_minmax(240px,1fr)] xl:items-start"
+        }
+      >
         <div className="space-y-2">
 
           {hasChosenWorkflow && applicableRecipes.length ? (
@@ -7162,7 +7175,13 @@ export default function ToolWorkbench({ tool }: WorkbenchProps) {
                   <button
                     key={option.mode}
                     type="button"
-                    onClick={() => setEditMode(option.mode)}
+                    onClick={() => {
+                      setEditMode(option.mode);
+                      if (option.mode !== "edit-text") {
+                        setEditSpanTarget(null);
+                        setEditSpanReplacement("");
+                      }
+                    }}
                     aria-pressed={editMode === option.mode}
                     title={`${option.label} — ${option.hint}`}
                     className={`inline-flex items-center gap-1.5 rounded-md px-2 py-1.5 text-[11px] font-medium transition ${
@@ -7386,6 +7405,44 @@ export default function ToolWorkbench({ tool }: WorkbenchProps) {
 
                 {editMode === "select" || editMode === "whiteout" || editMode === "edit-text" ? (
                   <span className="text-[11px] text-slate-500">{EDIT_TOOL_HINTS[editMode]}</span>
+                ) : null}
+
+                {editMode === "edit-text" && editSpanTarget ? (
+                  <div className="flex flex-wrap items-center gap-1.5 rounded-md border border-sky-700/60 bg-slate-900 px-2 py-1">
+                    <span className="text-[11px] text-slate-400">Replace “{editSpanTarget.text}” with:</span>
+                    <input
+                      type="text"
+                      value={editSpanReplacement}
+                      onChange={(event) => setEditSpanReplacement(event.target.value)}
+                      onKeyDown={(event) => {
+                        if (event.key === "Enter") applyEditSpanReplacement();
+                        if (event.key === "Escape") {
+                          setEditSpanTarget(null);
+                          setEditSpanReplacement("");
+                        }
+                      }}
+                      autoFocus
+                      className="w-40 rounded border border-slate-700 bg-slate-800 px-1.5 py-1 text-[11px] text-slate-200 focus:border-sky-400 focus:outline-none"
+                      aria-label="Replacement text"
+                    />
+                    <button
+                      type="button"
+                      onClick={applyEditSpanReplacement}
+                      className="rounded bg-sky-600 px-2 py-1 text-[11px] font-semibold text-white transition hover:bg-sky-500"
+                    >
+                      Replace
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setEditSpanTarget(null);
+                        setEditSpanReplacement("");
+                      }}
+                      className="rounded border border-slate-700 px-2 py-1 text-[11px] text-slate-400 transition hover:text-slate-200"
+                    >
+                      Cancel
+                    </button>
+                  </div>
                 ) : null}
 
                 {/* Feature 5 — batch apply scope + Feature 6 — snap-to-grid */}
