@@ -417,7 +417,7 @@ const EDIT_TOOL_OPTIONS: Array<{ mode: EditToolMode; label: string; hint: string
   { mode: "select", label: "Select", hint: "Click an annotation to select it — drag to move, press Delete to remove it." },
   { mode: "draw", label: "Draw", hint: "Drag on the page to draw freehand ink." },
   { mode: "highlight", label: "Highlight", hint: "Drag a box to highlight the text underneath." },
-  { mode: "text", label: "Text", hint: "Type your text, then click the page to place it." },
+  { mode: "text", label: "Text", hint: "Click the page to place a cursor, then type directly." },
   { mode: "edit-text", label: "Edit text", hint: "Click a word in the PDF to replace it in place." },
   { mode: "rect", label: "Rectangle", hint: "Drag on the page to draw a rectangle." },
   { mode: "ellipse", label: "Ellipse", hint: "Drag on the page to draw an ellipse." },
@@ -636,6 +636,8 @@ export default function ToolWorkbench({ tool }: WorkbenchProps) {
   const [editZoom, setEditZoom] = useState(100);
   const [editSpanTarget, setEditSpanTarget] = useState<EditTextSpan | null>(null);
   const [editSpanReplacement, setEditSpanReplacement] = useState("");
+  const [editTextCursor, setEditTextCursor] = useState<{ x: number; y: number } | null>(null);
+  const [editTextDraft, setEditTextDraft] = useState("");
   const [editStrokes, setEditStrokes] = useState<EditStroke[]>([]);
   const [editTextNotes, setEditTextNotes] = useState<EditTextNote[]>([]);
   const [editHighlights, setEditHighlights] = useState<EditHighlight[]>([]);
@@ -1882,6 +1884,8 @@ export default function ToolWorkbench({ tool }: WorkbenchProps) {
     editOpacity,
     editFillShape,
     selectedEditId,
+    editTextCursor,
+    editTextDraft,
   ]);
 
   useEffect(() => {
@@ -1903,9 +1907,30 @@ export default function ToolWorkbench({ tool }: WorkbenchProps) {
 
       if (event.key === "Escape") {
         setSelectedEditId(null);
+        setEditTextCursor(null);
+        setEditTextDraft("");
         return;
       }
       if (inFormField) return;
+
+      // Direct typing on the page when a text caret is active.
+      if (editTextCursor) {
+        if (event.key === "Enter") {
+          event.preventDefault();
+          commitEditTextDraft();
+          return;
+        }
+        if (event.key === "Backspace") {
+          event.preventDefault();
+          setEditTextDraft((prev) => prev.slice(0, -1));
+          return;
+        }
+        if (event.key.length === 1 && !event.ctrlKey && !event.metaKey && !event.altKey) {
+          event.preventDefault();
+          setEditTextDraft((prev) => prev + event.key);
+          return;
+        }
+      }
 
       const modifier = event.ctrlKey || event.metaKey;
       if (modifier && event.key.toLowerCase() === "z") {
@@ -1943,6 +1968,10 @@ export default function ToolWorkbench({ tool }: WorkbenchProps) {
     editWhiteouts,
     editImages,
     editStamps,
+    editTextCursor,
+    editTextDraft,
+    editColor,
+    editFontSize,
   ]);
 
   const uploadHint = useMemo(() => {
@@ -2031,6 +2060,22 @@ export default function ToolWorkbench({ tool }: WorkbenchProps) {
         context.fillStyle = note.color;
         context.font = `${note.size}px ${"DM Sans"}`;
         context.fillText(note.text, note.x, note.y);
+      }
+
+      // In-progress text typed directly at a placed cursor (MS Word style).
+      if (editTextCursor) {
+        context.fillStyle = editColor;
+        context.font = `${editFontSize}px ${"DM Sans"}`;
+        context.textBaseline = "alphabetic";
+        if (editTextDraft) {
+          context.fillText(editTextDraft, editTextCursor.x, editTextCursor.y);
+        }
+        const cursorX = editTextDraft
+          ? editTextCursor.x + context.measureText(editTextDraft).width + 2
+          : editTextCursor.x;
+        // Thin caret at the text baseline.
+        context.fillStyle = editColor;
+        context.fillRect(cursorX, editTextCursor.y - editFontSize * 0.8, 2, editFontSize * 1.1);
       }
 
       for (const shape of editShapes) {
@@ -2753,6 +2798,7 @@ export default function ToolWorkbench({ tool }: WorkbenchProps) {
 
   async function loadEditPreview(file: File, targetPage: number) {
     try {
+      commitEditTextDraft();
       setEditCanvasLoading(true);
       const preview = await renderEditPagePreview(new Uint8Array(await readAsArrayBuffer(file)), targetPage);
       const layer = editLayersRef.current[preview.safePage] ?? emptyEditLayer();
@@ -2999,24 +3045,13 @@ export default function ToolWorkbench({ tool }: WorkbenchProps) {
     }
 
     if (editMode !== "text") return;
-    if (!editText.trim()) return;
     const canvas = editCanvasRef.current;
     if (!canvas) return;
     const point = getEditCanvasPoint(canvas, event);
-    commitEditLayer(editPageNumber, (layer) => ({
-      ...layer,
-      textNotes: [
-        ...layer.textNotes,
-        {
-          id: nextEditAnnotationId(),
-          x: point.x,
-          y: point.y,
-          text: editText.trim(),
-          color: editColor,
-          size: editFontSize,
-        },
-      ],
-    }));
+    // Commit any in-progress text, then drop a caret here for direct typing.
+    commitEditTextDraft();
+    setEditTextCursor(point);
+    setEditTextDraft("");
   }
 
   // Feature 2 — click-to-edit existing text: whiteout the clicked word's bbox and
@@ -3095,6 +3130,31 @@ export default function ToolWorkbench({ tool }: WorkbenchProps) {
     }));
     setEditSpanTarget(null);
     setEditSpanReplacement("");
+  }
+
+  // Direct typing: when a caret is placed on the page, commit the typed text as a
+  // text note and clear the caret. Callers place a new caret afterwards when needed.
+  function commitEditTextDraft() {
+    if (!editTextCursor) return;
+    const text = editTextDraft.trim();
+    if (text) {
+      commitEditLayer(editPageNumber, (layer) => ({
+        ...layer,
+        textNotes: [
+          ...layer.textNotes,
+          {
+            id: nextEditAnnotationId(),
+            x: editTextCursor.x,
+            y: editTextCursor.y,
+            text,
+            color: editColor,
+            size: editFontSize,
+          },
+        ],
+      }));
+    }
+    setEditTextCursor(null);
+    setEditTextDraft("");
   }
 
   function changeEditZoom(direction: -1 | 1) {
@@ -4170,6 +4230,7 @@ export default function ToolWorkbench({ tool }: WorkbenchProps) {
   }
 
   async function runTool() {
+    commitEditTextDraft();
     setError("");
     setPinnedError(false);
     setStatus("");
@@ -7176,10 +7237,17 @@ export default function ToolWorkbench({ tool }: WorkbenchProps) {
                     key={option.mode}
                     type="button"
                     onClick={() => {
+                      if (editMode === "text" && option.mode !== "text") {
+                        commitEditTextDraft();
+                      }
                       setEditMode(option.mode);
                       if (option.mode !== "edit-text") {
                         setEditSpanTarget(null);
                         setEditSpanReplacement("");
+                      }
+                      if (option.mode !== "text") {
+                        setEditTextCursor(null);
+                        setEditTextDraft("");
                       }
                     }}
                     aria-pressed={editMode === option.mode}
@@ -7306,14 +7374,9 @@ export default function ToolWorkbench({ tool }: WorkbenchProps) {
                       />
                       Size {editFontSize}px
                     </label>
-                    <input
-                      id="edit-text"
-                      type="text"
-                      value={editText}
-                      onChange={(event) => setEditText(event.target.value)}
-                      placeholder="Type your text, then click the page to place it"
-                      className="min-w-[220px] flex-1 rounded-md border border-slate-600 bg-slate-800 px-2.5 py-1.5 text-xs text-slate-100 placeholder:text-slate-500 focus:border-sky-400 focus:outline-none"
-                    />
+                    <span className="text-[11px] text-slate-400">
+                      Click the page to place a cursor, then type directly. Enter to place, Esc to cancel.
+                    </span>
                   </>
                 ) : null}
 
