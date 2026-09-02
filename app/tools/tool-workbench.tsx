@@ -3689,7 +3689,7 @@ export default function ToolWorkbench({ tool }: WorkbenchProps) {
   useEffect(() => {
     const el = signaturePreviewRef.current;
     if (!el) return;
-    const update = () => setSignaturePreviewHeight(el.getBoundingClientRect().height);
+    const update = () => setSignaturePreviewHeight(el.offsetHeight || el.getBoundingClientRect().height || 0);
     update();
     const ro = new ResizeObserver(update);
     ro.observe(el);
@@ -7086,6 +7086,7 @@ export default function ToolWorkbench({ tool }: WorkbenchProps) {
                       src={signaturePlacementPreview}
                       alt="Signature placement preview"
                       onClick={onSignaturePlacementPick}
+                      onLoad={(e) => setSignaturePreviewHeight(e.currentTarget.parentElement?.offsetHeight || 0)}
                       className="h-auto w-full cursor-crosshair"
                     />
                     {signaturesForPage(signPageNumber).map((sig) => {
@@ -7119,19 +7120,19 @@ export default function ToolWorkbench({ tool }: WorkbenchProps) {
                             <>
                               <span
                                 aria-hidden="true"
-                                className="absolute -bottom-1.5 -right-1.5 h-3.5 w-3.5 rounded-sm border border-cyan-600 bg-white"
+                                className="absolute -bottom-2 -right-2 h-5 w-5 rounded-sm border border-cyan-600 bg-white"
                                 style={{ cursor: "nwse-resize" }}
                                 onPointerDown={(e) => beginSignatureDrag(sig.id, "resize", e)}
                               />
                               <span
                                 aria-hidden="true"
-                                className="absolute -bottom-1.5 left-1/2 h-3 w-3.5 -translate-x-1/2 rounded-sm border border-cyan-600 bg-white"
+                                className="absolute -bottom-2 left-1/2 h-4 w-5 -translate-x-1/2 rounded-sm border border-cyan-600 bg-white"
                                 style={{ cursor: "ns-resize" }}
                                 onPointerDown={(e) => beginSignatureDrag(sig.id, "resize-h", e)}
                               />
                               <span
                                 aria-hidden="true"
-                                className="absolute -top-5 left-1/2 h-3.5 w-3.5 -translate-x-1/2 rounded-full border border-cyan-600 bg-white"
+                                className="absolute -top-5 left-1/2 h-5 w-5 -translate-x-1/2 rounded-full border border-cyan-600 bg-white"
                                 style={{ cursor: "grab" }}
                                 onPointerDown={(e) => beginSignatureDrag(sig.id, "rotate", e)}
                               />
@@ -7723,7 +7724,7 @@ export default function ToolWorkbench({ tool }: WorkbenchProps) {
                 </div>
 
                 {/* Editor canvas */}
-                <div className="min-w-0 flex-1 overflow-auto bg-slate-950 p-6" style={{ maxHeight: "72vh" }}>
+                <div className="min-w-0 flex-1 overflow-auto bg-slate-950 p-6">
                   {editCanvasLoading ? (
                     <p className="py-10 text-center text-xs text-slate-400">Preparing editable page canvas…</p>
                   ) : editPreview ? (
