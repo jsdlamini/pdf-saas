@@ -437,6 +437,16 @@ function findEquationAtPosition(source: string, cursorPos: number): string | nul
   return null;
 }
 
+// SyncTeX input paths are absolute temp-dir paths with a `./` marker before the
+// project-relative path (e.g. /tmp/..././main.tex). Return just the relative
+// path so it matches projectEntries.
+function normalizeSynctexFile(path: string): string {
+  const dotSlash = path.lastIndexOf("/./");
+  if (dotSlash >= 0) return path.slice(dotSlash + 3);
+  const slash = path.lastIndexOf("/");
+  return slash >= 0 ? path.slice(slash + 1) : path;
+}
+
 async function parseSynctexGzBuffer(buffer: ArrayBuffer): Promise<SynctexRecord[]> {
   try {
     const bytes = new Uint8Array(buffer);
@@ -456,29 +466,33 @@ async function parseSynctexGzBuffer(buffer: ArrayBuffer): Promise<SynctexRecord[
 
     if (!text.includes("SyncTeX")) return [];
 
+    // SyncTeX v1 format: `Input:<tag>:<path>` registers files, `{<page>` opens a
+    // page block, and `h`/`v` records carry (x, y) in scaled points plus the
+    // source line: `h<tag>,<line>:<x>,<y>:...`. The first input is the project's
+    // main .tex file.
     const records: SynctexRecord[] = [];
-    const lines = text.split("\n");
-    let currentFile = "";
-    for (let i = 0; i < lines.length; i++) {
-      const line = lines[i];
+    let defaultFile = "";
+    let currentPage = 0;
+
+    for (const rawLine of text.split("\n")) {
+      const line = rawLine.trim();
       if (line.startsWith("Input:")) {
-        const parts = line.split(":");
-        if (parts.length >= 3) {
-          currentFile = parts.slice(1).join(":").trim();
-        }
+        const firstColon = line.indexOf(":");
+        const secondColon = line.indexOf(":", firstColon + 1);
+        const path = secondColon >= 0 ? line.slice(secondColon + 1).trim() : "";
+        if (path && !defaultFile) defaultFile = normalizeSynctexFile(path);
       } else if (line.startsWith("{")) {
-        const record: SynctexRecord = { page: 0, x: 0, y: 0, file: currentFile, line: 0 };
-        i++;
-        while (i < lines.length && lines[i] !== "}") {
-          const rl = lines[i];
-          if (rl.startsWith("Page:")) record.page = parseInt(rl.split(":")[1]) || 0;
-          else if (rl.startsWith("h:")) record.x = parseInt(rl.slice(2)) || 0;
-          else if (rl.startsWith("v:")) record.y = parseInt(rl.slice(2)) || 0;
-          else if (rl.startsWith("Line:")) record.line = parseInt(rl.split(":")[1]) || 0;
-          i++;
-        }
-        if (record.page > 0 && record.file) {
-          records.push(record);
+        currentPage = parseInt(line.slice(1), 10) || 0;
+      } else if (line === "}") {
+        currentPage = 0;
+      } else if (/^[hv]\d+,\d+:/.test(line)) {
+        const m = /^[hv](\d+),(\d+):(\d+),(\d+)/.exec(line);
+        if (!m) continue;
+        const lineNum = parseInt(m[2], 10);
+        const x = parseInt(m[3], 10);
+        const y = parseInt(m[4], 10);
+        if (currentPage > 0 && defaultFile && lineNum > 0) {
+          records.push({ page: currentPage, x, y, file: defaultFile, line: lineNum });
         }
       }
     }
