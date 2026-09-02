@@ -10,7 +10,9 @@ import { createRateLimiter } from "@/lib/rate-limit";
 const execFileAsync = promisify(execFile);
 
 const ASSETS_ROOT = process.env.PROJECT_ASSETS_DIR || "/app/data/assets";
-const BUILD_ROOT = process.env.PROJECT_BUILD_DIR || "/app/data/build";
+// The persistent build dir lives in /tmp (writable by the non-root app user;
+// /app/data is root-owned so /app/data/build can't be created at runtime).
+const BUILD_ROOT = process.env.PROJECT_BUILD_DIR || "/tmp/wiserfiles-build";
 // Per-project build dirs are evicted when they exceed this (in bytes).
 const BUILD_DIR_MAX_BYTES = 300 * 1024 * 1024;
 
