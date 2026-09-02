@@ -6569,19 +6569,6 @@ export default function ResearchStudioPage() {
               </button>
               <button
                 type="button"
-                onClick={syncToPdf}
-                className="studio-btn studio-btn-ghost"
-                aria-label="Sync to PDF"
-                title="Jump to the PDF position for the current editor line"
-                style={{ height: 32, padding: "0 10px" }}
-              >
-                <svg viewBox="0 0 20 20" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="1.8">
-                  <path d="M13 7l-6 6M8 7h5v5" strokeLinecap="round" strokeLinejoin="round" />
-                </svg>
-                <span className="hidden sm:inline">Sync</span>
-              </button>
-              <button
-                type="button"
                 onClick={() => void downloadProjectBundle()}
                 className="studio-btn studio-btn-secondary"
                 aria-label="Download project bundle"
@@ -7649,9 +7636,6 @@ export default function ResearchStudioPage() {
                 <div style={{ display: "flex", gap: 4 }}>
                   {compiledPdfUrl ? (
                     <>
-                      <button type="button" onClick={syncToPdf} className="studio-btn studio-btn-ghost" style={{ height: 24, fontSize: 10, padding: "0 6px" }} title="Jump to the PDF position of the current editor line">
-                        Sync
-                      </button>
                       <a href={compiledPdfUrl} download={compiledPdfFileName} className="studio-btn studio-btn-ghost" style={{ height: 24, fontSize: 10, padding: "0 6px", textDecoration: "none" }}>
                         <svg viewBox="0 0 20 20" style={{ width: 12, height: 12 }} fill="none" stroke="currentColor" strokeWidth="2">
                           <path d="M10 3v9m0 0l-3-3m3 3l3-3M4 14v2h12v-2" strokeLinecap="round" strokeLinejoin="round" />
