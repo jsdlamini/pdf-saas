@@ -193,6 +193,9 @@ export const TOOL_ITEMS: ToolItem[] = [
     description: "Click text to fix it. Add notes, shapes, images, a watermark.",
     category: "Edit",
     processing: "local",
+    // Temporarily disabled while the in-browser editor is reworked. The tool
+    // stays in the codebase; remove this flag to re-enable it.
+    disabled: true,
   },
   {
     slug: "crop-pdf",
