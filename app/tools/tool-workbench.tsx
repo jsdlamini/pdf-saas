@@ -120,6 +120,115 @@ function buildEditFont(size: number, family?: string, weight?: number, style?: s
   return `${fontStyle}${fontWeight} ${size}px ${fontFamily}`;
 }
 
+type EditTextRun = { text: string; bold: boolean; italic: boolean };
+
+function runsText(runs: EditTextRun[]): string {
+  return runs.reduce((out, run) => out + run.text, "");
+}
+
+function runLocation(runs: EditTextRun[], index: number): { runIndex: number; offset: number } {
+  let acc = 0;
+  for (let i = 0; i < runs.length; i += 1) {
+    const len = runs[i].text.length;
+    if (index <= acc + len) return { runIndex: i, offset: index - acc };
+    acc += len;
+  }
+  const last = Math.max(0, runs.length - 1);
+  return { runIndex: last, offset: runs[last]?.text.length ?? 0 };
+}
+
+function normalizeRuns(runs: EditTextRun[]): EditTextRun[] {
+  const out: EditTextRun[] = [];
+  for (const run of runs) {
+    if (!run.text) continue;
+    const last = out[out.length - 1];
+    if (last && last.bold === run.bold && last.italic === run.italic) {
+      last.text += run.text;
+    } else {
+      out.push({ text: run.text, bold: run.bold, italic: run.italic });
+    }
+  }
+  return out.length ? out : [{ text: "", bold: false, italic: false }];
+}
+
+function insertRunText(runs: EditTextRun[], index: number, text: string, bold: boolean, italic: boolean): EditTextRun[] {
+  const { runIndex, offset } = runLocation(runs, index);
+  const run = runs[runIndex] ?? { text: "", bold, italic };
+  const before = { text: run.text.slice(0, offset), bold: run.bold, italic: run.italic };
+  const inserted = { text, bold, italic };
+  const after = { text: run.text.slice(offset), bold: run.bold, italic: run.italic };
+  const next = [...runs];
+  next.splice(runIndex, 1, before, inserted, after);
+  return normalizeRuns(next);
+}
+
+function deleteRunRange(runs: EditTextRun[], start: number, end: number): EditTextRun[] {
+  if (start >= end) return runs;
+  const out: EditTextRun[] = [];
+  let acc = 0;
+  for (const run of runs) {
+    const runStart = acc;
+    const runEnd = acc + run.text.length;
+    acc = runEnd;
+    const before = Math.min(runEnd, start) - runStart;
+    if (before > 0) out.push({ text: run.text.slice(0, before), bold: run.bold, italic: run.italic });
+    const afterStart = Math.max(runStart, end) - runStart;
+    if (afterStart < run.text.length) out.push({ text: run.text.slice(afterStart), bold: run.bold, italic: run.italic });
+  }
+  return normalizeRuns(out);
+}
+
+function sliceRuns(runs: EditTextRun[], start: number, end: number): EditTextRun[] {
+  const out: EditTextRun[] = [];
+  let acc = 0;
+  for (const run of runs) {
+    const runStart = acc;
+    const runEnd = acc + run.text.length;
+    acc = runEnd;
+    const s = Math.max(runStart, start);
+    const e = Math.min(runEnd, end);
+    if (s < e) out.push({ text: run.text.slice(s - runStart, e - runStart), bold: run.bold, italic: run.italic });
+  }
+  return normalizeRuns(out);
+}
+
+function toggleRunStyle(runs: EditTextRun[], start: number, end: number, style: "bold" | "italic"): EditTextRun[] {
+  if (start >= end) return runs;
+  let allOn = true;
+  let acc = 0;
+  for (const run of runs) {
+    const runStart = acc;
+    const runEnd = acc + run.text.length;
+    acc = runEnd;
+    if (runEnd > start && runStart < end && !run[style]) {
+      allOn = false;
+      break;
+    }
+  }
+  const target = !allOn;
+  const out: EditTextRun[] = [];
+  acc = 0;
+  for (const run of runs) {
+    const runStart = acc;
+    const runEnd = acc + run.text.length;
+    acc = runEnd;
+    const beforeEnd = Math.min(runEnd, start);
+    if (beforeEnd > runStart) out.push({ text: run.text.slice(0, beforeEnd - runStart), bold: run.bold, italic: run.italic });
+    const midStart = Math.max(runStart, start);
+    const midEnd = Math.min(runEnd, end);
+    if (midStart < midEnd) {
+      out.push({
+        text: run.text.slice(midStart - runStart, midEnd - runStart),
+        bold: style === "bold" ? target : run.bold,
+        italic: style === "italic" ? target : run.italic,
+      });
+    }
+    const afterStart = Math.max(runStart, end);
+    if (afterStart < runEnd) out.push({ text: run.text.slice(afterStart - runStart), bold: run.bold, italic: run.italic });
+  }
+  return normalizeRuns(out);
+}
+
 type EditStroke = { id: string; points: CanvasPoint[]; color: string; width: number };
 type EditTextNote = {
   id: string;
@@ -131,6 +240,7 @@ type EditTextNote = {
   fontFamily?: string;
   fontWeight?: number;
   fontStyle?: "normal" | "italic";
+  runs?: EditTextRun[];
 };
 type EditHighlight = { id: string; x: number; y: number; width: number; height: number; color: string; opacity: number };
 type EditRectShape = { id: string; kind: "rect"; x: number; y: number; width: number; height: number; color: string; strokeWidth: number; opacity: number; fill: boolean };
@@ -434,7 +544,7 @@ const EDIT_TOOL_OPTIONS: Array<{ mode: EditToolMode; label: string; hint: string
   { mode: "select", label: "Select", hint: "Click an annotation to select it — drag to move, press Delete to remove it." },
   { mode: "draw", label: "Draw", hint: "Drag on the page to draw freehand ink." },
   { mode: "highlight", label: "Highlight", hint: "Drag a box to highlight the text underneath." },
-  { mode: "text", label: "Text", hint: "Click to place a cursor and type; double-click text to match its font." },
+  { mode: "text", label: "Text", hint: "Click to place a cursor and type. Arrows move, Shift selects, Ctrl+B/I format; double-click text to match its font." },
   { mode: "edit-text", label: "Edit text", hint: "Click a word in the PDF to replace it in place." },
   { mode: "rect", label: "Rectangle", hint: "Drag on the page to draw a rectangle." },
   { mode: "ellipse", label: "Ellipse", hint: "Drag on the page to draw an ellipse." },
@@ -657,7 +767,11 @@ export default function ToolWorkbench({ tool }: WorkbenchProps) {
   const [editSpanTarget, setEditSpanTarget] = useState<EditTextSpan | null>(null);
   const [editSpanReplacement, setEditSpanReplacement] = useState("");
   const [editTextCursor, setEditTextCursor] = useState<{ x: number; y: number } | null>(null);
-  const [editTextDraft, setEditTextDraft] = useState("");
+  const [editTextRuns, setEditTextRuns] = useState<EditTextRun[]>([{ text: "", bold: false, italic: false }]);
+  const [editTextCaret, setEditTextCaret] = useState(0);
+  const [editTextSelection, setEditTextSelection] = useState<{ start: number; end: number } | null>(null);
+  const [editPendingBold, setEditPendingBold] = useState(false);
+  const [editPendingItalic, setEditPendingItalic] = useState(false);
   const [editStrokes, setEditStrokes] = useState<EditStroke[]>([]);
   const [editTextNotes, setEditTextNotes] = useState<EditTextNote[]>([]);
   const [editHighlights, setEditHighlights] = useState<EditHighlight[]>([]);
@@ -1905,7 +2019,9 @@ export default function ToolWorkbench({ tool }: WorkbenchProps) {
     editFillShape,
     selectedEditId,
     editTextCursor,
-    editTextDraft,
+    editTextRuns,
+    editTextCaret,
+    editTextSelection,
     editFontFamily,
     editFontWeight,
     editFontStyle,
@@ -1931,26 +2047,117 @@ export default function ToolWorkbench({ tool }: WorkbenchProps) {
       if (event.key === "Escape") {
         setSelectedEditId(null);
         setEditTextCursor(null);
-        setEditTextDraft("");
+        setEditTextRuns([{ text: "", bold: false, italic: false }]);
+        setEditTextCaret(0);
+        setEditTextSelection(null);
+        setEditPendingBold(false);
+        setEditPendingItalic(false);
         return;
       }
       if (inFormField) return;
 
-      // Direct typing on the page when a text caret is active.
+      // Direct typing + caret/selection control when a text caret is active.
       if (editTextCursor) {
-        if (event.key === "Enter") {
+        const len = runsText(editTextRuns).length;
+        const mod = event.ctrlKey || event.metaKey;
+        const hasShift = event.shiftKey;
+        let caret = editTextCaret;
+        let selection = editTextSelection;
+        let pendingBold = editPendingBold;
+        let pendingItalic = editPendingItalic;
+
+        const applyState = (newRuns: EditTextRun[], newCaret: number, newSelection: typeof selection) => {
+          setEditTextRuns(newRuns);
+          setEditTextCaret(newCaret);
+          setEditTextSelection(newSelection);
+          setEditPendingBold(pendingBold);
+          setEditPendingItalic(pendingItalic);
+        };
+
+        const moveCaret = (next: number, extend: boolean) => {
+          const clamped = Math.max(0, Math.min(len, next));
+          if (extend) {
+            selection = selection ? { start: selection.start, end: clamped } : { start: caret, end: clamped };
+          } else {
+            selection = null;
+          }
+          caret = clamped;
+        };
+
+        if (event.key === "Enter" && !mod) {
           event.preventDefault();
           commitEditTextDraft();
           return;
         }
-        if (event.key === "Backspace") {
+
+        if (mod && (event.key.toLowerCase() === "b" || event.key.toLowerCase() === "i")) {
           event.preventDefault();
-          setEditTextDraft((prev) => prev.slice(0, -1));
+          const style = event.key.toLowerCase() === "b" ? "bold" : "italic";
+          if (selection && selection.start !== selection.end) {
+            const s = Math.min(selection.start, selection.end);
+            const e = Math.max(selection.start, selection.end);
+            applyState(toggleRunStyle(editTextRuns, s, e, style), e, null);
+          } else {
+            if (style === "bold") pendingBold = !pendingBold;
+            else pendingItalic = !pendingItalic;
+            setEditPendingBold(pendingBold);
+            setEditPendingItalic(pendingItalic);
+          }
           return;
         }
-        if (event.key.length === 1 && !event.ctrlKey && !event.metaKey && !event.altKey) {
+
+        if (
+          event.key === "ArrowLeft" ||
+          event.key === "ArrowRight" ||
+          event.key === "ArrowUp" ||
+          event.key === "ArrowDown" ||
+          event.key === "Home" ||
+          event.key === "End"
+        ) {
           event.preventDefault();
-          setEditTextDraft((prev) => prev + event.key);
+          let next = caret;
+          if (event.key === "ArrowLeft") next = caret - 1;
+          else if (event.key === "ArrowRight") next = caret + 1;
+          else if (event.key === "ArrowUp" || event.key === "Home") next = 0;
+          else next = len;
+          moveCaret(next, hasShift);
+          if (!hasShift && len > 0) {
+            const probe = Math.max(0, Math.min(len - 1, caret - 1));
+            const loc = runLocation(editTextRuns, probe);
+            const run = editTextRuns[loc.runIndex];
+            pendingBold = run?.bold ?? false;
+            pendingItalic = run?.italic ?? false;
+          }
+          applyState(editTextRuns, caret, selection);
+          return;
+        }
+
+        if (event.key === "Backspace" || event.key === "Delete") {
+          event.preventDefault();
+          if (selection && selection.start !== selection.end) {
+            const s = Math.min(selection.start, selection.end);
+            const e = Math.max(selection.start, selection.end);
+            applyState(deleteRunRange(editTextRuns, s, e), s, null);
+          } else if (event.key === "Backspace" && caret > 0) {
+            applyState(deleteRunRange(editTextRuns, caret - 1, caret), caret - 1, null);
+          } else if (event.key === "Delete" && caret < len) {
+            applyState(deleteRunRange(editTextRuns, caret, caret + 1), caret, null);
+          }
+          return;
+        }
+
+        if (event.key.length === 1 && !mod && !event.altKey) {
+          event.preventDefault();
+          let nextRuns = editTextRuns;
+          let insertAt = caret;
+          if (selection && selection.start !== selection.end) {
+            const s = Math.min(selection.start, selection.end);
+            const e = Math.max(selection.start, selection.end);
+            nextRuns = deleteRunRange(editTextRuns, s, e);
+            insertAt = s;
+          }
+          nextRuns = insertRunText(nextRuns, insertAt, event.key, pendingBold, pendingItalic);
+          applyState(nextRuns, insertAt + 1, null);
           return;
         }
       }
@@ -1992,7 +2199,11 @@ export default function ToolWorkbench({ tool }: WorkbenchProps) {
     editImages,
     editStamps,
     editTextCursor,
-    editTextDraft,
+    editTextRuns,
+    editTextCaret,
+    editTextSelection,
+    editPendingBold,
+    editPendingItalic,
     editColor,
     editFontSize,
     editFontFamily,
@@ -2084,24 +2295,56 @@ export default function ToolWorkbench({ tool }: WorkbenchProps) {
 
       for (const note of editTextNotes) {
         context.fillStyle = note.color;
-        context.font = buildEditFont(note.size, note.fontFamily, note.fontWeight, note.fontStyle);
-        context.fillText(note.text, note.x, note.y);
+        context.textBaseline = "alphabetic";
+        if (note.runs && note.runs.length) {
+          let noteX = note.x;
+          for (const run of note.runs) {
+            context.font = buildEditFont(note.size, note.fontFamily, run.bold ? 700 : 400, run.italic ? "italic" : "normal");
+            context.fillText(run.text, noteX, note.y);
+            noteX += context.measureText(run.text).width;
+          }
+        } else {
+          context.font = buildEditFont(note.size, note.fontFamily, note.fontWeight, note.fontStyle);
+          context.fillText(note.text, note.x, note.y);
+        }
       }
 
       // In-progress text typed directly at a placed cursor (MS Word style).
       if (editTextCursor) {
-        context.fillStyle = editColor;
-        context.font = buildEditFont(editFontSize, editFontFamily, editFontWeight, editFontStyle);
         context.textBaseline = "alphabetic";
-        if (editTextDraft) {
-          context.fillText(editTextDraft, editTextCursor.x, editTextCursor.y);
+        const selStart = editTextSelection ? Math.min(editTextSelection.start, editTextSelection.end) : -1;
+        const selEnd = editTextSelection ? Math.max(editTextSelection.start, editTextSelection.end) : -1;
+        let runX = editTextCursor.x;
+        let acc = 0;
+        for (const run of editTextRuns) {
+          const runStart = acc;
+          const runEnd = acc + run.text.length;
+          acc = runEnd;
+          context.font = buildEditFont(editFontSize, editFontFamily, run.bold ? 700 : 400, run.italic ? "italic" : "normal");
+          if (selStart >= 0 && runEnd > selStart && runStart < selEnd) {
+            const s = Math.max(runStart, selStart);
+            const e = Math.min(runEnd, selEnd);
+            const beforeW = context.measureText(run.text.slice(0, s - runStart)).width;
+            const midW = context.measureText(run.text.slice(s - runStart, e - runStart)).width;
+            context.fillStyle = "rgba(56,132,255,0.35)";
+            context.fillRect(runX + beforeW, editTextCursor.y - editFontSize * 0.85, midW, editFontSize * 1.1);
+          }
+          context.fillStyle = editColor;
+          context.fillText(run.text, runX, editTextCursor.y);
+          runX += context.measureText(run.text).width;
         }
-        const cursorX = editTextDraft
-          ? editTextCursor.x + context.measureText(editTextDraft).width + 2
-          : editTextCursor.x;
-        // Thin caret at the text baseline.
+        // Caret at the current character index (measured with each run's font).
+        let caretX = editTextCursor.x;
+        let remaining = editTextCaret;
+        for (const run of editTextRuns) {
+          if (remaining <= 0) break;
+          const take = Math.min(run.text.length, remaining);
+          context.font = buildEditFont(editFontSize, editFontFamily, run.bold ? 700 : 400, run.italic ? "italic" : "normal");
+          caretX += context.measureText(run.text.slice(0, take)).width;
+          remaining -= take;
+        }
         context.fillStyle = editColor;
-        context.fillRect(cursorX, editTextCursor.y - editFontSize * 0.8, 2, editFontSize * 1.1);
+        context.fillRect(caretX, editTextCursor.y - editFontSize * 0.8, 2, editFontSize * 1.1);
       }
 
       for (const shape of editShapes) {
@@ -3077,7 +3320,7 @@ export default function ToolWorkbench({ tool }: WorkbenchProps) {
     // Commit any in-progress text, then drop a caret here for direct typing.
     commitEditTextDraft();
     setEditTextCursor(point);
-    setEditTextDraft("");
+    resetEditTextDraft(editFontWeight >= 700, editFontStyle === "italic");
   }
 
   // Find the nearest word span at a canvas point (for click-to-edit + font adoption).
@@ -3143,7 +3386,7 @@ export default function ToolWorkbench({ tool }: WorkbenchProps) {
     } else {
       setEditTextCursor(point);
     }
-    setEditTextDraft("");
+    resetEditTextDraft(span ? span.fontWeight >= 700 : false, span ? span.fontStyle === "italic" : false);
   }
 
   function applyEditSpanReplacement() {
@@ -3191,8 +3434,11 @@ export default function ToolWorkbench({ tool }: WorkbenchProps) {
   // text note and clear the caret. Callers place a new caret afterwards when needed.
   function commitEditTextDraft() {
     if (!editTextCursor) return;
-    const text = editTextDraft.trim();
+    const fullText = runsText(editTextRuns);
+    const text = fullText.trim();
     if (text) {
+      const startIdx = fullText.indexOf(text);
+      const committedRuns = sliceRuns(editTextRuns, startIdx, startIdx + text.length);
       commitEditLayer(editPageNumber, (layer) => ({
         ...layer,
         textNotes: [
@@ -3207,12 +3453,23 @@ export default function ToolWorkbench({ tool }: WorkbenchProps) {
             fontFamily: editFontFamily,
             fontWeight: editFontWeight,
             fontStyle: editFontStyle,
+            runs: committedRuns,
           },
         ],
       }));
     }
     setEditTextCursor(null);
-    setEditTextDraft("");
+    setEditTextRuns([{ text: "", bold: false, italic: false }]);
+    setEditTextCaret(0);
+    setEditTextSelection(null);
+  }
+
+  function resetEditTextDraft(bold: boolean, italic: boolean) {
+    setEditTextRuns([{ text: "", bold, italic }]);
+    setEditTextCaret(0);
+    setEditTextSelection(null);
+    setEditPendingBold(bold);
+    setEditPendingItalic(italic);
   }
 
   function changeEditZoom(direction: -1 | 1) {
@@ -5314,6 +5571,39 @@ export default function ToolWorkbench({ tool }: WorkbenchProps) {
         }
         const source = await PDFDocument.load(await readAsArrayBuffer(firstFile));
         const font = await source.embedFont(StandardFonts.Helvetica);
+        const pdfFonts = {
+          helvetica: font,
+          helveticaBold: await source.embedFont(StandardFonts.HelveticaBold),
+          helveticaOblique: await source.embedFont(StandardFonts.HelveticaOblique),
+          helveticaBoldOblique: await source.embedFont(StandardFonts.HelveticaBoldOblique),
+          times: await source.embedFont(StandardFonts.TimesRoman),
+          timesBold: await source.embedFont(StandardFonts.TimesRomanBold),
+          timesItalic: await source.embedFont(StandardFonts.TimesRomanItalic),
+          timesBoldItalic: await source.embedFont(StandardFonts.TimesRomanBoldItalic),
+          courier: await source.embedFont(StandardFonts.Courier),
+          courierBold: await source.embedFont(StandardFonts.CourierBold),
+          courierOblique: await source.embedFont(StandardFonts.CourierOblique),
+          courierBoldOblique: await source.embedFont(StandardFonts.CourierBoldOblique),
+        };
+        const pickPdfFont = (family: string | undefined, bold: boolean, italic: boolean) => {
+          const fam = (family || "").toLowerCase();
+          if (/mono|courier|monospace/i.test(fam)) {
+            if (bold && italic) return pdfFonts.courierBoldOblique;
+            if (bold) return pdfFonts.courierBold;
+            if (italic) return pdfFonts.courierOblique;
+            return pdfFonts.courier;
+          }
+          if (/serif|times|georgia|garamond|bookman|palatino/i.test(fam)) {
+            if (bold && italic) return pdfFonts.timesBoldItalic;
+            if (bold) return pdfFonts.timesBold;
+            if (italic) return pdfFonts.timesItalic;
+            return pdfFonts.times;
+          }
+          if (bold && italic) return pdfFonts.helveticaBoldOblique;
+          if (bold) return pdfFonts.helveticaBold;
+          if (italic) return pdfFonts.helveticaOblique;
+          return pdfFonts.helvetica;
+        };
         const pageLayers: Record<number, EditPageLayer> =
           tool.slug === "edit-pdf"
             ? {
@@ -5517,13 +5807,25 @@ export default function ToolWorkbench({ tool }: WorkbenchProps) {
               }
 
               for (const note of pageTextNotes) {
-                page.drawText(note.text, {
-                  x: note.x * scaleX,
-                  y: height - note.y * scaleY,
-                  size: Math.max(8, note.size * scaleY),
-                  font,
-                  color: hexToRgb(note.color),
-                });
+                const noteSize = Math.max(8, note.size * scaleY);
+                const noteX = note.x * scaleX;
+                const noteY = height - note.y * scaleY;
+                const noteColor = hexToRgb(note.color);
+                if (note.runs && note.runs.length) {
+                  let runX = noteX;
+                  for (const run of note.runs) {
+                    const runFont = pickPdfFont(note.fontFamily, run.bold, run.italic);
+                    page.drawText(run.text, { x: runX, y: noteY, size: noteSize, font: runFont, color: noteColor });
+                    runX += runFont.widthOfTextAtSize(run.text, noteSize);
+                  }
+                } else {
+                  const noteFont = pickPdfFont(
+                    note.fontFamily,
+                    (note.fontWeight ?? 400) >= 700,
+                    note.fontStyle === "italic"
+                  );
+                  page.drawText(note.text, { x: noteX, y: noteY, size: noteSize, font: noteFont, color: noteColor });
+                }
               }
 
               for (const shape of pageShapes) {
@@ -7305,7 +7607,11 @@ export default function ToolWorkbench({ tool }: WorkbenchProps) {
                       }
                       if (option.mode !== "text") {
                         setEditTextCursor(null);
-                        setEditTextDraft("");
+                        setEditTextRuns([{ text: "", bold: false, italic: false }]);
+                        setEditTextCaret(0);
+                        setEditTextSelection(null);
+                        setEditPendingBold(false);
+                        setEditPendingItalic(false);
                       }
                     }}
                     aria-pressed={editMode === option.mode}
@@ -7433,7 +7739,7 @@ export default function ToolWorkbench({ tool }: WorkbenchProps) {
                       Size {editFontSize}px
                     </label>
                     <span className="text-[11px] text-slate-400">
-                      Click the page to place a cursor, then type directly. Enter to place, Esc to cancel.
+                      Click to place a cursor and type. Arrow keys move, Shift+arrows select, Ctrl+B/I format. Enter commits, Esc cancels.
                     </span>
                   </>
                 ) : null}
