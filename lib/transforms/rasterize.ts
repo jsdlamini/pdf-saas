@@ -13,6 +13,9 @@ export type EditTextSpan = {
   fontSize: number;
   width: number;
   bbox: { x: number; y: number; width: number; height: number };
+  fontFamily: string;
+  fontWeight: number;
+  fontStyle: "normal" | "italic";
 };
 
 export type EditFormField = {
@@ -189,12 +192,26 @@ export async function renderPdfPagePreview(bytes: Uint8Array, pageNumber = 1, pa
   };
 }
 
+function deriveFontFromName(fontName: string | undefined): { fontFamily: string; fontWeight: number; fontStyle: "normal" | "italic" } {
+  const name = fontName || "";
+  const bold = /bold|black|heavy|semibold|demi/i.test(name);
+  const italic = /italic|oblique/i.test(name);
+  const mono = /courier|mono|consolas|menlo|typewriter/i.test(name);
+  const serif = /times|garamond|georgia|serif|caslon|palatino|bookman|century/i.test(name);
+  const fontFamily = mono
+    ? "'Courier New', Courier, monospace"
+    : serif
+      ? "Georgia, 'Times New Roman', serif"
+      : "Arial, Helvetica, sans-serif";
+  return { fontFamily, fontWeight: bold ? 700 : 400, fontStyle: italic ? "italic" : "normal" };
+}
+
 export async function extractPageTextSpans(pdfPage: unknown, viewport: { transform: number[] }): Promise<EditTextSpan[]> {
   const spans: EditTextSpan[] = [];
   try {
     const page = pdfPage as {
       getTextContent: () => Promise<{
-        items: Array<{ str?: string; width?: number; transform?: number[] }>;
+        items: Array<{ str?: string; width?: number; transform?: number[]; fontName?: string }>;
       }>;
     };
     const textContent = await page.getTextContent();
@@ -207,6 +224,7 @@ export async function extractPageTextSpans(pdfPage: unknown, viewport: { transfo
       const [a, b, , , e, f] = composed;
       const fontSize = Math.hypot(a, b);
       if (fontSize < 2) continue;
+      const font = deriveFontFromName(item.fontName);
       const userScale = Math.hypot(transform[0], transform[1]) || fontSize;
       const canvasScale = fontSize / userScale;
       const itemCanvasWidth = (item.width ?? str.length * fontSize * 0.6) * canvasScale;
@@ -229,6 +247,9 @@ export async function extractPageTextSpans(pdfPage: unknown, viewport: { transfo
             width: wordWidth + pad * 2,
             height: fontSize * 1.12 + pad * 2,
           },
+          fontFamily: font.fontFamily,
+          fontWeight: font.fontWeight,
+          fontStyle: font.fontStyle,
         });
       }
     }

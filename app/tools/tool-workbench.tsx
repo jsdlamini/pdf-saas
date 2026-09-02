@@ -113,8 +113,25 @@ function nextEditAnnotationId() {
   return `edit-${Date.now().toString(36)}-${editAnnotationCounter}`;
 }
 
+function buildEditFont(size: number, family?: string, weight?: number, style?: string) {
+  const fontStyle = style === "italic" ? "italic " : "";
+  const fontWeight = weight ?? 400;
+  const fontFamily = family || "Arial, Helvetica, sans-serif";
+  return `${fontStyle}${fontWeight} ${size}px ${fontFamily}`;
+}
+
 type EditStroke = { id: string; points: CanvasPoint[]; color: string; width: number };
-type EditTextNote = { id: string; x: number; y: number; text: string; color: string; size: number };
+type EditTextNote = {
+  id: string;
+  x: number;
+  y: number;
+  text: string;
+  color: string;
+  size: number;
+  fontFamily?: string;
+  fontWeight?: number;
+  fontStyle?: "normal" | "italic";
+};
 type EditHighlight = { id: string; x: number; y: number; width: number; height: number; color: string; opacity: number };
 type EditRectShape = { id: string; kind: "rect"; x: number; y: number; width: number; height: number; color: string; strokeWidth: number; opacity: number; fill: boolean };
 type EditEllipseShape = { id: string; kind: "ellipse"; x: number; y: number; width: number; height: number; color: string; strokeWidth: number; opacity: number; fill: boolean };
@@ -417,7 +434,7 @@ const EDIT_TOOL_OPTIONS: Array<{ mode: EditToolMode; label: string; hint: string
   { mode: "select", label: "Select", hint: "Click an annotation to select it — drag to move, press Delete to remove it." },
   { mode: "draw", label: "Draw", hint: "Drag on the page to draw freehand ink." },
   { mode: "highlight", label: "Highlight", hint: "Drag a box to highlight the text underneath." },
-  { mode: "text", label: "Text", hint: "Click the page to place a cursor, then type directly." },
+  { mode: "text", label: "Text", hint: "Click to place a cursor and type; double-click text to match its font." },
   { mode: "edit-text", label: "Edit text", hint: "Click a word in the PDF to replace it in place." },
   { mode: "rect", label: "Rectangle", hint: "Drag on the page to draw a rectangle." },
   { mode: "ellipse", label: "Ellipse", hint: "Drag on the page to draw an ellipse." },
@@ -631,6 +648,9 @@ export default function ToolWorkbench({ tool }: WorkbenchProps) {
   const [editColor, setEditColor] = useState("#0f172a");
   const [editBrushSize, setEditBrushSize] = useState(2.6);
   const [editFontSize, setEditFontSize] = useState(16);
+  const [editFontFamily, setEditFontFamily] = useState("Arial, Helvetica, sans-serif");
+  const [editFontWeight, setEditFontWeight] = useState(400);
+  const [editFontStyle, setEditFontStyle] = useState<"normal" | "italic">("normal");
   const [editOpacity, setEditOpacity] = useState(45);
   const [editFillShape, setEditFillShape] = useState(false);
   const [editZoom, setEditZoom] = useState(100);
@@ -1886,6 +1906,9 @@ export default function ToolWorkbench({ tool }: WorkbenchProps) {
     selectedEditId,
     editTextCursor,
     editTextDraft,
+    editFontFamily,
+    editFontWeight,
+    editFontStyle,
   ]);
 
   useEffect(() => {
@@ -1972,6 +1995,9 @@ export default function ToolWorkbench({ tool }: WorkbenchProps) {
     editTextDraft,
     editColor,
     editFontSize,
+    editFontFamily,
+    editFontWeight,
+    editFontStyle,
   ]);
 
   const uploadHint = useMemo(() => {
@@ -2058,14 +2084,14 @@ export default function ToolWorkbench({ tool }: WorkbenchProps) {
 
       for (const note of editTextNotes) {
         context.fillStyle = note.color;
-        context.font = `${note.size}px ${"DM Sans"}`;
+        context.font = buildEditFont(note.size, note.fontFamily, note.fontWeight, note.fontStyle);
         context.fillText(note.text, note.x, note.y);
       }
 
       // In-progress text typed directly at a placed cursor (MS Word style).
       if (editTextCursor) {
         context.fillStyle = editColor;
-        context.font = `${editFontSize}px ${"DM Sans"}`;
+        context.font = buildEditFont(editFontSize, editFontFamily, editFontWeight, editFontStyle);
         context.textBaseline = "alphabetic";
         if (editTextDraft) {
           context.fillText(editTextDraft, editTextCursor.x, editTextCursor.y);
@@ -3054,23 +3080,17 @@ export default function ToolWorkbench({ tool }: WorkbenchProps) {
     setEditTextDraft("");
   }
 
-  // Feature 2 — click-to-edit existing text: whiteout the clicked word's bbox and
-  // place a text note with the replacement at the same position/font size. The
-  // replacement is typed inline (no dialog).
-  function selectEditSpanAt(point: CanvasPoint) {
+  // Find the nearest word span at a canvas point (for click-to-edit + font adoption).
+  function findEditSpanAt(point: CanvasPoint, maxDistance = 28): EditTextSpan | null {
     const spans = editTextSpansRef.current[editPageNumber] ?? [];
-    if (!spans.length) {
-      setStatus("No selectable text was found on this page.");
-      setEditSpanTarget(null);
-      return;
-    }
+    if (!spans.length) return null;
 
     const distanceTo = (span: EditTextSpan) =>
       Math.hypot(span.x + span.width / 2 - point.x, span.y - span.fontSize * 0.35 - point.y);
     const nearestIn = (list: EditTextSpan[]) =>
       [...list].sort((a, b) => distanceTo(a) - distanceTo(b))[0] ?? null;
 
-    let span: EditTextSpan | null = nearestIn(
+    const inside = nearestIn(
       spans.filter(
         (candidate) =>
           point.x >= candidate.bbox.x &&
@@ -3079,19 +3099,51 @@ export default function ToolWorkbench({ tool }: WorkbenchProps) {
           point.y <= candidate.bbox.y + candidate.bbox.height
       )
     );
-    if (!span) {
-      const nearest = nearestIn(spans);
-      if (nearest && distanceTo(nearest) <= 28) {
-        span = nearest;
-      } else {
-        setStatus("Click closer to a word to edit it.");
-        setEditSpanTarget(null);
-        return;
-      }
-    }
+    if (inside) return inside;
+    const nearest = nearestIn(spans);
+    if (nearest && distanceTo(nearest) <= maxDistance) return nearest;
+    return null;
+  }
 
+  // Feature 2 — click-to-edit existing text: whiteout the clicked word's bbox and
+  // place a text note with the replacement at the same position/font size. The
+  // replacement is typed inline (no dialog).
+  function selectEditSpanAt(point: CanvasPoint) {
+    const span = findEditSpanAt(point);
+    if (!span) {
+      setStatus(
+        editTextSpansRef.current[editPageNumber]?.length
+          ? "Click closer to a word to edit it."
+          : "No selectable text was found on this page."
+      );
+      setEditSpanTarget(null);
+      return;
+    }
     setEditSpanTarget(span);
     setEditSpanReplacement(span.text);
+  }
+
+  // Double-click anywhere on the page enters text editing and drops a caret. When
+  // the click lands on existing text, the caret adopts that text's font + size.
+  function onEditCanvasDoubleClick(event: React.MouseEvent<HTMLCanvasElement>) {
+    const canvas = editCanvasRef.current;
+    if (!canvas) return;
+    const point = getEditCanvasPoint(canvas, event);
+    const span = findEditSpanAt(point);
+    commitEditTextDraft();
+    setSelectedEditId(null);
+    setEditMode("text");
+    if (span) {
+      setEditFontSize(Math.max(6, Math.round(span.fontSize)));
+      setEditFontFamily(span.fontFamily);
+      setEditFontWeight(span.fontWeight);
+      setEditFontStyle(span.fontStyle);
+      // Align the caret to the line's baseline while honoring the exact click x.
+      setEditTextCursor({ x: point.x, y: span.y });
+    } else {
+      setEditTextCursor(point);
+    }
+    setEditTextDraft("");
   }
 
   function applyEditSpanReplacement() {
@@ -3125,6 +3177,9 @@ export default function ToolWorkbench({ tool }: WorkbenchProps) {
           text: replacement,
           color: "#0f172a",
           size: span.fontSize,
+          fontFamily: span.fontFamily,
+          fontWeight: span.fontWeight,
+          fontStyle: span.fontStyle,
         },
       ],
     }));
@@ -3149,6 +3204,9 @@ export default function ToolWorkbench({ tool }: WorkbenchProps) {
             text,
             color: editColor,
             size: editFontSize,
+            fontFamily: editFontFamily,
+            fontWeight: editFontWeight,
+            fontStyle: editFontStyle,
           },
         ],
       }));
@@ -7863,6 +7921,7 @@ export default function ToolWorkbench({ tool }: WorkbenchProps) {
                         onPointerUp={onEditPointerUp}
                         onPointerCancel={onEditPointerUp}
                         onClick={onEditCanvasClick}
+                        onDoubleClick={onEditCanvasDoubleClick}
                         style={
                           editCanvasSize.width && editCanvasSize.height
                             ? {
