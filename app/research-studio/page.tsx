@@ -7069,9 +7069,9 @@ export default function ResearchStudioPage() {
                 </svg>
               </button>
               <span style={{ width: 1, height: 18, background: "var(--border-color, #334155)", margin: "0 4px" }} />
-              <button type="button" onClick={() => changeEditorFontSize(-1)} className="studio-btn studio-btn-ghost" style={{ height: 26, fontSize: 12, fontWeight: 700, padding: "0 7px" }} title="Decrease font size (Ctrl/Cmd + -)">−</button>
+              <button type="button" onClick={() => changeEditorFontSize(-1)} className="studio-btn studio-btn-ghost" style={{ height: 26, fontSize: 12, fontWeight: 700, padding: "0 7px" }} title="Decrease font size (Shift + -)">−</button>
               <span style={{ fontSize: 11, color: "var(--text-muted, #64748b)", minWidth: 20, textAlign: "center" }}>{editorFontSize}</span>
-              <button type="button" onClick={() => changeEditorFontSize(1)} className="studio-btn studio-btn-ghost" style={{ height: 26, fontSize: 12, fontWeight: 700, padding: "0 7px" }} title="Increase font size (Ctrl/Cmd + =)">+</button>
+              <button type="button" onClick={() => changeEditorFontSize(1)} className="studio-btn studio-btn-ghost" style={{ height: 26, fontSize: 12, fontWeight: 700, padding: "0 7px" }} title="Increase font size (Shift + +)">+</button>
               <span style={{ width: 1, height: 18, background: "var(--border-color, #334155)", margin: "0 4px" }} />
               <span style={{ fontSize: 11, color: "var(--text-muted, #64748b)", marginLeft: 8 }}>{activeEntry?.path || "No file selected"}</span>
             </div>
@@ -7110,9 +7110,9 @@ export default function ResearchStudioPage() {
                 </svg>
               </button>
               <span style={{ width: 1, height: 18, background: "var(--border-color, #334155)", margin: "0 4px" }} />
-              <button type="button" onClick={() => changeEditorFontSize(-1)} className="studio-btn studio-btn-ghost" style={{ height: 26, fontSize: 12, fontWeight: 700, padding: "0 7px" }} title="Decrease font size (Ctrl/Cmd + -)">−</button>
+              <button type="button" onClick={() => changeEditorFontSize(-1)} className="studio-btn studio-btn-ghost" style={{ height: 26, fontSize: 12, fontWeight: 700, padding: "0 7px" }} title="Decrease font size (Shift + -)">−</button>
               <span style={{ fontSize: 11, color: "var(--text-muted, #64748b)", minWidth: 20, textAlign: "center" }}>{editorFontSize}</span>
-              <button type="button" onClick={() => changeEditorFontSize(1)} className="studio-btn studio-btn-ghost" style={{ height: 26, fontSize: 12, fontWeight: 700, padding: "0 7px" }} title="Increase font size (Ctrl/Cmd + =)">+</button>
+              <button type="button" onClick={() => changeEditorFontSize(1)} className="studio-btn studio-btn-ghost" style={{ height: 26, fontSize: 12, fontWeight: 700, padding: "0 7px" }} title="Increase font size (Shift + +)">+</button>
               <span style={{ width: 1, height: 18, background: "var(--border-color, #334155)", margin: "0 4px" }} />
               <span style={{ fontSize: 11, color: "var(--text-muted, #64748b)", marginLeft: 8 }}>{activeEntry?.path || "No file selected"}</span>
             </div>
