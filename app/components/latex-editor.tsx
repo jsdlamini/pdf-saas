@@ -52,6 +52,8 @@ export type LatexEditorProps = {
   theme?: EditorThemeId;
   highlightRanges?: EditorFindRange[];
   extensions?: Extension[];
+  fontSize?: number;
+  onFontSizeChange?: (size: number) => void;
   onViewReady?: (view: EditorView | null) => void;
   onKeyDown?: (event: KeyboardEvent) => void;
   onMouseMove?: (event: MouseEvent) => void;
@@ -267,6 +269,21 @@ const readOnlyCompartment = new Compartment();
 const languageCompartment = new Compartment();
 const themeCompartment = new Compartment();
 
+// ── Font-size controls (buttons, Ctrl/Cmd +/-, Ctrl/Cmd + wheel) ────────────
+const FONT_SIZE_MIN = 9;
+const FONT_SIZE_MAX = 32;
+
+function clampFontSize(size: number): number {
+  return Math.max(FONT_SIZE_MIN, Math.min(FONT_SIZE_MAX, Math.round(size)));
+}
+
+function fontSizeKeyDelta(event: KeyboardEvent): number {
+  const mod = event.ctrlKey || event.metaKey;
+  if (mod && event.key === "=") return 1;
+  if (mod && event.key === "-") return -1;
+  return 0;
+}
+
 export function LatexEditor({
   value,
   onChange,
@@ -276,6 +293,8 @@ export function LatexEditor({
   theme = "dark",
   highlightRanges = [],
   extensions = [],
+  fontSize = 13,
+  onFontSizeChange,
   onViewReady,
   onKeyDown,
   onMouseMove,
@@ -300,6 +319,10 @@ export function LatexEditor({
   onDragOverRef.current = onDragOver;
   const onDropRef = useRef(onDrop);
   onDropRef.current = onDrop;
+  const fontSizeRef = useRef(fontSize);
+  fontSizeRef.current = fontSize;
+  const onFontSizeChangeRef = useRef(onFontSizeChange);
+  onFontSizeChangeRef.current = onFontSizeChange;
 
   useEffect(() => {
     const themeExtension =
@@ -335,8 +358,24 @@ export function LatexEditor({
         }),
         EditorView.domEventHandlers({
           keydown: (event) => {
+            const delta = fontSizeKeyDelta(event);
+            if (delta) {
+              event.preventDefault();
+              onFontSizeChangeRef.current?.(clampFontSize(fontSizeRef.current + delta));
+              return true;
+            }
             onKeyDownRef.current?.(event);
             return event.defaultPrevented;
+          },
+          wheel: (event) => {
+            const mod = event.ctrlKey || event.metaKey;
+            if (mod) {
+              event.preventDefault();
+              const delta = event.deltaY < 0 ? 1 : -1;
+              onFontSizeChangeRef.current?.(clampFontSize(fontSizeRef.current + delta));
+              return true;
+            }
+            return false;
           },
           mousemove: (event) => {
             onMouseMoveRef.current?.(event);
@@ -415,5 +454,15 @@ export function LatexEditor({
     view.dispatch({ effects: setFindHighlights.of(highlightRanges) });
   }, [highlightRanges]);
 
-  return <div ref={containerRef} className={className} />;
+  const lineHeight = Math.round(fontSize * 1.6);
+  return (
+    <div
+      ref={containerRef}
+      className={className}
+      style={{
+        ["--editor-font-size" as string]: `${fontSize}px`,
+        ["--editor-line-height" as string]: `${lineHeight}px`,
+      }}
+    />
+  );
 }

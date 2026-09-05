@@ -1219,6 +1219,20 @@ export default function ResearchStudioPage() {
     try { localStorage.setItem("wiserfiles-editor-theme", editorTheme); } catch {}
   }, [editorTheme]);
 
+  const [editorFontSize, setEditorFontSize] = useState<number>(() => {
+    if (typeof window === "undefined") return 13;
+    try {
+      const saved = Number(localStorage.getItem("wiserfiles-editor-font-size"));
+      return saved >= 9 && saved <= 32 ? saved : 13;
+    } catch { return 13; }
+  });
+  useEffect(() => {
+    try { localStorage.setItem("wiserfiles-editor-font-size", String(editorFontSize)); } catch {}
+  }, [editorFontSize]);
+  const changeEditorFontSize = (delta: number) => {
+    setEditorFontSize((current) => Math.max(9, Math.min(32, current + delta)));
+  };
+
   // UI theme (dark/light) follows document.documentElement[data-theme], which the
   // home ThemeToggle and this studio selector both set, so they stay in sync.
   const [uiTheme, setUiTheme] = useState<"dark" | "light">("dark");
@@ -7055,6 +7069,10 @@ export default function ResearchStudioPage() {
                 </svg>
               </button>
               <span style={{ width: 1, height: 18, background: "var(--border-color, #334155)", margin: "0 4px" }} />
+              <button type="button" onClick={() => changeEditorFontSize(-1)} className="studio-btn studio-btn-ghost" style={{ height: 26, fontSize: 12, fontWeight: 700, padding: "0 7px" }} title="Decrease font size (Ctrl/Cmd + -)">−</button>
+              <span style={{ fontSize: 11, color: "var(--text-muted, #64748b)", minWidth: 20, textAlign: "center" }}>{editorFontSize}</span>
+              <button type="button" onClick={() => changeEditorFontSize(1)} className="studio-btn studio-btn-ghost" style={{ height: 26, fontSize: 12, fontWeight: 700, padding: "0 7px" }} title="Increase font size (Ctrl/Cmd + =)">+</button>
+              <span style={{ width: 1, height: 18, background: "var(--border-color, #334155)", margin: "0 4px" }} />
               <span style={{ fontSize: 11, color: "var(--text-muted, #64748b)", marginLeft: 8 }}>{activeEntry?.path || "No file selected"}</span>
             </div>
           ) : (
@@ -7091,6 +7109,10 @@ export default function ResearchStudioPage() {
                   <circle cx="9" cy="9" r="4" /><path d="M12.5 12.5L16 16" strokeLinecap="round" />
                 </svg>
               </button>
+              <span style={{ width: 1, height: 18, background: "var(--border-color, #334155)", margin: "0 4px" }} />
+              <button type="button" onClick={() => changeEditorFontSize(-1)} className="studio-btn studio-btn-ghost" style={{ height: 26, fontSize: 12, fontWeight: 700, padding: "0 7px" }} title="Decrease font size (Ctrl/Cmd + -)">−</button>
+              <span style={{ fontSize: 11, color: "var(--text-muted, #64748b)", minWidth: 20, textAlign: "center" }}>{editorFontSize}</span>
+              <button type="button" onClick={() => changeEditorFontSize(1)} className="studio-btn studio-btn-ghost" style={{ height: 26, fontSize: 12, fontWeight: 700, padding: "0 7px" }} title="Increase font size (Ctrl/Cmd + =)">+</button>
               <span style={{ width: 1, height: 18, background: "var(--border-color, #334155)", margin: "0 4px" }} />
               <span style={{ fontSize: 11, color: "var(--text-muted, #64748b)", marginLeft: 8 }}>{activeEntry?.path || "No file selected"}</span>
             </div>
@@ -7229,6 +7251,8 @@ export default function ResearchStudioPage() {
                 language={editorMode}
                 theme={editorTheme}
                 highlightRanges={currentFileFindRanges}
+                fontSize={editorFontSize}
+                onFontSizeChange={setEditorFontSize}
                 className="studio-editor-codemirror"
               />
               {collabCursors.length > 0 ? (
