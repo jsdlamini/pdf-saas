@@ -6453,18 +6453,6 @@ export default function ResearchStudioPage() {
         <div className="studio-topbar-left">
           <button
             type="button"
-            onClick={() => setLeftPaneCollapsed((prev) => !prev)}
-            className="studio-btn studio-btn-ghost"
-            aria-label="Toggle file tree"
-            title="Files"
-            style={{ width: 32, padding: 0 }}
-          >
-            <svg viewBox="0 0 20 20" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="1.8">
-              <path d="M3 5.5A1.5 1.5 0 0 1 4.5 4h3L9 5.5h6.5A1.5 1.5 0 0 1 17 7v7.5a1.5 1.5 0 0 1-1.5 1.5h-11A1.5 1.5 0 0 1 3 14.5v-9z" strokeLinecap="round" strokeLinejoin="round" />
-            </svg>
-          </button>
-          <button
-            type="button"
             onClick={openProjectsBoard}
             className="studio-btn studio-btn-ghost"
             aria-label="Back to projects board"
