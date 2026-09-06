@@ -549,6 +549,15 @@ function downloadBlob(blob: Blob, fileName: string) {
   URL.revokeObjectURL(href);
 }
 
+function safeProjectZipName(name: string): string {
+  const cleaned = (name || "")
+    .trim()
+    .replace(/[\\/:*?"<>|]/g, "")
+    .replace(/\s+/g, " ")
+    .slice(0, 100);
+  return cleaned || "research-project";
+}
+
 function getFileNameFromDisposition(header: string | null) {
   if (!header) return null;
   const quotedMatch = header.match(/filename="([^"]+)"/i);
@@ -5314,7 +5323,7 @@ export default function ResearchStudioPage() {
     }
 
     const blob = await zip.generateAsync({ type: "blob" });
-    downloadBlob(blob, "research-project.zip");
+    downloadBlob(blob, `${safeProjectZipName(projectName)}.zip`);
   }
 
   function arrayBufferToBase64(buffer: ArrayBuffer): string {
