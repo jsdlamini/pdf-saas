@@ -1399,9 +1399,16 @@ export default function ResearchStudioPage() {
   const [sortMode, setSortMode] = useState<"updated" | "name">("updated");
   const [openTabs, setOpenTabs] = useState<string[]>([]);
 
-  // Auto-collapse file tree on mobile
+  // Auto-collapse file tree on mobile. Only treat genuinely coarse-pointer
+  // devices as mobile so browser zoom on a desktop doesn't surface the
+  // Files/Output toggle buttons in the top bar.
   useEffect(() => {
-    const check = () => setIsMobile(window.innerWidth < 1024);
+    const check = () => {
+      const coarse =
+        typeof window.matchMedia === "function" &&
+        window.matchMedia("(pointer: coarse)").matches;
+      setIsMobile(window.innerWidth < 1024 && coarse);
+    };
     check();
     window.addEventListener("resize", check);
     return () => window.removeEventListener("resize", check);
