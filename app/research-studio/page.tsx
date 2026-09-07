@@ -6262,19 +6262,12 @@ export default function ResearchStudioPage() {
           </div>
         ) : (
           <div className="studio-project-grid" style={{
-            gridTemplateColumns: `repeat(auto-fill, minmax(${filteredProjects.length > 8 ? 220 : filteredProjects.length > 4 ? 260 : 280}px, 1fr))`,
+            gridTemplateColumns: `repeat(auto-fill, minmax(${filteredProjects.length > 8 ? 200 : filteredProjects.length > 4 ? 230 : 240}px, 1fr))`,
           }}>
             {filteredProjects.map((item, index) => {
               const isActive = item.id === activeProjectId;
-              const templateSlugs = RESEARCH_TEMPLATES.map((t) => t.slug);
               const snapshot = savedProjectSnapshots.find((s) => s.id === item.id);
               const fileCount = snapshot?.entries?.filter((e) => e.kind === "file").length ?? 0;
-              const tagName = snapshot?.entries?.some((e) => e.path === "main.tex" && e.content.includes("\\documentclass"))
-                ? templateSlugs.find((slug) => {
-                    const t = getTemplateBySlug(slug);
-                    return t && snapshot?.entries?.some((e) => e.path === "main.tex" && e.content === t.entries.find((te) => te.path === "main.tex")?.content);
-                  }) ?? "Custom"
-                : "Custom";
 
               const mode = item.type || snapshot?.editorMode || (
                 snapshot?.entries?.some((e: ProjectEntry) => e.path.endsWith(".py")) ? "python"
@@ -6305,23 +6298,8 @@ export default function ResearchStudioPage() {
                   <p className="studio-project-card-meta">
                     Updated {new Date(item.updatedAt).toLocaleString()}
                     {fileCount > 0 ? ` · ${fileCount} file${fileCount !== 1 ? "s" : ""}` : ""}
-                    <span
-                      className="studio-compile-badge"
-                      style={{
-                        background: item.coverDataUrl ? "rgba(52, 211, 153, 0.16)" : "rgba(148, 163, 184, 0.14)",
-                        color: item.coverDataUrl ? "#34d399" : "var(--text-muted, #64748b)",
-                      }}
-                    >
-                      {item.coverDataUrl ? "Compiled" : "Not compiled"}
-                    </span>
                   </p>
                   <div className="studio-project-card-tags">
-                    {tagName !== "Custom" ? (
-                      <span className="studio-tag">
-                        <span className="studio-tag-dot" style={{ background: tagName === "ieee" ? "#60a5fa" : tagName === "acm" ? "#f472b6" : tagName === "neurips" ? "#a78bfa" : tagName === "lncs" ? "#fbbf24" : "#4ade80" }} />
-                        {RESEARCH_TEMPLATES.find((t) => t.slug === tagName)?.name || tagName}
-                      </span>
-                    ) : null}
                     {(() => {
                       if (mode === "python") {
                         return (

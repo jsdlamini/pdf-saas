@@ -342,7 +342,7 @@ export default function DashboardPage() {
               {data.countries.slice(0, 15).map((c, i) => (
                 <div key={c.country} className="flex items-center gap-2 rounded-lg border border-slate-100 px-3 py-2 text-sm">
                   <span className="text-lg">{
-                    { 'South Africa': '🇿🇦', 'Eswatini': '🇸🇿', 'United States': '🇺🇸', 'United Kingdom': '🇬🇧', 'Germany': '🇩🇪', 'France': '🇫🇷', 'India': '🇮🇳', 'Canada': '🇨🇦', 'Australia': '🇦🇺', 'Nigeria': '🇳🇬', 'Kenya': '🇰🇪', 'Botswana': '🇧🇼', 'Zimbabwe': '🇿🇼', 'Namibia': '🇳🇦', 'Mozambique': '🇲🇿', 'Lesotho': '🇱🇸', 'Malawi': '🇲🇼', 'Zambia': '🇿🇲', 'Tanzania': '🇹🇿', 'Ghana': '🇬🇭' }[c.country] || '🌍'
+                    { 'South Africa': '🇿🇦', 'United States': '🇺🇸', 'United Kingdom': '🇬🇧', 'Germany': '🇩🇪', 'France': '🇫🇷', 'India': '🇮🇳', 'Canada': '🇨🇦', 'Australia': '🇦🇺', 'Nigeria': '🇳🇬', 'Kenya': '🇰🇪', 'Botswana': '🇧🇼', 'Zimbabwe': '🇿🇼', 'Namibia': '🇳🇦', 'Mozambique': '🇲🇿', 'Lesotho': '🇱🇸', 'Malawi': '🇲🇼', 'Zambia': '🇿🇲', 'Tanzania': '🇹🇿', 'Ghana': '🇬🇭' }[c.country] || '🌍'
                   }</span>
                   <span className="flex-1 font-medium text-slate-700">{c.country}</span>
                   <span className="text-xs font-semibold text-slate-500">{c.count}</span>
