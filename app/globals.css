@@ -1980,6 +1980,22 @@ body[data-studio-editor="true"] footer {
   font-weight: 700;
   color: var(--text-muted, #64748b);
 }
+.studio-project-cover-code {
+  justify-content: flex-start;
+  align-items: flex-start;
+  padding: 6px 8px;
+  text-align: left;
+}
+.studio-project-cover-code pre {
+  margin: 0;
+  width: 100%;
+  font-family: var(--font-mono);
+  font-size: 8.5px;
+  line-height: 1.45;
+  color: var(--text-muted, #64748b);
+  white-space: pre;
+  overflow: hidden;
+}
 .studio-compile-badge {
   display: inline-block;
   margin-left: 8px;
