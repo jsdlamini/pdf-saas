@@ -1053,6 +1053,9 @@ export default function ResearchStudioPage() {
   const [workspaceScreen, setWorkspaceScreen] = useState<"projects" | "editor" | "learn">(() => {
     if (typeof window === "undefined") return initialState.workspaceScreen;
     try {
+      const urlView = new URLSearchParams(window.location.search).get("view");
+      if (urlView === "learn" || urlView === "projects") return urlView;
+      if (urlView === "editor" || urlView === "contests") return "editor";
       const saved = localStorage.getItem("wiserfiles-workspace");
       return saved ? (JSON.parse(saved) as "projects" | "editor" | "learn") : initialState.workspaceScreen;
     } catch { return initialState.workspaceScreen; }
@@ -1261,6 +1264,14 @@ export default function ResearchStudioPage() {
   useEffect(() => {
     try { localStorage.setItem("wiserfiles-workspace", JSON.stringify(workspaceScreen)); } catch {}
   }, [workspaceScreen]);
+
+  // Open the contests panel when the page is opened with ?view=contests.
+  useEffect(() => {
+    if (searchParams.get("view") === "contests") {
+      void openChallengesPanel("cohorts");
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // Hide the global site footer while the editor is open to maximise space.
   useEffect(() => {
@@ -4756,7 +4767,26 @@ export default function ResearchStudioPage() {
   }
 
   function openProjectsBoard() {
-    setWorkspaceScreen("projects");
+    navigateScreen("projects");
+  }
+
+  function navigateScreen(screen: "projects" | "editor" | "learn") {
+    setWorkspaceScreen(screen);
+    if (typeof window !== "undefined") {
+      const url = new URL(window.location.href);
+      url.searchParams.set("view", screen);
+      window.history.replaceState({}, "", url);
+    }
+  }
+
+  function navigateContests() {
+    setWorkspaceScreen("editor");
+    void openChallengesPanel("cohorts");
+    if (typeof window !== "undefined") {
+      const url = new URL(window.location.href);
+      url.searchParams.set("view", "contests");
+      window.history.replaceState({}, "", url);
+    }
   }
 
   function toggleProjectSwitcher() {
@@ -6084,7 +6114,7 @@ export default function ResearchStudioPage() {
               <span style={{ width: 1, alignSelf: "stretch", background: "var(--border-color, #334155)", margin: "0 6px" }} />
               <button
                 type="button"
-                onClick={() => setWorkspaceScreen("learn")}
+                onClick={() => navigateScreen("learn")}
                 className="studio-btn"
                 style={{ background: "linear-gradient(135deg,#10b981,#14b8a6)", color: "#fff", border: "none", fontWeight: 700 }}
               >
@@ -6096,7 +6126,7 @@ export default function ResearchStudioPage() {
               </button>
               <button
                 type="button"
-                onClick={() => { setWorkspaceScreen("editor"); void openChallengesPanel("cohorts"); }}
+                onClick={() => navigateContests()}
                 className="studio-btn"
                 style={{ background: "linear-gradient(135deg,#8b5cf6,#6366f1)", color: "#fff", border: "none", fontWeight: 700 }}
               >
@@ -6422,7 +6452,7 @@ export default function ResearchStudioPage() {
   }
 
   if (workspaceScreen === "learn") {
-    return <LearnStudio onBack={() => setWorkspaceScreen("projects")} />;
+    return <LearnStudio onBack={() => navigateScreen("projects")} isSignedIn={isSignedIn} />;
   }
 
   return (
