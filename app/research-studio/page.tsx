@@ -6017,6 +6017,16 @@ export default function ResearchStudioPage() {
     return groups.filter((group) => group.projects.length > 0);
   }, [filteredProjects, savedProjectSnapshots]);
 
+  const [openFolders, setOpenFolders] = useState<Set<string>>(new Set());
+  function toggleProjectFolder(key: string) {
+    setOpenFolders((prev) => {
+      const next = new Set(prev);
+      if (next.has(key)) next.delete(key);
+      else next.add(key);
+      return next;
+    });
+  }
+
   if (workspaceScreen === "projects") {
     return (
       <main className="studio-dark studio-shell">
@@ -6320,9 +6330,15 @@ export default function ResearchStudioPage() {
           </div>
         ) : (
           <div style={{ display: "flex", flexDirection: "column", gap: 24 }}>
-            {dashboardGroups.map((group) => (
+            {dashboardGroups.map((group) => {
+              const isOpen = openFolders.has(group.key);
+              return (
               <section key={group.key} style={{ border: `1px solid var(--border-color, #334155)`, borderRadius: 12, background: "var(--bg-secondary, #131620)", overflow: "hidden" }}>
-                <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "10px 14px", borderBottom: `1px solid var(--border-color, #334155)`, background: `linear-gradient(120deg, ${group.color}1f, transparent)` }}>
+                <button
+                  type="button"
+                  onClick={() => toggleProjectFolder(group.key)}
+                  style={{ display: "flex", alignItems: "center", gap: 8, width: "100%", padding: "12px 14px", border: "none", borderBottom: isOpen ? `1px solid var(--border-color, #334155)` : "none", background: `linear-gradient(120deg, ${group.color}1f, transparent)`, cursor: "pointer", textAlign: "left" }}
+                >
                   <svg viewBox="0 0 20 20" className="h-4 w-4" fill="none" stroke={group.color} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
                     <path d="M3 5.5A1.5 1.5 0 0 1 4.5 4h3L9 5.5h6.5A1.5 1.5 0 0 1 17 7v7.5a1.5 1.5 0 0 1-1.5 1.5h-11A1.5 1.5 0 0 1 3 14.5v-9z" />
                   </svg>
@@ -6330,7 +6346,11 @@ export default function ResearchStudioPage() {
                   <span style={{ fontSize: 11, color: "var(--text-muted, #64748b)", marginLeft: "auto" }}>
                     {group.projects.length} project{group.projects.length !== 1 ? "s" : ""}
                   </span>
-                </div>
+                  <svg viewBox="0 0 20 20" className="h-4 w-4" fill="none" stroke="var(--text-muted, #64748b)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ transform: isOpen ? "rotate(90deg)" : "rotate(0deg)", transition: "transform 0.15s" }}>
+                    <path d="M7 5l5 5-5 5" />
+                  </svg>
+                </button>
+                {isOpen ? (
                 <div className="studio-project-grid" style={{ padding: 12 }}>
                   {group.projects.map((item, index) => {
                     const isActive = item.id === activeProjectId;
@@ -6440,8 +6460,10 @@ export default function ResearchStudioPage() {
                     );
                   })}
                 </div>
+                ) : null}
               </section>
-            ))}
+              );
+            })}
           </div>
         )}
 
