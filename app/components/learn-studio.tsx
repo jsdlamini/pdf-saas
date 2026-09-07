@@ -5,24 +5,32 @@ import ReactMarkdown from "react-markdown";
 import { LatexEditor } from "./latex-editor";
 import { LEARN_SECTIONS, type LearnLanguage } from "@/lib/learn-curriculum";
 
+function normalize(s: string): string {
+  return s.replace(/\r/g, "").trim();
+}
+
 export function LearnStudio({ onBack }: { onBack: () => void }) {
   const [language, setLanguage] = useState<LearnLanguage>("python");
   const [lessonId, setLessonId] = useState("py-hello");
   const [code, setCode] = useState("");
   const [output, setOutput] = useState("");
+  const [feedback, setFeedback] = useState("");
   const [running, setRunning] = useState(false);
-  const [done, setDone] = useState<string[]>([]);
+  const [showHint, setShowHint] = useState(false);
+  const [solved, setSolved] = useState<string[]>([]);
 
   useEffect(() => {
     try {
-      const saved = JSON.parse(localStorage.getItem("wiserfiles-learn-done") || "[]");
-      if (Array.isArray(saved)) setDone(saved.filter((x: unknown) => typeof x === "string"));
+      const next = localStorage.getItem("wiserfiles-learn-solved");
+      const prev = localStorage.getItem("wiserfiles-learn-done");
+      const parsed = next ? JSON.parse(next) : prev ? JSON.parse(prev) : [];
+      if (Array.isArray(parsed)) setSolved(parsed.filter((x: unknown) => typeof x === "string"));
     } catch {}
   }, []);
 
   useEffect(() => {
-    try { localStorage.setItem("wiserfiles-learn-done", JSON.stringify(done)); } catch {}
-  }, [done]);
+    try { localStorage.setItem("wiserfiles-learn-solved", JSON.stringify(solved)); } catch {}
+  }, [solved]);
 
   const lessons = useMemo(
     () => LEARN_SECTIONS.find((s) => s.language === language)?.lessons ?? [],
@@ -33,18 +41,22 @@ export function LearnStudio({ onBack }: { onBack: () => void }) {
   useEffect(() => {
     const target = lessons.find((l) => l.id === lessonId) ?? lessons[0];
     if (target) {
-      setCode(target.starter);
+      setCode(target.challenge.starter);
       setOutput("");
+      setFeedback("");
+      setShowHint(false);
     }
   }, [language, lessonId, lessons]);
 
   const lessonIndex = lesson ? lessons.findIndex((l) => l.id === lesson.id) : -1;
-  const doneCount = lessons.filter((l) => done.includes(l.id)).length;
+  const solvedCount = lessons.filter((l) => solved.includes(l.id)).length;
+  const isSolved = lesson ? solved.includes(lesson.id) : false;
 
   async function runCode() {
     if (!lesson) return;
     setRunning(true);
     setOutput("");
+    setFeedback("");
     try {
       const mainPath = language === "python" ? "main.py" : "main.cpp";
       const res = await fetch("/api/run-code", {
@@ -58,7 +70,37 @@ export function LearnStudio({ onBack }: { onBack: () => void }) {
       } else {
         setOutput(data?.output != null && data.output !== "" ? data.output : "(no output)");
       }
-      if (!done.includes(lesson.id)) setDone((d) => [...d, lesson.id]);
+    } catch {
+      setOutput("Could not reach the code runner. Is the sandbox running?");
+    } finally {
+      setRunning(false);
+    }
+  }
+
+  async function checkCode() {
+    if (!lesson) return;
+    setRunning(true);
+    setFeedback("");
+    try {
+      const mainPath = language === "python" ? "main.py" : "main.cpp";
+      const res = await fetch("/api/run-code", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ language, files: [{ path: mainPath, content: code }], mainPath }),
+      });
+      const data = await res.json().catch(() => null);
+      if (!res.ok) {
+        setOutput(data?.error || "Failed to run code.");
+        return;
+      }
+      const out = data?.output != null ? String(data.output) : "";
+      setOutput(out || "(no output)");
+      if (normalize(out) === normalize(lesson.challenge.expectedOutput)) {
+        setFeedback("✅ Solved! Great work.");
+        if (!solved.includes(lesson.id)) setSolved((s) => [...s, lesson.id]);
+      } else {
+        setFeedback("❌ Not quite. Compare with the expected output and try again.");
+      }
     } catch {
       setOutput("Could not reach the code runner. Is the sandbox running?");
     } finally {
@@ -73,8 +115,10 @@ export function LearnStudio({ onBack }: { onBack: () => void }) {
   }
 
   function resetCode() {
-    if (lesson) setCode(lesson.starter);
+    if (lesson) setCode(lesson.challenge.starter);
     setOutput("");
+    setFeedback("");
+    setShowHint(false);
   }
 
   const border = "var(--border-color, #334155)";
@@ -90,14 +134,14 @@ export function LearnStudio({ onBack }: { onBack: () => void }) {
     >
       {/* Header */}
       <header style={{ display: "flex", alignItems: "center", gap: 12, padding: "10px 16px", borderBottom: `1px solid ${border}`, background: bg2 }}>
-        <button type="button" onClick={onBack} className="studio-btn studio-btn-ghost" style={{ height: 30, fontSize: 12, padding: "0 10px" }}>
+        <button type="button" onClick={onBack} className="studio-btn studio-btn-ghost" style={{ height: 30, fontSize: 12, padding: "0 10px", cursor: "pointer" }}>
           ← Back
         </button>
         <span style={{ fontWeight: 800, fontSize: 15 }}>Learn to Code</span>
-        <span style={{ fontSize: 11, color: muted }}>Beginner Python &amp; C++ — practice right in the editor</span>
+        <span style={{ fontSize: 11, color: muted }}>Beginner Python &amp; C++ — solve a challenge after every lesson</span>
         <div style={{ marginLeft: "auto", display: "flex", gap: 6, alignItems: "center" }}>
           <span style={{ fontSize: 11, color: muted, marginRight: 4 }}>
-            {doneCount}/{lessons.length} done
+            {solvedCount}/{lessons.length} solved
           </span>
           {(["python", "cpp"] as LearnLanguage[]).map((lang) => (
             <button
@@ -127,7 +171,7 @@ export function LearnStudio({ onBack }: { onBack: () => void }) {
         <aside style={{ width: 240, overflowY: "auto", borderRight: `1px solid ${border}`, background: bg2, padding: 12 }}>
           {lessons.map((l, i) => {
             const active = l.id === lesson?.id;
-            const complete = done.includes(l.id);
+            const complete = solved.includes(l.id);
             return (
               <button
                 key={l.id}
@@ -172,16 +216,31 @@ export function LearnStudio({ onBack }: { onBack: () => void }) {
               <pre style={{ background: "#0d1117", border: `1px solid ${border}`, borderRadius: 8, padding: "12px 14px", overflowX: "auto", fontSize: 12.5, color: "#c9d1d9", fontFamily: "var(--font-mono)", lineHeight: 1.5 }}>
                 {lesson.example}
               </pre>
-              <h3 style={{ fontSize: 11, textTransform: "uppercase", letterSpacing: "0.1em", color: muted, margin: "18px 0 8px" }}>
-                Your turn
-              </h3>
-              <div className="challenge-markdown" style={{ fontSize: 13.5, lineHeight: 1.65 }}>
-                <ReactMarkdown>{lesson.task}</ReactMarkdown>
+
+              <div style={{ display: "flex", alignItems: "center", gap: 10, margin: "18px 0 8px" }}>
+                <h3 style={{ fontSize: 11, textTransform: "uppercase", letterSpacing: "0.1em", color: muted, margin: 0 }}>
+                  🧩 Challenge
+                </h3>
+                {isSolved ? (
+                  <span style={{ fontSize: 11, fontWeight: 700, color: "#34d399" }}>✓ Solved</span>
+                ) : null}
               </div>
-              {lesson.expectedOutput ? (
-                <p style={{ fontSize: 12, color: muted, marginTop: 10 }}>
-                  Expected output: <code style={{ color: "#34d399", fontFamily: "var(--font-mono)" }}>{lesson.expectedOutput}</code>
-                </p>
+              <div className="challenge-markdown" style={{ fontSize: 13.5, lineHeight: 1.65 }}>
+                <ReactMarkdown>{lesson.challenge.prompt}</ReactMarkdown>
+              </div>
+              {lesson.challenge.hint ? (
+                <div style={{ marginTop: 10 }}>
+                  <button
+                    type="button"
+                    onClick={() => setShowHint((v) => !v)}
+                    style={{ fontSize: 11, fontWeight: 600, cursor: "pointer", background: "none", border: "none", color: "#60a5fa", padding: 0 }}
+                  >
+                    {showHint ? "Hide hint" : "Show hint"}
+                  </button>
+                  {showHint ? (
+                    <p style={{ fontSize: 12, color: muted, margin: "6px 0 0", fontStyle: "italic" }}>{lesson.challenge.hint}</p>
+                  ) : null}
+                </div>
               ) : null}
             </>
           ) : (
@@ -205,11 +264,19 @@ export function LearnStudio({ onBack }: { onBack: () => void }) {
               type="button"
               onClick={runCode}
               disabled={running}
-              style={{ height: 30, padding: "0 16px", fontSize: 12, fontWeight: 700, borderRadius: 8, border: "none", cursor: "pointer", background: "#10b981", color: "#fff" }}
+              style={{ height: 30, padding: "0 14px", fontSize: 12, fontWeight: 700, borderRadius: 8, border: `1px solid ${border}`, cursor: "pointer", background: "transparent", color: primary }}
             >
               {running ? "Running…" : "▶ Run"}
             </button>
-            <button type="button" onClick={resetCode} className="studio-btn studio-btn-ghost" style={{ height: 30, fontSize: 12, padding: "0 10px" }}>
+            <button
+              type="button"
+              onClick={checkCode}
+              disabled={running}
+              style={{ height: 30, padding: "0 16px", fontSize: 12, fontWeight: 700, borderRadius: 8, border: "none", cursor: "pointer", background: "#10b981", color: "#fff" }}
+            >
+              {running ? "Checking…" : "✓ Check"}
+            </button>
+            <button type="button" onClick={resetCode} className="studio-btn studio-btn-ghost" style={{ height: 30, fontSize: 12, padding: "0 10px", cursor: "pointer" }}>
               Reset
             </button>
             <button
@@ -217,17 +284,22 @@ export function LearnStudio({ onBack }: { onBack: () => void }) {
               onClick={nextLesson}
               disabled={lessonIndex >= lessons.length - 1}
               className="studio-btn studio-btn-ghost"
-              style={{ height: 30, fontSize: 12, padding: "0 10px", marginLeft: "auto" }}
+              style={{ height: 30, fontSize: 12, padding: "0 10px", marginLeft: "auto", cursor: "pointer" }}
             >
               Next →
             </button>
           </div>
           <div style={{ height: 150, borderTop: `1px solid ${border}`, overflowY: "auto", background: "#0d1117", padding: 10 }}>
-            <p style={{ fontSize: 10, textTransform: "uppercase", letterSpacing: "0.1em", color: muted, margin: "0 0 6px" }}>
-              Output
-            </p>
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+              <p style={{ fontSize: 10, textTransform: "uppercase", letterSpacing: "0.1em", color: muted, margin: "0 0 6px" }}>
+                Output
+              </p>
+              {feedback ? (
+                <span style={{ fontSize: 11, fontWeight: 700, color: feedback.startsWith("✅") ? "#34d399" : "#fca5a5" }}>{feedback}</span>
+              ) : null}
+            </div>
             <pre style={{ margin: 0, whiteSpace: "pre-wrap", fontFamily: "var(--font-mono)", fontSize: 12.5, color: "#c9d1d9" }}>
-              {output || "Run your code to see the output here."}
+              {output || "Write your solution and press ✓ Check."}
             </pre>
           </div>
         </section>
