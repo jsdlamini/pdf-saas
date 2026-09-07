@@ -12,6 +12,7 @@ function normalize(s: string): string {
 export function LearnStudio({ onBack }: { onBack: () => void }) {
   const [language, setLanguage] = useState<LearnLanguage>("python");
   const [lessonId, setLessonId] = useState("py-hello");
+  const [challengeIndex, setChallengeIndex] = useState(0);
   const [code, setCode] = useState("");
   const [output, setOutput] = useState("");
   const [feedback, setFeedback] = useState("");
@@ -37,23 +38,51 @@ export function LearnStudio({ onBack }: { onBack: () => void }) {
     [language]
   );
   const lesson = lessons.find((l) => l.id === lessonId) ?? lessons[0];
+  const challenges = lesson?.challenges ?? [];
+  const currentChallenge = challenges[challengeIndex];
 
+  // Load the current challenge's starter whenever the lesson/challenge changes.
   useEffect(() => {
     const target = lessons.find((l) => l.id === lessonId) ?? lessons[0];
-    if (target) {
-      setCode(target.challenge.starter);
+    if (target && target.challenges[challengeIndex]) {
+      setCode(target.challenges[challengeIndex].starter);
       setOutput("");
       setFeedback("");
       setShowHint(false);
     }
-  }, [language, lessonId, lessons]);
+  }, [language, lessonId, challengeIndex, lessons]);
 
   const lessonIndex = lesson ? lessons.findIndex((l) => l.id === lesson.id) : -1;
-  const solvedCount = lessons.filter((l) => solved.includes(l.id)).length;
-  const isSolved = lesson ? solved.includes(lesson.id) : false;
+
+  function solvedKey(lid: string, idx: number) {
+    return `${lid}:${idx}`;
+  }
+  function isSolved(lid: string, idx: number) {
+    return solved.includes(solvedKey(lid, idx));
+  }
+
+  const lessonSolvedCount = lesson
+    ? lesson.challenges.filter((_, i) => isSolved(lesson.id, i)).length
+    : 0;
+  const lessonComplete = lesson ? lessonSolvedCount === lesson.challenges.length : false;
+
+  const totalChallenges = lessons.reduce((n, l) => n + l.challenges.length, 0);
+  const totalSolved = solved.length;
+
+  function selectLanguage(lang: LearnLanguage) {
+    setLanguage(lang);
+    const first = LEARN_SECTIONS.find((s) => s.language === lang)?.lessons[0];
+    if (first) setLessonId(first.id);
+    setChallengeIndex(0);
+  }
+
+  function selectLesson(id: string) {
+    setLessonId(id);
+    setChallengeIndex(0);
+  }
 
   async function runCode() {
-    if (!lesson) return;
+    if (!lesson || !currentChallenge) return;
     setRunning(true);
     setOutput("");
     setFeedback("");
@@ -78,7 +107,7 @@ export function LearnStudio({ onBack }: { onBack: () => void }) {
   }
 
   async function checkCode() {
-    if (!lesson) return;
+    if (!lesson || !currentChallenge) return;
     setRunning(true);
     setFeedback("");
     try {
@@ -95,9 +124,13 @@ export function LearnStudio({ onBack }: { onBack: () => void }) {
       }
       const out = data?.output != null ? String(data.output) : "";
       setOutput(out || "(no output)");
-      if (normalize(out) === normalize(lesson.challenge.expectedOutput)) {
+      if (normalize(out) === normalize(currentChallenge.expectedOutput)) {
         setFeedback("✅ Solved! Great work.");
-        if (!solved.includes(lesson.id)) setSolved((s) => [...s, lesson.id]);
+        const key = solvedKey(lesson.id, challengeIndex);
+        if (!solved.includes(key)) setSolved((s) => [...s, key]);
+        if (challengeIndex + 1 < lesson.challenges.length) {
+          setChallengeIndex(challengeIndex + 1);
+        }
       } else {
         setFeedback("❌ Not quite. Compare with the expected output and try again.");
       }
@@ -108,14 +141,16 @@ export function LearnStudio({ onBack }: { onBack: () => void }) {
     }
   }
 
-  function nextLesson() {
-    if (lessonIndex >= 0 && lessonIndex < lessons.length - 1) {
-      setLessonId(lessons[lessonIndex + 1].id);
-    }
+  function nextChallenge() {
+    if (challengeIndex + 1 < challenges.length) setChallengeIndex(challengeIndex + 1);
+  }
+
+  function prevChallenge() {
+    if (challengeIndex > 0) setChallengeIndex(challengeIndex - 1);
   }
 
   function resetCode() {
-    if (lesson) setCode(lesson.challenge.starter);
+    if (currentChallenge) setCode(currentChallenge.starter);
     setOutput("");
     setFeedback("");
     setShowHint(false);
@@ -138,16 +173,13 @@ export function LearnStudio({ onBack }: { onBack: () => void }) {
           ← Back
         </button>
         <span style={{ fontWeight: 800, fontSize: 15 }}>Learn to Code</span>
-        <span style={{ fontSize: 11, color: muted }}>Beginner Python &amp; C++ — solve a challenge after every lesson</span>
+        <span style={{ fontSize: 11, color: muted }}>{totalSolved}/{totalChallenges} challenges solved</span>
         <div style={{ marginLeft: "auto", display: "flex", gap: 6, alignItems: "center" }}>
-          <span style={{ fontSize: 11, color: muted, marginRight: 4 }}>
-            {solvedCount}/{lessons.length} solved
-          </span>
           {(["python", "cpp"] as LearnLanguage[]).map((lang) => (
             <button
               key={lang}
               type="button"
-              onClick={() => setLanguage(lang)}
+              onClick={() => selectLanguage(lang)}
               style={{
                 height: 30,
                 padding: "0 14px",
@@ -171,12 +203,13 @@ export function LearnStudio({ onBack }: { onBack: () => void }) {
         <aside style={{ width: 240, overflowY: "auto", borderRight: `1px solid ${border}`, background: bg2, padding: 12 }}>
           {lessons.map((l, i) => {
             const active = l.id === lesson?.id;
-            const complete = solved.includes(l.id);
+            const doneCount = l.challenges.filter((_, idx) => isSolved(l.id, idx)).length;
+            const complete = doneCount === l.challenges.length;
             return (
               <button
                 key={l.id}
                 type="button"
-                onClick={() => setLessonId(l.id)}
+                onClick={() => selectLesson(l.id)}
                 style={{
                   display: "flex",
                   alignItems: "center",
@@ -196,6 +229,7 @@ export function LearnStudio({ onBack }: { onBack: () => void }) {
               >
                 <span style={{ fontSize: 11, color: muted, minWidth: 18 }}>{i + 1}.</span>
                 <span style={{ flex: 1 }}>{l.title}</span>
+                <span style={{ fontSize: 10, color: muted }}>{doneCount}/{l.challenges.length}</span>
                 {complete ? <span style={{ color: "#34d399", fontSize: 12 }}>✓</span> : null}
               </button>
             );
@@ -217,31 +251,67 @@ export function LearnStudio({ onBack }: { onBack: () => void }) {
                 {lesson.example}
               </pre>
 
-              <div style={{ display: "flex", alignItems: "center", gap: 10, margin: "18px 0 8px" }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 10, margin: "18px 0 10px" }}>
                 <h3 style={{ fontSize: 11, textTransform: "uppercase", letterSpacing: "0.1em", color: muted, margin: 0 }}>
-                  🧩 Challenge
+                  🧩 Challenges
                 </h3>
-                {isSolved ? (
-                  <span style={{ fontSize: 11, fontWeight: 700, color: "#34d399" }}>✓ Solved</span>
+                <span style={{ fontSize: 11, fontWeight: 700, color: lessonComplete ? "#34d399" : muted }}>
+                  {lessonSolvedCount}/{challenges.length} solved{lessonComplete ? " — complete! 🎉" : ""}
+                </span>
+              </div>
+
+              {/* Challenge picker */}
+              <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginBottom: 12 }}>
+                {challenges.map((c, i) => {
+                  const done = isSolved(lesson.id, i);
+                  const current = i === challengeIndex;
+                  return (
+                    <button
+                      key={i}
+                      type="button"
+                      onClick={() => setChallengeIndex(i)}
+                      style={{
+                        minWidth: 34,
+                        height: 30,
+                        padding: "0 8px",
+                        borderRadius: 8,
+                        fontSize: 12,
+                        fontWeight: 700,
+                        cursor: "pointer",
+                        border: current ? "1px solid rgba(16,185,129,0.6)" : `1px solid ${border}`,
+                        background: done ? "rgba(52,211,153,0.15)" : current ? "rgba(16,185,129,0.12)" : "transparent",
+                        color: done ? "#34d399" : current ? "#5eead4" : primary,
+                      }}
+                    >
+                      {i + 1}{done ? " ✓" : ""}
+                    </button>
+                  );
+                })}
+              </div>
+
+              {/* Current challenge prompt */}
+              <div style={{ background: bg2, border: `1px solid ${border}`, borderRadius: 8, padding: "12px 14px" }}>
+                <p style={{ margin: "0 0 4px", fontSize: 11, fontWeight: 700, color: "#5eead4" }}>
+                  Question {challengeIndex + 1}
+                </p>
+                <div className="challenge-markdown" style={{ fontSize: 13.5, lineHeight: 1.6 }}>
+                  <ReactMarkdown>{currentChallenge?.prompt}</ReactMarkdown>
+                </div>
+                {currentChallenge?.hint ? (
+                  <div style={{ marginTop: 8 }}>
+                    <button
+                      type="button"
+                      onClick={() => setShowHint((v) => !v)}
+                      style={{ fontSize: 11, fontWeight: 600, cursor: "pointer", background: "none", border: "none", color: "#60a5fa", padding: 0 }}
+                    >
+                      {showHint ? "Hide hint" : "Show hint"}
+                    </button>
+                    {showHint ? (
+                      <p style={{ fontSize: 12, color: muted, margin: "6px 0 0", fontStyle: "italic" }}>{currentChallenge.hint}</p>
+                    ) : null}
+                  </div>
                 ) : null}
               </div>
-              <div className="challenge-markdown" style={{ fontSize: 13.5, lineHeight: 1.65 }}>
-                <ReactMarkdown>{lesson.challenge.prompt}</ReactMarkdown>
-              </div>
-              {lesson.challenge.hint ? (
-                <div style={{ marginTop: 10 }}>
-                  <button
-                    type="button"
-                    onClick={() => setShowHint((v) => !v)}
-                    style={{ fontSize: 11, fontWeight: 600, cursor: "pointer", background: "none", border: "none", color: "#60a5fa", padding: 0 }}
-                  >
-                    {showHint ? "Hide hint" : "Show hint"}
-                  </button>
-                  {showHint ? (
-                    <p style={{ fontSize: 12, color: muted, margin: "6px 0 0", fontStyle: "italic" }}>{lesson.challenge.hint}</p>
-                  ) : null}
-                </div>
-              ) : null}
             </>
           ) : (
             <p style={{ color: muted }}>Select a lesson to begin.</p>
@@ -259,7 +329,7 @@ export function LearnStudio({ onBack }: { onBack: () => void }) {
               className="studio-editor-codemirror"
             />
           </div>
-          <div style={{ display: "flex", gap: 8, padding: "8px 10px", borderTop: `1px solid ${border}`, background: bg2, alignItems: "center" }}>
+          <div style={{ display: "flex", gap: 8, padding: "8px 10px", borderTop: `1px solid ${border}`, background: bg2, alignItems: "center", flexWrap: "wrap" }}>
             <button
               type="button"
               onClick={runCode}
@@ -279,15 +349,11 @@ export function LearnStudio({ onBack }: { onBack: () => void }) {
             <button type="button" onClick={resetCode} className="studio-btn studio-btn-ghost" style={{ height: 30, fontSize: 12, padding: "0 10px", cursor: "pointer" }}>
               Reset
             </button>
-            <button
-              type="button"
-              onClick={nextLesson}
-              disabled={lessonIndex >= lessons.length - 1}
-              className="studio-btn studio-btn-ghost"
-              style={{ height: 30, fontSize: 12, padding: "0 10px", marginLeft: "auto", cursor: "pointer" }}
-            >
-              Next →
-            </button>
+            <span style={{ marginLeft: "auto", display: "flex", gap: 6, alignItems: "center" }}>
+              <button type="button" onClick={prevChallenge} disabled={challengeIndex === 0} className="studio-btn studio-btn-ghost" style={{ height: 30, fontSize: 12, padding: "0 8px", cursor: "pointer" }}>←</button>
+              <span style={{ fontSize: 11, color: muted }}>Q {challengeIndex + 1}/{challenges.length}</span>
+              <button type="button" onClick={nextChallenge} disabled={challengeIndex + 1 >= challenges.length} className="studio-btn studio-btn-ghost" style={{ height: 30, fontSize: 12, padding: "0 8px", cursor: "pointer" }}>→</button>
+            </span>
           </div>
           <div style={{ height: 150, borderTop: `1px solid ${border}`, overflowY: "auto", background: "#0d1117", padding: 10 }}>
             <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>

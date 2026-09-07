@@ -6061,19 +6061,20 @@ export default function ResearchStudioPage() {
               >
                 Start from a template
               </button>
+              <span style={{ width: 1, alignSelf: "stretch", background: "var(--border-color, #334155)", margin: "0 6px" }} />
               <button
                 type="button"
                 onClick={() => setWorkspaceScreen("learn")}
-                className="inline-flex items-center gap-1.5 rounded-lg px-4 py-2 text-sm font-bold text-white"
-                style={{ background: "linear-gradient(135deg,#10b981,#14b8a6)", boxShadow: "0 2px 12px rgba(16,185,129,0.35)", cursor: "pointer" }}
+                className="studio-btn"
+                style={{ background: "linear-gradient(135deg,#10b981,#14b8a6)", color: "#fff", border: "none", fontWeight: 700 }}
               >
                 🎓 Learn to Code
               </button>
               <button
                 type="button"
-                onClick={() => void openChallengesPanel("cohorts")}
-                className="inline-flex items-center gap-1.5 rounded-lg px-4 py-2 text-sm font-bold text-white"
-                style={{ background: "linear-gradient(135deg,#8b5cf6,#6366f1)", boxShadow: "0 2px 12px rgba(139,92,246,0.35)", cursor: "pointer" }}
+                onClick={() => { setWorkspaceScreen("editor"); void openChallengesPanel("cohorts"); }}
+                className="studio-btn"
+                style={{ background: "linear-gradient(135deg,#8b5cf6,#6366f1)", color: "#fff", border: "none", fontWeight: 700 }}
               >
                 🏆 Contests
               </button>
@@ -6490,32 +6491,6 @@ export default function ResearchStudioPage() {
           </span>
         </div>
         <div className="studio-topbar-right">
-          <button
-            type="button"
-            onClick={() => setWorkspaceScreen("learn")}
-            className="inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-bold text-white"
-            style={{ background: "linear-gradient(135deg,#10b981,#14b8a6)", boxShadow: "0 2px 10px rgba(16,185,129,0.35)", cursor: "pointer" }}
-            title="Learn Python & C++ from scratch"
-          >
-            <svg viewBox="0 0 20 20" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-              <path d="M2 7l8-4 8 4-8 4-8-4z" />
-              <path d="M6 9.5V14c0 1.2 1.8 2 4 2s4-.8 4-2V9.5" />
-            </svg>
-            <span>Learn</span>
-          </button>
-          <button
-            type="button"
-            onClick={() => void openChallengesPanel("cohorts")}
-            className="inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-bold text-white"
-            style={{ background: "linear-gradient(135deg,#8b5cf6,#6366f1)", boxShadow: "0 2px 10px rgba(139,92,246,0.35)", cursor: "pointer" }}
-            title="Contests & coding challenges"
-          >
-            <svg viewBox="0 0 20 20" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-              <path d="M4 4h12v3a4 4 0 0 1-4 4H8a4 4 0 0 1-4-4V4z" />
-              <path d="M8 3h4M10 11v4M7 18h6M8 15h4" />
-            </svg>
-            <span>Contests</span>
-          </button>
           {isMobile ? (
             <>
               <button
