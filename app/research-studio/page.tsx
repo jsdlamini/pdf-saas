@@ -14,6 +14,7 @@ import { useSearchParams } from "next/navigation";
 import Swal from "sweetalert2";
 import { getTemplateBySlug, RESEARCH_TEMPLATES, type ResearchTemplate } from "@/lib/research-templates";
 import { LatexEditor, EDITOR_THEMES, type EditorThemeId, type EditorFindRange } from "../components/latex-editor";
+import { LearnStudio } from "../components/learn-studio";
 import { EditorView } from "@codemirror/view";
 import type { EditorMode } from "@/lib/highlighters";
 import { vscodeFileIcon, vscodeFolderIcon } from "@/lib/file-icons";
@@ -110,7 +111,7 @@ type InitialResearchStudioState = {
   projectEntries: ProjectEntry[];
   selectedPath: string;
   lastCompileAt: string;
-  workspaceScreen: "projects" | "editor";
+  workspaceScreen: "projects" | "editor" | "learn";
 };
 
 type AiFixSuggestion = {
@@ -1049,11 +1050,11 @@ export default function ResearchStudioPage() {
   }
 
   // Restore workspace state from localStorage on mount
-  const [workspaceScreen, setWorkspaceScreen] = useState<"projects" | "editor">(() => {
+  const [workspaceScreen, setWorkspaceScreen] = useState<"projects" | "editor" | "learn">(() => {
     if (typeof window === "undefined") return initialState.workspaceScreen;
     try {
       const saved = localStorage.getItem("wiserfiles-workspace");
-      return saved ? (JSON.parse(saved) as "projects" | "editor") : initialState.workspaceScreen;
+      return saved ? (JSON.parse(saved) as "projects" | "editor" | "learn") : initialState.workspaceScreen;
     } catch { return initialState.workspaceScreen; }
   });
   const [savedProjects, setSavedProjects] = useState<SavedProjectMeta[]>(() => {
@@ -6060,6 +6061,22 @@ export default function ResearchStudioPage() {
               >
                 Start from a template
               </button>
+              <button
+                type="button"
+                onClick={() => setWorkspaceScreen("learn")}
+                className="inline-flex items-center gap-1.5 rounded-lg px-4 py-2 text-sm font-bold text-white"
+                style={{ background: "linear-gradient(135deg,#10b981,#14b8a6)", boxShadow: "0 2px 12px rgba(16,185,129,0.35)" }}
+              >
+                🎓 Learn to Code
+              </button>
+              <button
+                type="button"
+                onClick={() => void openChallengesPanel("cohorts")}
+                className="inline-flex items-center gap-1.5 rounded-lg px-4 py-2 text-sm font-bold text-white"
+                style={{ background: "linear-gradient(135deg,#8b5cf6,#6366f1)", boxShadow: "0 2px 12px rgba(139,92,246,0.35)" }}
+              >
+                🏆 Contests
+              </button>
             </div>
             {!isSignedIn ? (
               <div className="studio-hero-auth">
@@ -6382,6 +6399,10 @@ export default function ResearchStudioPage() {
     );
   }
 
+  if (workspaceScreen === "learn") {
+    return <LearnStudio onBack={() => setWorkspaceScreen("projects")} />;
+  }
+
   return (
     <main className="studio-dark studio-shell">
       <Dialog open={githubDialogOpen} onOpenChange={setGithubDialogOpen}>
@@ -6469,6 +6490,32 @@ export default function ResearchStudioPage() {
           </span>
         </div>
         <div className="studio-topbar-right">
+          <button
+            type="button"
+            onClick={() => setWorkspaceScreen("learn")}
+            className="inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-bold text-white"
+            style={{ background: "linear-gradient(135deg,#10b981,#14b8a6)", boxShadow: "0 2px 10px rgba(16,185,129,0.35)" }}
+            title="Learn Python & C++ from scratch"
+          >
+            <svg viewBox="0 0 20 20" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M2 7l8-4 8 4-8 4-8-4z" />
+              <path d="M6 9.5V14c0 1.2 1.8 2 4 2s4-.8 4-2V9.5" />
+            </svg>
+            <span>Learn</span>
+          </button>
+          <button
+            type="button"
+            onClick={() => void openChallengesPanel("cohorts")}
+            className="inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-bold text-white"
+            style={{ background: "linear-gradient(135deg,#8b5cf6,#6366f1)", boxShadow: "0 2px 10px rgba(139,92,246,0.35)" }}
+            title="Contests & coding challenges"
+          >
+            <svg viewBox="0 0 20 20" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M4 4h12v3a4 4 0 0 1-4 4H8a4 4 0 0 1-4-4V4z" />
+              <path d="M8 3h4M10 11v4M7 18h6M8 15h4" />
+            </svg>
+            <span>Contests</span>
+          </button>
           {isMobile ? (
             <>
               <button
