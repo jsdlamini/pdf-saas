@@ -6065,7 +6065,7 @@ export default function ResearchStudioPage() {
                 type="button"
                 onClick={() => setWorkspaceScreen("learn")}
                 className="inline-flex items-center gap-1.5 rounded-lg px-4 py-2 text-sm font-bold text-white"
-                style={{ background: "linear-gradient(135deg,#10b981,#14b8a6)", boxShadow: "0 2px 12px rgba(16,185,129,0.35)" }}
+                style={{ background: "linear-gradient(135deg,#10b981,#14b8a6)", boxShadow: "0 2px 12px rgba(16,185,129,0.35)", cursor: "pointer" }}
               >
                 🎓 Learn to Code
               </button>
@@ -6073,7 +6073,7 @@ export default function ResearchStudioPage() {
                 type="button"
                 onClick={() => void openChallengesPanel("cohorts")}
                 className="inline-flex items-center gap-1.5 rounded-lg px-4 py-2 text-sm font-bold text-white"
-                style={{ background: "linear-gradient(135deg,#8b5cf6,#6366f1)", boxShadow: "0 2px 12px rgba(139,92,246,0.35)" }}
+                style={{ background: "linear-gradient(135deg,#8b5cf6,#6366f1)", boxShadow: "0 2px 12px rgba(139,92,246,0.35)", cursor: "pointer" }}
               >
                 🏆 Contests
               </button>
@@ -6494,7 +6494,7 @@ export default function ResearchStudioPage() {
             type="button"
             onClick={() => setWorkspaceScreen("learn")}
             className="inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-bold text-white"
-            style={{ background: "linear-gradient(135deg,#10b981,#14b8a6)", boxShadow: "0 2px 10px rgba(16,185,129,0.35)" }}
+            style={{ background: "linear-gradient(135deg,#10b981,#14b8a6)", boxShadow: "0 2px 10px rgba(16,185,129,0.35)", cursor: "pointer" }}
             title="Learn Python & C++ from scratch"
           >
             <svg viewBox="0 0 20 20" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
@@ -6507,7 +6507,7 @@ export default function ResearchStudioPage() {
             type="button"
             onClick={() => void openChallengesPanel("cohorts")}
             className="inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-bold text-white"
-            style={{ background: "linear-gradient(135deg,#8b5cf6,#6366f1)", boxShadow: "0 2px 10px rgba(139,92,246,0.35)" }}
+            style={{ background: "linear-gradient(135deg,#8b5cf6,#6366f1)", boxShadow: "0 2px 10px rgba(139,92,246,0.35)", cursor: "pointer" }}
             title="Contests & coding challenges"
           >
             <svg viewBox="0 0 20 20" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
