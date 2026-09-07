@@ -5975,12 +5975,17 @@ export default function ResearchStudioPage() {
       { key: "cpp", label: "C++", color: "#f97316", projects: [] },
     ];
     for (const project of filteredProjects) {
-      const type: EditorMode = project.type || "latex";
+      const snapshot = savedProjectSnapshots.find((s) => s.id === project.id);
+      const type: EditorMode = project.type || snapshot?.editorMode || (
+        snapshot?.entries?.some((e) => e.path.endsWith(".py")) ? "python"
+        : snapshot?.entries?.some((e) => e.path.endsWith(".cpp")) ? "cpp"
+        : "latex"
+      );
       const group = groups.find((g) => g.key === type);
       if (group) group.projects.push(project);
     }
     return groups.filter((group) => group.projects.length > 0);
-  }, [filteredProjects]);
+  }, [filteredProjects, savedProjectSnapshots]);
 
   if (workspaceScreen === "projects") {
     return (
@@ -6286,15 +6291,17 @@ export default function ResearchStudioPage() {
         ) : (
           <div style={{ display: "flex", flexDirection: "column", gap: 24 }}>
             {dashboardGroups.map((group) => (
-              <section key={group.key}>
-                <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 10 }}>
-                  <span style={{ width: 8, height: 8, borderRadius: "50%", background: group.color }} />
-                  <span style={{ fontSize: 14, fontWeight: 700, color: "var(--text-primary, #e2e8f0)" }}>{group.label}</span>
+              <section key={group.key} style={{ border: `1px solid var(--border-color, #334155)`, borderRadius: 12, background: "var(--bg-secondary, #131620)", overflow: "hidden" }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "10px 14px", borderBottom: `1px solid var(--border-color, #334155)`, background: `linear-gradient(120deg, ${group.color}1f, transparent)` }}>
+                  <svg viewBox="0 0 20 20" className="h-4 w-4" fill="none" stroke={group.color} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M3 5.5A1.5 1.5 0 0 1 4.5 4h3L9 5.5h6.5A1.5 1.5 0 0 1 17 7v7.5a1.5 1.5 0 0 1-1.5 1.5h-11A1.5 1.5 0 0 1 3 14.5v-9z" />
+                  </svg>
+                  <span style={{ fontSize: 13, fontWeight: 700, color: "var(--text-primary, #e2e8f0)" }}>{group.label}</span>
                   <span style={{ fontSize: 11, color: "var(--text-muted, #64748b)", marginLeft: "auto" }}>
                     {group.projects.length} project{group.projects.length !== 1 ? "s" : ""}
                   </span>
                 </div>
-                <div className="studio-project-grid">
+                <div className="studio-project-grid" style={{ padding: 12 }}>
                   {group.projects.map((item, index) => {
                     const isActive = item.id === activeProjectId;
                     const snapshot = savedProjectSnapshots.find((s) => s.id === item.id);
