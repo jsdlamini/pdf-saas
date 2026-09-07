@@ -5,6 +5,7 @@ export type LearnChallenge = {
   starter: string; // skeleton code loaded into the editor
   expectedOutput: string; // exact stdout (trimmed) a correct answer prints
   hint?: string;
+  kind?: "drill" | "word";
 };
 
 export type LearnLesson = {
@@ -35,6 +36,14 @@ function cpp(prompt: string, expectedOutput: string, starter?: string): LearnCha
   };
 }
 
+function wordPy(prompt: string, expectedOutput: string, starter?: string): LearnChallenge {
+  return { kind: "word", prompt, starter: starter ?? "# Read the problem, then write your solution\n", expectedOutput };
+}
+
+function wordCpp(prompt: string, expectedOutput: string, starter?: string): LearnChallenge {
+  return { kind: "word", prompt, starter: starter ?? '#include <iostream>\nint main() {\n    // your solution here\n    return 0;\n}\n', expectedOutput };
+}
+
 export const LEARN_LESSONS: LearnLesson[] = [
   // ─────────────────────────── Python ───────────────────────────
   {
@@ -56,6 +65,9 @@ export const LEARN_LESSONS: LearnLesson[] = [
       py("Print `one` then `two` on separate lines (two prints).", "one\ntwo"),
       py("Print `A`, `B` and `C` each on its own line (three prints).", "A\nB\nC"),
       py("Print `Line 1`, `Line 2` and `Line 3` each on its own line.", "Line 1\nLine 2\nLine 3"),
+      wordPy("A grain depot's terminal must greet every visitor. Print the exact line `Grain depot open.`", "Grain depot open."),
+      wordPy("A clinic booking system prints a confirmation after each appointment. Print `Appointment confirmed.`", "Appointment confirmed."),
+      wordPy("A school's registration desk shows a welcome banner. Print `Welcome to registration.`", "Welcome to registration."),
     ],
   },
   {
@@ -77,6 +89,9 @@ export const LEARN_LESSONS: LearnLesson[] = [
       py("Create `count = 1`, then change it to `2`, then print it.", "2"),
       py("Create `total = 10`, then `total = total + 5`, then print `total`.", "15"),
       py("Create `x = 4`, `y = 7` and `z = 12`, print all three on one line.", "4 7 12"),
+      wordPy("A farmer weighs two sacks of grain: 3.2 kg and 4.1 kg. Store each weight in a variable and print both on one line.", "3.2 4.1"),
+      wordPy("A shop opens with 150 bags and sells 40 by noon. Store the starting stock in a variable, subtract the sales, and print the remaining stock.", "110"),
+      wordPy("A counter on a machine starts at 5 and is updated to 6 after the first run. Store the value, update it, and print the final count.", "6"),
     ],
   },
   {
@@ -98,6 +113,9 @@ export const LEARN_LESSONS: LearnLesson[] = [
       py("Print `7 * 6`.", "42"),
       py("Print `100 / 8` exactly as Python prints it.", "12.5"),
       py("Print `(20 + 30) * 2 - 15`.", "85"),
+      wordPy("A cooperative packs maize into 50 kg bags. A harvest of 1,250 kg must be packed. Print how many full bags are made, then the leftover kg on the next line.", "25\n0"),
+      wordPy("A plot is 24 m long and 15 m wide. Print its area in square metres.", "360"),
+      wordPy("A tanker delivers 2,000 litres to three pumps equally. Print how many whole litres each pump receives.", "666"),
     ],
   },
   {
@@ -119,6 +137,9 @@ export const LEARN_LESSONS: LearnLesson[] = [
       py("Convert `\"50\"` to an int and print its whole-number half (`// 2`).", "25"),
       py("Convert `\"9\"` to an int and print `9 ** 2`.", "81"),
       py("Convert `\"2024\"` to an int, add `1`, print the result.", "2025"),
+      wordPy("A form stores a farmer's age as the text `42`. Convert it to a number and print the age next year.", "43"),
+      wordPy("A sensor reports rainfall as the text `12.4`. Convert it to a number and print double that amount.", "24.8"),
+      wordPy("An invoice stores the quantity as `7` and the unit price as `3`. Convert both to numbers and print the total cost.", "21"),
     ],
   },
   {
@@ -140,6 +161,9 @@ export const LEARN_LESSONS: LearnLesson[] = [
       py("`n = 7`. Print `Even` if `n % 2 == 0`, else `Odd`.", "Odd", 'n = 7\n'),
       py("`n = 10`. Print `Even` if `n % 2 == 0`, else `Odd`.", "Even", 'n = 10\n'),
       py("`maize = 1200` and `threshold = 1000`. Print `Above` if `maize > threshold`, else `Below`.", "Above", 'maize = 1200\nthreshold = 1000\n'),
+      wordPy("An early-warning system flags a drought when seasonal rainfall is below 500 mm. This season recorded 420 mm. Print `Alert` if below 500, otherwise `Normal`.", "Alert"),
+      wordPy("A pass is awarded at 50 marks. A student scored 73. Print `Pass` if the score is 50 or more, otherwise `Fail`.", "Pass"),
+      wordPy("A thermostat prints `Heat` below 18 degrees, `Cool` above 28 degrees, and `Comfortable` otherwise. The room is 22 degrees. Print the right word.", "Comfortable"),
     ],
   },
   {
@@ -161,6 +185,9 @@ export const LEARN_LESSONS: LearnLesson[] = [
       py("Print the squares `i*i` for `i` from 1 to 5.", "1\n4\n9\n16\n25"),
       py("Count down: print 5, 4, 3, 2, 1 (one per line).", "5\n4\n3\n2\n1"),
       py("Print the sum of even numbers from 2 to 20.", "110"),
+      wordPy("A nursery plants 5 seedlings in a row and labels each position. Print the positions 1 to 5, one per line.", "1\n2\n3\n4\n5"),
+      wordPy("A farmer sums the daily milk yields of 7 cows, starting at 3 litres and increasing by 1 each cow. Print the total.", "42"),
+      wordPy("A maize plant starts at 10 cm and grows 5 cm each week. Print its height each week for 6 weeks.", "10\n15\n20\n25\n30\n35"),
     ],
   },
   {
@@ -182,6 +209,9 @@ export const LEARN_LESSONS: LearnLesson[] = [
       py("Print `3 * n` for n = 1..4 using `while`.", "3\n6\n9\n12"),
       py("Print the odd numbers 1 to 9 using `while`.", "1\n3\n5\n7\n9"),
       py("Using `while`, print 20, 15, 10, 5, 0 (count down by 5).", "20\n15\n10\n5\n0"),
+      wordPy("A water tank holds 100 litres and leaks 10 litres a day. Print the water level each day until it reaches 0.", "100\n90\n80\n70\n60\n50\n40\n30\n20\n10\n0"),
+      wordPy("A savings account starts at 0 and receives 20 a month. Print the balance each month until it reaches 100.", "20\n40\n60\n80\n100"),
+      wordPy("A culture of bacteria doubles every hour, starting with 1 cell. Print the count each hour until it exceeds 100.", "1\n2\n4\n8\n16\n32\n64\n128"),
     ],
   },
   {
@@ -203,6 +233,9 @@ export const LEARN_LESSONS: LearnLesson[] = [
       py("Print the last item of `nums = [4, 8, 15, 16]` (index -1).", "16"),
       py("Print `len([4, 8, 15, 16, 23, 42])`.", "6"),
       py("Print the average (sum / len) of `[10, 20, 30, 40]` as a whole number.", "25"),
+      wordPy("A market records the prices of five vegetables: 12, 7, 9, 15 and 6. Print the most expensive price.", "15"),
+      wordPy("A school records attendance over five days: 95, 88, 92, 90 and 85. Print the average attendance as a whole number.", "90"),
+      wordPy("A shop tracks four days of sales: 210, 340, 180 and 290. Print the total sales.", "1020"),
     ],
   },
   {
@@ -224,6 +257,9 @@ export const LEARN_LESSONS: LearnLesson[] = [
       py("Define `is_even(n)` returning `n % 2 == 0`; print `is_even(10)`.", "True"),
       py("Define `is_even(n)` returning `n % 2 == 0`; print `is_even(7)`.", "False"),
       py("Define `c_to_f(c)` returning `c * 9 / 5 + 32`; print `c_to_f(100)`.", "212.0"),
+      wordPy("A fuel station charges a flat fee of 5 plus 3 per litre. Write a function `cost(litres)` and print `cost(20)`.", "65"),
+      wordPy("A taxi charges 2 per kilometre. Write a function `fare(km)` and print `fare(15)`.", "30"),
+      wordPy("The area of a rectangle is length times width. Write a function `area(length, width)` and print `area(30, 20)`.", "600"),
     ],
   },
   {
@@ -245,6 +281,9 @@ export const LEARN_LESSONS: LearnLesson[] = [
       py("Print `boom` for each number 1..20 that is a multiple of 7.", "boom\nboom"),
       py("For 1..10: print `fizz` for multiples of 3, else the number.", "1\n2\nfizz\n4\n5\nfizz\n7\n8\nfizz\n10"),
       py("Print the product of the numbers 1..5 (1*2*3*4*5).", "120"),
+      wordPy("A generator checks numbers 1 to 15: print `Fizz` for multiples of 3, `Buzz` for multiples of 5, `FizzBuzz` for both, and the number otherwise.", "1\n2\nFizz\n4\nBuzz\nFizz\n7\n8\nFizz\nBuzz\n11\nFizz\n13\n14\nFizzBuzz"),
+      wordPy("A traffic light alternates every second. For seconds 1 to 10, print `STOP` for odd seconds and `GO` for even seconds.", "STOP\nGO\nSTOP\nGO\nSTOP\nGO\nSTOP\nGO\nSTOP\nGO"),
+      wordPy("A harvest sorter processes crates 1 to 20: print `RIPE` for crates divisible by 4, and the crate number otherwise.", "1\n2\n3\nRIPE\n5\n6\n7\nRIPE\n9\n10\n11\nRIPE\n13\n14\n15\nRIPE\n17\n18\n19\nRIPE"),
     ],
   },
 
@@ -268,6 +307,9 @@ export const LEARN_LESSONS: LearnLesson[] = [
       cpp("Print `one` then `two` on separate lines.", "one\ntwo"),
       cpp("Print `A`, `B` and `C` each on its own line.", "A\nB\nC"),
       cpp("Print `Line 1`, `Line 2` and `Line 3` each on its own line.", "Line 1\nLine 2\nLine 3"),
+      wordCpp("A grain depot's terminal must greet every visitor. Print the exact line `Grain depot open.`", "Grain depot open."),
+      wordCpp("A clinic booking system prints a confirmation after each appointment. Print `Appointment confirmed.`", "Appointment confirmed."),
+      wordCpp("A school's registration desk shows a welcome banner. Print `Welcome to registration.`", "Welcome to registration."),
     ],
   },
   {
@@ -289,6 +331,9 @@ export const LEARN_LESSONS: LearnLesson[] = [
       cpp("Create `int x = 4; int y = 7; int z = 12;`, print all three on one line.", "4 7 12"),
       cpp("Create `double pi = 3.14;` and print it.", "3.14"),
       cpp("Create `bool ok = true;` and print it (prints `1`).", "1"),
+      wordCpp("A farmer weighs two sacks of grain: 3.2 kg and 4.1 kg. Store each weight in a variable and print both on one line.", "3.2 4.1"),
+      wordCpp("A shop opens with 150 bags and sells 40 by noon. Store the starting stock in a variable, subtract the sales, and print the remaining stock.", "110"),
+      wordCpp("A counter on a machine starts at 5 and is updated to 6 after the first run. Store the value, update it, and print the final count.", "6"),
     ],
   },
   {
@@ -310,6 +355,9 @@ export const LEARN_LESSONS: LearnLesson[] = [
       cpp("Print `100 / 8` using a `double` (so you get `12.5`).", "12.5"),
       cpp("Print `(20 + 30) * 2 - 15`.", "85"),
       cpp("Print `11 % 3` (the remainder of 11 divided by 3).", "2"),
+      wordCpp("A cooperative packs maize into 50 kg bags. A harvest of 1,250 kg must be packed. Print how many full bags are made, then the leftover kg on the next line.", "25\n0"),
+      wordCpp("A plot is 24 m long and 15 m wide. Print its area in square metres.", "360"),
+      wordCpp("A tanker delivers 2,000 litres to three pumps equally. Print how many whole litres each pump receives.", "666"),
     ],
   },
   {
@@ -331,6 +379,9 @@ export const LEARN_LESSONS: LearnLesson[] = [
       cpp("Print `9 * 9`.", "81"),
       cpp("Print `2024 + 1`.", "2025"),
       cpp("Print the whole-number average of 84, 91 and 76.", "83"),
+      wordCpp("A form stores a farmer's age as the text `42`. Convert it to a number and print the age next year.", "43"),
+      wordCpp("A sensor reports rainfall as the text `12.4`. Convert it to a number and print double that amount.", "24.8"),
+      wordCpp("An invoice stores the quantity as `7` and the unit price as `3`. Convert both to numbers and print the total cost.", "21"),
     ],
   },
   {
@@ -352,6 +403,9 @@ export const LEARN_LESSONS: LearnLesson[] = [
       cpp("`n = 7`. Print `Even` if `n % 2 == 0`, else `Odd`.", "Odd"),
       cpp("`n = 10`. Print `Even` if `n % 2 == 0`, else `Odd`.", "Even"),
       cpp("`maize = 1200`, `threshold = 1000`. Print `Above` if `maize > threshold`, else `Below`.", "Above"),
+      wordCpp("An early-warning system flags a drought when seasonal rainfall is below 500 mm. This season recorded 420 mm. Print `Alert` if below 500, otherwise `Normal`.", "Alert"),
+      wordCpp("A pass is awarded at 50 marks. A student scored 73. Print `Pass` if the score is 50 or more, otherwise `Fail`.", "Pass"),
+      wordCpp("A thermostat prints `Heat` below 18 degrees, `Cool` above 28 degrees, and `Comfortable` otherwise. The room is 22 degrees. Print the right word.", "Comfortable"),
     ],
   },
   {
@@ -373,6 +427,9 @@ export const LEARN_LESSONS: LearnLesson[] = [
       cpp("Print 5, 4, 3, 2, 1 (count down).", "5\n4\n3\n2\n1"),
       cpp("Print the sum of even numbers from 2 to 20.", "110"),
       cpp("Print the numbers 0 to 4 (start at 0).", "0\n1\n2\n3\n4"),
+      wordCpp("A nursery plants 5 seedlings in a row and labels each position. Print the positions 1 to 5, one per line.", "1\n2\n3\n4\n5"),
+      wordCpp("A farmer sums the daily milk yields of 7 cows, starting at 3 litres and increasing by 1 each cow. Print the total.", "42"),
+      wordCpp("A maize plant starts at 10 cm and grows 5 cm each week. Print its height each week for 6 weeks.", "10\n15\n20\n25\n30\n35"),
     ],
   },
   {
@@ -394,6 +451,9 @@ export const LEARN_LESSONS: LearnLesson[] = [
       cpp("Print the odd numbers 1 to 9 using `while`.", "1\n3\n5\n7\n9"),
       cpp("Using `while`, print 20, 15, 10, 5, 0.", "20\n15\n10\n5\n0"),
       cpp("Print the squares 1, 4, 9, 16 using `while`.", "1\n4\n9\n16"),
+      wordCpp("A water tank holds 100 litres and leaks 10 litres a day. Print the water level each day until it reaches 0.", "100\n90\n80\n70\n60\n50\n40\n30\n20\n10\n0"),
+      wordCpp("A savings account starts at 0 and receives 20 a month. Print the balance each month until it reaches 100.", "20\n40\n60\n80\n100"),
+      wordCpp("A culture of bacteria doubles every hour, starting with 1 cell. Print the count each hour until it exceeds 100.", "1\n2\n4\n8\n16\n32\n64\n128"),
     ],
   },
   {
@@ -415,6 +475,9 @@ export const LEARN_LESSONS: LearnLesson[] = [
       cpp("Print the average (sum / count) of `{10, 20, 30, 40}`.", "25"),
       cpp("Print the product of `{2, 3, 4}`.", "24"),
       cpp("Count how many of `{1, 4, 9, 12, 15, 18}` are even, and print the count.", "3"),
+      wordCpp("A market records the prices of five vegetables: 12, 7, 9, 15 and 6. Print the most expensive price.", "15"),
+      wordCpp("A school records attendance over five days: 95, 88, 92, 90 and 85. Print the average attendance as a whole number.", "90"),
+      wordCpp("A shop tracks four days of sales: 210, 340, 180 and 290. Print the total sales.", "1020"),
     ],
   },
   {
@@ -436,6 +499,9 @@ export const LEARN_LESSONS: LearnLesson[] = [
       cpp("Define `int sum3(int a, int b, int c) { return a + b + c; }` and print `sum3(10, 20, 30)`.", "60"),
       cpp("Define `int maxOf(int a, int b) { return a > b ? a : b; }` and print `maxOf(9, 14)`.", "14"),
       cpp("Define `int avg(int a, int b) { return (a + b) / 2; }` and print `avg(10, 20)`.", "15"),
+      wordCpp("A fuel station charges a flat fee of 5 plus 3 per litre. Write a function `cost(litres)` and print `cost(20)`.", "65"),
+      wordCpp("A taxi charges 2 per kilometre. Write a function `fare(km)` and print `fare(15)`.", "30"),
+      wordCpp("The area of a rectangle is length times width. Write a function `area(length, width)` and print `area(30, 20)`.", "600"),
     ],
   },
   {
@@ -457,6 +523,9 @@ export const LEARN_LESSONS: LearnLesson[] = [
       cpp("For 1..10: print `fizz` for multiples of 3, else the number.", "1\n2\nfizz\n4\n5\nfizz\n7\n8\nfizz\n10"),
       cpp("Print the product of the numbers 1..5.", "120"),
       cpp("For 1..20: print `YES` for multiples of 4, else the number.", "1\n2\n3\nYES\n5\n6\n7\nYES\n9\n10\n11\nYES\n13\n14\n15\nYES\n17\n18\n19\nYES"),
+      wordCpp("A generator checks numbers 1 to 15: print `Fizz` for multiples of 3, `Buzz` for multiples of 5, `FizzBuzz` for both, and the number otherwise.", "1\n2\nFizz\n4\nBuzz\nFizz\n7\n8\nFizz\nBuzz\n11\nFizz\n13\n14\nFizzBuzz"),
+      wordCpp("A traffic light alternates every second. For seconds 1 to 10, print `STOP` for odd seconds and `GO` for even seconds.", "STOP\nGO\nSTOP\nGO\nSTOP\nGO\nSTOP\nGO\nSTOP\nGO"),
+      wordCpp("A harvest sorter processes crates 1 to 20: print `RIPE` for crates divisible by 4, and the crate number otherwise.", "1\n2\n3\nRIPE\n5\n6\n7\nRIPE\n9\n10\n11\nRIPE\n13\n14\n15\nRIPE\n17\n18\n19\nRIPE"),
     ],
   },
 ];

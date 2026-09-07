@@ -65,6 +65,7 @@ export function LearnStudio({ onBack }: { onBack: () => void }) {
     ? lesson.challenges.filter((_, i) => isSolved(lesson.id, i)).length
     : 0;
   const lessonComplete = lesson ? lessonSolvedCount === lesson.challenges.length : false;
+  const firstWordIndex = challenges.findIndex((c) => c.kind === "word");
 
   const totalChallenges = lessons.reduce((n, l) => n + l.challenges.length, 0);
   const totalSolved = solved.length;
@@ -262,37 +263,52 @@ export function LearnStudio({ onBack }: { onBack: () => void }) {
 
               {/* Challenge picker */}
               <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginBottom: 12 }}>
-                {challenges.map((c, i) => {
-                  const done = isSolved(lesson.id, i);
-                  const current = i === challengeIndex;
-                  return (
-                    <button
-                      key={i}
-                      type="button"
-                      onClick={() => setChallengeIndex(i)}
-                      style={{
-                        minWidth: 34,
-                        height: 30,
-                        padding: "0 8px",
-                        borderRadius: 8,
-                        fontSize: 12,
-                        fontWeight: 700,
-                        cursor: "pointer",
-                        border: current ? "1px solid rgba(16,185,129,0.6)" : `1px solid ${border}`,
-                        background: done ? "rgba(52,211,153,0.15)" : current ? "rgba(16,185,129,0.12)" : "transparent",
-                        color: done ? "#34d399" : current ? "#5eead4" : primary,
-                      }}
-                    >
-                      {i + 1}{done ? " ✓" : ""}
-                    </button>
-                  );
-                })}
+                {challenges.slice(0, firstWordIndex < 0 ? challenges.length : firstWordIndex).map((c, i) => (
+                  <button
+                    key={i}
+                    type="button"
+                    onClick={() => setChallengeIndex(i)}
+                    style={{
+                      minWidth: 34, height: 30, padding: "0 8px", borderRadius: 8, fontSize: 12, fontWeight: 700, cursor: "pointer",
+                      border: i === challengeIndex ? "1px solid rgba(16,185,129,0.6)" : `1px solid ${border}`,
+                      background: isSolved(lesson.id, i) ? "rgba(52,211,153,0.15)" : i === challengeIndex ? "rgba(16,185,129,0.12)" : "transparent",
+                      color: isSolved(lesson.id, i) ? "#34d399" : i === challengeIndex ? "#5eead4" : primary,
+                    }}
+                  >
+                    {i + 1}{isSolved(lesson.id, i) ? " ✓" : ""}
+                  </button>
+                ))}
+                {firstWordIndex >= 0 ? (
+                  <div style={{ flexBasis: "100%", fontSize: 10, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.08em", color: muted, margin: "4px 0 0" }}>
+                    🌍 Real-life problems
+                  </div>
+                ) : null}
+                {firstWordIndex >= 0
+                  ? challenges.slice(firstWordIndex).map((c, i) => {
+                      const idx = firstWordIndex + i;
+                      return (
+                        <button
+                          key={idx}
+                          type="button"
+                          onClick={() => setChallengeIndex(idx)}
+                          style={{
+                            minWidth: 34, height: 30, padding: "0 8px", borderRadius: 8, fontSize: 12, fontWeight: 700, cursor: "pointer",
+                            border: idx === challengeIndex ? "1px solid rgba(16,185,129,0.6)" : `1px solid ${border}`,
+                            background: isSolved(lesson.id, idx) ? "rgba(52,211,153,0.15)" : idx === challengeIndex ? "rgba(16,185,129,0.12)" : "transparent",
+                            color: isSolved(lesson.id, idx) ? "#34d399" : idx === challengeIndex ? "#5eead4" : primary,
+                          }}
+                        >
+                          🌍 {i + 1}{isSolved(lesson.id, idx) ? " ✓" : ""}
+                        </button>
+                      );
+                    })
+                  : null}
               </div>
 
               {/* Current challenge prompt */}
               <div style={{ background: bg2, border: `1px solid ${border}`, borderRadius: 8, padding: "12px 14px" }}>
                 <p style={{ margin: "0 0 4px", fontSize: 11, fontWeight: 700, color: "#5eead4" }}>
-                  Question {challengeIndex + 1}
+                  {currentChallenge?.kind === "word" ? "🌍 Real-life problem" : `Question ${challengeIndex + 1}`}
                 </p>
                 <div className="challenge-markdown" style={{ fontSize: 13.5, lineHeight: 1.6 }}>
                   <ReactMarkdown>{currentChallenge?.prompt}</ReactMarkdown>
