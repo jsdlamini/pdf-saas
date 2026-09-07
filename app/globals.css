@@ -1624,18 +1624,15 @@ body[data-studio-editor="true"] footer {
 .studio-hero {
   display: flex;
   flex-direction: column;
-  gap: 24px;
-  border-radius: 20px;
-  border: 1px solid color-mix(in srgb, #a78bfa 24%, var(--border-color, #334155));
-  background:
-    radial-gradient(120% 90% at 100% 0%, rgba(139, 92, 246, 0.22), transparent 55%),
-    radial-gradient(120% 90% at 0% 100%, rgba(96, 165, 250, 0.14), transparent 50%),
-    var(--bg-secondary, #131620);
-  padding: 28px;
-  margin-bottom: 28px;
+  gap: 20px;
+  border-radius: 16px;
+  border: 1px solid var(--border-color, #334155);
+  background: var(--bg-secondary, #131620);
+  padding: 20px;
+  margin-bottom: 20px;
 }
 @media (min-width: 900px) {
-  .studio-hero { padding: 36px; }
+  .studio-hero { padding: 24px; }
 }
 
 .studio-hero-copy {
@@ -1915,8 +1912,8 @@ body[data-studio-editor="true"] footer {
 
 .studio-project-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
-  gap: 12px;
+  grid-template-columns: repeat(auto-fill, minmax(230px, 1fr));
+  gap: 10px;
 }
 
 .studio-project-card {
@@ -1924,8 +1921,8 @@ body[data-studio-editor="true"] footer {
   container-name: project-card;
   background: var(--bg-secondary, #131620);
   border: 1px solid var(--border-color, #334155);
-  border-radius: 10px;
-  padding: 16px;
+  border-radius: 8px;
+  padding: 12px;
   transition: border-color 0.15s, background 0.15s;
   cursor: default;
   animation: studio-card-enter 0.4s cubic-bezier(0.22, 1, 0.36, 1) both;
@@ -1958,10 +1955,10 @@ body[data-studio-editor="true"] footer {
 }
 
 .studio-project-cover {
-  height: 120px;
-  border-radius: 8px;
+  height: 68px;
+  border-radius: 6px;
   overflow: hidden;
-  margin-bottom: 12px;
+  margin-bottom: 10px;
   border: 1px solid var(--border-color, #334155);
   background: var(--bg-surface, #1e2130);
   display: flex;
@@ -1979,7 +1976,7 @@ body[data-studio-editor="true"] footer {
   background: color-mix(in srgb, var(--accent-color, #60a5fa) 8%, var(--bg-surface, #1e2130));
 }
 .studio-project-cover-empty span {
-  font-size: 20px;
+  font-size: 15px;
   font-weight: 700;
   color: var(--text-muted, #64748b);
 }
