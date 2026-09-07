@@ -1354,6 +1354,8 @@ html[data-theme="light"] .studio-projects-panel {
 }
 .studio-editor-codemirror .cm-cursor {
   border-left-color: #4ade80;
+  border-left-width: 2px;
+  margin-left: -1px;
 }
 .studio-editor-codemirror .cm-find-match {
   background: rgba(250, 204, 21, 0.28);
