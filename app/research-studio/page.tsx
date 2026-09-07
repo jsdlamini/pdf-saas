@@ -5967,6 +5967,21 @@ export default function ResearchStudioPage() {
     return groups.filter((group) => group.projects.length > 0);
   }, [savedProjects]);
 
+  // Group filtered projects into three folder-like sections for the dashboard.
+  const dashboardGroups = useMemo(() => {
+    const groups: { key: EditorMode; label: string; color: string; projects: SavedProjectMeta[] }[] = [
+      { key: "latex", label: "LaTeX", color: "#818cf8", projects: [] },
+      { key: "python", label: "Python", color: "#4ade80", projects: [] },
+      { key: "cpp", label: "C++", color: "#f97316", projects: [] },
+    ];
+    for (const project of filteredProjects) {
+      const type: EditorMode = project.type || "latex";
+      const group = groups.find((g) => g.key === type);
+      if (group) group.projects.push(project);
+    }
+    return groups.filter((group) => group.projects.length > 0);
+  }, [filteredProjects]);
+
   if (workspaceScreen === "projects") {
     return (
       <main className="studio-dark studio-shell">
@@ -6068,7 +6083,11 @@ export default function ResearchStudioPage() {
                 className="studio-btn"
                 style={{ background: "linear-gradient(135deg,#10b981,#14b8a6)", color: "#fff", border: "none", fontWeight: 700 }}
               >
-                🎓 Learn to Code
+                <svg viewBox="0 0 20 20" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M2 7l8-4 8 4-8 4-8-4z" />
+                  <path d="M6 9.5V14c0 1.2 1.8 2 4 2s4-.8 4-2V9.5" />
+                </svg>
+                Learn to Code
               </button>
               <button
                 type="button"
@@ -6076,7 +6095,11 @@ export default function ResearchStudioPage() {
                 className="studio-btn"
                 style={{ background: "linear-gradient(135deg,#8b5cf6,#6366f1)", color: "#fff", border: "none", fontWeight: 700 }}
               >
-                🏆 Contests
+                <svg viewBox="0 0 20 20" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M4 4h12v3a4 4 0 0 1-4 4H8a4 4 0 0 1-4-4V4z" />
+                  <path d="M8 3h4M10 11v4M7 18h6M8 15h4" />
+                </svg>
+                Contests
               </button>
             </div>
             {!isSignedIn ? (
@@ -6261,114 +6284,127 @@ export default function ResearchStudioPage() {
             </button>
           </div>
         ) : (
-          <div className="studio-project-grid" style={{
-            gridTemplateColumns: `repeat(auto-fill, minmax(${filteredProjects.length > 8 ? 170 : filteredProjects.length > 4 ? 190 : 200}px, 1fr))`,
-          }}>
-            {filteredProjects.map((item, index) => {
-              const isActive = item.id === activeProjectId;
-              const snapshot = savedProjectSnapshots.find((s) => s.id === item.id);
-              const fileCount = snapshot?.entries?.filter((e) => e.kind === "file").length ?? 0;
+          <div style={{ display: "flex", flexDirection: "column", gap: 24 }}>
+            {dashboardGroups.map((group) => (
+              <section key={group.key}>
+                <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 10 }}>
+                  <span style={{ width: 8, height: 8, borderRadius: "50%", background: group.color }} />
+                  <span style={{ fontSize: 14, fontWeight: 700, color: "var(--text-primary, #e2e8f0)" }}>{group.label}</span>
+                  <span style={{ fontSize: 11, color: "var(--text-muted, #64748b)", marginLeft: "auto" }}>
+                    {group.projects.length} project{group.projects.length !== 1 ? "s" : ""}
+                  </span>
+                </div>
+                <div className="studio-project-grid">
+                  {group.projects.map((item, index) => {
+                    const isActive = item.id === activeProjectId;
+                    const snapshot = savedProjectSnapshots.find((s) => s.id === item.id);
+                    const fileCount = snapshot?.entries?.filter((e) => e.kind === "file").length ?? 0;
+                    const mode = item.type || snapshot?.editorMode || (
+                      snapshot?.entries?.some((e: ProjectEntry) => e.path.endsWith(".py")) ? "python"
+                      : snapshot?.entries?.some((e: ProjectEntry) => e.path.endsWith(".cpp")) ? "cpp"
+                      : "latex"
+                    );
+                    const files = snapshot?.entries?.filter((e) => e.kind === "file") ?? [];
+                    const mainFile = files.find((f) => /^main\.(tex|py|cpp)$/.test(f.path)) ?? files[0];
+                    const codeSnippet = mainFile?.content ? mainFile.content.split("\n").slice(0, 5).join("\n") : "";
 
-              const mode = item.type || snapshot?.editorMode || (
-                snapshot?.entries?.some((e: ProjectEntry) => e.path.endsWith(".py")) ? "python"
-                : snapshot?.entries?.some((e: ProjectEntry) => e.path.endsWith(".cpp")) ? "cpp"
-                : "latex"
-              );
-
-              return (
-                <article
-                  key={item.id}
-                  className="studio-project-card"
-                  data-mode={mode}
-                  style={{
-                    animationDelay: `${Math.min(index, 15) * 55}ms`,
-                    ...(isActive ? { borderColor: "rgba(30, 64, 175, 0.4)" } : {}),
-                  }}
-                >
-                  {item.coverDataUrl ? (
-                    <div className="studio-project-cover">
-                      <img src={item.coverDataUrl} alt={`${item.name} preview`} loading="lazy" />
-                    </div>
-                  ) : (
-                    <div className="studio-project-cover studio-project-cover-empty" aria-hidden="true">
-                      <span>{mode === "python" ? "Py" : mode === "cpp" ? "C++" : "TeX"}</span>
-                    </div>
-                  )}
-                  <p className="studio-project-card-name">{item.name}</p>
-                  <p className="studio-project-card-meta">
-                    Updated {new Date(item.updatedAt).toLocaleString()}
-                    {fileCount > 0 ? ` · ${fileCount} file${fileCount !== 1 ? "s" : ""}` : ""}
-                  </p>
-                  <div className="studio-project-card-tags">
-                    {(() => {
-                      if (mode === "python") {
-                        return (
-                          <span className="studio-tag">
-                            <span className="studio-tag-dot" style={{ background: "#4ade80" }} />
-                            Python
-                          </span>
-                        );
-                      }
-                      if (mode === "cpp") {
-                        return (
-                          <span className="studio-tag">
-                            <span className="studio-tag-dot" style={{ background: "#f97316" }} />
-                            C++
-                          </span>
-                        );
-                      }
-                      return (
-                        <span className="studio-tag">
-                          <span className="studio-tag-dot" style={{ background: "#818cf8" }} />
-                          LaTeX
-                        </span>
-                      );
-                    })()}
-                  </div>
-                  <div className="studio-project-card-actions">
-                    <button
-                      type="button"
-                      onClick={() => {
-                        if (item.id !== activeProjectId) saveCurrentProject();
-                        loadSavedProject(item.id);
-                      }}
-                      className="studio-btn studio-btn-primary studio-card-btn"
-                      title={`Open ${item.name}`}
-                      aria-label={`Open ${item.name}`}
-                    >
-                      <svg viewBox="0 0 20 20" className="studio-card-btn-icon" aria-hidden="true"><path d="M6 4l9 6-9 6V4z" strokeLinecap="round" strokeLinejoin="round" /></svg>
-                      <span className="studio-card-btn-label">Open</span>
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        if (item.id !== activeProjectId) saveCurrentProject();
-                        loadSavedProject(item.id);
-                        setTimeout(() => {
-                          void downloadProjectBundle();
-                        }, 500);
-                      }}
-                      className="studio-btn studio-btn-secondary studio-card-btn"
-                      title={`Download ${item.name}`}
-                      aria-label={`Download ${item.name}`}
-                    >
-                      <svg viewBox="0 0 20 20" className="studio-card-btn-icon" aria-hidden="true"><path d="M10 3v9m0 0l-3-3m3 3l3-3M4 14v2h12v-2" strokeLinecap="round" strokeLinejoin="round" /></svg>
-                      <span className="studio-card-btn-label">Download</span>
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => deleteSavedProject(item.id)}
-                      className="studio-btn studio-btn-danger studio-card-btn"
-                      title={`Delete ${item.name}`}
-                      aria-label={`Delete ${item.name}`}
-                    >
-                      <svg viewBox="0 0 20 20" className="studio-card-btn-icon" aria-hidden="true"><path d="M5 6h10M8 6V4h4v2m-5 0l.5 10h5L13 6" strokeLinecap="round" strokeLinejoin="round" /></svg>
-                      <span className="studio-card-btn-label">Delete</span>
-                    </button>
-                  </div>
-                </article>
-              );
-            })}
+                    return (
+                      <article
+                        key={item.id}
+                        className="studio-project-card"
+                        data-mode={mode}
+                        style={{
+                          animationDelay: `${Math.min(index, 15) * 55}ms`,
+                          ...(isActive ? { borderColor: "rgba(30, 64, 175, 0.4)" } : {}),
+                        }}
+                      >
+                        {item.coverDataUrl ? (
+                          <div className="studio-project-cover">
+                            <img src={item.coverDataUrl} alt={`${item.name} preview`} loading="lazy" />
+                          </div>
+                        ) : (
+                          <div className="studio-project-cover studio-project-cover-code" aria-hidden="true">
+                            <pre>{codeSnippet || (mode === "python" ? "Py" : mode === "cpp" ? "C++" : "TeX")}</pre>
+                          </div>
+                        )}
+                        <p className="studio-project-card-name">{item.name}</p>
+                        <p className="studio-project-card-meta">
+                          Updated {new Date(item.updatedAt).toLocaleString()}
+                          {fileCount > 0 ? ` · ${fileCount} file${fileCount !== 1 ? "s" : ""}` : ""}
+                        </p>
+                        <div className="studio-project-card-tags">
+                          {(() => {
+                            if (mode === "python") {
+                              return (
+                                <span className="studio-tag">
+                                  <span className="studio-tag-dot" style={{ background: "#4ade80" }} />
+                                  Python
+                                </span>
+                              );
+                            }
+                            if (mode === "cpp") {
+                              return (
+                                <span className="studio-tag">
+                                  <span className="studio-tag-dot" style={{ background: "#f97316" }} />
+                                  C++
+                                </span>
+                              );
+                            }
+                            return (
+                              <span className="studio-tag">
+                                <span className="studio-tag-dot" style={{ background: "#818cf8" }} />
+                                LaTeX
+                              </span>
+                            );
+                          })()}
+                        </div>
+                        <div className="studio-project-card-actions">
+                          <button
+                            type="button"
+                            onClick={() => {
+                              if (item.id !== activeProjectId) saveCurrentProject();
+                              loadSavedProject(item.id);
+                            }}
+                            className="studio-btn studio-btn-primary studio-card-btn"
+                            title={`Open ${item.name}`}
+                            aria-label={`Open ${item.name}`}
+                          >
+                            <svg viewBox="0 0 20 20" className="studio-card-btn-icon" aria-hidden="true"><path d="M6 4l9 6-9 6V4z" strokeLinecap="round" strokeLinejoin="round" /></svg>
+                            <span className="studio-card-btn-label">Open</span>
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              if (item.id !== activeProjectId) saveCurrentProject();
+                              loadSavedProject(item.id);
+                              setTimeout(() => {
+                                void downloadProjectBundle();
+                              }, 500);
+                            }}
+                            className="studio-btn studio-btn-secondary studio-card-btn"
+                            title={`Download ${item.name}`}
+                            aria-label={`Download ${item.name}`}
+                          >
+                            <svg viewBox="0 0 20 20" className="studio-card-btn-icon" aria-hidden="true"><path d="M10 3v9m0 0l-3-3m3 3l3-3M4 14v2h12v-2" strokeLinecap="round" strokeLinejoin="round" /></svg>
+                            <span className="studio-card-btn-label">Download</span>
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => deleteSavedProject(item.id)}
+                            className="studio-btn studio-btn-danger studio-card-btn"
+                            title={`Delete ${item.name}`}
+                            aria-label={`Delete ${item.name}`}
+                          >
+                            <svg viewBox="0 0 20 20" className="studio-card-btn-icon" aria-hidden="true"><path d="M5 6h10M8 6V4h4v2m-5 0l.5 10h5L13 6" strokeLinecap="round" strokeLinejoin="round" /></svg>
+                            <span className="studio-card-btn-label">Delete</span>
+                          </button>
+                        </div>
+                      </article>
+                    );
+                  })}
+                </div>
+              </section>
+            ))}
           </div>
         )}
 

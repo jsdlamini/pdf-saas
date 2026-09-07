@@ -3,10 +3,26 @@
 import { useEffect, useMemo, useState } from "react";
 import ReactMarkdown from "react-markdown";
 import { LatexEditor } from "./latex-editor";
-import { LEARN_SECTIONS, type LearnLanguage } from "@/lib/learn-curriculum";
+import { LEARN_LESSONS, LEARN_SECTIONS, type LearnLanguage } from "@/lib/learn-curriculum";
 
 function normalize(s: string): string {
   return s.replace(/\r/g, "").trim();
+}
+
+function CheckIcon({ size = 12, color = "#34d399" }: { size?: number; color?: string }) {
+  return (
+    <svg viewBox="0 0 20 20" style={{ width: size, height: size }} fill="none" stroke={color} strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M4 10.5l4 4 8-9" />
+    </svg>
+  );
+}
+
+function StarIcon({ size = 12, color = "#fbbf24" }: { size?: number; color?: string }) {
+  return (
+    <svg viewBox="0 0 20 20" style={{ width: size, height: size }} fill={color}>
+      <path d="M10 1.5l2.6 5.3 5.9.9-4.3 4.1 1 5.9L10 15l-5.2 2.7 1-5.9L1.5 7.7l5.9-.9L10 1.5z" />
+    </svg>
+  );
 }
 
 export function LearnStudio({ onBack }: { onBack: () => void }) {
@@ -19,6 +35,8 @@ export function LearnStudio({ onBack }: { onBack: () => void }) {
   const [running, setRunning] = useState(false);
   const [showHint, setShowHint] = useState(false);
   const [solved, setSolved] = useState<string[]>([]);
+  const [lastSolveDate, setLastSolveDate] = useState("");
+  const [streak, setStreak] = useState(0);
 
   useEffect(() => {
     try {
@@ -26,6 +44,8 @@ export function LearnStudio({ onBack }: { onBack: () => void }) {
       const prev = localStorage.getItem("wiserfiles-learn-done");
       const parsed = next ? JSON.parse(next) : prev ? JSON.parse(prev) : [];
       if (Array.isArray(parsed)) setSolved(parsed.filter((x: unknown) => typeof x === "string"));
+      setLastSolveDate(localStorage.getItem("wiserfiles-learn-lastdate") || "");
+      setStreak(Number(localStorage.getItem("wiserfiles-learn-streak") || "0") || 0);
     } catch {}
   }, []);
 
@@ -41,7 +61,6 @@ export function LearnStudio({ onBack }: { onBack: () => void }) {
   const challenges = lesson?.challenges ?? [];
   const currentChallenge = challenges[challengeIndex];
 
-  // Load the current challenge's starter whenever the lesson/challenge changes.
   useEffect(() => {
     const target = lessons.find((l) => l.id === lessonId) ?? lessons[0];
     if (target && target.challenges[challengeIndex]) {
@@ -53,6 +72,7 @@ export function LearnStudio({ onBack }: { onBack: () => void }) {
   }, [language, lessonId, challengeIndex, lessons]);
 
   const lessonIndex = lesson ? lessons.findIndex((l) => l.id === lesson.id) : -1;
+  const firstWordIndex = challenges.findIndex((c) => c.kind === "word");
 
   function solvedKey(lid: string, idx: number) {
     return `${lid}:${idx}`;
@@ -65,10 +85,43 @@ export function LearnStudio({ onBack }: { onBack: () => void }) {
     ? lesson.challenges.filter((_, i) => isSolved(lesson.id, i)).length
     : 0;
   const lessonComplete = lesson ? lessonSolvedCount === lesson.challenges.length : false;
-  const firstWordIndex = challenges.findIndex((c) => c.kind === "word");
 
-  const totalChallenges = lessons.reduce((n, l) => n + l.challenges.length, 0);
+  const totalChallenges = useMemo(
+    () => lessons.reduce((n, l) => n + l.challenges.length, 0),
+    [lessons]
+  );
   const totalSolved = solved.length;
+  const progressPct = totalChallenges ? Math.round((totalSolved / totalChallenges) * 100) : 0;
+
+  const totalXP = useMemo(() => {
+    let xp = 0;
+    for (const l of LEARN_LESSONS) {
+      for (let i = 0; i < l.challenges.length; i += 1) {
+        if (solved.includes(`${l.id}:${i}`)) {
+          xp += l.challenges[i].kind === "word" ? 25 : 10;
+        }
+      }
+    }
+    return xp;
+  }, [solved]);
+  const level = Math.floor(totalXP / 200) + 1;
+
+  function registerSolve() {
+    const today = new Date().toISOString().slice(0, 10);
+    const yesterday = new Date(Date.now() - 86400000).toISOString().slice(0, 10);
+    if (lastSolveDate === today) {
+      // no change
+    } else if (lastSolveDate === yesterday) {
+      setStreak((s) => s + 1);
+    } else {
+      setStreak(1);
+    }
+    setLastSolveDate(today);
+    try {
+      localStorage.setItem("wiserfiles-learn-lastdate", today);
+      localStorage.setItem("wiserfiles-learn-streak", String(streak + (lastSolveDate === yesterday ? 1 : lastSolveDate === today ? 0 : 1)));
+    } catch {}
+  }
 
   function selectLanguage(lang: LearnLanguage) {
     setLanguage(lang);
@@ -126,14 +179,17 @@ export function LearnStudio({ onBack }: { onBack: () => void }) {
       const out = data?.output != null ? String(data.output) : "";
       setOutput(out || "(no output)");
       if (normalize(out) === normalize(currentChallenge.expectedOutput)) {
-        setFeedback("✅ Solved! Great work.");
+        setFeedback(`Solved — +${currentChallenge.kind === "word" ? 25 : 10} XP`);
         const key = solvedKey(lesson.id, challengeIndex);
-        if (!solved.includes(key)) setSolved((s) => [...s, key]);
+        if (!solved.includes(key)) {
+          setSolved((s) => [...s, key]);
+          registerSolve();
+        }
         if (challengeIndex + 1 < lesson.challenges.length) {
           setChallengeIndex(challengeIndex + 1);
         }
       } else {
-        setFeedback("❌ Not quite. Compare with the expected output and try again.");
+        setFeedback("Not quite. Compare with the expected output and try again.");
       }
     } catch {
       setOutput("Could not reach the code runner. Is the sandbox running?");
@@ -145,11 +201,9 @@ export function LearnStudio({ onBack }: { onBack: () => void }) {
   function nextChallenge() {
     if (challengeIndex + 1 < challenges.length) setChallengeIndex(challengeIndex + 1);
   }
-
   function prevChallenge() {
     if (challengeIndex > 0) setChallengeIndex(challengeIndex - 1);
   }
-
   function resetCode() {
     if (currentChallenge) setCode(currentChallenge.starter);
     setOutput("");
@@ -168,36 +222,57 @@ export function LearnStudio({ onBack }: { onBack: () => void }) {
       className="studio-dark"
       style={{ height: "100vh", display: "flex", flexDirection: "column", background: bg, color: primary, overflow: "hidden" }}
     >
-      {/* Header */}
-      <header style={{ display: "flex", alignItems: "center", gap: 12, padding: "10px 16px", borderBottom: `1px solid ${border}`, background: bg2 }}>
+      {/* Header with gamification */}
+      <header
+        style={{
+          display: "flex", alignItems: "center", gap: 12, padding: "12px 16px", borderBottom: `1px solid ${border}`,
+          background: "linear-gradient(120deg, rgba(79,70,229,0.16), rgba(20,184,166,0.14), transparent)",
+        }}
+      >
         <button type="button" onClick={onBack} className="studio-btn studio-btn-ghost" style={{ height: 30, fontSize: 12, padding: "0 10px", cursor: "pointer" }}>
-          ← Back
+          <svg viewBox="0 0 20 20" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 4l-6 6 6 6" /></svg>
+          Back
         </button>
         <span style={{ fontWeight: 800, fontSize: 15 }}>Learn to Code</span>
-        <span style={{ fontSize: 11, color: muted }}>{totalSolved}/{totalChallenges} challenges solved</span>
-        <div style={{ marginLeft: "auto", display: "flex", gap: 6, alignItems: "center" }}>
-          {(["python", "cpp"] as LearnLanguage[]).map((lang) => (
-            <button
-              key={lang}
-              type="button"
-              onClick={() => selectLanguage(lang)}
-              style={{
-                height: 30,
-                padding: "0 14px",
-                fontSize: 12,
-                fontWeight: 700,
-                cursor: "pointer",
-                borderRadius: 8,
-                border: language === lang ? "none" : `1px solid ${border}`,
-                background: language === lang ? "linear-gradient(135deg,#10b981,#14b8a6)" : "transparent",
-                color: language === lang ? "#fff" : muted,
-              }}
-            >
-              {lang === "python" ? "Python" : "C++"}
-            </button>
-          ))}
+
+        <div style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: 8 }}>
+          <span style={{ display: "inline-flex", alignItems: "center", gap: 5, fontSize: 11, fontWeight: 700, color: "#fbbf24", background: "rgba(251,191,36,0.12)", border: "1px solid rgba(251,191,36,0.3)", borderRadius: 999, padding: "2px 10px" }}>
+            Level {level}
+          </span>
+          <span style={{ display: "inline-flex", alignItems: "center", gap: 5, fontSize: 11, fontWeight: 700, color: "#fbbf24", background: "rgba(251,191,36,0.12)", border: "1px solid rgba(251,191,36,0.3)", borderRadius: 999, padding: "2px 10px" }}>
+            <StarIcon size={11} /> {totalXP} XP
+          </span>
+          {streak > 0 ? (
+            <span style={{ fontSize: 11, fontWeight: 700, color: "#fb923c", background: "rgba(251,146,60,0.12)", border: "1px solid rgba(251,146,60,0.3)", borderRadius: 999, padding: "2px 10px" }}>
+              {streak}-day streak
+            </span>
+          ) : null}
+          <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
+            {(["python", "cpp"] as LearnLanguage[]).map((lang) => (
+              <button
+                key={lang}
+                type="button"
+                onClick={() => selectLanguage(lang)}
+                style={{
+                  height: 30, padding: "0 14px", fontSize: 12, fontWeight: 700, cursor: "pointer", borderRadius: 8,
+                  border: language === lang ? "none" : `1px solid ${border}`,
+                  background: language === lang
+                    ? (lang === "python" ? "linear-gradient(135deg,#10b981,#14b8a6)" : "linear-gradient(135deg,#f97316,#fb923c)")
+                    : "transparent",
+                  color: language === lang ? "#fff" : muted,
+                }}
+              >
+                {lang === "python" ? "Python" : "C++"}
+              </button>
+            ))}
+          </div>
         </div>
       </header>
+
+      {/* Overall progress bar */}
+      <div style={{ height: 4, background: "rgba(148,163,184,0.12)" }}>
+        <div style={{ height: "100%", width: `${progressPct}%`, background: "linear-gradient(90deg,#10b981,#14b8a6)", transition: "width 0.3s ease" }} />
+      </div>
 
       <div style={{ flex: 1, display: "flex", minHeight: 0 }}>
         {/* Lesson list */}
@@ -212,16 +287,8 @@ export function LearnStudio({ onBack }: { onBack: () => void }) {
                 type="button"
                 onClick={() => selectLesson(l.id)}
                 style={{
-                  display: "flex",
-                  alignItems: "center",
-                  gap: 8,
-                  width: "100%",
-                  textAlign: "left",
-                  padding: "9px 10px",
-                  marginBottom: 4,
-                  borderRadius: 8,
-                  fontSize: 12.5,
-                  cursor: "pointer",
+                  display: "flex", alignItems: "center", gap: 8, width: "100%", textAlign: "left", padding: "9px 10px",
+                  marginBottom: 4, borderRadius: 8, fontSize: 12.5, cursor: "pointer",
                   background: active ? "rgba(16,185,129,0.15)" : "transparent",
                   color: active ? "#5eead4" : primary,
                   border: active ? "1px solid rgba(16,185,129,0.4)" : "1px solid transparent",
@@ -231,7 +298,7 @@ export function LearnStudio({ onBack }: { onBack: () => void }) {
                 <span style={{ fontSize: 11, color: muted, minWidth: 18 }}>{i + 1}.</span>
                 <span style={{ flex: 1 }}>{l.title}</span>
                 <span style={{ fontSize: 10, color: muted }}>{doneCount}/{l.challenges.length}</span>
-                {complete ? <span style={{ color: "#34d399", fontSize: 12 }}>✓</span> : null}
+                {complete ? <CheckIcon size={12} /> : null}
               </button>
             );
           })}
@@ -254,10 +321,10 @@ export function LearnStudio({ onBack }: { onBack: () => void }) {
 
               <div style={{ display: "flex", alignItems: "center", gap: 10, margin: "18px 0 10px" }}>
                 <h3 style={{ fontSize: 11, textTransform: "uppercase", letterSpacing: "0.1em", color: muted, margin: 0 }}>
-                  🧩 Challenges
+                  Challenges
                 </h3>
                 <span style={{ fontSize: 11, fontWeight: 700, color: lessonComplete ? "#34d399" : muted }}>
-                  {lessonSolvedCount}/{challenges.length} solved{lessonComplete ? " — complete! 🎉" : ""}
+                  {lessonSolvedCount}/{challenges.length} solved{lessonComplete ? " — complete" : ""}
                 </span>
               </div>
 
@@ -279,8 +346,8 @@ export function LearnStudio({ onBack }: { onBack: () => void }) {
                   </button>
                 ))}
                 {firstWordIndex >= 0 ? (
-                  <div style={{ flexBasis: "100%", fontSize: 10, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.08em", color: muted, margin: "4px 0 0" }}>
-                    🌍 Real-life problems
+                  <div style={{ flexBasis: "100%", fontSize: 10, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.08em", color: "#f59e0b", margin: "4px 0 0" }}>
+                    Real-life problems
                   </div>
                 ) : null}
                 {firstWordIndex >= 0
@@ -293,12 +360,12 @@ export function LearnStudio({ onBack }: { onBack: () => void }) {
                           onClick={() => setChallengeIndex(idx)}
                           style={{
                             minWidth: 34, height: 30, padding: "0 8px", borderRadius: 8, fontSize: 12, fontWeight: 700, cursor: "pointer",
-                            border: idx === challengeIndex ? "1px solid rgba(16,185,129,0.6)" : `1px solid ${border}`,
-                            background: isSolved(lesson.id, idx) ? "rgba(52,211,153,0.15)" : idx === challengeIndex ? "rgba(16,185,129,0.12)" : "transparent",
-                            color: isSolved(lesson.id, idx) ? "#34d399" : idx === challengeIndex ? "#5eead4" : primary,
+                            border: idx === challengeIndex ? "1px solid rgba(245,158,11,0.6)" : `1px solid ${border}`,
+                            background: isSolved(lesson.id, idx) ? "rgba(52,211,153,0.15)" : idx === challengeIndex ? "rgba(245,158,11,0.12)" : "transparent",
+                            color: isSolved(lesson.id, idx) ? "#34d399" : idx === challengeIndex ? "#fbbf24" : primary,
                           }}
                         >
-                          🌍 {i + 1}{isSolved(lesson.id, idx) ? " ✓" : ""}
+                          {i + 1}{isSolved(lesson.id, idx) ? " ✓" : ""}
                         </button>
                       );
                     })
@@ -307,8 +374,8 @@ export function LearnStudio({ onBack }: { onBack: () => void }) {
 
               {/* Current challenge prompt */}
               <div style={{ background: bg2, border: `1px solid ${border}`, borderRadius: 8, padding: "12px 14px" }}>
-                <p style={{ margin: "0 0 4px", fontSize: 11, fontWeight: 700, color: "#5eead4" }}>
-                  {currentChallenge?.kind === "word" ? "🌍 Real-life problem" : `Question ${challengeIndex + 1}`}
+                <p style={{ margin: "0 0 4px", fontSize: 11, fontWeight: 700, color: currentChallenge?.kind === "word" ? "#fbbf24" : "#5eead4" }}>
+                  {currentChallenge?.kind === "word" ? "Real-life problem" : `Question ${challengeIndex + 1}`}
                 </p>
                 <div className="challenge-markdown" style={{ fontSize: 13.5, lineHeight: 1.6 }}>
                   <ReactMarkdown>{currentChallenge?.prompt}</ReactMarkdown>
@@ -352,23 +419,23 @@ export function LearnStudio({ onBack }: { onBack: () => void }) {
               disabled={running}
               style={{ height: 30, padding: "0 14px", fontSize: 12, fontWeight: 700, borderRadius: 8, border: `1px solid ${border}`, cursor: "pointer", background: "transparent", color: primary }}
             >
-              {running ? "Running…" : "▶ Run"}
+              {running ? "Running…" : "Run"}
             </button>
             <button
               type="button"
               onClick={checkCode}
               disabled={running}
-              style={{ height: 30, padding: "0 16px", fontSize: 12, fontWeight: 700, borderRadius: 8, border: "none", cursor: "pointer", background: "#10b981", color: "#fff" }}
+              style={{ height: 30, padding: "0 16px", fontSize: 12, fontWeight: 700, borderRadius: 8, border: "none", cursor: "pointer", background: "linear-gradient(135deg,#10b981,#14b8a6)", color: "#fff" }}
             >
-              {running ? "Checking…" : "✓ Check"}
+              {running ? "Checking…" : "Check answer"}
             </button>
             <button type="button" onClick={resetCode} className="studio-btn studio-btn-ghost" style={{ height: 30, fontSize: 12, padding: "0 10px", cursor: "pointer" }}>
               Reset
             </button>
             <span style={{ marginLeft: "auto", display: "flex", gap: 6, alignItems: "center" }}>
-              <button type="button" onClick={prevChallenge} disabled={challengeIndex === 0} className="studio-btn studio-btn-ghost" style={{ height: 30, fontSize: 12, padding: "0 8px", cursor: "pointer" }}>←</button>
-              <span style={{ fontSize: 11, color: muted }}>Q {challengeIndex + 1}/{challenges.length}</span>
-              <button type="button" onClick={nextChallenge} disabled={challengeIndex + 1 >= challenges.length} className="studio-btn studio-btn-ghost" style={{ height: 30, fontSize: 12, padding: "0 8px", cursor: "pointer" }}>→</button>
+              <button type="button" onClick={prevChallenge} disabled={challengeIndex === 0} className="studio-btn studio-btn-ghost" style={{ height: 30, fontSize: 12, padding: "0 8px", cursor: "pointer" }}>‹</button>
+              <span style={{ fontSize: 11, color: muted }}>{challengeIndex + 1}/{challenges.length}</span>
+              <button type="button" onClick={nextChallenge} disabled={challengeIndex + 1 >= challenges.length} className="studio-btn studio-btn-ghost" style={{ height: 30, fontSize: 12, padding: "0 8px", cursor: "pointer" }}>›</button>
             </span>
           </div>
           <div style={{ height: 150, borderTop: `1px solid ${border}`, overflowY: "auto", background: "#0d1117", padding: 10 }}>
@@ -377,11 +444,11 @@ export function LearnStudio({ onBack }: { onBack: () => void }) {
                 Output
               </p>
               {feedback ? (
-                <span style={{ fontSize: 11, fontWeight: 700, color: feedback.startsWith("✅") ? "#34d399" : "#fca5a5" }}>{feedback}</span>
+                <span style={{ fontSize: 11, fontWeight: 700, color: feedback.startsWith("Solved") ? "#34d399" : "#fca5a5" }}>{feedback}</span>
               ) : null}
             </div>
             <pre style={{ margin: 0, whiteSpace: "pre-wrap", fontFamily: "var(--font-mono)", fontSize: 12.5, color: "#c9d1d9" }}>
-              {output || "Write your solution and press ✓ Check."}
+              {output || "Write your solution and press Check answer."}
             </pre>
           </div>
         </section>
