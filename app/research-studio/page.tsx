@@ -6262,7 +6262,7 @@ export default function ResearchStudioPage() {
           </div>
         ) : (
           <div className="studio-project-grid" style={{
-            gridTemplateColumns: `repeat(auto-fill, minmax(${filteredProjects.length > 8 ? 200 : filteredProjects.length > 4 ? 230 : 240}px, 1fr))`,
+            gridTemplateColumns: `repeat(auto-fill, minmax(${filteredProjects.length > 8 ? 170 : filteredProjects.length > 4 ? 190 : 200}px, 1fr))`,
           }}>
             {filteredProjects.map((item, index) => {
               const isActive = item.id === activeProjectId;
