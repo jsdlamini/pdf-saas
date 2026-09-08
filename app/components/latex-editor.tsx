@@ -278,7 +278,8 @@ function clampFontSize(size: number): number {
 }
 
 function fontSizeKeyDelta(event: KeyboardEvent): number {
-  if (!event.shiftKey) return 0;
+  const mod = event.ctrlKey || event.metaKey;
+  if (!mod) return 0;
   if (event.code === "Equal" || event.code === "NumpadAdd") return 1;
   if (event.code === "Minus" || event.code === "NumpadSubtract") return -1;
   return 0;
@@ -368,7 +369,7 @@ export function LatexEditor({
             return event.defaultPrevented;
           },
           wheel: (event) => {
-            const mod = event.ctrlKey || event.metaKey || event.shiftKey;
+            const mod = event.ctrlKey || event.metaKey;
             if (mod) {
               event.preventDefault();
               const delta = event.deltaY < 0 ? 1 : -1;

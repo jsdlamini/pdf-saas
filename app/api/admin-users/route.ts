@@ -40,11 +40,14 @@ export async function GET() {
     const users = clerkUsers
       .map((u) => {
         const localUser = localByUserId.get(u.id);
+        const created = localUser?.created_at ?? new Date(u.createdAt);
         return {
           user_id: u.id,
           email: u.emailAddresses[0]?.emailAddress || "",
           role: localUser?.role || "user",
-          created_at: localUser?.created_at || new Date(u.createdAt).toISOString(),
+          // `created_at` comes back as a Date from Postgres but as a string from
+          // Clerk, so normalise both to ISO strings before sorting.
+          created_at: created instanceof Date ? created.toISOString() : String(created),
         };
       })
       .sort((a, b) => (b.created_at || "").localeCompare(a.created_at || ""));
