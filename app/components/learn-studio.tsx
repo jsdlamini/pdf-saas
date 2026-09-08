@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import ReactMarkdown from "react-markdown";
 import { SignInButton, SignUpButton } from "@clerk/nextjs";
 import { LatexEditor } from "./latex-editor";
+import { trackEvent } from "./analytics";
 import { LEARN_LESSONS, LEARN_SECTIONS, type LearnLanguage } from "@/lib/learn-curriculum";
 
 function normalize(s: string): string {
@@ -28,7 +29,7 @@ function StarIcon({ size = 12, color = "#fbbf24" }: { size?: number; color?: str
 
 const GUEST_CHALLENGE_LIMIT = 5;
 
-export function LearnStudio({ onBack, isSignedIn }: { onBack: () => void; isSignedIn: boolean }) {
+export function LearnStudio({ onBack, isSignedIn, userId }: { onBack: () => void; isSignedIn: boolean; userId?: string | null }) {
   const [language, setLanguage] = useState<LearnLanguage>("python");
   const [lessonId, setLessonId] = useState("py-hello");
   const [challengeIndex, setChallengeIndex] = useState(0);
@@ -196,9 +197,14 @@ export function LearnStudio({ onBack, isSignedIn }: { onBack: () => void; isSign
       if (normalize(out) === normalize(currentChallenge.expectedOutput)) {
         setFeedback(`Solved — +${currentChallenge.kind === "word" ? 25 : 10} XP`);
         const key = solvedKey(lesson.id, challengeIndex);
-        if (!solved.includes(key)) {
+        const isNewSolve = !solved.includes(key);
+        if (isNewSolve) {
           setSolved((s) => [...s, key]);
           registerSolve();
+          trackEvent("learn-solve", { userId: userId || "guest", detail: `${lesson.id}:${challengeIndex}` });
+          if (lessonSolvedCount + 1 === lesson.challenges.length) {
+            trackEvent("learn-lesson-complete", { userId: userId || "guest", detail: lesson.id });
+          }
         }
         if (challengeIndex + 1 < lesson.challenges.length) {
           setChallengeIndex(challengeIndex + 1);

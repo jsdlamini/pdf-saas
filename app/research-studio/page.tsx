@@ -3591,6 +3591,7 @@ export default function ResearchStudioPage() {
       });
       const data = (await res.json()) as { passed: boolean; firstSolve: boolean; total: number; results: Array<{ ok: boolean; input: string; expected: string; actual: string }> };
       setChallengeResults(data);
+      trackStudioEvent("challenge-submit", `${activeChallenge.language}:${data.passed ? (practice ? "practice" : "solved") : "fail"}`);
       if (data.passed) {
         if (practice) {
           setCompileNotice("Practice passed — no points recorded, not on the leaderboard.");
@@ -3677,6 +3678,7 @@ export default function ResearchStudioPage() {
       }
       setJoinCode("");
       setCompileNotice("Contest joined.");
+      trackStudioEvent("contest-join", code);
       await loadContests();
       await loadLeaderboard();
     } catch {
@@ -3732,6 +3734,7 @@ export default function ResearchStudioPage() {
       setNewContestEndsAt("");
       setNewContestPrizes("");
       setCompileNotice(`Contest created — invite code ${data?.contest?.join_code}.`);
+      trackStudioEvent("contest-create", name);
       await loadContests();
     } catch {
       setCompileNotice("Could not create contest.");
@@ -6474,7 +6477,7 @@ export default function ResearchStudioPage() {
   }
 
   if (workspaceScreen === "learn") {
-    return <LearnStudio onBack={() => navigateScreen("projects")} isSignedIn={isSignedIn} />;
+    return <LearnStudio onBack={() => navigateScreen("projects")} isSignedIn={isSignedIn} userId={userId} />;
   }
 
   return (
