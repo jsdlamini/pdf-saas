@@ -1,4 +1,4 @@
-import { clerkClient } from "@clerk/nextjs/server";
+import { createClerkClient } from "@clerk/backend";
 import { listAllUsers, setUserRole } from "@/lib/user-roles";
 import { requireDashboardAccess } from "@/lib/dashboard-access";
 
@@ -14,7 +14,7 @@ export async function GET() {
   if (access.error) return jsonError(access.error, access.status);
 
   try {
-    const client = await clerkClient();
+    const client = createClerkClient({ secretKey: process.env.CLERK_SECRET_KEY || "" });
 
     // Paginate through every Clerk user (Clerk is the source of truth for
     // registration, including Google OAuth sign-ups).
@@ -24,8 +24,12 @@ export async function GET() {
     let offset = 0;
     for (let i = 0; i < maxPages; i += 1) {
       const page = await client.users.getUserList({ limit: pageSize, offset });
-      clerkUsers.push(...page.data);
-      if (page.data.length < pageSize) break;
+      const list = Array.isArray(page) ? page : page?.data;
+      if (!Array.isArray(list)) {
+        throw new Error(`Unexpected getUserList response: ${typeof page}`);
+      }
+      clerkUsers.push(...list);
+      if (list.length < pageSize) break;
       offset += pageSize;
     }
 
@@ -47,6 +51,7 @@ export async function GET() {
 
     return Response.json({ users });
   } catch (error) {
+    console.error("[admin-users] failed to list users:", error);
     return jsonError(error instanceof Error ? error.message : "Could not load users.", 500);
   }
 }
@@ -63,7 +68,7 @@ export async function POST(request: Request) {
   if (!targetId || !role) return jsonError("userId and role required", 400);
   if (!["admin", "user"].includes(role)) return jsonError("Invalid role", 400);
 
-  const client = await clerkClient();
+  const client = createClerkClient({ secretKey: process.env.CLERK_SECRET_KEY || "" });
   const targetUser = await client.users.getUser(targetId);
   const email = targetUser.emailAddresses[0]?.emailAddress || "";
   await setUserRole(targetId, role as "admin" | "user", email);
