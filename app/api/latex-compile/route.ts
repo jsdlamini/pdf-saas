@@ -521,6 +521,7 @@ async function compileWithEngine(
   engine: LatexEngine
 ): Promise<{ pdfBytes: Buffer; warnings: string[] }> {
   const pdfPath = join(tempDir, buildPdfOutputPath(rootFile));
+  let engineError: unknown = null;
   try {
     await execFileAsync(engine.binary, engine.buildArgs(rootFile), {
       cwd: tempDir,
@@ -532,18 +533,35 @@ async function compileWithEngine(
     // a PDF. If one was produced, return it with the real errors surfaced as
     // warnings instead of failing the whole compile on a missing icon or an
     // undefined environment (the misleading "Missing input file .nav" noise).
+    engineError = error;
+  }
+
+  // latexmk aborts after a single pass when it sees a missing input file (for
+  // example an image referenced by \includegraphics). Beamer writes .toc/.nav
+  // at \end{document} but reads them on the next pass, so that abort leaves the
+  // Outline and "Where we are" tables of contents empty. Run one explicit
+  // pdflatex pass to consume the .toc/.nav/.aux that were just written so the
+  // section map and cross-references resolve even when latexmk gave up early.
+  if (engine.name === "latexmk" || engine.name === "texliveonfly") {
     try {
-      const pdfBytes = await readFile(pdfPath);
-      const logData = await readMainLogIfAvailable(tempDir, rootFile);
-      const warnings = logData ? diagnoseLatexErrors(logData.text) : [];
-      return { pdfBytes, warnings };
+      await execFileAsync(
+        "pdflatex",
+        ["-synctex=1", "-interaction=nonstopmode", "-file-line-error", rootFile],
+        { cwd: tempDir, timeout: 300_000, maxBuffer: 32 * 1024 * 1024 }
+      );
     } catch {
-      throw error;
+      // Non-zero exit is fine; the PDF may still have been written.
     }
   }
 
-  const pdfBytes = await readFile(pdfPath);
-  return { pdfBytes, warnings: [] };
+  try {
+    const pdfBytes = await readFile(pdfPath);
+    const logData = await readMainLogIfAvailable(tempDir, rootFile);
+    const warnings = engineError && logData ? diagnoseLatexErrors(logData.text) : [];
+    return { pdfBytes, warnings };
+  } catch (error) {
+    throw engineError ?? error;
+  }
 }
 
 // Writes the project into a fresh temp dir (text files, inline images, .bib
