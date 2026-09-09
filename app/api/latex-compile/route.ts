@@ -630,8 +630,14 @@ async function prepareCompileDir(
       const stubPath = `${rootBase}.${ext}`;
       if (!fileMap.has(stubPath)) {
         const targetPath = join(tempDir, stubPath);
-        await mkdir(dirname(targetPath), { recursive: true });
-        await writeFile(targetPath, "", "utf8");
+        // Only create an empty stub when the file doesn't already exist. Never
+        // clobber a .toc/.nav that latexmk generated on a previous pass — that
+        // would empty the table of contents and section navigation.
+        const exists = await stat(targetPath).then(() => true).catch(() => false);
+        if (!exists) {
+          await mkdir(dirname(targetPath), { recursive: true });
+          await writeFile(targetPath, "", "utf8");
+        }
       }
     }
   }
