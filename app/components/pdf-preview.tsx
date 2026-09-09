@@ -130,7 +130,12 @@ export default function PdfPreview({
         pdfRef.current = pdf;
         setPageCount(pdf.numPages);
         setError("");
+        // Preserve the scroll position across a re-compile so the user isn't
+        // yanked back to page 1 when the PDF URL changes.
+        const container = containerRef.current;
+        const prevScroll = container?.scrollTop ?? 0;
         await render(zoom);
+        if (container) container.scrollTop = prevScroll;
       } catch (e) {
         setError(e instanceof Error ? e.message : "Could not load PDF.");
       }

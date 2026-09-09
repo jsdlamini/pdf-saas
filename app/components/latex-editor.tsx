@@ -411,9 +411,15 @@ export function LatexEditor({
     if (!view) return;
     const current = view.state.doc.toString();
     if (current !== value) {
+      // Preserve scroll + cursor so a full-document replace doesn't yank the
+      // user back to the top of the file.
+      const scrollTop = view.scrollDOM.scrollTop;
+      const cursor = view.state.selection.main.head;
       view.dispatch({
         changes: { from: 0, to: current.length, insert: value },
       });
+      view.scrollDOM.scrollTop = scrollTop;
+      view.dispatch({ selection: { anchor: Math.min(cursor, value.length) } });
     }
   }, [value]);
 
