@@ -5120,7 +5120,10 @@ export default function ResearchStudioPage() {
       setCompiledPdfBlob(blob);
       setCompiledPdfUrl(nextUrl);
 
-      const downloadName = `${(projectName || "document").replace(/[^\w\- ]+/g, "").trim().replace(/\s+/g, "-") || "document"}.pdf`;
+      // Name the download after the source file (e.g. main.tex -> main.pdf),
+      // not the project name.
+      const sourceBase = (rootPath || "document").split("/").pop() || "document";
+      const downloadName = `${sourceBase.replace(/\.tex$/i, "").replace(/[^\w\- ]+/g, "").trim().replace(/\s+/g, "-") || "document"}.pdf`;
       setCompiledPdfFileName(downloadName);
       setCompileMainLog("");
       setCompileMainLogFileName("main.log");
