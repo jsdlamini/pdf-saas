@@ -4932,8 +4932,15 @@ export default function ResearchStudioPage() {
     setCodeRunBusy(true);
     try {
       setTerminalOpen(true);
+      const sessionExisted = Boolean(termSessionRef.current);
       const sessionId = await ensureTerminalSession();
       if (!sessionId) return;
+
+      // Give a freshly-spawned PTY a moment to start so the first command isn't
+      // lost (the shell isn't ready to read stdin immediately).
+      if (!sessionExisted) {
+        await new Promise((resolve) => setTimeout(resolve, 500));
+      }
 
       // Re-sync the latest files into the session's working dir (the session
       // may have been started earlier, before these edits).
@@ -5033,32 +5040,35 @@ export default function ResearchStudioPage() {
       .filter((e) => isBinaryAssetPath(e.path) && e.content)
       .map((e) => ({ path: e.path, content: e.content }));
 
-    // Prefer the server asset store (keeps the compile body small). Fall back
-    // to sending images inline when the upload fails, or when there is no
-    // per-user store at all (guests).
-    let compileFiles = allFiles;
-    if (userId && activeProjectId && !accountSyncUnavailable && imageFiles.length) {
-      try {
-        await uploadProjectAssets(activeProjectId, imageFiles);
-        compileFiles = allFiles.filter((e) => !isBinaryAssetPath(e.path));
-      } catch {
-        // Keep images inline so the compile still has figures.
-      }
-    }
+    // Flip into the busy state immediately (before any upload work) so the
+    // button instantly shows "Compiling…" and the Stop button appears.
+    setCompileMainLog("");
+    setCompileMainLogFileName("main.log");
+    setPreviewErrorLogs([]);
+    setAiFixError("");
+    setAiFixSummary("");
+    setAiFixSuggestions([]);
+    setCompileBusy(true);
+    setCompileNotice("Compiling project on server...");
+    compileAbortRef.current?.abort();
+    const controller = new AbortController();
+    compileAbortRef.current = controller;
+    const timeoutId = setTimeout(() => controller.abort(), 300_000);
 
     try {
-      setCompileMainLog("");
-      setCompileMainLogFileName("main.log");
-      setPreviewErrorLogs([]);
-      setAiFixError("");
-      setAiFixSummary("");
-      setAiFixSuggestions([]);
-      setCompileBusy(true);
-      setCompileNotice("Compiling project on server...");
-      compileAbortRef.current?.abort();
-      const controller = new AbortController();
-      compileAbortRef.current = controller;
-      const timeoutId = setTimeout(() => controller.abort(), 300_000);
+      // Prefer the server asset store (keeps the compile body small). Fall back
+      // to sending images inline when the upload fails, or when there is no
+      // per-user store at all (guests).
+      let compileFiles = allFiles;
+      if (userId && activeProjectId && !accountSyncUnavailable && imageFiles.length) {
+        try {
+          await uploadProjectAssets(activeProjectId, imageFiles);
+          compileFiles = allFiles.filter((e) => !isBinaryAssetPath(e.path));
+        } catch {
+          // Keep images inline so the compile still has figures.
+        }
+      }
+
       let response: Response;
       try {
         response = await fetch("/api/latex-compile", {
