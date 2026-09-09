@@ -1553,6 +1553,15 @@ export default function ResearchStudioPage() {
   const isCodeMode = editorMode === "python" || editorMode === "cpp";
   const activeSource = activeEntry?.content ?? "";
 
+  // Close the terminal when leaving code mode — LaTeX only renders a PDF.
+  useEffect(() => {
+    if (!isCodeMode && terminalOpen) {
+      stopTerminalSession();
+      setTerminalOpen(false);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isCodeMode]);
+
 
   const preview = useMemo(() => buildPreview(activeSource), [activeSource]);
   const projectTree = useMemo(() => buildProjectTree(projectEntries), [projectEntries]);
@@ -8339,7 +8348,7 @@ export default function ResearchStudioPage() {
         </DialogContent>
       </Dialog>
 
-      {terminalOpen ? (
+      {terminalOpen && isCodeMode ? (
         <div
           style={{
             position: "fixed", left: 0, right: 0, bottom: 0, zIndex: 60,
