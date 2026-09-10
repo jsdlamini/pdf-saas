@@ -6588,17 +6588,6 @@ export default function ResearchStudioPage() {
           </span>
         </div>
         <div className="studio-topbar-right">
-          <button
-            type="button"
-            onClick={() => setLeftPaneCollapsed(!leftPaneCollapsed)}
-            className="studio-btn studio-btn-secondary studio-show-phone"
-            aria-label={leftPaneCollapsed ? "Show project files" : "Hide project files"}
-            title={leftPaneCollapsed ? "Show project files" : "Hide project files"}
-          >
-            <svg viewBox="0 0 20 20" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="1.8">
-              <path d="M3 6h5l1.2 1.5H17v7.5H3V6z" strokeLinecap="round" strokeLinejoin="round" />
-            </svg>
-          </button>
           {isCodeMode ? (
             <>
               <span className="studio-hide-phone" style={{ fontSize: 11, fontWeight: 600, color: "var(--text-secondary, #94a3b8)" }}>
@@ -6983,6 +6972,19 @@ export default function ResearchStudioPage() {
           "--right-width": rightPaneCollapsed ? "40px" : `${rightPaneWidth}px`,
         } as React.CSSProperties}
       >
+        {/* Mobile left-drawer handle (opens the file tree) */}
+        <button
+          type="button"
+          className="studio-drawer-handle"
+          onClick={() => setLeftPaneCollapsed(false)}
+          aria-label="Open project files"
+          title="Open project files"
+        >
+          <svg viewBox="0 0 20 20" style={{ width: 16, height: 16 }} fill="none" stroke="currentColor" strokeWidth="2">
+            <path d="M7 4l6 6-6 6" strokeLinecap="round" strokeLinejoin="round" />
+          </svg>
+        </button>
+
         {/* File tree sidebar */}
         <aside className="studio-filetree">
           {leftPaneCollapsed ? (
