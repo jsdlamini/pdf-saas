@@ -2348,13 +2348,38 @@ body[data-studio-editor="true"] footer {
   }
 }
 
+/* Elements only shown on phones (hidden on larger screens). */
+.studio-show-phone {
+  display: none;
+}
+
 @media (max-width: 640px) {
   .studio-topbar {
     padding: 0 8px;
+    position: relative;
   }
 
   .studio-topbar-meta {
     display: none;
+  }
+
+  .studio-hide-phone {
+    display: none !important;
+  }
+
+  .studio-show-phone {
+    display: inline-flex;
+  }
+
+  .studio-run-button {
+    position: absolute;
+    left: 50%;
+    transform: translateX(-50%);
+    z-index: 5;
+  }
+
+  .studio-run-button:active:not(:disabled) {
+    transform: translateX(-50%) translateY(0.5px) scale(0.99);
   }
 
   .studio-editor-format-shortcuts {

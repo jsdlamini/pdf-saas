@@ -6588,16 +6588,27 @@ export default function ResearchStudioPage() {
           </span>
         </div>
         <div className="studio-topbar-right">
+          <button
+            type="button"
+            onClick={() => setLeftPaneCollapsed(!leftPaneCollapsed)}
+            className="studio-btn studio-btn-secondary studio-show-phone"
+            aria-label={leftPaneCollapsed ? "Show project files" : "Hide project files"}
+            title={leftPaneCollapsed ? "Show project files" : "Hide project files"}
+          >
+            <svg viewBox="0 0 20 20" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="1.8">
+              <path d="M3 6h5l1.2 1.5H17v7.5H3V6z" strokeLinecap="round" strokeLinejoin="round" />
+            </svg>
+          </button>
           {isCodeMode ? (
             <>
-              <span style={{ fontSize: 11, fontWeight: 600, color: "var(--text-secondary, #94a3b8)" }}>
+              <span className="studio-hide-phone" style={{ fontSize: 11, fontWeight: 600, color: "var(--text-secondary, #94a3b8)" }}>
                 {editorMode === "python" ? "Python" : "C++"}
               </span>
               <button
                 type="button"
                 onClick={() => void compileProject()}
                 disabled={codeRunBusy}
-                className="studio-btn studio-btn-primary"
+                className="studio-btn studio-btn-primary studio-run-button"
                 aria-label={codeRunBusy ? "Running code" : "Run code"}
                 style={{ background: "#4ade80", color: "#000" }}
               >
@@ -6611,7 +6622,7 @@ export default function ResearchStudioPage() {
                   type="button"
                   onClick={() => void runFigure()}
                   disabled={figureBusy}
-                  className="studio-btn studio-btn-secondary"
+                  className="studio-btn studio-btn-secondary studio-hide-phone"
                   aria-label="Generate figure"
                   title="Generate a matplotlib figure from this Python code"
                 >
@@ -6630,7 +6641,7 @@ export default function ResearchStudioPage() {
                   const blob = new Blob([activeSource], { type: "text/plain;charset=utf-8" });
                   downloadBlob(blob, filename.split("/").pop() || filename);
                 }}
-                className="studio-btn studio-btn-secondary"
+                className="studio-btn studio-btn-secondary studio-hide-phone"
                 aria-label="Download source file"
               >
                 <svg viewBox="0 0 20 20" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="1.8">
@@ -6659,7 +6670,7 @@ export default function ResearchStudioPage() {
                 type="button"
                 onClick={() => void compileProject()}
                 disabled={compileBusy}
-                className="studio-btn studio-btn-primary"
+                className="studio-btn studio-btn-primary studio-run-button"
                 aria-label={compileBusy ? "Compiling project" : "Compile project"}
                 aria-busy={compileBusy}
               >
@@ -6676,7 +6687,7 @@ export default function ResearchStudioPage() {
                 type="button"
                 onClick={() => { cleanBuildNextRef.current = true; void compileProject(); }}
                 disabled={compileBusy}
-                className="studio-btn studio-btn-ghost"
+                className="studio-btn studio-btn-ghost studio-hide-phone"
                 aria-label="Clean build (discard cached compilation)"
                 title="Clean build — discard cached compilation state"
                 style={{ height: 32, padding: "0 10px" }}
@@ -6689,7 +6700,7 @@ export default function ResearchStudioPage() {
               <button
                 type="button"
                 onClick={() => void downloadProjectBundle()}
-                className="studio-btn studio-btn-secondary"
+                className="studio-btn studio-btn-secondary studio-hide-phone"
                 aria-label="Download project bundle"
               >
                 <svg viewBox="0 0 20 20" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="1.8">
@@ -6713,7 +6724,7 @@ export default function ResearchStudioPage() {
           <button
             type="button"
             onClick={saveCurrentProject}
-            className="studio-btn studio-btn-secondary"
+            className="studio-btn studio-btn-secondary studio-hide-phone"
             aria-label="Save current project"
           >
             <svg viewBox="0 0 20 20" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="1.8">
@@ -6724,7 +6735,7 @@ export default function ResearchStudioPage() {
           </button>
           <a
             href="/"
-            className="studio-btn studio-btn-ghost"
+            className="studio-btn studio-btn-ghost studio-hide-phone"
             aria-label="Back to WiserFiles home"
             title="Back to WiserFiles home"
             style={{ width: 32, padding: 0, textDecoration: "none" }}
@@ -6761,7 +6772,7 @@ export default function ResearchStudioPage() {
           <button
             type="button"
             onClick={() => setShowShortcuts((c) => !c)}
-            className="studio-btn studio-btn-ghost"
+            className="studio-btn studio-btn-ghost studio-hide-phone"
             aria-label="Keyboard shortcuts"
             title="Keyboard shortcuts"
             style={{ width: 32, padding: 0 }}
