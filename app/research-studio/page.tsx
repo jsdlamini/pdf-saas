@@ -5130,6 +5130,10 @@ export default function ResearchStudioPage() {
       setCompiledPdfBlob(blob);
       setCompiledPdfUrl(nextUrl);
 
+      // On narrow screens the PDF preview is a slide-in overlay that starts
+      // closed; open it automatically so the compiled result is visible.
+      if (isMobile) setRightPaneCollapsed(false);
+
       // Name the download after the source file (e.g. main.tex -> main.pdf),
       // not the project name.
       const sourceBase = (rootPath || "document").split("/").pop() || "document";
