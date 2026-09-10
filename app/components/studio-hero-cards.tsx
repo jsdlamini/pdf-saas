@@ -158,7 +158,9 @@ export default function StudioHeroCards({ onLaunch }: { onLaunch?: () => void })
   useEffect(() => {
     reducedRef.current =
       typeof window !== "undefined" &&
-      Boolean(window.matchMedia?.("(prefers-reduced-motion: reduce)").matches);
+      (Boolean(window.matchMedia?.("(prefers-reduced-motion: reduce)").matches) ||
+        // Phones: show the code statically — no live typing or rotation.
+        window.innerWidth < 640);
   }, []);
 
   const slide = SLIDES[active];
