@@ -1581,6 +1581,12 @@ body[data-studio-editor="true"] footer {
   flex-wrap: wrap;
 }
 
+/* LaTeX formatting shortcuts (B/I/U/…) — hidden on phones so the toolbar stays
+   a single compact row of utility controls. */
+.studio-editor-format-shortcuts {
+  display: contents;
+}
+
 /* ── Status bar ───── */
 .studio-statusbar {
   display: flex;
@@ -2287,22 +2293,83 @@ body[data-studio-editor="true"] footer {
 
 /* ── Responsive ───── */
 @media (max-width: 1024px) {
-  .studio-panes {
-    grid-template-columns: 44px 0px 0px minmax(0, 1fr) 0px 0px;
+  /* On phones and tablets the editor is the single full-width focus. The file
+     tree and PDF preview slide in as overlays instead of squeezing the editor. */
+  .studio-panes,
+  .studio-panes-code {
+    position: relative;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) !important;
+    overflow: hidden;
   }
 
-  .studio-panes-left-collapsed {
-    --left-width: 0px;
+  .studio-panes > .studio-resize-handle {
+    display: none;
   }
 
-  .studio-panes-right-collapsed {
-    --right-width: 0px;
+  .studio-editor-wrapper {
+    grid-column: 1;
+    grid-row: 1;
+    min-width: 0;
+  }
+
+  .studio-filetree {
+    position: absolute;
+    left: 0;
+    top: 0;
+    bottom: 0;
+    width: min(88vw, 340px);
+    max-width: 100%;
+    z-index: 45;
+    box-shadow: 8px 0 32px rgba(0, 0, 0, 0.45);
+    transition: transform 0.22s ease;
+  }
+
+  .studio-panes-left-collapsed .studio-filetree {
+    transform: translateX(-100%);
+    box-shadow: none;
+  }
+
+  .studio-preview {
+    position: absolute;
+    right: 0;
+    top: 0;
+    bottom: 0;
+    width: min(94vw, 520px);
+    max-width: 100%;
+    z-index: 45;
+    box-shadow: -8px 0 32px rgba(0, 0, 0, 0.45);
+    transition: transform 0.22s ease;
+  }
+
+  .studio-panes-right-collapsed .studio-preview {
+    transform: translateX(100%);
+    box-shadow: none;
   }
 }
 
 @media (max-width: 640px) {
   .studio-topbar {
     padding: 0 8px;
+  }
+
+  .studio-topbar-meta {
+    display: none;
+  }
+
+  .studio-editor-format-shortcuts {
+    display: none;
+  }
+
+  .studio-menubar {
+    overflow-x: auto;
+    flex-wrap: nowrap;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .studio-menu-trigger {
+    white-space: nowrap;
+    flex-shrink: 0;
   }
 
   .studio-project-grid {

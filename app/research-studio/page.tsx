@@ -1411,15 +1411,13 @@ export default function ResearchStudioPage() {
   const [sortMode, setSortMode] = useState<"updated" | "name">("updated");
   const [openTabs, setOpenTabs] = useState<string[]>([]);
 
-  // Auto-collapse file tree on mobile. Only treat genuinely coarse-pointer
-  // devices as mobile so browser zoom on a desktop doesn't surface the
-  // Files/Output toggle buttons in the top bar.
+  // Auto-collapse the file tree and preview on narrow screens so the editor is
+  // the single full-width focus. The CSS breakpoint (max-width: 1024px) turns
+  // both panes into slide-in overlays, so this keeps them tucked away by
+  // default on phones and tablets.
   useEffect(() => {
     const check = () => {
-      const coarse =
-        typeof window.matchMedia === "function" &&
-        window.matchMedia("(pointer: coarse)").matches;
-      setIsMobile(window.innerWidth < 1024 && coarse);
+      setIsMobile(window.innerWidth < 1024);
     };
     check();
     window.addEventListener("resize", check);
@@ -3262,7 +3260,7 @@ export default function ResearchStudioPage() {
 
   const [newProjectOpen, setNewProjectOpen] = useState(false);
   const [newProjectName, setNewProjectName] = useState("");
-  const [newProjectType, setNewProjectType] = useState<EditorMode>("latex");
+  const [newProjectType, setNewProjectType] = useState<EditorMode>("python");
   const [newProjectTemplate, setNewProjectTemplate] = useState("");
   const [newProjectError, setNewProjectError] = useState("");
 
@@ -4608,7 +4606,7 @@ export default function ResearchStudioPage() {
       return;
     }
     setNewProjectName("");
-    setNewProjectType("latex");
+    setNewProjectType("python");
     setNewProjectTemplate("");
     setNewProjectError("");
     setNewProjectOpen(true);
@@ -5945,6 +5943,7 @@ export default function ResearchStudioPage() {
                     closeIntellisense();
                     setSelectedPath(node.path);
                     setOpenTabs((prev) => prev.includes(node.path) ? prev : [...prev, node.path]);
+                    if (isMobile) setLeftPaneCollapsed(true);
                   }
                 } else {
                   toggleFolder(node.path);
@@ -6589,24 +6588,6 @@ export default function ResearchStudioPage() {
           </span>
         </div>
         <div className="studio-topbar-right">
-          {isMobile ? (
-            <>
-              <button
-                type="button"
-                onClick={() => setLeftPaneCollapsed(!leftPaneCollapsed)}
-                className="studio-btn studio-btn-secondary"
-              >
-                {leftPaneCollapsed ? "Files" : "Hide"}
-              </button>
-              <button
-                type="button"
-                onClick={() => setRightPaneCollapsed(!rightPaneCollapsed)}
-                className="studio-btn studio-btn-secondary"
-              >
-                {rightPaneCollapsed ? (isCodeMode ? "Output" : "Preview") : "Hide"}
-              </button>
-            </>
-          ) : null}
           {isCodeMode ? (
             <>
               <span style={{ fontSize: 11, fontWeight: 600, color: "var(--text-secondary, #94a3b8)" }}>
@@ -6904,7 +6885,7 @@ export default function ResearchStudioPage() {
           }] as any[] : []),
           {
             label: "View", key: "view", items: [
-              { label: rightPaneCollapsed ? (isCodeMode ? "Show Output" : "Show PDF Preview") : (isCodeMode ? "Hide Output" : "Hide PDF Preview"), action: () => { setOpenMenu(""); setRightPaneCollapsed(!rightPaneCollapsed); } },
+              ...(!isCodeMode ? [{ label: rightPaneCollapsed ? "Show PDF Preview" : "Hide PDF Preview", action: () => { setOpenMenu(""); setRightPaneCollapsed(!rightPaneCollapsed); } }] as any[] : []),
               { label: leftPaneCollapsed ? "Show File Tree" : "Hide File Tree", action: () => { setOpenMenu(""); setLeftPaneCollapsed(!leftPaneCollapsed); } },
               "-",
               { label: "Version History", action: () => { setOpenMenu(""); setHistoryOpen(true); } },
@@ -6985,7 +6966,7 @@ export default function ResearchStudioPage() {
       {/* Main panes */}
       <section
         ref={panesRef}
-        className={isCodeMode ? "studio-panes studio-panes-code" : "studio-panes"}
+        className={`studio-panes ${isCodeMode ? "studio-panes-code" : ""} ${leftPaneCollapsed ? "studio-panes-left-collapsed" : ""} ${rightPaneCollapsed ? "studio-panes-right-collapsed" : ""}`}
         style={{
           "--left-width": leftPaneCollapsed ? "40px" : `${leftPaneWidth}px`,
           "--right-width": rightPaneCollapsed ? "40px" : `${rightPaneWidth}px`,
@@ -7201,6 +7182,7 @@ export default function ResearchStudioPage() {
             </div>
           ) : (
             <div className="studio-editor-toolbar">
+              <span className="studio-editor-format-shortcuts">
               <button type="button" onClick={() => insertEditorSnippet({ before: "\\textbf{", after: "}", placeholder: "bold text" })} className="studio-btn studio-btn-ghost" style={{ height: 26, fontSize: 11, fontWeight: 700, padding: "0 8px" }} title="Bold (Ctrl+B)">B</button>
               <button type="button" onClick={() => insertEditorSnippet({ before: "\\textit{", after: "}", placeholder: "italic text" })} className="studio-btn studio-btn-ghost" style={{ height: 26, fontSize: 11, fontStyle: "italic", padding: "0 8px" }} title="Italic (Ctrl+I)">I</button>
               <button type="button" onClick={() => insertEditorSnippet({ before: "\\underline{", after: "}", placeholder: "underlined text" })} className="studio-btn studio-btn-ghost" style={{ height: 26, fontSize: 11, textDecoration: "underline", padding: "0 8px" }} title="Underline">U</button>
@@ -7227,6 +7209,7 @@ export default function ResearchStudioPage() {
               </button>
               <button type="button" onClick={() => insertEditorSnippet({ before: "\\cite{", after: "}", placeholder: "key" })} className="studio-btn studio-btn-ghost" style={{ height: 26, fontSize: 10, padding: "0 8px" }} title="Citation">cite</button>
               <button type="button" onClick={() => insertEditorSnippet({ before: "\\ref{", after: "}", placeholder: "key" })} className="studio-btn studio-btn-ghost" style={{ height: 26, fontSize: 10, padding: "0 8px" }} title="Reference">ref</button>
+              </span>
               <span style={{ width: 1, height: 18, background: "var(--border-color, #334155)", margin: "0 4px" }} />
               <button type="button" onClick={() => setFindPanelOpen((c) => !c)} className="studio-btn studio-btn-ghost" style={{ height: 26, fontSize: 11, padding: "0 8px" }} title="Find & Replace">
                 <svg viewBox="0 0 20 20" style={{ width: 14, height: 14 }} fill="none" stroke="currentColor" strokeWidth="2">
