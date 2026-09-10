@@ -1327,6 +1327,7 @@ export default function ResearchStudioPage() {
   const termContainerRef = useRef<HTMLDivElement | null>(null);
   const xtermRef = useRef<{ term: any; fit: any; onResize: () => void } | null>(null);
   const termSessionRef = useRef<string | null>(null);
+  const termSessionPromiseRef = useRef<Promise<string | null> | null>(null);
   const termPollTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const termSeenRef = useRef(0);
 
@@ -3970,33 +3971,44 @@ export default function ResearchStudioPage() {
 
   async function ensureTerminalSession(): Promise<string | null> {
     if (termSessionRef.current) return termSessionRef.current;
-    setTerminalBusy(true);
-    try {
-      const res = await fetch("/api/terminal", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          files: projectEntries.filter((e) => e.kind === "file").map((e) => ({ path: e.path, content: e.content })),
-          folders: projectEntries.filter((e) => e.kind === "folder").map((e) => e.path),
-        }),
-      });
-      const data = (await res.json().catch(() => null)) as { sessionId?: string; error?: string } | null;
-      if (!data || data.error || !data.sessionId) {
-        writeToTerm(`\r\n${data?.error || "Could not start the terminal."}\r\n`);
+    // Single-flight: the Run button and the terminal panel's open effect can
+    // both call this in the same tick. Share one in-flight spawn so we never
+    // start two shells — the second session's output would otherwise be the
+    // one displayed and the first Run would appear to do nothing (the classic
+    // "have to click Run twice" symptom).
+    if (termSessionPromiseRef.current) return termSessionPromiseRef.current;
+    const promise = (async () => {
+      setTerminalBusy(true);
+      try {
+        const res = await fetch("/api/terminal", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            files: projectEntries.filter((e) => e.kind === "file").map((e) => ({ path: e.path, content: e.content })),
+            folders: projectEntries.filter((e) => e.kind === "folder").map((e) => e.path),
+          }),
+        });
+        const data = (await res.json().catch(() => null)) as { sessionId?: string; error?: string } | null;
+        if (!data || data.error || !data.sessionId) {
+          writeToTerm(`\r\n${data?.error || "Could not start the terminal."}\r\n`);
+          return null;
+        }
+        termSessionRef.current = data.sessionId;
+        termSeenRef.current = 0;
+        setTermSessionId(data.sessionId);
+        setTermRunning(true);
+        termPollTimerRef.current = setTimeout(() => void pollTerminal(data.sessionId!), 120);
+        return data.sessionId;
+      } catch (error) {
+        writeToTerm(`\r\nError: ${error instanceof Error ? error.message : "failed"}\r\n`);
         return null;
+      } finally {
+        setTerminalBusy(false);
+        termSessionPromiseRef.current = null;
       }
-      termSessionRef.current = data.sessionId;
-      termSeenRef.current = 0;
-      setTermSessionId(data.sessionId);
-      setTermRunning(true);
-      termPollTimerRef.current = setTimeout(() => void pollTerminal(data.sessionId!), 120);
-      return data.sessionId;
-    } catch (error) {
-      writeToTerm(`\r\nError: ${error instanceof Error ? error.message : "failed"}\r\n`);
-      return null;
-    } finally {
-      setTerminalBusy(false);
-    }
+    })();
+    termSessionPromiseRef.current = promise;
+    return promise;
   }
 
   async function openFromGithub() {
