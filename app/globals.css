@@ -2413,14 +2413,20 @@ body[data-studio-editor="true"] footer {
   }
 
   .studio-menubar {
-    overflow-x: auto;
-    flex-wrap: nowrap;
-    -webkit-overflow-scrolling: touch;
+    height: auto;
+    min-height: 32px;
+    flex-wrap: wrap;
+    padding: 4px 8px;
   }
 
   .studio-menu-trigger {
     white-space: nowrap;
     flex-shrink: 0;
+    padding: 4px 8px;
+  }
+
+  .studio-menu-dropdown {
+    max-width: calc(100vw - 16px);
   }
 
   .studio-project-grid {
