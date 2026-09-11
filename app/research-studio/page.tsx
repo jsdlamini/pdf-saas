@@ -6810,7 +6810,9 @@ export default function ResearchStudioPage() {
                     <rect x="5" y="9" width="10" height="8" rx="1.5" />
                     <path d="M7 9V6a3 3 0 0 1 6 0v3" strokeLinecap="round" />
                   </svg>
-                  <span>Sign in to join a practical group.</span>
+                  <SignInButton mode="modal">
+                    <button type="button" className="studio-groups-signin">Sign in to join a practical group.</button>
+                  </SignInButton>
                 </div>
               ) : groupsError ? (
                 <div className="studio-groups-lock">
