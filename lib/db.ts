@@ -17,6 +17,10 @@ export const db = new Pool({
   max: 10,
   idleTimeoutMillis: 30_000,
   connectionTimeoutMillis: 5_000,
+  // TCP keepalive so long-lived idle connections are detected as dead and
+  // dropped instead of failing a query after a Docker network blip.
+  keepAlive: true,
+  keepAliveInitialDelayMillis: 10_000,
 });
 
 const MIGRATIONS: string[] = [

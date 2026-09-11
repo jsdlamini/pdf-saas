@@ -1417,6 +1417,7 @@ export default function ResearchStudioPage() {
   const [groups, setGroups] = useState<{ id: string; name: string; schedule: string; capacity: number; members: number; joined: boolean }[]>([]);
   const [groupsIsAdmin, setGroupsIsAdmin] = useState(false);
   const [groupsBusy, setGroupsBusy] = useState<string | null>(null);
+  const [groupsError, setGroupsError] = useState("");
   const [joinGroupOpen, setJoinGroupOpen] = useState<string | null>(null);
   const [joinName, setJoinName] = useState("");
   const [joinSurname, setJoinSurname] = useState("");
@@ -6092,8 +6093,9 @@ export default function ResearchStudioPage() {
         | null;
       if (data?.groups) setGroups(data.groups);
       setGroupsIsAdmin(Boolean(data?.isAdmin));
+      setGroupsError("");
     } catch {
-      // Non-blocking: groups stay empty if the request fails.
+      setGroupsError("Couldn't load the groups. Please try again.");
     }
   }
 
@@ -6680,6 +6682,13 @@ export default function ResearchStudioPage() {
                     <path d="M7 9V6a3 3 0 0 1 6 0v3" strokeLinecap="round" />
                   </svg>
                   <span>Sign in to join a practical group.</span>
+                </div>
+              ) : groupsError ? (
+                <div className="studio-groups-lock">
+                  <span>{groupsError}</span>
+                  <button type="button" onClick={() => void loadGroups()} className="studio-btn studio-btn-secondary" style={{ height: 28, fontSize: 11, padding: "0 10px" }}>
+                    Retry
+                  </button>
                 </div>
               ) : (
                 <div className="studio-groups-grid">
