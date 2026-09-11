@@ -69,11 +69,11 @@ export async function POST(request: Request) {
   } | null;
   const { userId: targetId, role } = body || {};
   if (!targetId || !role) return jsonError("userId and role required", 400);
-  if (!["admin", "user"].includes(role)) return jsonError("Invalid role", 400);
+  if (!["admin", "assistant", "user"].includes(role)) return jsonError("Invalid role", 400);
 
   const client = createClerkClient({ secretKey: process.env.CLERK_SECRET_KEY || "" });
   const targetUser = await client.users.getUser(targetId);
   const email = targetUser.emailAddresses[0]?.emailAddress || "";
-  await setUserRole(targetId, role as "admin" | "user", email);
+  await setUserRole(targetId, role as "admin" | "assistant" | "user", email);
   return Response.json({ ok: true, userId: targetId, role });
 }
