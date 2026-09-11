@@ -321,9 +321,11 @@ const MIGRATIONS: string[] = [
     name TEXT NOT NULL,
     schedule TEXT NOT NULL DEFAULT '',
     capacity INTEGER NOT NULL DEFAULT 50,
+    session_count INTEGER NOT NULL DEFAULT 4,
     sort_order INTEGER NOT NULL DEFAULT 0,
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
   )`,
+  `ALTER TABLE wiserfiles_groups ADD COLUMN IF NOT EXISTS session_count INTEGER NOT NULL DEFAULT 4`,
   `CREATE TABLE IF NOT EXISTS wiserfiles_group_members (
     user_id TEXT NOT NULL,
     group_id TEXT NOT NULL,

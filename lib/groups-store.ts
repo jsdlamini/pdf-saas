@@ -6,6 +6,7 @@ export type GroupView = {
   name: string;
   schedule: string;
   capacity: number;
+  sessionCount: number;
   members: number;
   joined: boolean;
 };
@@ -30,10 +31,10 @@ async function ensureGroupsSeeded(): Promise<void> {
   for (let i = 0; i < STUDY_GROUPS.length; i++) {
     const g = STUDY_GROUPS[i];
     await db.query(
-      `INSERT INTO wiserfiles_groups (id, name, schedule, capacity, sort_order)
-       VALUES ($1, $2, $3, $4, $5)
+      `INSERT INTO wiserfiles_groups (id, name, schedule, capacity, session_count, sort_order)
+       VALUES ($1, $2, $3, $4, $5, $6)
        ON CONFLICT (id) DO NOTHING`,
-      [g.id, g.name, g.schedule, g.capacity, i]
+      [g.id, g.name, g.schedule, g.capacity, g.sessionCount, i]
     );
   }
 }
@@ -41,7 +42,7 @@ async function ensureGroupsSeeded(): Promise<void> {
 export async function listGroups(userId: string | null): Promise<GroupView[]> {
   await ensureGroupsSeeded();
   const groups = await db.query(
-    `SELECT id, name, schedule, capacity FROM wiserfiles_groups ORDER BY sort_order ASC, id ASC`
+    `SELECT id, name, schedule, capacity, session_count FROM wiserfiles_groups ORDER BY sort_order ASC, id ASC`
   );
   const counts = await db.query(
     `SELECT group_id, COUNT(*)::int AS n FROM wiserfiles_group_members GROUP BY group_id`
@@ -59,6 +60,7 @@ export async function listGroups(userId: string | null): Promise<GroupView[]> {
     name: g.name as string,
     schedule: g.schedule as string,
     capacity: g.capacity as number,
+    sessionCount: g.session_count as number,
     members: countMap.get(g.id) ?? 0,
     joined: mine.has(g.id),
   }));
@@ -110,13 +112,14 @@ export async function leaveGroup(userId: string, groupId: string): Promise<{ mem
 
 export async function updateGroup(
   groupId: string,
-  fields: { name: string; schedule: string; capacity: number }
+  fields: { name: string; schedule: string; capacity: number; sessionCount: number }
 ): Promise<boolean> {
   await ensureMigrated();
   const capacity = Math.max(1, Math.min(200, Math.round(fields.capacity) || 50));
+  const sessionCount = Math.max(1, Math.min(50, Math.round(fields.sessionCount) || 4));
   const r = await db.query(
-    `UPDATE wiserfiles_groups SET name = $2, schedule = $3, capacity = $4 WHERE id = $1`,
-    [groupId, fields.name.trim() || "Group", fields.schedule.trim(), capacity]
+    `UPDATE wiserfiles_groups SET name = $2, schedule = $3, capacity = $4, session_count = $5 WHERE id = $1`,
+    [groupId, fields.name.trim() || "Group", fields.schedule.trim(), capacity, sessionCount]
   );
   return (r.rowCount ?? 0) > 0;
 }

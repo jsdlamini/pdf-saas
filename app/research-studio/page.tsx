@@ -1414,7 +1414,7 @@ export default function ResearchStudioPage() {
   const [openTabs, setOpenTabs] = useState<string[]>([]);
 
   // Study-group memberships (students add themselves; groups are static config).
-  const [groups, setGroups] = useState<{ id: string; name: string; schedule: string; capacity: number; members: number; joined: boolean }[]>([]);
+  const [groups, setGroups] = useState<{ id: string; name: string; schedule: string; capacity: number; sessionCount: number; members: number; joined: boolean }[]>([]);
   const [groupsIsAdmin, setGroupsIsAdmin] = useState(false);
   const [groupsIsAssistant, setGroupsIsAssistant] = useState(false);
   const [assessGroupOpen, setAssessGroupOpen] = useState<string | null>(null);
@@ -1440,6 +1440,7 @@ export default function ResearchStudioPage() {
   const [editName, setEditName] = useState("");
   const [editSchedule, setEditSchedule] = useState("");
   const [editCapacity, setEditCapacity] = useState("50");
+  const [editSessionCount, setEditSessionCount] = useState("4");
   const [editError, setEditError] = useState("");
 
   // Auto-collapse the file tree and preview on narrow screens so the editor is
@@ -6177,11 +6178,12 @@ export default function ResearchStudioPage() {
     }
   }
 
-  function openEditGroup(g: { id: string; name: string; schedule: string; capacity: number }) {
+  function openEditGroup(g: { id: string; name: string; schedule: string; capacity: number; sessionCount: number }) {
     setEditGroupOpen(g.id);
     setEditName(g.name);
     setEditSchedule(g.schedule);
     setEditCapacity(String(g.capacity));
+    setEditSessionCount(String(g.sessionCount));
     setEditError("");
   }
 
@@ -6204,6 +6206,7 @@ export default function ResearchStudioPage() {
           name: editName,
           schedule: editSchedule,
           capacity: Number(editCapacity) || 50,
+          sessionCount: Number(editSessionCount) || 4,
         }),
       });
       if (!res.ok) {
@@ -6879,6 +6882,10 @@ export default function ResearchStudioPage() {
                 <div className="space-y-1.5">
                   <Label htmlFor="edit-capacity">Capacity</Label>
                   <Input id="edit-capacity" type="number" min={1} max={200} value={editCapacity} onChange={(e) => setEditCapacity(e.target.value)} />
+                </div>
+                <div className="space-y-1.5">
+                  <Label htmlFor="edit-sessions">Practical sessions</Label>
+                  <Input id="edit-sessions" type="number" min={1} max={50} value={editSessionCount} onChange={(e) => setEditSessionCount(e.target.value)} />
                 </div>
                 {editError ? <p className="text-xs font-semibold text-[var(--danger)]">{editError}</p> : null}
               </div>
