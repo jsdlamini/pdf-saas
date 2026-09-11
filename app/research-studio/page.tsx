@@ -1280,6 +1280,7 @@ export default function ResearchStudioPage() {
     if (searchParams.get("groups") === "open") {
       setWorkspaceScreen("projects");
       setGroupsOpen(true);
+      void loadGroups();
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -6114,7 +6115,11 @@ export default function ResearchStudioPage() {
       const data = (await res.json().catch(() => null)) as
         | { groups?: typeof groups; isAdmin?: boolean; isAssistant?: boolean; signedIn?: boolean }
         | null;
-      if (data?.groups) setGroups(data.groups);
+      if (!res.ok || !data?.groups) {
+        setGroupsError("Couldn't load the groups. Please try again.");
+        return;
+      }
+      setGroups(data.groups);
       setGroupsIsAdmin(Boolean(data?.isAdmin));
       setGroupsIsAssistant(Boolean(data?.isAssistant));
       setGroupsError("");
@@ -6452,7 +6457,7 @@ export default function ResearchStudioPage() {
               {(!buttonVisibility || buttonVisibility.groups) ? (
                 <button
                   type="button"
-                  onClick={() => setGroupsOpen(true)}
+                  onClick={() => { setGroupsOpen(true); void loadGroups(); }}
                   className="studio-btn"
                   style={{ background: "linear-gradient(135deg,#f59e0b,#f97316)", color: "#fff", border: "none", fontWeight: 700 }}
                 >
