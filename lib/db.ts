@@ -12,8 +12,10 @@ import { Pool } from "pg";
 // throw breaks the build. Fail loudly in ensureMigrated() instead.
 const connectionString = process.env.DATABASE_URL;
 
+let pool = createDbPool();
+
 function createDbPool(): Pool {
-  const pool = new Pool({
+  const p = new Pool({
     connectionString: connectionString || "postgresql://localhost:5432/__missing__",
     max: 10,
     idleTimeoutMillis: 30_000,
@@ -25,14 +27,32 @@ function createDbPool(): Pool {
   // replace it so the next query gets a fresh pool instead of an ever-failing
   // one. pg removes the broken client itself, but a recreated pool also clears
   // any stale socket/DNS state.
-  pool.on("error", (error) => {
+  p.on("error", (error) => {
     console.error("[db] pool error:", error instanceof Error ? error.message : String(error));
-    db = createDbPool();
+    pool = createDbPool();
   });
-  return pool;
+  return p;
 }
 
-export let db = createDbPool();
+// A thin query wrapper that retries transient connect timeouts (Docker DNS /
+// network can be briefly unsettled right after a deploy), so one bad
+// connection doesn't fail the request.
+export const db = {
+  async query(sql: string, params?: unknown[]) {
+    for (let attempt = 0; ; attempt++) {
+      try {
+        return await pool.query(sql, params);
+      } catch (error) {
+        const msg = error instanceof Error ? error.message : String(error);
+        if (attempt >= 2 || !msg.includes("timeout exceeded when trying to connect")) throw error;
+        await new Promise((resolve) => setTimeout(resolve, 700 * (attempt + 1)));
+      }
+    }
+  },
+  connect() {
+    return pool.connect();
+  },
+};
 
 const MIGRATIONS: string[] = [
   `CREATE TABLE IF NOT EXISTS wiserfiles_research_projects (

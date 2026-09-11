@@ -138,7 +138,7 @@ export async function listGroupMembers(groupId: string): Promise<GroupMember[]> 
     `SELECT name, surname, programme, student_id, joined_at
      FROM wiserfiles_group_members
      WHERE group_id = $1
-     ORDER BY joined_at ASC`,
+     ORDER BY LOWER(programme) ASC, LOWER(surname) ASC, LOWER(name) ASC`,
     [groupId]
   );
   return r.rows.map((x) => ({
