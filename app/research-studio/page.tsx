@@ -6198,6 +6198,14 @@ export default function ResearchStudioPage() {
   }
 
   async function handleLeaveGroup(groupId: string) {
+    const group = groups.find((g) => g.id === groupId);
+    const ok = await confirmModal(
+      `Leave ${group?.name || "group"}?`,
+      "Are you sure you want to leave this group?",
+      "Leave group",
+      true
+    );
+    if (!ok) return;
     setGroupsBusy(groupId);
     try {
       const res = await fetch("/api/groups", {
@@ -6681,6 +6689,16 @@ export default function ResearchStudioPage() {
                   Join a practical group — up to 50 students per group.
                 </DialogDescription>
               </DialogHeader>
+              {groupsIsAdmin ? (
+                <div style={{ display: "flex", justifyContent: "flex-end" }}>
+                  <a href="/api/groups/pdf?group=all" download className="studio-btn studio-btn-ghost" style={{ height: 30, fontSize: 11, padding: "0 10px", textDecoration: "none" }} title="Download all students across groups">
+                    <svg viewBox="0 0 20 20" style={{ width: 14, height: 14 }} fill="none" stroke="currentColor" strokeWidth="1.8">
+                      <path d="M10 3v9m0 0l-3-3m3 3l3-3M4 14v2h12v-2" strokeLinecap="round" strokeLinejoin="round" />
+                    </svg>
+                    Export all students
+                  </a>
+                </div>
+              ) : null}
               {!isSignedIn ? (
                 <div className="studio-groups-lock">
                   <svg viewBox="0 0 20 20" style={{ width: 16, height: 16 }} fill="none" stroke="currentColor" strokeWidth="1.8">
@@ -6701,6 +6719,7 @@ export default function ResearchStudioPage() {
                   {groups.map((g) => {
                     const full = g.members >= g.capacity;
                     const pct = Math.min(100, Math.round((g.members / g.capacity) * 100));
+                    const pctColor = full ? "#ef4444" : pct >= 70 ? "#f59e0b" : "#4ade80";
                     return (
                       <article key={g.id} className="studio-group-card">
                         <div>
@@ -6708,12 +6727,13 @@ export default function ResearchStudioPage() {
                           <p className="studio-group-schedule">{g.schedule}</p>
                         </div>
                         <div className="studio-group-capacity">
-                          <div className="studio-group-bar"><div style={{ width: `${pct}%` }} /></div>
+                          <div className="studio-group-bar"><div style={{ width: `${pct}%`, background: pctColor }} /></div>
+                          <span className="studio-group-pct" style={{ color: pctColor }}>{pct}% full</span>
                           <span className="studio-group-count">{g.members}/{g.capacity}</span>
                         </div>
                         <div className="studio-group-actions">
                           {g.joined ? (
-                            <button type="button" onClick={() => void handleLeaveGroup(g.id)} disabled={groupsBusy === g.id} className="studio-btn studio-btn-secondary" style={{ height: 30, fontSize: 11, padding: "0 12px" }}>
+                            <button type="button" onClick={() => void handleLeaveGroup(g.id)} disabled={groupsBusy === g.id} className="studio-btn studio-btn-danger" style={{ height: 30, fontSize: 11, padding: "0 12px" }}>
                               {groupsBusy === g.id ? "…" : "Leave"}
                             </button>
                           ) : (

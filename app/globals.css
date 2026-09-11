@@ -1917,9 +1917,13 @@ body[data-studio-editor="true"] footer {
 }
 .studio-group-bar > div {
   height: 100%;
-  background: #4ade80;
   border-radius: 3px;
   transition: width 0.2s ease;
+}
+.studio-group-pct {
+  font-size: 11px;
+  font-weight: 700;
+  white-space: nowrap;
 }
 .studio-group-count {
   font-size: 11px;

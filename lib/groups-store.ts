@@ -146,3 +146,24 @@ export async function listGroupMembers(groupId: string): Promise<GroupMember[]> 
     joinedAt: x.joined_at as string,
   }));
 }
+
+export type AggregatedMember = GroupMember & { groupName: string };
+
+export async function listAllGroupMembers(): Promise<AggregatedMember[]> {
+  await ensureGroupsSeeded();
+  const r = await db.query(
+    `SELECT m.name, m.surname, m.programme, m.student_id, m.joined_at,
+            g.name AS group_name
+     FROM wiserfiles_group_members m
+     JOIN wiserfiles_groups g ON g.id = m.group_id
+     ORDER BY g.sort_order ASC, m.joined_at ASC`
+  );
+  return r.rows.map((x) => ({
+    name: x.name as string,
+    surname: x.surname as string,
+    programme: x.programme as string,
+    studentId: x.student_id as string,
+    joinedAt: x.joined_at as string,
+    groupName: x.group_name as string,
+  }));
+}
