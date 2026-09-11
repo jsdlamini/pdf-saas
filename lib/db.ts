@@ -12,16 +12,27 @@ import { Pool } from "pg";
 // throw breaks the build. Fail loudly in ensureMigrated() instead.
 const connectionString = process.env.DATABASE_URL;
 
-export const db = new Pool({
-  connectionString: connectionString || "postgresql://localhost:5432/__missing__",
-  max: 10,
-  idleTimeoutMillis: 30_000,
-  connectionTimeoutMillis: 5_000,
-  // TCP keepalive so long-lived idle connections are detected as dead and
-  // dropped instead of failing a query after a Docker network blip.
-  keepAlive: true,
-  keepAliveInitialDelayMillis: 10_000,
-});
+function createDbPool(): Pool {
+  const pool = new Pool({
+    connectionString: connectionString || "postgresql://localhost:5432/__missing__",
+    max: 10,
+    idleTimeoutMillis: 30_000,
+    connectionTimeoutMillis: 15_000,
+    // TCP keepalive so long-lived idle connections are detected as dead.
+    keepAlive: true,
+  });
+  // If the pool's connections die (e.g. a Docker network blip after a deploy),
+  // replace it so the next query gets a fresh pool instead of an ever-failing
+  // one. pg removes the broken client itself, but a recreated pool also clears
+  // any stale socket/DNS state.
+  pool.on("error", (error) => {
+    console.error("[db] pool error:", error instanceof Error ? error.message : String(error));
+    db = createDbPool();
+  });
+  return pool;
+}
+
+export let db = createDbPool();
 
 const MIGRATIONS: string[] = [
   `CREATE TABLE IF NOT EXISTS wiserfiles_research_projects (
