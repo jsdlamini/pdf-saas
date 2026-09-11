@@ -1,6 +1,5 @@
 import { db, ensureMigrated } from "@/lib/db";
-
-const DEFAULT_SESSION_COUNT = 10;
+import { DEFAULT_SESSION_COUNT } from "@/lib/groups";
 
 export type AssessStudent = {
   userId: string;
@@ -20,17 +19,29 @@ export type AssessTest = { studentId: string; score: number | null };
 
 async function ensureSessions(groupId: string): Promise<void> {
   await ensureMigrated();
+  const g = await db.query(`SELECT session_count FROM wiserfiles_groups WHERE id = $1`, [groupId]);
+  const target = (g.rows[0]?.session_count as number | undefined) ?? DEFAULT_SESSION_COUNT;
+
   const existing = await db.query(
-    `SELECT COUNT(*)::int AS n FROM wiserfiles_group_sessions WHERE group_id = $1`,
+    `SELECT id FROM wiserfiles_group_sessions WHERE group_id = $1 ORDER BY sort_order ASC, id ASC`,
     [groupId]
   );
-  if (existing.rows[0].n > 0) return;
-  for (let i = 1; i <= DEFAULT_SESSION_COUNT; i++) {
+  const count = existing.rows.length;
+
+  // Add missing sessions.
+  for (let i = count + 1; i <= target; i++) {
     await db.query(
       `INSERT INTO wiserfiles_group_sessions (group_id, title, max_marks, sort_order)
        VALUES ($1, $2, 10, $3)`,
       [groupId, `Practical ${i}`, i]
     );
+  }
+
+  // Remove sessions beyond the configured count (marks cascade on delete).
+  if (count > target) {
+    for (const s of existing.rows.slice(target)) {
+      await db.query(`DELETE FROM wiserfiles_group_sessions WHERE id = $1`, [s.id]);
+    }
   }
 }
 
