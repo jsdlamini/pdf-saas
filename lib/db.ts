@@ -17,6 +17,10 @@ export const db = new Pool({
   max: 10,
   idleTimeoutMillis: 30_000,
   connectionTimeoutMillis: 5_000,
+  // TCP keepalive so long-lived idle connections are detected as dead and
+  // dropped instead of failing a query after a Docker network blip.
+  keepAlive: true,
+  keepAliveInitialDelayMillis: 10_000,
 });
 
 const MIGRATIONS: string[] = [
@@ -326,12 +330,14 @@ const MIGRATIONS: string[] = [
     name TEXT NOT NULL DEFAULT '',
     surname TEXT NOT NULL DEFAULT '',
     programme TEXT NOT NULL DEFAULT '',
+    student_id TEXT NOT NULL DEFAULT '',
     joined_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     PRIMARY KEY (user_id, group_id)
   )`,
   `ALTER TABLE wiserfiles_group_members ADD COLUMN IF NOT EXISTS name TEXT NOT NULL DEFAULT ''`,
   `ALTER TABLE wiserfiles_group_members ADD COLUMN IF NOT EXISTS surname TEXT NOT NULL DEFAULT ''`,
   `ALTER TABLE wiserfiles_group_members ADD COLUMN IF NOT EXISTS programme TEXT NOT NULL DEFAULT ''`,
+  `ALTER TABLE wiserfiles_group_members ADD COLUMN IF NOT EXISTS student_id TEXT NOT NULL DEFAULT ''`,
 ];
 
 let migrationPromise: Promise<void> | null = null;

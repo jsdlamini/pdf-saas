@@ -26,6 +26,10 @@ export function isValidProgramme(value: string): boolean {
   return VALID_PROGRAMMES.some((p) => p.toLowerCase() === value.trim().toLowerCase());
 }
 
+export function isValidStudentId(value: string): boolean {
+  return /^\d{6}$|^\d{9}$/.test(value.trim());
+}
+
 export const STUDY_GROUPS: StudyGroup[] = [
   { id: "group-a", name: "Group A", schedule: "Friday, 1 – 3 PM", capacity: GROUP_CAPACITY },
   { id: "group-b", name: "Group B", schedule: "Wednesday, 10:00 – 11:50 AM", capacity: GROUP_CAPACITY },

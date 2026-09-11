@@ -1417,10 +1417,12 @@ export default function ResearchStudioPage() {
   const [groups, setGroups] = useState<{ id: string; name: string; schedule: string; capacity: number; members: number; joined: boolean }[]>([]);
   const [groupsIsAdmin, setGroupsIsAdmin] = useState(false);
   const [groupsBusy, setGroupsBusy] = useState<string | null>(null);
+  const [groupsError, setGroupsError] = useState("");
   const [joinGroupOpen, setJoinGroupOpen] = useState<string | null>(null);
   const [joinName, setJoinName] = useState("");
   const [joinSurname, setJoinSurname] = useState("");
   const [joinProgramme, setJoinProgramme] = useState("");
+  const [joinStudentId, setJoinStudentId] = useState("");
   const [joinError, setJoinError] = useState("");
   const [groupsOpen, setGroupsOpen] = useState(false);
   const [editGroupOpen, setEditGroupOpen] = useState<string | null>(null);
@@ -6092,8 +6094,9 @@ export default function ResearchStudioPage() {
         | null;
       if (data?.groups) setGroups(data.groups);
       setGroupsIsAdmin(Boolean(data?.isAdmin));
+      setGroupsError("");
     } catch {
-      // Non-blocking: groups stay empty if the request fails.
+      setGroupsError("Couldn't load the groups. Please try again.");
     }
   }
 
@@ -6107,6 +6110,7 @@ export default function ResearchStudioPage() {
     setJoinName(clerkUser?.firstName || "");
     setJoinSurname(clerkUser?.lastName || "");
     setJoinProgramme("");
+    setJoinStudentId("");
     setJoinError("");
   }
 
@@ -6123,13 +6127,17 @@ export default function ResearchStudioPage() {
       setJoinError("Choose a programme.");
       return;
     }
+    if (!/^\d{6}$|^\d{9}$/.test(joinStudentId.trim())) {
+      setJoinError("Student ID must be 6 or 9 digits.");
+      return;
+    }
     setJoinError("");
     setGroupsBusy(groupId);
     try {
       const res = await fetch("/api/groups", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ action: "join", groupId, name, surname, programme: joinProgramme }),
+        body: JSON.stringify({ action: "join", groupId, name, surname, programme: joinProgramme, studentId: joinStudentId.trim() }),
       });
       const data = (await res.json().catch(() => null)) as { error?: string } | null;
       if (!res.ok) {
@@ -6681,6 +6689,13 @@ export default function ResearchStudioPage() {
                   </svg>
                   <span>Sign in to join a practical group.</span>
                 </div>
+              ) : groupsError ? (
+                <div className="studio-groups-lock">
+                  <span>{groupsError}</span>
+                  <button type="button" onClick={() => void loadGroups()} className="studio-btn studio-btn-secondary" style={{ height: 28, fontSize: 11, padding: "0 10px" }}>
+                    Retry
+                  </button>
+                </div>
               ) : (
                 <div className="studio-groups-grid">
                   {groups.map((g) => {
@@ -6774,6 +6789,10 @@ export default function ResearchStudioPage() {
                 <div className="space-y-1.5">
                   <Label htmlFor="join-surname">Surname</Label>
                   <Input id="join-surname" value={joinSurname} onChange={(e) => setJoinSurname(e.target.value)} placeholder="Your surname" />
+                </div>
+                <div className="space-y-1.5">
+                  <Label htmlFor="join-student-id">Student ID</Label>
+                  <Input id="join-student-id" value={joinStudentId} onChange={(e) => setJoinStudentId(e.target.value)} placeholder="6 or 9 digits" inputMode="numeric" />
                 </div>
                 <div className="space-y-1.5">
                   <Label htmlFor="join-programme">Programme</Label>

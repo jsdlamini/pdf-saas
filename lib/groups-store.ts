@@ -1,5 +1,5 @@
 import { db, ensureMigrated } from "@/lib/db";
-import { STUDY_GROUPS, isValidProgramme } from "@/lib/groups";
+import { STUDY_GROUPS, isValidProgramme, isValidStudentId } from "@/lib/groups";
 
 export type GroupView = {
   id: string;
@@ -14,6 +14,7 @@ export type GroupMember = {
   name: string;
   surname: string;
   programme: string;
+  studentId: string;
   joinedAt: string;
 };
 
@@ -21,6 +22,7 @@ export type JoinDetails = {
   name: string;
   surname: string;
   programme: string;
+  studentId: string;
 };
 
 async function ensureGroupsSeeded(): Promise<void> {
@@ -75,8 +77,10 @@ export async function joinGroup(
   const name = details.name.trim();
   const surname = details.surname.trim();
   const programme = details.programme.trim();
+  const studentId = details.studentId.trim();
   if (!name || !surname) return { ok: false, error: "Name and surname are required." };
   if (!isValidProgramme(programme)) return { ok: false, error: "Choose a valid programme." };
+  if (!isValidStudentId(studentId)) return { ok: false, error: "Student ID must be 6 or 9 digits." };
 
   const existing = await db.query(
     `SELECT 1 FROM wiserfiles_group_members WHERE user_id = $1 AND group_id = $2`,
@@ -90,10 +94,10 @@ export async function joinGroup(
   if (n >= capacity) return { ok: false, error: "This group is full." };
 
   await db.query(
-    `INSERT INTO wiserfiles_group_members (user_id, group_id, name, surname, programme)
-     VALUES ($1, $2, $3, $4, $5)
-     ON CONFLICT (user_id, group_id) DO UPDATE SET name = $3, surname = $4, programme = $5`,
-    [userId, groupId, name, surname, programme]
+    `INSERT INTO wiserfiles_group_members (user_id, group_id, name, surname, programme, student_id)
+     VALUES ($1, $2, $3, $4, $5, $6)
+     ON CONFLICT (user_id, group_id) DO UPDATE SET name = $3, surname = $4, programme = $5, student_id = $6`,
+    [userId, groupId, name, surname, programme, studentId]
   );
   return { ok: true, members: await countMembers(groupId) };
 }
@@ -128,7 +132,7 @@ async function countMembers(groupId: string): Promise<number> {
 export async function listGroupMembers(groupId: string): Promise<GroupMember[]> {
   await ensureMigrated();
   const r = await db.query(
-    `SELECT name, surname, programme, joined_at
+    `SELECT name, surname, programme, student_id, joined_at
      FROM wiserfiles_group_members
      WHERE group_id = $1
      ORDER BY joined_at ASC`,
@@ -138,6 +142,7 @@ export async function listGroupMembers(groupId: string): Promise<GroupMember[]> 
     name: x.name as string,
     surname: x.surname as string,
     programme: x.programme as string,
+    studentId: x.student_id as string,
     joinedAt: x.joined_at as string,
   }));
 }
