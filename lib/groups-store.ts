@@ -159,7 +159,7 @@ export async function listAllGroupMembers(): Promise<AggregatedMember[]> {
             g.name AS group_name
      FROM wiserfiles_group_members m
      JOIN wiserfiles_groups g ON g.id = m.group_id
-     ORDER BY g.sort_order ASC, m.joined_at ASC`
+     ORDER BY g.sort_order ASC, LOWER(m.programme) ASC, LOWER(m.surname) ASC, LOWER(m.name) ASC`
   );
   return r.rows.map((x) => ({
     name: x.name as string,
