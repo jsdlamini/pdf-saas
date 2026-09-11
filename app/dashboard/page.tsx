@@ -359,6 +359,9 @@ export default function DashboardPage() {
         {/* User Management */}
         <UserManagement />
 
+        {/* Studio Button Visibility */}
+        <ButtonVisibilitySettings />
+
         {/* AI Quota Settings */}
         <AiQuotaSettings />
 
@@ -410,16 +413,15 @@ function UserManagement() {
       .finally(() => setLoaded(true));
   }, []);
 
-  async function toggleRole(userId: string, currentRole: string) {
-    const newRole = currentRole === "admin" ? "user" : "admin";
+  async function setRole(userId: string, role: string) {
     const r = await fetch("/api/admin-users", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ userId, role: newRole }),
+      body: JSON.stringify({ userId, role }),
     });
     if (r.ok) {
       setUsers((prev) =>
-        prev.map((u) => (u.user_id === userId ? { ...u, role: newRole } : u))
+        prev.map((u) => (u.user_id === userId ? { ...u, role } : u))
       );
     }
   }
@@ -497,7 +499,9 @@ function UserManagement() {
                       className={`inline-flex rounded-full px-2.5 py-0.5 text-xs font-semibold ${
                         u.role === "admin"
                           ? "bg-purple-100 text-purple-800 border border-purple-200"
-                          : "bg-slate-100 text-slate-600 border border-slate-200"
+                          : u.role === "assistant"
+                            ? "bg-amber-100 text-amber-800 border border-amber-200"
+                            : "bg-slate-100 text-slate-600 border border-slate-200"
                       }`}
                     >
                       {u.role}
@@ -515,13 +519,15 @@ function UserManagement() {
                       >
                         Metrics
                       </button>
-                      <button
-                        type="button"
-                        onClick={() => toggleRole(u.user_id, u.role)}
-                        className="text-xs font-semibold text-cyan-700 hover:text-cyan-900 underline underline-offset-2 transition"
+                      <select
+                        value={u.role}
+                        onChange={(e) => void setRole(u.user_id, e.target.value)}
+                        className="rounded border border-slate-300 px-2 py-1 text-xs font-semibold text-slate-700"
                       >
-                        {u.role === "admin" ? "Demote" : "Promote"}
-                      </button>
+                        <option value="user">user</option>
+                        <option value="assistant">assistant</option>
+                        <option value="admin">admin</option>
+                      </select>
                     </div>
                   </td>
                 </tr>
@@ -622,6 +628,106 @@ function UserManagement() {
           </div>
         </div>
       ) : null}
+    </div>
+  );
+}
+
+type ButtonConfigShape = Record<"user" | "assistant" | "admin", Record<string, boolean>>;
+
+const STUDIO_BUTTONS: Array<{ key: string; label: string }> = [
+  { key: "newProject", label: "New Project" },
+  { key: "template", label: "Start from a template" },
+  { key: "learn", label: "Learn to Code" },
+  { key: "contests", label: "Contests" },
+  { key: "groups", label: "Practical Groups" },
+];
+const STUDIO_ROLES = ["user", "assistant", "admin"] as const;
+
+function ButtonVisibilitySettings() {
+  const [config, setConfig] = useState<ButtonConfigShape | null>(null);
+  const [saving, setSaving] = useState(false);
+  const [notice, setNotice] = useState("");
+
+  useEffect(() => {
+    fetch("/api/studio-buttons")
+      .then((r) => r.json())
+      .then((d) => { if (d.config) setConfig(d.config); })
+      .catch(() => { /* best-effort */ });
+  }, []);
+
+  function toggle(role: keyof ButtonConfigShape, key: string) {
+    setConfig((cur) =>
+      cur ? { ...cur, [role]: { ...cur[role], [key]: !cur[role][key] } } : cur
+    );
+  }
+
+  async function save() {
+    if (!config) return;
+    setSaving(true);
+    setNotice("");
+    try {
+      const r = await fetch("/api/studio-buttons", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ config }),
+      });
+      if (!r.ok) throw new Error();
+      setNotice("Saved.");
+    } catch {
+      setNotice("Couldn't save.");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  if (!config) return null;
+
+  return (
+    <div className="rounded-2xl border border-slate-200/60 bg-white p-6 shadow-sm">
+      <div className="flex items-center justify-between mb-1">
+        <div>
+          <h2 className="text-base font-semibold text-slate-900">Studio Button Visibility</h2>
+          <p className="text-xs text-slate-500 mt-0.5">Choose which buttons appear on the research studio home per role.</p>
+        </div>
+        <button
+          type="button"
+          onClick={() => void save()}
+          disabled={saving}
+          className="rounded-lg bg-cyan-700 px-3 py-1.5 text-xs font-semibold text-white hover:bg-cyan-800 disabled:opacity-50"
+        >
+          {saving ? "Saving…" : "Save"}
+        </button>
+      </div>
+      {notice ? <p className="text-xs text-emerald-600">{notice}</p> : null}
+      <div className="mt-4 overflow-x-auto">
+        <table className="w-full text-sm">
+          <thead>
+            <tr className="border-b border-slate-200 text-left text-xs uppercase tracking-[0.1em] text-slate-500">
+              <th className="py-2 pr-4 font-semibold">Button</th>
+              {STUDIO_ROLES.map((r) => (
+                <th key={r} className="py-2 pr-4 font-semibold capitalize">{r}</th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {STUDIO_BUTTONS.map((b) => (
+              <tr key={b.key} className="border-b border-slate-100">
+                <td className="py-2.5 pr-4 text-slate-700">{b.label}</td>
+                {STUDIO_ROLES.map((r) => (
+                  <td key={r} className="py-2.5 pr-4">
+                    <input
+                      type="checkbox"
+                      checked={Boolean(config[r][b.key])}
+                      onChange={() => toggle(r, b.key)}
+                      className="h-4 w-4 accent-cyan-700"
+                    />
+                  </td>
+                ))}
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
     </div>
   );
 }

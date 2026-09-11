@@ -1416,6 +1416,17 @@ export default function ResearchStudioPage() {
   // Study-group memberships (students add themselves; groups are static config).
   const [groups, setGroups] = useState<{ id: string; name: string; schedule: string; capacity: number; members: number; joined: boolean }[]>([]);
   const [groupsIsAdmin, setGroupsIsAdmin] = useState(false);
+  const [groupsIsAssistant, setGroupsIsAssistant] = useState(false);
+  const [assessGroupOpen, setAssessGroupOpen] = useState<string | null>(null);
+  const [assessData, setAssessData] = useState<{
+    students: { userId: string; name: string; surname: string; studentId: string }[];
+    sessions: { id: number; title: string; maxMarks: number }[];
+    marks: { sessionId: number; studentId: string; score: number | null }[];
+    tests: { studentId: string; score: number | null }[];
+  } | null>(null);
+  const [assessBusy, setAssessBusy] = useState(false);
+  const [assessNotice, setAssessNotice] = useState("");
+  const [buttonVisibility, setButtonVisibility] = useState<Record<string, boolean> | null>(null);
   const [groupsBusy, setGroupsBusy] = useState<string | null>(null);
   const [groupsError, setGroupsError] = useState("");
   const [joinGroupOpen, setJoinGroupOpen] = useState<string | null>(null);
@@ -6090,10 +6101,11 @@ export default function ResearchStudioPage() {
     try {
       const res = await fetch("/api/groups");
       const data = (await res.json().catch(() => null)) as
-        | { groups?: typeof groups; isAdmin?: boolean; signedIn?: boolean }
+        | { groups?: typeof groups; isAdmin?: boolean; isAssistant?: boolean; signedIn?: boolean }
         | null;
       if (data?.groups) setGroups(data.groups);
       setGroupsIsAdmin(Boolean(data?.isAdmin));
+      setGroupsIsAssistant(Boolean(data?.isAssistant));
       setGroupsError("");
     } catch {
       setGroupsError("Couldn't load the groups. Please try again.");
@@ -6102,8 +6114,19 @@ export default function ResearchStudioPage() {
 
   useEffect(() => {
     void loadGroups();
+    void loadButtonVisibility();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isSignedIn]);
+
+  async function loadButtonVisibility() {
+    try {
+      const res = await fetch("/api/studio-buttons");
+      const data = (await res.json().catch(() => null)) as { buttons?: Record<string, boolean> } | null;
+      if (data?.buttons) setButtonVisibility(data.buttons);
+    } catch {
+      // Non-blocking: fall back to showing all buttons.
+    }
+  }
 
   function openJoinGroup(groupId: string) {
     setJoinGroupOpen(groupId);
@@ -6227,6 +6250,65 @@ export default function ResearchStudioPage() {
     }
   }
 
+  async function openAssess(groupId: string) {
+    setAssessGroupOpen(groupId);
+    setAssessData(null);
+    setAssessNotice("");
+    try {
+      const res = await fetch(`/api/groups/assess?group=${encodeURIComponent(groupId)}`);
+      if (!res.ok) throw new Error();
+      setAssessData((await res.json()) as NonNullable<typeof assessData>);
+    } catch {
+      setAssessNotice("Couldn't load the assessment sheet.");
+    }
+  }
+
+  function setMark(sessionId: number, studentId: string, value: string) {
+    const score = value.trim() === "" ? null : Number(value);
+    setAssessData((cur) =>
+      cur
+        ? {
+            ...cur,
+            marks: [
+              ...cur.marks.filter((m) => !(m.sessionId === sessionId && m.studentId === studentId)),
+              { sessionId, studentId, score },
+            ],
+          }
+        : cur
+    );
+  }
+
+  function setTest(studentId: string, value: string) {
+    const score = value.trim() === "" ? null : Number(value);
+    setAssessData((cur) =>
+      cur
+        ? {
+            ...cur,
+            tests: [...cur.tests.filter((t) => t.studentId !== studentId), { studentId, score }],
+          }
+        : cur
+    );
+  }
+
+  async function saveAssess() {
+    if (!assessGroupOpen || !assessData) return;
+    setAssessBusy(true);
+    try {
+      const res = await fetch("/api/groups/assess", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ groupId: assessGroupOpen, marks: assessData.marks, tests: assessData.tests }),
+      });
+      if (!res.ok) throw new Error();
+      setAssessNotice("Marks saved.");
+      setAssessGroupOpen(null);
+    } catch {
+      setAssessNotice("Couldn't save the marks.");
+    } finally {
+      setAssessBusy(false);
+    }
+  }
+
   if (workspaceScreen === "projects") {
     return (
       <main className="studio-dark studio-shell">
@@ -6308,55 +6390,65 @@ export default function ResearchStudioPage() {
           <StudioHeroCards onLaunch={() => void createNewProject()} />
           <div className="studio-hero-copy">
             <div className="studio-hero-actions">
-              <button type="button" onClick={() => void createNewProject()} className="studio-btn studio-btn-primary">
-                <svg viewBox="0 0 20 20" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="2">
-                  <path d="M10 4v12M4 10h12" strokeLinecap="round" strokeLinejoin="round" />
-                </svg>
-                New Project
-              </button>
-              <button
-                type="button"
-                onClick={() => void createNewProject()}
-                className="studio-btn studio-btn-secondary"
-              >
-                Start from a template
-              </button>
+              {(!buttonVisibility || buttonVisibility.newProject) ? (
+                <button type="button" onClick={() => void createNewProject()} className="studio-btn studio-btn-primary">
+                  <svg viewBox="0 0 20 20" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="2">
+                    <path d="M10 4v12M4 10h12" strokeLinecap="round" strokeLinejoin="round" />
+                  </svg>
+                  New Project
+                </button>
+              ) : null}
+              {(!buttonVisibility || buttonVisibility.template) ? (
+                <button
+                  type="button"
+                  onClick={() => void createNewProject()}
+                  className="studio-btn studio-btn-secondary"
+                >
+                  Start from a template
+                </button>
+              ) : null}
               <span style={{ width: 1, alignSelf: "stretch", background: "var(--border-color, #334155)", margin: "0 6px" }} />
-              <button
-                type="button"
-                onClick={() => navigateScreen("learn")}
-                className="studio-btn"
-                style={{ background: "linear-gradient(135deg,#10b981,#14b8a6)", color: "#fff", border: "none", fontWeight: 700 }}
-              >
-                <svg viewBox="0 0 20 20" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-                  <path d="M2 7l8-4 8 4-8 4-8-4z" />
-                  <path d="M6 9.5V14c0 1.2 1.8 2 4 2s4-.8 4-2V9.5" />
-                </svg>
-                Learn to Code
-              </button>
-              <button
-                type="button"
-                onClick={() => navigateContests()}
-                className="studio-btn"
-                style={{ background: "linear-gradient(135deg,#8b5cf6,#6366f1)", color: "#fff", border: "none", fontWeight: 700 }}
-              >
-                <svg viewBox="0 0 20 20" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-                  <path d="M4 4h12v3a4 4 0 0 1-4 4H8a4 4 0 0 1-4-4V4z" />
-                  <path d="M8 3h4M10 11v4M7 18h6M8 15h4" />
-                </svg>
-                Contests
-              </button>
-              <button
-                type="button"
-                onClick={() => setGroupsOpen(true)}
-                className="studio-btn"
-                style={{ background: "linear-gradient(135deg,#f59e0b,#f97316)", color: "#fff", border: "none", fontWeight: 700 }}
-              >
-                <svg viewBox="0 0 20 20" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-                  <path d="M8 9a3 3 0 1 0 0-6 3 3 0 0 0 0 6zM2 17v-1a5 5 0 0 1 5-5h2M12 5a3 3 0 1 1 0 6M13 14h6m-3-3v6" />
-                </svg>
-                Practical Groups
-              </button>
+              {(!buttonVisibility || buttonVisibility.learn) ? (
+                <button
+                  type="button"
+                  onClick={() => navigateScreen("learn")}
+                  className="studio-btn"
+                  style={{ background: "linear-gradient(135deg,#10b981,#14b8a6)", color: "#fff", border: "none", fontWeight: 700 }}
+                >
+                  <svg viewBox="0 0 20 20" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M2 7l8-4 8 4-8 4-8-4z" />
+                    <path d="M6 9.5V14c0 1.2 1.8 2 4 2s4-.8 4-2V9.5" />
+                  </svg>
+                  Learn to Code
+                </button>
+              ) : null}
+              {(!buttonVisibility || buttonVisibility.contests) ? (
+                <button
+                  type="button"
+                  onClick={() => navigateContests()}
+                  className="studio-btn"
+                  style={{ background: "linear-gradient(135deg,#8b5cf6,#6366f1)", color: "#fff", border: "none", fontWeight: 700 }}
+                >
+                  <svg viewBox="0 0 20 20" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M4 4h12v3a4 4 0 0 1-4 4H8a4 4 0 0 1-4-4V4z" />
+                    <path d="M8 3h4M10 11v4M7 18h6M8 15h4" />
+                  </svg>
+                  Contests
+                </button>
+              ) : null}
+              {(!buttonVisibility || buttonVisibility.groups) ? (
+                <button
+                  type="button"
+                  onClick={() => setGroupsOpen(true)}
+                  className="studio-btn"
+                  style={{ background: "linear-gradient(135deg,#f59e0b,#f97316)", color: "#fff", border: "none", fontWeight: 700 }}
+                >
+                  <svg viewBox="0 0 20 20" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M8 9a3 3 0 1 0 0-6 3 3 0 0 0 0 6zM2 17v-1a5 5 0 0 1 5-5h2M12 5a3 3 0 1 1 0 6M13 14h6m-3-3v6" />
+                  </svg>
+                  Practical Groups
+                </button>
+              ) : null}
             </div>
             {!isSignedIn ? (
               <div className="studio-hero-auth">
@@ -6741,6 +6833,11 @@ export default function ResearchStudioPage() {
                               {full ? "Full" : groupsBusy === g.id ? "Joining…" : "Join group"}
                             </button>
                           )}
+                          {groupsIsAdmin || groupsIsAssistant ? (
+                            <button type="button" onClick={() => void openAssess(g.id)} className="studio-btn studio-btn-ghost" style={{ height: 30, fontSize: 11, padding: "0 10px" }} title="Assess students">
+                              Assess
+                            </button>
+                          ) : null}
                           {groupsIsAdmin ? (
                             <>
                               <button type="button" onClick={() => openEditGroup(g)} className="studio-btn studio-btn-ghost" style={{ height: 30, fontSize: 11, padding: "0 10px" }} title="Edit group">
@@ -6789,6 +6886,78 @@ export default function ResearchStudioPage() {
                 <Button variant="outline" onClick={() => setEditGroupOpen(null)}>Cancel</Button>
                 <Button onClick={() => void submitEditGroup()} disabled={groupsBusy === editGroupOpen}>Save</Button>
               </DialogFooter>
+            </DialogContent>
+          </Dialog>
+        ) : null}
+        {assessGroupOpen ? (
+          <Dialog open onOpenChange={(open) => { if (!open) setAssessGroupOpen(null); }}>
+            <DialogContent className="sm:max-w-5xl">
+              <DialogHeader>
+                <DialogTitle>Assess {groups.find((g) => g.id === assessGroupOpen)?.name || "group"}</DialogTitle>
+                <DialogDescription>Enter marks per practical session and the test score.</DialogDescription>
+              </DialogHeader>
+              {!assessData ? (
+                <p style={{ fontSize: 12, color: "var(--text-muted, #64748b)" }}>{assessNotice || "Loading…"}</p>
+              ) : (() => {
+                const markMap = new Map(assessData.marks.map((m) => [`${m.sessionId}:${m.studentId}`, m.score]));
+                const testMap = new Map(assessData.tests.map((t) => [t.studentId, t.score]));
+                return (
+                  <>
+                    <div className="studio-assess-scroll">
+                      <table className="studio-assess-table">
+                        <thead>
+                          <tr>
+                            <th>Student</th>
+                            {assessData.sessions.map((s) => (
+                              <th key={s.id} title={`Max ${s.maxMarks} marks`}>{s.title}</th>
+                            ))}
+                            <th>Test</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {assessData.students.map((st) => (
+                            <tr key={st.userId}>
+                              <td className="studio-assess-student">
+                                {st.name} {st.surname}
+                                {st.studentId ? <span className="studio-assess-sid">{st.studentId}</span> : null}
+                              </td>
+                              {assessData.sessions.map((s) => {
+                                const val = markMap.get(`${s.id}:${st.userId}`);
+                                return (
+                                  <td key={s.id}>
+                                    <input
+                                      type="number"
+                                      min={0}
+                                      max={s.maxMarks}
+                                      value={val == null ? "" : String(val)}
+                                      onChange={(e) => setMark(s.id, st.userId, e.target.value)}
+                                      className="studio-assess-input"
+                                    />
+                                  </td>
+                                );
+                              })}
+                              <td>
+                                <input
+                                  type="number"
+                                  min={0}
+                                  value={testMap.get(st.userId) == null ? "" : String(testMap.get(st.userId))}
+                                  onChange={(e) => setTest(st.userId, e.target.value)}
+                                  className="studio-assess-input"
+                                />
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                    <DialogFooter>
+                      {assessNotice ? <span style={{ fontSize: 11, color: "var(--text-muted, #64748b)" }}>{assessNotice}</span> : null}
+                      <Button variant="outline" onClick={() => setAssessGroupOpen(null)}>Close</Button>
+                      <Button onClick={() => void saveAssess()} disabled={assessBusy}>{assessBusy ? "Saving…" : "Save marks"}</Button>
+                    </DialogFooter>
+                  </>
+                );
+              })()}
             </DialogContent>
           </Dialog>
         ) : null}

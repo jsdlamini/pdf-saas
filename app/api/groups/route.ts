@@ -11,11 +11,15 @@ function jsonError(message: string, status: number) {
 
 export async function GET() {
   const { userId } = await auth();
-  const [groups, isAdmin] = await Promise.all([
-    listGroups(userId ?? null),
-    userId ? getUserRole(userId).then((r) => r === "admin") : Promise.resolve(false),
-  ]);
-  return Response.json({ groups, signedIn: Boolean(userId), isAdmin });
+  const role = userId ? await getUserRole(userId) : "user";
+  const groups = await listGroups(userId ?? null);
+  return Response.json({
+    groups,
+    signedIn: Boolean(userId),
+    isAdmin: role === "admin",
+    isAssistant: role === "assistant",
+    role,
+  });
 }
 
 export async function POST(request: Request) {

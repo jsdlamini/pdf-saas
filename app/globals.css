@@ -1949,6 +1949,47 @@ body[data-studio-editor="true"] footer {
   color: var(--text-muted, #64748b);
 }
 
+/* ── Assessment sheet ───── */
+.studio-assess-scroll {
+  overflow-x: auto;
+}
+.studio-assess-table {
+  border-collapse: collapse;
+  width: 100%;
+  min-width: 720px;
+  font-size: 12px;
+}
+.studio-assess-table th,
+.studio-assess-table td {
+  padding: 6px 8px;
+  border: 1px solid var(--border-color, #334155);
+  text-align: center;
+  white-space: nowrap;
+}
+.studio-assess-table th {
+  background: var(--bg-primary, #0d0f17);
+  font-size: 10px;
+  color: var(--text-muted, #64748b);
+}
+.studio-assess-table td.studio-assess-student {
+  text-align: left;
+}
+.studio-assess-sid {
+  display: block;
+  font-size: 10px;
+  color: var(--text-muted, #64748b);
+}
+.studio-assess-input {
+  width: 56px;
+  height: 26px;
+  text-align: center;
+  background: var(--bg-primary, #0d0f17);
+  border: 1px solid var(--border-color, #334155);
+  border-radius: 6px;
+  color: var(--text-primary, #e2e8f0);
+  font-size: 12px;
+}
+
 .studio-search {
   width: 100%;
   max-width: 400px;

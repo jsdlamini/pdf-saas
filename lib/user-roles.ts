@@ -5,13 +5,15 @@ export async function ensureUserRolesTable() {
   await ensureMigrated();
 }
 
-export async function getUserRole(userId: string): Promise<"admin" | "user"> {
+export type UserRole = "admin" | "assistant" | "user";
+
+export async function getUserRole(userId: string): Promise<UserRole> {
   await ensureMigrated();
   const result = await db.query(
     "SELECT role FROM wiserfiles_user_roles WHERE user_id = $1",
     [userId]
   );
-  return (result.rows[0]?.role as "admin" | "user") || "user";
+  return (result.rows[0]?.role as UserRole) || "user";
 }
 
 export async function ensureUserRecord(userId: string, email: string) {
@@ -31,7 +33,7 @@ export async function listAllUsers() {
   return result.rows;
 }
 
-export async function setUserRole(userId: string, role: "admin" | "user", email: string) {
+export async function setUserRole(userId: string, role: UserRole, email: string) {
   await ensureMigrated();
   await db.query(
     `INSERT INTO wiserfiles_user_roles (user_id, email, role) VALUES ($1, $2, $3)
