@@ -1422,6 +1422,7 @@ export default function ResearchStudioPage() {
   const [joinName, setJoinName] = useState("");
   const [joinSurname, setJoinSurname] = useState("");
   const [joinProgramme, setJoinProgramme] = useState("");
+  const [joinStudentId, setJoinStudentId] = useState("");
   const [joinError, setJoinError] = useState("");
   const [groupsOpen, setGroupsOpen] = useState(false);
   const [editGroupOpen, setEditGroupOpen] = useState<string | null>(null);
@@ -6109,6 +6110,7 @@ export default function ResearchStudioPage() {
     setJoinName(clerkUser?.firstName || "");
     setJoinSurname(clerkUser?.lastName || "");
     setJoinProgramme("");
+    setJoinStudentId("");
     setJoinError("");
   }
 
@@ -6125,13 +6127,17 @@ export default function ResearchStudioPage() {
       setJoinError("Choose a programme.");
       return;
     }
+    if (!/^\d{6}$|^\d{9}$/.test(joinStudentId.trim())) {
+      setJoinError("Student ID must be 6 or 9 digits.");
+      return;
+    }
     setJoinError("");
     setGroupsBusy(groupId);
     try {
       const res = await fetch("/api/groups", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ action: "join", groupId, name, surname, programme: joinProgramme }),
+        body: JSON.stringify({ action: "join", groupId, name, surname, programme: joinProgramme, studentId: joinStudentId.trim() }),
       });
       const data = (await res.json().catch(() => null)) as { error?: string } | null;
       if (!res.ok) {
@@ -6783,6 +6789,10 @@ export default function ResearchStudioPage() {
                 <div className="space-y-1.5">
                   <Label htmlFor="join-surname">Surname</Label>
                   <Input id="join-surname" value={joinSurname} onChange={(e) => setJoinSurname(e.target.value)} placeholder="Your surname" />
+                </div>
+                <div className="space-y-1.5">
+                  <Label htmlFor="join-student-id">Student ID</Label>
+                  <Input id="join-student-id" value={joinStudentId} onChange={(e) => setJoinStudentId(e.target.value)} placeholder="6 or 9 digits" inputMode="numeric" />
                 </div>
                 <div className="space-y-1.5">
                   <Label htmlFor="join-programme">Programme</Label>

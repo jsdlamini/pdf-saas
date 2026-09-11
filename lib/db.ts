@@ -330,12 +330,14 @@ const MIGRATIONS: string[] = [
     name TEXT NOT NULL DEFAULT '',
     surname TEXT NOT NULL DEFAULT '',
     programme TEXT NOT NULL DEFAULT '',
+    student_id TEXT NOT NULL DEFAULT '',
     joined_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     PRIMARY KEY (user_id, group_id)
   )`,
   `ALTER TABLE wiserfiles_group_members ADD COLUMN IF NOT EXISTS name TEXT NOT NULL DEFAULT ''`,
   `ALTER TABLE wiserfiles_group_members ADD COLUMN IF NOT EXISTS surname TEXT NOT NULL DEFAULT ''`,
   `ALTER TABLE wiserfiles_group_members ADD COLUMN IF NOT EXISTS programme TEXT NOT NULL DEFAULT ''`,
+  `ALTER TABLE wiserfiles_group_members ADD COLUMN IF NOT EXISTS student_id TEXT NOT NULL DEFAULT ''`,
 ];
 
 let migrationPromise: Promise<void> | null = null;

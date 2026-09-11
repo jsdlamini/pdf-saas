@@ -28,6 +28,7 @@ export async function POST(request: Request) {
     name?: string;
     surname?: string;
     programme?: string;
+    studentId?: string;
     schedule?: string;
     capacity?: number;
   } | null;
@@ -50,6 +51,7 @@ export async function POST(request: Request) {
       name: typeof body.name === "string" ? body.name : "",
       surname: typeof body.surname === "string" ? body.surname : "",
       programme: typeof body.programme === "string" ? body.programme : "",
+      studentId: typeof body.studentId === "string" ? body.studentId : "",
     });
     if (!result.ok) return jsonError(result.error || "Could not join the group.", 409);
     return Response.json({ ok: true, joined: true, members: result.members });

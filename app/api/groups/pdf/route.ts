@@ -30,9 +30,10 @@ export async function GET(request: Request) {
   const pageW = 595;
   const pageH = 842;
   const margin = 52;
-  const nameX = margin;
-  const surnameX = margin + 140;
-  const progX = margin + 285;
+  const sidX = margin;
+  const nameX = margin + 92;
+  const surnameX = margin + 232;
+  const progX = margin + 360;
   const rowH = 21;
   const rowsPerPage = Math.floor((pageH - margin * 2 - 130) / rowH);
 
@@ -51,6 +52,7 @@ export async function GET(request: Request) {
     y -= 18;
     page.drawText(`Enrolled: ${members.length} / ${group.capacity}`, { x: margin, y, size: 10, font, color: rgb(0.42, 0.45, 0.55) });
     y -= 26;
+    page.drawText("Student ID", { x: sidX, y, size: 9, font: bold, color: rgb(0.5, 0.52, 0.6) });
     page.drawText("Name", { x: nameX, y, size: 9, font: bold, color: rgb(0.5, 0.52, 0.6) });
     page.drawText("Surname", { x: surnameX, y, size: 9, font: bold, color: rgb(0.5, 0.52, 0.6) });
     page.drawText("Programme", { x: progX, y, size: 9, font: bold, color: rgb(0.5, 0.52, 0.6) });
@@ -76,7 +78,8 @@ export async function GET(request: Request) {
         drawHeader();
         row = 0;
       }
-      page.drawText(`${i + 1}. ${m.name}`, { x: nameX, y, size: 10, font, color: rgb(0.15, 0.16, 0.22) });
+      page.drawText(`${i + 1}. ${m.studentId}`, { x: sidX, y, size: 10, font, color: rgb(0.15, 0.16, 0.22) });
+      page.drawText(m.name, { x: nameX, y, size: 10, font, color: rgb(0.15, 0.16, 0.22) });
       page.drawText(m.surname, { x: surnameX, y, size: 10, font, color: rgb(0.15, 0.16, 0.22) });
       page.drawText(m.programme, { x: progX, y, size: 9, font, color: rgb(0.42, 0.45, 0.55) });
       y -= rowH;
