@@ -1274,6 +1274,16 @@ export default function ResearchStudioPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  // Land straight on the practical-group choices when shared via
+  // ?groups=open (e.g. /research-studio?view=projects&groups=open).
+  useEffect(() => {
+    if (searchParams.get("groups") === "open") {
+      setWorkspaceScreen("projects");
+      setGroupsOpen(true);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   // Hide the global site footer while the editor is open to maximise space.
   useEffect(() => {
     if (workspaceScreen === "editor") {
