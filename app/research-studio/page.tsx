@@ -1412,6 +1412,11 @@ export default function ResearchStudioPage() {
   const [sortMode, setSortMode] = useState<"updated" | "name">("updated");
   const [openTabs, setOpenTabs] = useState<string[]>([]);
 
+  // Study-group memberships (students add themselves; groups are static config).
+  const [groups, setGroups] = useState<{ id: string; name: string; schedule: string; capacity: number; members: number; joined: boolean }[]>([]);
+  const [groupsIsAdmin, setGroupsIsAdmin] = useState(false);
+  const [groupsBusy, setGroupsBusy] = useState<string | null>(null);
+
   // Auto-collapse the file tree and preview on narrow screens so the editor is
   // the single full-width focus. The CSS breakpoint (max-width: 1024px) turns
   // both panes into slide-in overlays, so this keeps them tucked away by
@@ -6067,6 +6072,68 @@ export default function ResearchStudioPage() {
     });
   }
 
+  async function loadGroups() {
+    try {
+      const res = await fetch("/api/groups");
+      const data = (await res.json().catch(() => null)) as
+        | { groups?: typeof groups; isAdmin?: boolean; signedIn?: boolean }
+        | null;
+      if (data?.groups) setGroups(data.groups);
+      setGroupsIsAdmin(Boolean(data?.isAdmin));
+    } catch {
+      // Non-blocking: groups stay empty if the request fails.
+    }
+  }
+
+  useEffect(() => {
+    void loadGroups();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isSignedIn]);
+
+  async function handleJoinGroup(groupId: string) {
+    setGroupsBusy(groupId);
+    try {
+      const res = await fetch("/api/groups", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "join", groupId }),
+      });
+      const data = (await res.json().catch(() => null)) as { error?: string; members?: number } | null;
+      if (!res.ok) {
+        setCompileNotice(data?.error || "Could not join the group.");
+      } else {
+        setCompileNotice("Joined the group.");
+      }
+      await loadGroups();
+    } catch {
+      setCompileNotice("Could not join the group.");
+    } finally {
+      setGroupsBusy(null);
+    }
+  }
+
+  async function handleLeaveGroup(groupId: string) {
+    setGroupsBusy(groupId);
+    try {
+      const res = await fetch("/api/groups", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "leave", groupId }),
+      });
+      if (!res.ok) {
+        const data = (await res.json().catch(() => null)) as { error?: string } | null;
+        setCompileNotice(data?.error || "Could not leave the group.");
+      } else {
+        setCompileNotice("Left the group.");
+      }
+      await loadGroups();
+    } catch {
+      setCompileNotice("Could not leave the group.");
+    } finally {
+      setGroupsBusy(null);
+    }
+  }
+
   if (workspaceScreen === "projects") {
     return (
       <main className="studio-dark studio-shell">
@@ -6506,6 +6573,63 @@ export default function ResearchStudioPage() {
             })}
           </div>
         )}
+
+        {/* Study groups — students add themselves, 50 max per group */}
+        <section className="studio-groups">
+          <div className="studio-groups-header">
+            <h2 className="studio-dashboard-title" style={{ fontSize: 18 }}>Study groups</h2>
+            <p className="studio-dashboard-subtitle" style={{ fontSize: 12 }}>
+              Join a tutorial group — up to 50 students per group.
+            </p>
+          </div>
+          {!isSignedIn ? (
+            <div className="studio-groups-lock">
+              <svg viewBox="0 0 20 20" style={{ width: 16, height: 16 }} fill="none" stroke="currentColor" strokeWidth="1.8">
+                <rect x="5" y="9" width="10" height="8" rx="1.5" />
+                <path d="M7 9V6a3 3 0 0 1 6 0v3" strokeLinecap="round" />
+              </svg>
+              <span>Sign in to join a study group.</span>
+            </div>
+          ) : (
+            <div className="studio-groups-grid">
+              {groups.map((g) => {
+                const full = g.members >= g.capacity;
+                const pct = Math.min(100, Math.round((g.members / g.capacity) * 100));
+                return (
+                  <article key={g.id} className="studio-group-card">
+                    <div>
+                      <p className="studio-group-name">{g.name}</p>
+                      <p className="studio-group-schedule">{g.schedule}</p>
+                    </div>
+                    <div className="studio-group-capacity">
+                      <div className="studio-group-bar"><div style={{ width: `${pct}%` }} /></div>
+                      <span className="studio-group-count">{g.members}/{g.capacity}</span>
+                    </div>
+                    <div className="studio-group-actions">
+                      {g.joined ? (
+                        <button type="button" onClick={() => void handleLeaveGroup(g.id)} disabled={groupsBusy === g.id} className="studio-btn studio-btn-secondary" style={{ height: 30, fontSize: 11, padding: "0 12px" }}>
+                          {groupsBusy === g.id ? "…" : "Leave"}
+                        </button>
+                      ) : (
+                        <button type="button" onClick={() => void handleJoinGroup(g.id)} disabled={full || groupsBusy === g.id} className="studio-btn studio-btn-primary" style={{ height: 30, fontSize: 11, padding: "0 12px" }}>
+                          {full ? "Full" : groupsBusy === g.id ? "Joining…" : "Join group"}
+                        </button>
+                      )}
+                      {groupsIsAdmin ? (
+                        <a href={`/api/groups/pdf?group=${g.id}`} download className="studio-btn studio-btn-ghost" style={{ height: 30, fontSize: 11, padding: "0 10px", textDecoration: "none" }} title="Download roster PDF">
+                          <svg viewBox="0 0 20 20" style={{ width: 14, height: 14 }} fill="none" stroke="currentColor" strokeWidth="1.8">
+                            <path d="M10 3v9m0 0l-3-3m3 3l3-3M4 14v2h12v-2" strokeLinecap="round" strokeLinejoin="round" />
+                          </svg>
+                          PDF
+                        </a>
+                      ) : null}
+                    </div>
+                  </article>
+                );
+              })}
+            </div>
+          )}
+        </section>
 
         </div>
         {renderNewProjectDialog()}
