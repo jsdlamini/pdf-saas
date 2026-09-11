@@ -21,6 +21,7 @@ import { vscodeFileIcon, vscodeFolderIcon } from "@/lib/file-icons";
 import { loadJson, persistJson, removeJson } from "@/lib/json-storage";
 import { mergeAssetContents, unrecoverableAssetPaths, isBinaryAssetPath } from "@/lib/project-assets";
 import { renderPdfFirstPagePreview } from "@/lib/transforms/rasterize";
+import { VALID_PROGRAMMES } from "@/lib/groups";
 import { classifyUpload, joinUploadPath } from "@/lib/project-upload";
 import { Button } from "@/components/ui/button";
 import ReactMarkdown from "react-markdown";
@@ -1416,6 +1417,17 @@ export default function ResearchStudioPage() {
   const [groups, setGroups] = useState<{ id: string; name: string; schedule: string; capacity: number; members: number; joined: boolean }[]>([]);
   const [groupsIsAdmin, setGroupsIsAdmin] = useState(false);
   const [groupsBusy, setGroupsBusy] = useState<string | null>(null);
+  const [joinGroupOpen, setJoinGroupOpen] = useState<string | null>(null);
+  const [joinName, setJoinName] = useState("");
+  const [joinSurname, setJoinSurname] = useState("");
+  const [joinProgramme, setJoinProgramme] = useState("");
+  const [joinError, setJoinError] = useState("");
+  const [groupsOpen, setGroupsOpen] = useState(false);
+  const [editGroupOpen, setEditGroupOpen] = useState<string | null>(null);
+  const [editName, setEditName] = useState("");
+  const [editSchedule, setEditSchedule] = useState("");
+  const [editCapacity, setEditCapacity] = useState("50");
+  const [editError, setEditError] = useState("");
 
   // Auto-collapse the file tree and preview on narrow screens so the editor is
   // the single full-width focus. The CSS breakpoint (max-width: 1024px) turns
@@ -6090,23 +6102,88 @@ export default function ResearchStudioPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isSignedIn]);
 
-  async function handleJoinGroup(groupId: string) {
+  function openJoinGroup(groupId: string) {
+    setJoinGroupOpen(groupId);
+    setJoinName(clerkUser?.firstName || "");
+    setJoinSurname(clerkUser?.lastName || "");
+    setJoinProgramme("");
+    setJoinError("");
+  }
+
+  async function submitJoinGroup() {
+    const groupId = joinGroupOpen;
+    if (!groupId) return;
+    const name = joinName.trim();
+    const surname = joinSurname.trim();
+    if (!name || !surname) {
+      setJoinError("Name and surname are required.");
+      return;
+    }
+    if (!joinProgramme) {
+      setJoinError("Choose a programme.");
+      return;
+    }
+    setJoinError("");
     setGroupsBusy(groupId);
     try {
       const res = await fetch("/api/groups", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ action: "join", groupId }),
+        body: JSON.stringify({ action: "join", groupId, name, surname, programme: joinProgramme }),
       });
-      const data = (await res.json().catch(() => null)) as { error?: string; members?: number } | null;
+      const data = (await res.json().catch(() => null)) as { error?: string } | null;
       if (!res.ok) {
-        setCompileNotice(data?.error || "Could not join the group.");
+        setJoinError(data?.error || "Could not join the group.");
       } else {
         setCompileNotice("Joined the group.");
+        setJoinGroupOpen(null);
       }
       await loadGroups();
     } catch {
-      setCompileNotice("Could not join the group.");
+      setJoinError("Could not join the group.");
+    } finally {
+      setGroupsBusy(null);
+    }
+  }
+
+  function openEditGroup(g: { id: string; name: string; schedule: string; capacity: number }) {
+    setEditGroupOpen(g.id);
+    setEditName(g.name);
+    setEditSchedule(g.schedule);
+    setEditCapacity(String(g.capacity));
+    setEditError("");
+  }
+
+  async function submitEditGroup() {
+    const groupId = editGroupOpen;
+    if (!groupId) return;
+    if (!editName.trim()) {
+      setEditError("Name is required.");
+      return;
+    }
+    setEditError("");
+    setGroupsBusy(groupId);
+    try {
+      const res = await fetch("/api/groups", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "update",
+          groupId,
+          name: editName,
+          schedule: editSchedule,
+          capacity: Number(editCapacity) || 50,
+        }),
+      });
+      if (!res.ok) {
+        const data = (await res.json().catch(() => null)) as { error?: string } | null;
+        setEditError(data?.error || "Could not update the group.");
+      } else {
+        setEditGroupOpen(null);
+      }
+      await loadGroups();
+    } catch {
+      setEditError("Could not update the group.");
     } finally {
       setGroupsBusy(null);
     }
@@ -6252,6 +6329,17 @@ export default function ResearchStudioPage() {
                   <path d="M8 3h4M10 11v4M7 18h6M8 15h4" />
                 </svg>
                 Contests
+              </button>
+              <button
+                type="button"
+                onClick={() => setGroupsOpen(true)}
+                className="studio-btn"
+                style={{ background: "linear-gradient(135deg,#f59e0b,#f97316)", color: "#fff", border: "none", fontWeight: 700 }}
+              >
+                <svg viewBox="0 0 20 20" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M8 9a3 3 0 1 0 0-6 3 3 0 0 0 0 6zM2 17v-1a5 5 0 0 1 5-5h2M12 5a3 3 0 1 1 0 6M13 14h6m-3-3v6" />
+                </svg>
+                Practical Groups
               </button>
             </div>
             {!isSignedIn ? (
@@ -6574,65 +6662,141 @@ export default function ResearchStudioPage() {
           </div>
         )}
 
-        {/* Study groups — students add themselves, 50 max per group */}
-        <section className="studio-groups">
-          <div className="studio-groups-header">
-            <h2 className="studio-dashboard-title" style={{ fontSize: 18 }}>Study groups</h2>
-            <p className="studio-dashboard-subtitle" style={{ fontSize: 12 }}>
-              Join a tutorial group — up to 50 students per group.
-            </p>
-          </div>
-          {!isSignedIn ? (
-            <div className="studio-groups-lock">
-              <svg viewBox="0 0 20 20" style={{ width: 16, height: 16 }} fill="none" stroke="currentColor" strokeWidth="1.8">
-                <rect x="5" y="9" width="10" height="8" rx="1.5" />
-                <path d="M7 9V6a3 3 0 0 1 6 0v3" strokeLinecap="round" />
-              </svg>
-              <span>Sign in to join a study group.</span>
-            </div>
-          ) : (
-            <div className="studio-groups-grid">
-              {groups.map((g) => {
-                const full = g.members >= g.capacity;
-                const pct = Math.min(100, Math.round((g.members / g.capacity) * 100));
-                return (
-                  <article key={g.id} className="studio-group-card">
-                    <div>
-                      <p className="studio-group-name">{g.name}</p>
-                      <p className="studio-group-schedule">{g.schedule}</p>
-                    </div>
-                    <div className="studio-group-capacity">
-                      <div className="studio-group-bar"><div style={{ width: `${pct}%` }} /></div>
-                      <span className="studio-group-count">{g.members}/{g.capacity}</span>
-                    </div>
-                    <div className="studio-group-actions">
-                      {g.joined ? (
-                        <button type="button" onClick={() => void handleLeaveGroup(g.id)} disabled={groupsBusy === g.id} className="studio-btn studio-btn-secondary" style={{ height: 30, fontSize: 11, padding: "0 12px" }}>
-                          {groupsBusy === g.id ? "…" : "Leave"}
-                        </button>
-                      ) : (
-                        <button type="button" onClick={() => void handleJoinGroup(g.id)} disabled={full || groupsBusy === g.id} className="studio-btn studio-btn-primary" style={{ height: 30, fontSize: 11, padding: "0 12px" }}>
-                          {full ? "Full" : groupsBusy === g.id ? "Joining…" : "Join group"}
-                        </button>
-                      )}
-                      {groupsIsAdmin ? (
-                        <a href={`/api/groups/pdf?group=${g.id}`} download className="studio-btn studio-btn-ghost" style={{ height: 30, fontSize: 11, padding: "0 10px", textDecoration: "none" }} title="Download roster PDF">
-                          <svg viewBox="0 0 20 20" style={{ width: 14, height: 14 }} fill="none" stroke="currentColor" strokeWidth="1.8">
-                            <path d="M10 3v9m0 0l-3-3m3 3l3-3M4 14v2h12v-2" strokeLinecap="round" strokeLinejoin="round" />
-                          </svg>
-                          PDF
-                        </a>
-                      ) : null}
-                    </div>
-                  </article>
-                );
-              })}
-            </div>
-          )}
-        </section>
-
         </div>
         {renderNewProjectDialog()}
+        {groupsOpen ? (
+          <Dialog open onOpenChange={(open) => { if (!open) setGroupsOpen(false); }}>
+            <DialogContent className="sm:max-w-3xl">
+              <DialogHeader>
+                <DialogTitle>Practical groups</DialogTitle>
+                <DialogDescription>
+                  Join a practical group — up to 50 students per group.
+                </DialogDescription>
+              </DialogHeader>
+              {!isSignedIn ? (
+                <div className="studio-groups-lock">
+                  <svg viewBox="0 0 20 20" style={{ width: 16, height: 16 }} fill="none" stroke="currentColor" strokeWidth="1.8">
+                    <rect x="5" y="9" width="10" height="8" rx="1.5" />
+                    <path d="M7 9V6a3 3 0 0 1 6 0v3" strokeLinecap="round" />
+                  </svg>
+                  <span>Sign in to join a practical group.</span>
+                </div>
+              ) : (
+                <div className="studio-groups-grid">
+                  {groups.map((g) => {
+                    const full = g.members >= g.capacity;
+                    const pct = Math.min(100, Math.round((g.members / g.capacity) * 100));
+                    return (
+                      <article key={g.id} className="studio-group-card">
+                        <div>
+                          <p className="studio-group-name">{g.name}</p>
+                          <p className="studio-group-schedule">{g.schedule}</p>
+                        </div>
+                        <div className="studio-group-capacity">
+                          <div className="studio-group-bar"><div style={{ width: `${pct}%` }} /></div>
+                          <span className="studio-group-count">{g.members}/{g.capacity}</span>
+                        </div>
+                        <div className="studio-group-actions">
+                          {g.joined ? (
+                            <button type="button" onClick={() => void handleLeaveGroup(g.id)} disabled={groupsBusy === g.id} className="studio-btn studio-btn-secondary" style={{ height: 30, fontSize: 11, padding: "0 12px" }}>
+                              {groupsBusy === g.id ? "…" : "Leave"}
+                            </button>
+                          ) : (
+                            <button type="button" onClick={() => openJoinGroup(g.id)} disabled={full || groupsBusy === g.id} className="studio-btn studio-btn-primary" style={{ height: 30, fontSize: 11, padding: "0 12px" }}>
+                              {full ? "Full" : groupsBusy === g.id ? "Joining…" : "Join group"}
+                            </button>
+                          )}
+                          {groupsIsAdmin ? (
+                            <>
+                              <button type="button" onClick={() => openEditGroup(g)} className="studio-btn studio-btn-ghost" style={{ height: 30, fontSize: 11, padding: "0 10px" }} title="Edit group">
+                                Edit
+                              </button>
+                              <a href={`/api/groups/pdf?group=${g.id}`} download className="studio-btn studio-btn-ghost" style={{ height: 30, fontSize: 11, padding: "0 10px", textDecoration: "none" }} title="Download roster PDF">
+                                <svg viewBox="0 0 20 20" style={{ width: 14, height: 14 }} fill="none" stroke="currentColor" strokeWidth="1.8">
+                                  <path d="M10 3v9m0 0l-3-3m3 3l3-3M4 14v2h12v-2" strokeLinecap="round" strokeLinejoin="round" />
+                                </svg>
+                                PDF
+                              </a>
+                            </>
+                          ) : null}
+                        </div>
+                      </article>
+                    );
+                  })}
+                </div>
+              )}
+            </DialogContent>
+          </Dialog>
+        ) : null}
+        {editGroupOpen ? (
+          <Dialog open onOpenChange={(open) => { if (!open) setEditGroupOpen(null); }}>
+            <DialogContent className="sm:max-w-md">
+              <DialogHeader>
+                <DialogTitle>Edit group</DialogTitle>
+                <DialogDescription>Change the group name, schedule, or capacity.</DialogDescription>
+              </DialogHeader>
+              <div className="space-y-3">
+                <div className="space-y-1.5">
+                  <Label htmlFor="edit-name">Name</Label>
+                  <Input id="edit-name" value={editName} onChange={(e) => setEditName(e.target.value)} />
+                </div>
+                <div className="space-y-1.5">
+                  <Label htmlFor="edit-schedule">Schedule</Label>
+                  <Input id="edit-schedule" value={editSchedule} onChange={(e) => setEditSchedule(e.target.value)} />
+                </div>
+                <div className="space-y-1.5">
+                  <Label htmlFor="edit-capacity">Capacity</Label>
+                  <Input id="edit-capacity" type="number" min={1} max={200} value={editCapacity} onChange={(e) => setEditCapacity(e.target.value)} />
+                </div>
+                {editError ? <p className="text-xs font-semibold text-[var(--danger)]">{editError}</p> : null}
+              </div>
+              <DialogFooter>
+                <Button variant="outline" onClick={() => setEditGroupOpen(null)}>Cancel</Button>
+                <Button onClick={() => void submitEditGroup()} disabled={groupsBusy === editGroupOpen}>Save</Button>
+              </DialogFooter>
+            </DialogContent>
+          </Dialog>
+        ) : null}
+        {joinGroupOpen ? (
+          <Dialog open onOpenChange={(open) => { if (!open) setJoinGroupOpen(null); }}>
+            <DialogContent className="sm:max-w-md">
+              <DialogHeader>
+                <DialogTitle>Join {groups.find((g) => g.id === joinGroupOpen)?.name || "group"}</DialogTitle>
+                <DialogDescription>
+                  Enter your name, surname, and programme to join this group.
+                </DialogDescription>
+              </DialogHeader>
+              <div className="space-y-3">
+                <div className="space-y-1.5">
+                  <Label htmlFor="join-name">Name</Label>
+                  <Input id="join-name" value={joinName} onChange={(e) => setJoinName(e.target.value)} placeholder="Your first name" autoFocus />
+                </div>
+                <div className="space-y-1.5">
+                  <Label htmlFor="join-surname">Surname</Label>
+                  <Input id="join-surname" value={joinSurname} onChange={(e) => setJoinSurname(e.target.value)} placeholder="Your surname" />
+                </div>
+                <div className="space-y-1.5">
+                  <Label htmlFor="join-programme">Programme</Label>
+                  <select id="join-programme" value={joinProgramme} onChange={(e) => setJoinProgramme(e.target.value)} className="studio-sort-select" style={{ width: "100%" }}>
+                    <option value="">Select programme</option>
+                    {VALID_PROGRAMMES.map((p) => (
+                      <option key={p} value={p}>{p}</option>
+                    ))}
+                  </select>
+                </div>
+                {joinError ? (
+                  <p className="text-xs font-semibold text-[var(--danger)]">{joinError}</p>
+                ) : null}
+              </div>
+              <DialogFooter>
+                <Button variant="outline" onClick={() => setJoinGroupOpen(null)}>Cancel</Button>
+                <Button onClick={() => void submitJoinGroup()} disabled={groupsBusy === joinGroupOpen}>
+                  {groupsBusy === joinGroupOpen ? "Joining…" : "Join group"}
+                </Button>
+              </DialogFooter>
+            </DialogContent>
+          </Dialog>
+        ) : null}
       </main>
     );
   }
