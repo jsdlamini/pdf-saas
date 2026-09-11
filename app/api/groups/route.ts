@@ -11,8 +11,21 @@ function jsonError(message: string, status: number) {
 
 export async function GET() {
   const { userId } = await auth();
-  const role = userId ? await getUserRole(userId) : "user";
-  const groups = await listGroups(userId ?? null);
+  // The shared Postgres pool can hit a transient connect timeout after a
+  // deploy; retry a couple of times so the dialog fills instead of failing.
+  let role = "user";
+  let groups;
+  for (let attempt = 0; ; attempt++) {
+    try {
+      role = userId ? await getUserRole(userId) : "user";
+      groups = await listGroups(userId ?? null);
+      break;
+    } catch (error) {
+      const msg = error instanceof Error ? error.message : String(error);
+      if (attempt >= 2 || !msg.includes("timeout exceeded when trying to connect")) throw error;
+      await new Promise((resolve) => setTimeout(resolve, 700 * (attempt + 1)));
+    }
+  }
   return Response.json({
     groups,
     signedIn: Boolean(userId),
