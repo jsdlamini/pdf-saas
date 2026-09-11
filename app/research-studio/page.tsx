@@ -6465,12 +6465,9 @@ export default function ResearchStudioPage() {
             </div>
             {!isSignedIn ? (
               <div className="studio-hero-auth">
-                <span>Working offline — sign in to sync across devices.</span>
-                <SignUpButton mode="modal">
-                  <button type="button" className="studio-btn studio-btn-primary">Create account</button>
-                </SignUpButton>
+                <span>Sign in to sync your projects across devices.</span>
                 <SignInButton mode="modal">
-                  <button type="button" className="studio-btn studio-btn-secondary">Sign in</button>
+                  <button type="button" className="studio-btn studio-btn-primary">Sign in</button>
                 </SignInButton>
               </div>
             ) : null}
@@ -6579,10 +6576,7 @@ export default function ResearchStudioPage() {
             </p>
           ) : authLoaded ? (
             <div className="studio-auth-cta">
-              <span>Working offline — sign in to sync across devices.</span>
-              <SignUpButton mode="modal">
-                <button type="button">Create account</button>
-              </SignUpButton>
+              <span>Sign in to sync across devices.</span>
               <SignInButton mode="modal">
                 <button type="button">Sign in</button>
               </SignInButton>
