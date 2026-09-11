@@ -1,7 +1,7 @@
-import { auth, clerkClient } from "@clerk/nextjs/server";
+import { auth } from "@clerk/nextjs/server";
 import { getUserRole } from "@/lib/user-roles";
 import { getGroupById } from "@/lib/groups";
-import { listGroupMemberIds } from "@/lib/groups-store";
+import { listGroupMembers } from "@/lib/groups-store";
 import { PDFDocument, StandardFonts, rgb } from "pdf-lib";
 
 export const runtime = "nodejs";
@@ -21,18 +21,7 @@ export async function GET(request: Request) {
   const group = getGroupById(groupId);
   if (!group) return Response.json({ error: "Unknown group." }, { status: 404 });
 
-  const memberIds = await listGroupMemberIds(groupId);
-  const client = await clerkClient();
-  const members: { name: string; email: string }[] = [];
-  for (const id of memberIds) {
-    try {
-      const u = await client.users.getUser(id);
-      const name = [u.firstName, u.lastName].filter(Boolean).join(" ").trim() || u.username || "—";
-      members.push({ name, email: u.primaryEmailAddress?.emailAddress || "" });
-    } catch {
-      members.push({ name: "—", email: "" });
-    }
-  }
+  const members = await listGroupMembers(groupId);
 
   const pdf = await PDFDocument.create();
   const font = await pdf.embedFont(StandardFonts.Helvetica);
@@ -40,7 +29,10 @@ export async function GET(request: Request) {
 
   const pageW = 595;
   const pageH = 842;
-  const margin = 56;
+  const margin = 52;
+  const nameX = margin;
+  const surnameX = margin + 140;
+  const progX = margin + 285;
   const rowH = 21;
   const rowsPerPage = Math.floor((pageH - margin * 2 - 130) / rowH);
 
@@ -53,14 +45,15 @@ export async function GET(request: Request) {
   };
 
   const drawHeader = () => {
-    page.drawText("Study Group Roster", { x: margin, y, size: 20, font: bold, color: rgb(0.1, 0.1, 0.16) });
+    page.drawText("Practical Group Roster", { x: margin, y, size: 20, font: bold, color: rgb(0.1, 0.1, 0.16) });
     y -= 24;
     page.drawText(`${group.name} — ${group.schedule}`, { x: margin, y, size: 12, font: bold, color: rgb(0.25, 0.28, 0.4) });
     y -= 18;
     page.drawText(`Enrolled: ${members.length} / ${group.capacity}`, { x: margin, y, size: 10, font, color: rgb(0.42, 0.45, 0.55) });
     y -= 26;
-    page.drawText("Name", { x: margin, y, size: 9, font: bold, color: rgb(0.5, 0.52, 0.6) });
-    page.drawText("Email", { x: margin + 240, y, size: 9, font: bold, color: rgb(0.5, 0.52, 0.6) });
+    page.drawText("Name", { x: nameX, y, size: 9, font: bold, color: rgb(0.5, 0.52, 0.6) });
+    page.drawText("Surname", { x: surnameX, y, size: 9, font: bold, color: rgb(0.5, 0.52, 0.6) });
+    page.drawText("Programme", { x: progX, y, size: 9, font: bold, color: rgb(0.5, 0.52, 0.6) });
     y -= 8;
     page.drawLine({
       start: { x: margin, y },
@@ -83,8 +76,9 @@ export async function GET(request: Request) {
         drawHeader();
         row = 0;
       }
-      page.drawText(`${i + 1}. ${m.name}`, { x: margin, y, size: 10, font, color: rgb(0.15, 0.16, 0.22) });
-      page.drawText(m.email, { x: margin + 240, y, size: 9, font, color: rgb(0.42, 0.45, 0.55) });
+      page.drawText(`${i + 1}. ${m.name}`, { x: nameX, y, size: 10, font, color: rgb(0.15, 0.16, 0.22) });
+      page.drawText(m.surname, { x: surnameX, y, size: 10, font, color: rgb(0.15, 0.16, 0.22) });
+      page.drawText(m.programme, { x: progX, y, size: 9, font, color: rgb(0.42, 0.45, 0.55) });
       y -= rowH;
       row += 1;
     });

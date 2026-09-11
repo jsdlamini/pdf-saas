@@ -311,13 +311,27 @@ const MIGRATIONS: string[] = [
   `ALTER TABLE wiserfiles_challenge_solves ADD COLUMN IF NOT EXISTS team_id INTEGER`,
   `ALTER TABLE wiserfiles_submissions ADD COLUMN IF NOT EXISTS team_id INTEGER`,
 
-  // ── Study groups (tutorial groups; students add themselves) ─────────
+  // ── Practical groups (students add themselves) ─────────
+  `CREATE TABLE IF NOT EXISTS wiserfiles_groups (
+    id TEXT PRIMARY KEY,
+    name TEXT NOT NULL,
+    schedule TEXT NOT NULL DEFAULT '',
+    capacity INTEGER NOT NULL DEFAULT 50,
+    sort_order INTEGER NOT NULL DEFAULT 0,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+  )`,
   `CREATE TABLE IF NOT EXISTS wiserfiles_group_members (
     user_id TEXT NOT NULL,
     group_id TEXT NOT NULL,
+    name TEXT NOT NULL DEFAULT '',
+    surname TEXT NOT NULL DEFAULT '',
+    programme TEXT NOT NULL DEFAULT '',
     joined_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     PRIMARY KEY (user_id, group_id)
   )`,
+  `ALTER TABLE wiserfiles_group_members ADD COLUMN IF NOT EXISTS name TEXT NOT NULL DEFAULT ''`,
+  `ALTER TABLE wiserfiles_group_members ADD COLUMN IF NOT EXISTS surname TEXT NOT NULL DEFAULT ''`,
+  `ALTER TABLE wiserfiles_group_members ADD COLUMN IF NOT EXISTS programme TEXT NOT NULL DEFAULT ''`,
 ];
 
 let migrationPromise: Promise<void> | null = null;
