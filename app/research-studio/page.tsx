@@ -1056,7 +1056,10 @@ export default function ResearchStudioPage() {
     try {
       const urlView = new URLSearchParams(window.location.search).get("view");
       if (urlView === "learn" || urlView === "projects") return urlView;
-      if (urlView === "editor" || urlView === "contests") return "editor";
+      if (urlView === "editor") return "editor";
+      // "contests" opens the Challenges dialog on the projects screen rather
+      // than forcing the editor open.
+      if (urlView === "contests") return "projects";
       const saved = localStorage.getItem("wiserfiles-workspace");
       return saved ? (JSON.parse(saved) as "projects" | "editor" | "learn") : initialState.workspaceScreen;
     } catch { return initialState.workspaceScreen; }
@@ -3610,6 +3613,9 @@ export default function ResearchStudioPage() {
     setChallengeResults(null);
     setHintText("");
     setChallengesOpen(false);
+    // Starting a challenge needs the editor; switching here keeps the dialog
+    // viewable from the projects screen until the user commits.
+    setWorkspaceScreen("editor");
     setCompileNotice(`Challenge loaded: ${ch.slug}. Edit your code, then click "Submit for grading" to earn points.`);
   }
 
@@ -4850,7 +4856,8 @@ export default function ResearchStudioPage() {
   }
 
   function navigateContests() {
-    setWorkspaceScreen("editor");
+    // Open the Challenges/Contests dialog on the current screen — do not force
+    // the editor open; the user may just close the dialog.
     void openChallengesPanel("cohorts");
     if (typeof window !== "undefined") {
       const url = new URL(window.location.href);
@@ -6335,6 +6342,330 @@ export default function ResearchStudioPage() {
     void saveSingleMark(itemId, studentId, score);
   }
 
+  const challengesDialog = (
+          <Dialog open={challengesOpen} onOpenChange={setChallengesOpen}>
+            <DialogContent className="sm:max-w-lg">
+              {activeChallenge ? (
+                <>
+                  <DialogHeader>
+                    <DialogTitle>{activeChallenge.slug}</DialogTitle>
+                    <DialogDescription>{activeChallenge.language.toUpperCase()} challenge</DialogDescription>
+                  </DialogHeader>
+                  <div className="max-h-64 overflow-y-auto rounded-lg border p-3 text-sm challenge-markdown">
+                    <ReactMarkdown>{activeChallenge.statement_md}</ReactMarkdown>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <Button onClick={() => void runChallengeTests()} disabled={challengeBusy}>
+                      {challengeBusy ? "Running…" : "Run tests"}
+                    </Button>
+                    <Button variant="outline" onClick={() => setActiveChallenge(null)}>Back to list</Button>
+                  </div>
+                  {challengeResults ? (
+                    <div className="space-y-1.5">
+                      <p className={`text-sm font-semibold ${challengeResults.passed ? "text-emerald-600" : "text-rose-600"}`}>
+                        {challengeResults.passed
+                          ? `Solved! ${challengeResults.firstSolve ? "First solve — points awarded." : ""}`
+                          : `Not passing: ${challengeResults.results.filter((r) => r.ok).length}/${challengeResults.total} tests`}
+                      </p>
+                      {challengeResults.results.map((r, i) => (
+                        <div key={i} className="rounded-lg border px-3 py-2 text-xs">
+                          <p className="font-mono">Test {i + 1}: {r.ok ? "✓ pass" : "✗ fail"}</p>
+                          {!r.ok ? (
+                            <>
+                              <p className="font-mono text-muted-foreground">input: {r.input || "(none)"}</p>
+                              <DiffText expected={r.expected} actual={r.actual || "(empty)"} />
+                            </>
+                          ) : null}
+                        </div>
+                      ))}
+                    </div>
+                  ) : null}
+                </>
+              ) : (
+                <>
+                  {!userId ? (
+                    <div className="flex flex-col items-center gap-3 py-10 text-center">
+                      <p className="text-sm text-muted-foreground">Sign in to compete in contests and climb the leaderboard.</p>
+                      <div className="flex gap-2">
+                        <SignInButton mode="modal"><Button>Sign in</Button></SignInButton>
+                        <SignUpButton mode="modal"><Button variant="outline">Register</Button></SignUpButton>
+                      </div>
+                    </div>
+                  ) : (
+                  <>
+                  <DialogHeader>
+                    <DialogTitle>Challenges</DialogTitle>
+                    <DialogDescription>Python and C++ problems graded against hidden tests. Opt in to appear on the leaderboard.</DialogDescription>
+                  </DialogHeader>
+                  <div className="mb-3 flex gap-1.5">
+                    <Button variant={challengeTab === "challenges" ? "default" : "outline"} size="sm" onClick={() => setChallengeTab("challenges")}>Challenges</Button>
+                    <Button variant={challengeTab === "cohorts" ? "default" : "outline"} size="sm" onClick={() => { setChallengeTab("cohorts"); void loadContests(); }}>Contests</Button>
+                    <Button variant={challengeTab === "leaderboard" ? "default" : "outline"} size="sm" onClick={() => { setChallengeTab("leaderboard"); void loadLeaderboard(); }}>Leaderboard</Button>
+                    <Button variant={challengeTab === "progress" ? "default" : "outline"} size="sm" onClick={() => { setChallengeTab("progress"); void loadProgress(); }}>Results</Button>
+                  </div>
+    
+                  {challengeTab === "challenges" ? (
+                    <div className="grid max-h-96 gap-1.5 overflow-y-auto">
+                      {challenges.length === 0 ? (
+                        <p className="text-sm text-muted-foreground">Loading…</p>
+                      ) : (
+                        challenges
+                          .filter((ch) => ch.language === editorMode)
+                          .sort((a, b) => {
+                            const ra = DIFFICULTY_RANK[a.difficulty] ?? 3;
+                            const rb = DIFFICULTY_RANK[b.difficulty] ?? 3;
+                            if (ra !== rb) return ra - rb;
+                            if (a.points !== b.points) return a.points - b.points;
+                            return a.id - b.id;
+                          })
+                          .map((ch, i) => (
+                            <button
+                              key={ch.id}
+                              type="button"
+                              onClick={() => void solveChallenge(ch)}
+                              className="flex items-center justify-between rounded-lg border px-3 py-2 text-left text-sm transition hover:bg-muted"
+                            >
+                              <span className="flex items-center gap-2">
+                                <span className="w-5 shrink-0 text-xs text-muted-foreground">{i + 1}</span>
+                                <span className="font-semibold">{ch.slug}</span>
+                              </span>
+                              <span className="flex items-center gap-2 text-xs text-muted-foreground">
+                                <span className={`rounded-full px-2 py-0.5 text-[10px] font-semibold ${difficultyBadgeClass(ch.difficulty)}`}>{ch.difficulty}</span>
+                                {ch.language} · {ch.points} pts{ch.test_mode !== "io" ? ` · ${ch.test_mode}` : ""}
+                              </span>
+                            </button>
+                          ))
+                      )}
+                    </div>
+                  ) : challengeTab === "cohorts" ? (
+                    <div className="space-y-3">
+                      <div className="rounded-lg border border-blue-500/40 bg-blue-500/5 p-3">
+                        <p className="text-sm font-semibold text-blue-500">Join a contest</p>
+                        <div className="mt-1.5 flex gap-2">
+                          <input value={joinCode} onChange={(e) => setJoinCode(e.target.value)} placeholder="Invite code from the host" className="h-9 flex-1 rounded-md border bg-background px-2 text-sm" />
+                          <Button size="sm" onClick={() => void joinContest()}>Join</Button>
+                        </div>
+                      </div>
+    
+                      <label className="flex cursor-pointer items-center gap-2 rounded-lg border border-amber-500/40 bg-amber-500/5 px-3 py-2 text-sm font-semibold text-amber-500">
+                        <input type="checkbox" checked={showHostForm} onChange={(e) => setShowHostForm(e.target.checked)} /> Host a contest
+                      </label>
+                      {showHostForm ? (
+                        <div className="rounded-lg border border-amber-500/40 bg-amber-500/5 p-3">
+                          <p className="text-sm font-semibold text-amber-500">Host a contest</p>
+                          <div className="mt-1.5 space-y-2">
+                            <input value={newContestName} onChange={(e) => setNewContestName(e.target.value)} placeholder="Contest name — e.g. Friday Night Sprint" className="h-9 w-full rounded-md border bg-background px-2 text-sm" />
+                            <input value={newContestDesc} onChange={(e) => setNewContestDesc(e.target.value)} placeholder="Description (optional)" className="h-9 w-full rounded-md border bg-background px-2 text-sm" />
+                            <div className="flex gap-2">
+                              <input type="datetime-local" value={newContestStartsAt} onChange={(e) => setNewContestStartsAt(e.target.value)} className="h-9 flex-1 rounded-md border bg-background px-2 text-sm" aria-label="Starts at" />
+                              <input type="datetime-local" value={newContestEndsAt} onChange={(e) => setNewContestEndsAt(e.target.value)} className="h-9 flex-1 rounded-md border bg-background px-2 text-sm" aria-label="Ends at" />
+                            </div>
+                            <div className="flex flex-wrap items-center gap-4">
+                              <label className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                                <input type="checkbox" checked={newContestPublic} onChange={(e) => setNewContestPublic(e.target.checked)} /> Public page
+                              </label>
+                              <label className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                                <input type="checkbox" checked={newContestTeamMode} onChange={(e) => setNewContestTeamMode(e.target.checked)} /> Team contest
+                              </label>
+                              <label className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                                Scoring
+                                <select value={newContestScoring} onChange={(e) => setNewContestScoring(e.target.value as "solve" | "icpc")} className="h-8 rounded-md border bg-background px-1 text-xs">
+                                  <option value="solve">Most points</option>
+                                  <option value="icpc">ICPC (penalty)</option>
+                                </select>
+                              </label>
+                            </div>
+                            <textarea value={newContestPrizes} onChange={(e) => setNewContestPrizes(e.target.value)} placeholder={"Prizes — one per line\ne.g. 1st place — $100\n2nd place — $50"} rows={3} className="w-full rounded-md border bg-background px-2 py-1 text-sm" />
+                            <Button size="sm" onClick={() => void createContest()} disabled={cohortBusy}>{cohortBusy ? "Creating…" : "Create contest"}</Button>
+                          </div>
+                        </div>
+                      ) : null}
+    
+                      <div className="max-h-64 space-y-1.5 overflow-y-auto">
+                        {!contestsData ? (
+                          <p className="text-sm text-muted-foreground">Loading…</p>
+                        ) : contestsData.contests.length === 0 ? (
+                          <p className="text-sm text-muted-foreground">No contests yet — host one or join with a code.</p>
+                        ) : (
+                          contestsData.contests.map((c) => {
+                            const mine = contestsData.enrollments.some((e) => e.cohort_id === c.id);
+                            return (
+                              <div key={c.id} className="rounded-lg border px-3 py-2 text-sm">
+                                <div className="flex items-center justify-between gap-2">
+                                  <span className="font-semibold">{c.name}</span>
+                                  <span className="flex items-center gap-2">
+                                    <span className="font-mono text-xs text-muted-foreground">{c.join_code}</span>
+                                    {c.slug ? (
+                                      <QRCodeSVG value={`${(process.env.NEXT_PUBLIC_SITE_URL || "").replace(/\/$/, "")}/contest/${c.slug}?code=${c.join_code}`} size={72} bgColor="#ffffff" fgColor="#000000" title="Scan to join" />
+                                    ) : null}
+                                  </span>
+                                </div>
+                                <div className="text-xs text-muted-foreground">
+                                  {c.challenge_count} problem{c.challenge_count === 1 ? "" : "s"} · {c.member_count} competitor{c.member_count === 1 ? "" : "s"}
+                                  {c.team_mode ? " · team contest" : ""}
+                                  {mine ? " · you're in" : ""}
+                                  {c.starts_at ? ` · ${new Date(c.starts_at).toLocaleString()}` : ""}
+                                  {c.ends_at && new Date(c.ends_at).getTime() < Date.now() ? <span className="text-rose-500"> · closed</span> : null}
+                                  {c.freeze_at && new Date(c.freeze_at).getTime() < Date.now() ? <span className="text-amber-500"> · frozen</span> : null}
+                                </div>
+                                {c.prizes && c.prizes.length ? (
+                                  <div className="mt-1 text-xs text-amber-500">🏆 {c.prizes.map((p) => p.label).join(" · ")}</div>
+                                ) : null}
+                                {c.team_mode && mine ? (
+                                  <div className="mt-2 flex flex-wrap items-center gap-1.5">
+                                    <input value={teamName} onChange={(e) => setTeamName(e.target.value)} placeholder="Team name" className="h-7 w-28 rounded-md border bg-background px-2 text-xs" />
+                                    <Button size="sm" variant="outline" onClick={() => void createTeam(c.id)} disabled={teamBusy}>Create team</Button>
+                                    <input value={teamCode} onChange={(e) => setTeamCode(e.target.value)} placeholder="Team code" className="h-7 w-24 rounded-md border bg-background px-2 text-xs" />
+                                    <Button size="sm" variant="outline" onClick={() => void joinTeam(c.id)} disabled={teamBusy}>Join</Button>
+                                  </div>
+                                ) : null}
+                                {c.slug && c.is_public ? (
+                                  <a href={`/contest/${c.slug}`} target="_blank" rel="noreferrer" className="mt-1 inline-block text-xs text-blue-500 hover:underline">Public page ↗</a>
+                                ) : null}
+                                {c.created_by === userId ? (
+                                  <div className="mt-2 flex flex-wrap gap-1.5">
+                                    <Button size="sm" variant="outline" onClick={() => void updateContestField(c.id, { endsAt: new Date().toISOString() })}>Close now</Button>
+                                    <Button size="sm" variant="outline" onClick={() => void updateContestField(c.id, { freezeAt: new Date().toISOString() })}>Freeze</Button>
+                                    <Button size="sm" variant="outline" onClick={() => void openManageContest(c)}>Problems</Button>
+                                  </div>
+                                ) : null}
+                              </div>
+                            );
+                          })
+                        )}
+                      </div>
+                      {manageContest ? (
+                        <div className="rounded-lg border p-3">
+                          <p className="text-sm font-semibold">Problems — {manageContest.name}</p>
+                          <p className="text-xs text-muted-foreground">Check the problems in this contest. Unchecked problems won't count toward its leaderboard.</p>
+                          <div className="mt-2 max-h-48 space-y-1 overflow-y-auto">
+                            {challenges.map((ch) => (
+                              <label key={ch.id} className="flex items-center gap-2 rounded px-1 py-0.5 text-xs hover:bg-muted">
+                                <input type="checkbox" checked={manageSlugs.has(ch.slug)} onChange={() => toggleManageSlug(ch.slug)} />
+                                <span>{ch.slug}</span>
+                                <span className="text-muted-foreground">{ch.language} · {ch.difficulty} · {ch.points} pts</span>
+                              </label>
+                            ))}
+                          </div>
+                          <div className="mt-2 flex gap-2">
+                            <Button size="sm" onClick={() => void saveContestProblems()} disabled={manageBusy}>{manageBusy ? "Saving…" : "Save problems"}</Button>
+                            <Button size="sm" variant="outline" onClick={() => setManageContest(null)}>Cancel</Button>
+                          </div>
+                        </div>
+                      ) : null}
+                    </div>
+                  ) : challengeTab === "leaderboard" ? (
+                    <div className="space-y-3">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <input
+                          value={joinCode}
+                          onChange={(e) => setJoinCode(e.target.value)}
+                          placeholder="join code"
+                          className="h-9 w-32 rounded-md border bg-background px-2 text-sm"
+                        />
+                        <Button variant="outline" size="sm" onClick={() => void joinContest()}>Join contest</Button>
+                        <Button size="sm" onClick={() => { setOptInOpen(true); setOptInName(leaderboard?.me?.displayName || ""); }}>{leaderboard?.me?.optedIn ? "Settings" : "Opt in"}</Button>
+                      </div>
+                      {optInOpen ? (
+                        <div className="space-y-2 rounded-lg border p-3">
+                          <p className="text-sm font-semibold">Leaderboard settings</p>
+                          <input
+                            value={optInName}
+                            onChange={(e) => setOptInName(e.target.value)}
+                            placeholder="Display name (shown on the board)"
+                            className="h-9 w-full rounded-md border bg-background px-2 text-sm"
+                          />
+                          <input
+                            value={optInStudentId}
+                            onChange={(e) => setOptInStudentId(e.target.value)}
+                            disabled={studentIdLocked}
+                            placeholder={studentIdLocked ? "Student ID (locked)" : "Student ID — you can only set this once"}
+                            title={studentIdLocked ? "Your student ID is locked. Only your teacher can change it." : undefined}
+                            className="h-9 w-full rounded-md border bg-background px-2 text-sm disabled:cursor-not-allowed disabled:opacity-60"
+                          />
+                          {studentIdLocked ? (
+                            <p className="text-xs text-muted-foreground">🔒 Student ID locked — only your teacher can change it.</p>
+                          ) : null}
+                          <div className="flex gap-2">
+                            <Button size="sm" onClick={() => void saveOptIn()} disabled={optInBusy}>{optInBusy ? "Saving…" : "Save"}</Button>
+                            <Button size="sm" variant="outline" onClick={() => setOptInOpen(false)}>Cancel</Button>
+                          </div>
+                        </div>
+                      ) : null}
+                      <div className="max-h-72 overflow-y-auto">
+                        {!leaderboard ? (
+                          <p className="text-sm text-muted-foreground">Loading…</p>
+                        ) : leaderboard.entries.length === 0 ? (
+                          <p className="text-sm text-muted-foreground">No one on the board yet — opt in and solve a challenge.</p>
+                        ) : (
+                          <>
+                            {leaderboard.frozen ? (
+                              <p className="mb-2 text-xs text-amber-500">⏸️ Leaderboard frozen — new solves are hidden until the end.</p>
+                            ) : null}
+                            <table className="w-full border-collapse text-sm">
+                              <thead>
+                                <tr className="border-b text-left text-xs text-muted-foreground">
+                                  <th className="py-1 pr-2">#</th>
+                                  <th className="py-1 pr-2">Name</th>
+                                  <th className="py-1 pr-2 text-right">Solved</th>
+                                  <th className="py-1 text-right">{leaderboard.scoringMode === "icpc" ? "Penalty" : "Points"}</th>
+                                </tr>
+                              </thead>
+                              <tbody>
+                                {leaderboard.entries.map((e, i) => (
+                                  <tr key={e.userId} className="border-b">
+                                    <td className="py-1 pr-2">{i + 1}</td>
+                                    <td className="py-1 pr-2">{e.displayName}</td>
+                                    <td className="py-1 pr-2 text-right">{e.solved}</td>
+                                    <td className="py-1 text-right font-semibold">{leaderboard.scoringMode === "icpc" ? e.penalty : e.points}</td>
+                                  </tr>
+                                ))}
+                              </tbody>
+                            </table>
+                          </>
+                        )}
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="max-h-96 overflow-auto">
+                      {!progressData ? (
+                        <p className="text-sm text-muted-foreground">Loading…</p>
+                      ) : progressData.members.length === 0 ? (
+                        <p className="text-sm text-muted-foreground">No competitors in your contest yet. Only the host can see this.</p>
+                      ) : (
+                        <table className="w-full border-collapse text-xs">
+                          <thead>
+                            <tr className="border-b text-left text-muted-foreground">
+                              <th className="py-1 pr-2">Competitor</th>
+                              {progressData.challenges.map((c) => (
+                                <th key={c.id} className="py-1 pr-2" title={c.slug}>{c.slug.replace(/^(py|cpp)-/, "")}</th>
+                              ))}
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {progressData.members.map((m) => (
+                              <tr key={m.userId} className="border-b">
+                                <td className="py-1 pr-2">{m.displayName}</td>
+                                {m.statuses.map((s, i) => (
+                                  <td key={i} className="py-1 pr-2 text-center" title={s}>
+                                    {s === "solved" ? "✓" : s === "attempted" ? "•" : "·"}
+                                  </td>
+                                ))}
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      )}
+                    </div>
+                  )}
+                  </>
+                  )}
+                </>
+              )}
+            </DialogContent>
+          </Dialog>
+  );
+
   if (workspaceScreen === "projects") {
     return (
       <main className="studio-dark studio-shell">
@@ -6548,6 +6879,20 @@ export default function ResearchStudioPage() {
                 </svg>
                 Import
               </button>
+              {groupsIsAdmin ? (
+                <a
+                  href="/dashboard"
+                  className="studio-btn studio-btn-ghost"
+                  aria-label="Admin dashboard"
+                  title="Admin dashboard"
+                  style={{ textDecoration: "none" }}
+                >
+                  <svg viewBox="0 0 20 20" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="1.8">
+                    <path d="M3 4h4v4H3zM8 4h4v4H8zM13 4h4v4h-4zM3 10h4v4H3zM8 10h4v4H8zM13 10h4v4h-4z" strokeLinecap="round" strokeLinejoin="round" />
+                  </svg>
+                  Dashboard
+                </a>
+              ) : null}
             </div>
           </div>
 
@@ -6788,6 +7133,7 @@ export default function ResearchStudioPage() {
         )}
 
         </div>
+        {challengesDialog}
         {renderNewProjectDialog()}
         {groupsOpen ? (
           <Dialog open onOpenChange={(open) => { if (!open) setGroupsOpen(false); }}>
@@ -8594,327 +8940,7 @@ export default function ResearchStudioPage() {
         </DialogContent>
       </Dialog>
 
-      <Dialog open={challengesOpen} onOpenChange={setChallengesOpen}>
-        <DialogContent className="sm:max-w-lg">
-          {activeChallenge ? (
-            <>
-              <DialogHeader>
-                <DialogTitle>{activeChallenge.slug}</DialogTitle>
-                <DialogDescription>{activeChallenge.language.toUpperCase()} challenge</DialogDescription>
-              </DialogHeader>
-              <div className="max-h-64 overflow-y-auto rounded-lg border p-3 text-sm challenge-markdown">
-                <ReactMarkdown>{activeChallenge.statement_md}</ReactMarkdown>
-              </div>
-              <div className="flex items-center gap-2">
-                <Button onClick={() => void runChallengeTests()} disabled={challengeBusy}>
-                  {challengeBusy ? "Running…" : "Run tests"}
-                </Button>
-                <Button variant="outline" onClick={() => setActiveChallenge(null)}>Back to list</Button>
-              </div>
-              {challengeResults ? (
-                <div className="space-y-1.5">
-                  <p className={`text-sm font-semibold ${challengeResults.passed ? "text-emerald-600" : "text-rose-600"}`}>
-                    {challengeResults.passed
-                      ? `Solved! ${challengeResults.firstSolve ? "First solve — points awarded." : ""}`
-                      : `Not passing: ${challengeResults.results.filter((r) => r.ok).length}/${challengeResults.total} tests`}
-                  </p>
-                  {challengeResults.results.map((r, i) => (
-                    <div key={i} className="rounded-lg border px-3 py-2 text-xs">
-                      <p className="font-mono">Test {i + 1}: {r.ok ? "✓ pass" : "✗ fail"}</p>
-                      {!r.ok ? (
-                        <>
-                          <p className="font-mono text-muted-foreground">input: {r.input || "(none)"}</p>
-                          <DiffText expected={r.expected} actual={r.actual || "(empty)"} />
-                        </>
-                      ) : null}
-                    </div>
-                  ))}
-                </div>
-              ) : null}
-            </>
-          ) : (
-            <>
-              {!userId ? (
-                <div className="flex flex-col items-center gap-3 py-10 text-center">
-                  <p className="text-sm text-muted-foreground">Sign in to compete in contests and climb the leaderboard.</p>
-                  <div className="flex gap-2">
-                    <SignInButton mode="modal"><Button>Sign in</Button></SignInButton>
-                    <SignUpButton mode="modal"><Button variant="outline">Register</Button></SignUpButton>
-                  </div>
-                </div>
-              ) : (
-              <>
-              <DialogHeader>
-                <DialogTitle>Challenges</DialogTitle>
-                <DialogDescription>Python and C++ problems graded against hidden tests. Opt in to appear on the leaderboard.</DialogDescription>
-              </DialogHeader>
-              <div className="mb-3 flex gap-1.5">
-                <Button variant={challengeTab === "challenges" ? "default" : "outline"} size="sm" onClick={() => setChallengeTab("challenges")}>Challenges</Button>
-                <Button variant={challengeTab === "cohorts" ? "default" : "outline"} size="sm" onClick={() => { setChallengeTab("cohorts"); void loadContests(); }}>Contests</Button>
-                <Button variant={challengeTab === "leaderboard" ? "default" : "outline"} size="sm" onClick={() => { setChallengeTab("leaderboard"); void loadLeaderboard(); }}>Leaderboard</Button>
-                <Button variant={challengeTab === "progress" ? "default" : "outline"} size="sm" onClick={() => { setChallengeTab("progress"); void loadProgress(); }}>Results</Button>
-              </div>
-
-              {challengeTab === "challenges" ? (
-                <div className="grid max-h-96 gap-1.5 overflow-y-auto">
-                  {challenges.length === 0 ? (
-                    <p className="text-sm text-muted-foreground">Loading…</p>
-                  ) : (
-                    challenges
-                      .filter((ch) => ch.language === editorMode)
-                      .sort((a, b) => {
-                        const ra = DIFFICULTY_RANK[a.difficulty] ?? 3;
-                        const rb = DIFFICULTY_RANK[b.difficulty] ?? 3;
-                        if (ra !== rb) return ra - rb;
-                        if (a.points !== b.points) return a.points - b.points;
-                        return a.id - b.id;
-                      })
-                      .map((ch, i) => (
-                        <button
-                          key={ch.id}
-                          type="button"
-                          onClick={() => void solveChallenge(ch)}
-                          className="flex items-center justify-between rounded-lg border px-3 py-2 text-left text-sm transition hover:bg-muted"
-                        >
-                          <span className="flex items-center gap-2">
-                            <span className="w-5 shrink-0 text-xs text-muted-foreground">{i + 1}</span>
-                            <span className="font-semibold">{ch.slug}</span>
-                          </span>
-                          <span className="flex items-center gap-2 text-xs text-muted-foreground">
-                            <span className={`rounded-full px-2 py-0.5 text-[10px] font-semibold ${difficultyBadgeClass(ch.difficulty)}`}>{ch.difficulty}</span>
-                            {ch.language} · {ch.points} pts{ch.test_mode !== "io" ? ` · ${ch.test_mode}` : ""}
-                          </span>
-                        </button>
-                      ))
-                  )}
-                </div>
-              ) : challengeTab === "cohorts" ? (
-                <div className="space-y-3">
-                  <div className="rounded-lg border border-blue-500/40 bg-blue-500/5 p-3">
-                    <p className="text-sm font-semibold text-blue-500">Join a contest</p>
-                    <div className="mt-1.5 flex gap-2">
-                      <input value={joinCode} onChange={(e) => setJoinCode(e.target.value)} placeholder="Invite code from the host" className="h-9 flex-1 rounded-md border bg-background px-2 text-sm" />
-                      <Button size="sm" onClick={() => void joinContest()}>Join</Button>
-                    </div>
-                  </div>
-
-                  <label className="flex cursor-pointer items-center gap-2 rounded-lg border border-amber-500/40 bg-amber-500/5 px-3 py-2 text-sm font-semibold text-amber-500">
-                    <input type="checkbox" checked={showHostForm} onChange={(e) => setShowHostForm(e.target.checked)} /> Host a contest
-                  </label>
-                  {showHostForm ? (
-                    <div className="rounded-lg border border-amber-500/40 bg-amber-500/5 p-3">
-                      <p className="text-sm font-semibold text-amber-500">Host a contest</p>
-                      <div className="mt-1.5 space-y-2">
-                        <input value={newContestName} onChange={(e) => setNewContestName(e.target.value)} placeholder="Contest name — e.g. Friday Night Sprint" className="h-9 w-full rounded-md border bg-background px-2 text-sm" />
-                        <input value={newContestDesc} onChange={(e) => setNewContestDesc(e.target.value)} placeholder="Description (optional)" className="h-9 w-full rounded-md border bg-background px-2 text-sm" />
-                        <div className="flex gap-2">
-                          <input type="datetime-local" value={newContestStartsAt} onChange={(e) => setNewContestStartsAt(e.target.value)} className="h-9 flex-1 rounded-md border bg-background px-2 text-sm" aria-label="Starts at" />
-                          <input type="datetime-local" value={newContestEndsAt} onChange={(e) => setNewContestEndsAt(e.target.value)} className="h-9 flex-1 rounded-md border bg-background px-2 text-sm" aria-label="Ends at" />
-                        </div>
-                        <div className="flex flex-wrap items-center gap-4">
-                          <label className="flex items-center gap-1.5 text-xs text-muted-foreground">
-                            <input type="checkbox" checked={newContestPublic} onChange={(e) => setNewContestPublic(e.target.checked)} /> Public page
-                          </label>
-                          <label className="flex items-center gap-1.5 text-xs text-muted-foreground">
-                            <input type="checkbox" checked={newContestTeamMode} onChange={(e) => setNewContestTeamMode(e.target.checked)} /> Team contest
-                          </label>
-                          <label className="flex items-center gap-1.5 text-xs text-muted-foreground">
-                            Scoring
-                            <select value={newContestScoring} onChange={(e) => setNewContestScoring(e.target.value as "solve" | "icpc")} className="h-8 rounded-md border bg-background px-1 text-xs">
-                              <option value="solve">Most points</option>
-                              <option value="icpc">ICPC (penalty)</option>
-                            </select>
-                          </label>
-                        </div>
-                        <textarea value={newContestPrizes} onChange={(e) => setNewContestPrizes(e.target.value)} placeholder={"Prizes — one per line\ne.g. 1st place — $100\n2nd place — $50"} rows={3} className="w-full rounded-md border bg-background px-2 py-1 text-sm" />
-                        <Button size="sm" onClick={() => void createContest()} disabled={cohortBusy}>{cohortBusy ? "Creating…" : "Create contest"}</Button>
-                      </div>
-                    </div>
-                  ) : null}
-
-                  <div className="max-h-64 space-y-1.5 overflow-y-auto">
-                    {!contestsData ? (
-                      <p className="text-sm text-muted-foreground">Loading…</p>
-                    ) : contestsData.contests.length === 0 ? (
-                      <p className="text-sm text-muted-foreground">No contests yet — host one or join with a code.</p>
-                    ) : (
-                      contestsData.contests.map((c) => {
-                        const mine = contestsData.enrollments.some((e) => e.cohort_id === c.id);
-                        return (
-                          <div key={c.id} className="rounded-lg border px-3 py-2 text-sm">
-                            <div className="flex items-center justify-between gap-2">
-                              <span className="font-semibold">{c.name}</span>
-                              <span className="flex items-center gap-2">
-                                <span className="font-mono text-xs text-muted-foreground">{c.join_code}</span>
-                                {c.slug ? (
-                                  <QRCodeSVG value={`${(process.env.NEXT_PUBLIC_SITE_URL || "").replace(/\/$/, "")}/contest/${c.slug}?code=${c.join_code}`} size={72} bgColor="#ffffff" fgColor="#000000" title="Scan to join" />
-                                ) : null}
-                              </span>
-                            </div>
-                            <div className="text-xs text-muted-foreground">
-                              {c.challenge_count} problem{c.challenge_count === 1 ? "" : "s"} · {c.member_count} competitor{c.member_count === 1 ? "" : "s"}
-                              {c.team_mode ? " · team contest" : ""}
-                              {mine ? " · you're in" : ""}
-                              {c.starts_at ? ` · ${new Date(c.starts_at).toLocaleString()}` : ""}
-                              {c.ends_at && new Date(c.ends_at).getTime() < Date.now() ? <span className="text-rose-500"> · closed</span> : null}
-                              {c.freeze_at && new Date(c.freeze_at).getTime() < Date.now() ? <span className="text-amber-500"> · frozen</span> : null}
-                            </div>
-                            {c.prizes && c.prizes.length ? (
-                              <div className="mt-1 text-xs text-amber-500">🏆 {c.prizes.map((p) => p.label).join(" · ")}</div>
-                            ) : null}
-                            {c.team_mode && mine ? (
-                              <div className="mt-2 flex flex-wrap items-center gap-1.5">
-                                <input value={teamName} onChange={(e) => setTeamName(e.target.value)} placeholder="Team name" className="h-7 w-28 rounded-md border bg-background px-2 text-xs" />
-                                <Button size="sm" variant="outline" onClick={() => void createTeam(c.id)} disabled={teamBusy}>Create team</Button>
-                                <input value={teamCode} onChange={(e) => setTeamCode(e.target.value)} placeholder="Team code" className="h-7 w-24 rounded-md border bg-background px-2 text-xs" />
-                                <Button size="sm" variant="outline" onClick={() => void joinTeam(c.id)} disabled={teamBusy}>Join</Button>
-                              </div>
-                            ) : null}
-                            {c.slug && c.is_public ? (
-                              <a href={`/contest/${c.slug}`} target="_blank" rel="noreferrer" className="mt-1 inline-block text-xs text-blue-500 hover:underline">Public page ↗</a>
-                            ) : null}
-                            {c.created_by === userId ? (
-                              <div className="mt-2 flex flex-wrap gap-1.5">
-                                <Button size="sm" variant="outline" onClick={() => void updateContestField(c.id, { endsAt: new Date().toISOString() })}>Close now</Button>
-                                <Button size="sm" variant="outline" onClick={() => void updateContestField(c.id, { freezeAt: new Date().toISOString() })}>Freeze</Button>
-                                <Button size="sm" variant="outline" onClick={() => void openManageContest(c)}>Problems</Button>
-                              </div>
-                            ) : null}
-                          </div>
-                        );
-                      })
-                    )}
-                  </div>
-                  {manageContest ? (
-                    <div className="rounded-lg border p-3">
-                      <p className="text-sm font-semibold">Problems — {manageContest.name}</p>
-                      <p className="text-xs text-muted-foreground">Check the problems in this contest. Unchecked problems won't count toward its leaderboard.</p>
-                      <div className="mt-2 max-h-48 space-y-1 overflow-y-auto">
-                        {challenges.map((ch) => (
-                          <label key={ch.id} className="flex items-center gap-2 rounded px-1 py-0.5 text-xs hover:bg-muted">
-                            <input type="checkbox" checked={manageSlugs.has(ch.slug)} onChange={() => toggleManageSlug(ch.slug)} />
-                            <span>{ch.slug}</span>
-                            <span className="text-muted-foreground">{ch.language} · {ch.difficulty} · {ch.points} pts</span>
-                          </label>
-                        ))}
-                      </div>
-                      <div className="mt-2 flex gap-2">
-                        <Button size="sm" onClick={() => void saveContestProblems()} disabled={manageBusy}>{manageBusy ? "Saving…" : "Save problems"}</Button>
-                        <Button size="sm" variant="outline" onClick={() => setManageContest(null)}>Cancel</Button>
-                      </div>
-                    </div>
-                  ) : null}
-                </div>
-              ) : challengeTab === "leaderboard" ? (
-                <div className="space-y-3">
-                  <div className="flex flex-wrap items-center gap-2">
-                    <input
-                      value={joinCode}
-                      onChange={(e) => setJoinCode(e.target.value)}
-                      placeholder="join code"
-                      className="h-9 w-32 rounded-md border bg-background px-2 text-sm"
-                    />
-                    <Button variant="outline" size="sm" onClick={() => void joinContest()}>Join contest</Button>
-                    <Button size="sm" onClick={() => { setOptInOpen(true); setOptInName(leaderboard?.me?.displayName || ""); }}>{leaderboard?.me?.optedIn ? "Settings" : "Opt in"}</Button>
-                  </div>
-                  {optInOpen ? (
-                    <div className="space-y-2 rounded-lg border p-3">
-                      <p className="text-sm font-semibold">Leaderboard settings</p>
-                      <input
-                        value={optInName}
-                        onChange={(e) => setOptInName(e.target.value)}
-                        placeholder="Display name (shown on the board)"
-                        className="h-9 w-full rounded-md border bg-background px-2 text-sm"
-                      />
-                      <input
-                        value={optInStudentId}
-                        onChange={(e) => setOptInStudentId(e.target.value)}
-                        disabled={studentIdLocked}
-                        placeholder={studentIdLocked ? "Student ID (locked)" : "Student ID — you can only set this once"}
-                        title={studentIdLocked ? "Your student ID is locked. Only your teacher can change it." : undefined}
-                        className="h-9 w-full rounded-md border bg-background px-2 text-sm disabled:cursor-not-allowed disabled:opacity-60"
-                      />
-                      {studentIdLocked ? (
-                        <p className="text-xs text-muted-foreground">🔒 Student ID locked — only your teacher can change it.</p>
-                      ) : null}
-                      <div className="flex gap-2">
-                        <Button size="sm" onClick={() => void saveOptIn()} disabled={optInBusy}>{optInBusy ? "Saving…" : "Save"}</Button>
-                        <Button size="sm" variant="outline" onClick={() => setOptInOpen(false)}>Cancel</Button>
-                      </div>
-                    </div>
-                  ) : null}
-                  <div className="max-h-72 overflow-y-auto">
-                    {!leaderboard ? (
-                      <p className="text-sm text-muted-foreground">Loading…</p>
-                    ) : leaderboard.entries.length === 0 ? (
-                      <p className="text-sm text-muted-foreground">No one on the board yet — opt in and solve a challenge.</p>
-                    ) : (
-                      <>
-                        {leaderboard.frozen ? (
-                          <p className="mb-2 text-xs text-amber-500">⏸️ Leaderboard frozen — new solves are hidden until the end.</p>
-                        ) : null}
-                        <table className="w-full border-collapse text-sm">
-                          <thead>
-                            <tr className="border-b text-left text-xs text-muted-foreground">
-                              <th className="py-1 pr-2">#</th>
-                              <th className="py-1 pr-2">Name</th>
-                              <th className="py-1 pr-2 text-right">Solved</th>
-                              <th className="py-1 text-right">{leaderboard.scoringMode === "icpc" ? "Penalty" : "Points"}</th>
-                            </tr>
-                          </thead>
-                          <tbody>
-                            {leaderboard.entries.map((e, i) => (
-                              <tr key={e.userId} className="border-b">
-                                <td className="py-1 pr-2">{i + 1}</td>
-                                <td className="py-1 pr-2">{e.displayName}</td>
-                                <td className="py-1 pr-2 text-right">{e.solved}</td>
-                                <td className="py-1 text-right font-semibold">{leaderboard.scoringMode === "icpc" ? e.penalty : e.points}</td>
-                              </tr>
-                            ))}
-                          </tbody>
-                        </table>
-                      </>
-                    )}
-                  </div>
-                </div>
-              ) : (
-                <div className="max-h-96 overflow-auto">
-                  {!progressData ? (
-                    <p className="text-sm text-muted-foreground">Loading…</p>
-                  ) : progressData.members.length === 0 ? (
-                    <p className="text-sm text-muted-foreground">No competitors in your contest yet. Only the host can see this.</p>
-                  ) : (
-                    <table className="w-full border-collapse text-xs">
-                      <thead>
-                        <tr className="border-b text-left text-muted-foreground">
-                          <th className="py-1 pr-2">Competitor</th>
-                          {progressData.challenges.map((c) => (
-                            <th key={c.id} className="py-1 pr-2" title={c.slug}>{c.slug.replace(/^(py|cpp)-/, "")}</th>
-                          ))}
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {progressData.members.map((m) => (
-                          <tr key={m.userId} className="border-b">
-                            <td className="py-1 pr-2">{m.displayName}</td>
-                            {m.statuses.map((s, i) => (
-                              <td key={i} className="py-1 pr-2 text-center" title={s}>
-                                {s === "solved" ? "✓" : s === "attempted" ? "•" : "·"}
-                              </td>
-                            ))}
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  )}
-                </div>
-              )}
-              </>
-              )}
-            </>
-          )}
-        </DialogContent>
-      </Dialog>
+          {challengesDialog}
 
       {terminalOpen && isCodeMode ? (
         <div
