@@ -48,6 +48,6 @@ export async function GET(request: Request) {
     console.error("[assess-export] failed:", error);
     return Response.json({ error: "Could not build the spreadsheet." }, { status: 500 });
   } finally {
-    await rm(dir, { recursive: true, force: true }).catch(() => {});
+    await rm(dir, { recursive: true, force: true }).catch(() => { /* best-effort cleanup */ });
   }
 }
