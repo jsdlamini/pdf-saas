@@ -1443,6 +1443,7 @@ export default function ResearchStudioPage() {
   const [buttonVisibility, setButtonVisibility] = useState<Record<string, boolean> | null>(null);
   const [groupsBusy, setGroupsBusy] = useState<string | null>(null);
   const [groupsError, setGroupsError] = useState("");
+  const [groupsLoading, setGroupsLoading] = useState(true);
   const [joinGroupOpen, setJoinGroupOpen] = useState<string | null>(null);
   const [joinName, setJoinName] = useState("");
   const [joinSurname, setJoinSurname] = useState("");
@@ -6115,6 +6116,7 @@ export default function ResearchStudioPage() {
   }
 
   async function loadGroups() {
+    setGroupsLoading(true);
     try {
       const res = await fetch("/api/groups");
       const data = (await res.json().catch(() => null)) as
@@ -6130,6 +6132,8 @@ export default function ResearchStudioPage() {
       setGroupsError("");
     } catch {
       setGroupsError("Couldn't load the groups. Please try again.");
+    } finally {
+      setGroupsLoading(false);
     }
   }
 
@@ -6824,6 +6828,8 @@ export default function ResearchStudioPage() {
                     Retry
                   </button>
                 </div>
+              ) : groupsLoading ? (
+                <p style={{ fontSize: 12, color: "var(--text-muted, #64748b)" }}>Loading groups…</p>
               ) : (
                 <div className="studio-groups-grid">
                   {groups.map((g) => {
