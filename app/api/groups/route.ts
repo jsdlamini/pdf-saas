@@ -49,6 +49,8 @@ export async function POST(request: Request) {
     schedule?: string;
     capacity?: number;
     sessionCount?: number;
+    testCount?: number;
+    examCount?: number;
   } | null;
   if (!body || typeof body.groupId !== "string") return jsonError("Invalid payload.", 400);
 
@@ -60,6 +62,8 @@ export async function POST(request: Request) {
       schedule: typeof body.schedule === "string" ? body.schedule : "",
       capacity: typeof body.capacity === "number" ? body.capacity : 50,
       sessionCount: typeof body.sessionCount === "number" ? body.sessionCount : 4,
+      testCount: typeof body.testCount === "number" ? body.testCount : 1,
+      examCount: typeof body.examCount === "number" ? body.examCount : 1,
     });
     if (!ok) return jsonError("Group not found.", 404);
     return Response.json({ ok: true });

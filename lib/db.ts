@@ -353,10 +353,14 @@ const MIGRATIONS: string[] = [
     schedule TEXT NOT NULL DEFAULT '',
     capacity INTEGER NOT NULL DEFAULT 50,
     session_count INTEGER NOT NULL DEFAULT 4,
+    test_count INTEGER NOT NULL DEFAULT 1,
+    exam_count INTEGER NOT NULL DEFAULT 1,
     sort_order INTEGER NOT NULL DEFAULT 0,
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
   )`,
   `ALTER TABLE wiserfiles_groups ADD COLUMN IF NOT EXISTS session_count INTEGER NOT NULL DEFAULT 4`,
+  `ALTER TABLE wiserfiles_groups ADD COLUMN IF NOT EXISTS test_count INTEGER NOT NULL DEFAULT 1`,
+  `ALTER TABLE wiserfiles_groups ADD COLUMN IF NOT EXISTS exam_count INTEGER NOT NULL DEFAULT 1`,
   `CREATE TABLE IF NOT EXISTS wiserfiles_group_members (
     user_id TEXT NOT NULL,
     group_id TEXT NOT NULL,
@@ -381,6 +385,7 @@ const MIGRATIONS: string[] = [
     sort_order INTEGER NOT NULL DEFAULT 0,
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
   )`,
+  `ALTER TABLE wiserfiles_group_sessions ADD COLUMN IF NOT EXISTS kind TEXT NOT NULL DEFAULT 'practical'`,
   `CREATE TABLE IF NOT EXISTS wiserfiles_assessment_marks (
     session_id INTEGER NOT NULL REFERENCES wiserfiles_group_sessions(id) ON DELETE CASCADE,
     student_id TEXT NOT NULL,

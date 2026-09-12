@@ -1,65 +1,79 @@
 import { db, ensureMigrated } from "@/lib/db";
-import { DEFAULT_SESSION_COUNT } from "@/lib/groups";
+import { DEFAULT_SESSION_COUNT, DEFAULT_TEST_COUNT, DEFAULT_EXAM_COUNT } from "@/lib/groups";
+
+export type AssessKind = "practical" | "test" | "exam";
 
 export type AssessStudent = {
   userId: string;
   name: string;
   surname: string;
   studentId: string;
+  programme: string;
 };
 
-export type AssessSession = {
+export type AssessItem = {
   id: number;
+  kind: AssessKind;
   title: string;
   maxMarks: number;
 };
 
-export type AssessMark = { sessionId: number; studentId: string; score: number | null };
-export type AssessTest = { studentId: string; score: number | null };
+export type AssessMark = { itemId: number; studentId: string; score: number | null };
 
-async function ensureSessions(groupId: string): Promise<void> {
+async function ensureItems(groupId: string): Promise<void> {
   await ensureMigrated();
-  const g = await db.query(`SELECT session_count FROM wiserfiles_groups WHERE id = $1`, [groupId]);
-  const target = (g.rows[0]?.session_count as number | undefined) ?? DEFAULT_SESSION_COUNT;
-
-  const existing = await db.query(
-    `SELECT id FROM wiserfiles_group_sessions WHERE group_id = $1 ORDER BY sort_order ASC, id ASC`,
+  const g = await db.query(
+    `SELECT session_count, test_count, exam_count FROM wiserfiles_groups WHERE id = $1`,
     [groupId]
   );
-  const count = existing.rows.length;
+  const counts: Record<AssessKind, number> = {
+    practical: (g.rows[0]?.session_count as number | undefined) ?? DEFAULT_SESSION_COUNT,
+    test: (g.rows[0]?.test_count as number | undefined) ?? DEFAULT_TEST_COUNT,
+    exam: (g.rows[0]?.exam_count as number | undefined) ?? DEFAULT_EXAM_COUNT,
+  };
 
-  // Add missing sessions.
-  for (let i = count + 1; i <= target; i++) {
-    await db.query(
-      `INSERT INTO wiserfiles_group_sessions (group_id, title, max_marks, sort_order)
-       VALUES ($1, $2, 10, $3)`,
-      [groupId, `Practical ${i}`, i]
-    );
-  }
+  const existing = await db.query(
+    `SELECT id, kind FROM wiserfiles_group_sessions WHERE group_id = $1 ORDER BY kind ASC, sort_order ASC, id ASC`,
+    [groupId]
+  );
 
-  // Remove sessions beyond the configured count (marks cascade on delete).
-  if (count > target) {
-    for (const s of existing.rows.slice(target)) {
-      await db.query(`DELETE FROM wiserfiles_group_sessions WHERE id = $1`, [s.id]);
+  for (const kind of ["practical", "test", "exam"] as AssessKind[]) {
+    const target = counts[kind];
+    const items = existing.rows.filter((x) => x.kind === kind);
+
+    // Add missing items.
+    for (let i = items.length + 1; i <= target; i++) {
+      await db.query(
+        `INSERT INTO wiserfiles_group_sessions (group_id, kind, title, max_marks, sort_order)
+         VALUES ($1, $2, $3, 10, $4)`,
+        [groupId, kind, `${kind === "practical" ? "Practical" : kind === "test" ? "Test" : "Exam"} ${i}`, i]
+      );
+    }
+
+    // Remove items beyond the configured count (marks cascade on delete).
+    if (items.length > target) {
+      for (const s of items.slice(target)) {
+        await db.query(`DELETE FROM wiserfiles_group_sessions WHERE id = $1`, [s.id]);
+      }
     }
   }
 }
 
 export async function getAssessment(groupId: string) {
-  await ensureSessions(groupId);
+  await ensureItems(groupId);
 
   const members = await db.query(
-    `SELECT user_id, name, surname, student_id
+    `SELECT user_id, name, surname, student_id, programme
      FROM wiserfiles_group_members
      WHERE group_id = $1
      ORDER BY joined_at ASC`,
     [groupId]
   );
-  const sessions = await db.query(
-    `SELECT id, title, max_marks
+  const items = await db.query(
+    `SELECT id, kind, title, max_marks
      FROM wiserfiles_group_sessions
      WHERE group_id = $1
-     ORDER BY sort_order ASC, id ASC`,
+     ORDER BY kind ASC, sort_order ASC, id ASC`,
     [groupId]
   );
   const marks = await db.query(
@@ -69,10 +83,13 @@ export async function getAssessment(groupId: string) {
      WHERE s.group_id = $1`,
     [groupId]
   );
-  const tests = await db.query(
-    `SELECT student_id, score FROM wiserfiles_assessment_tests WHERE group_id = $1`,
-    [groupId]
-  );
+
+  const itemRows = items.rows.map((x) => ({
+    id: x.id as number,
+    kind: x.kind as AssessKind,
+    title: x.title as string,
+    maxMarks: x.max_marks as number,
+  })) as AssessItem[];
 
   return {
     students: members.rows.map((x) => ({
@@ -80,46 +97,37 @@ export async function getAssessment(groupId: string) {
       name: x.name as string,
       surname: x.surname as string,
       studentId: x.student_id as string,
+      programme: x.programme as string,
     })) as AssessStudent[],
-    sessions: sessions.rows.map((x) => ({
-      id: x.id as number,
-      title: x.title as string,
-      maxMarks: x.max_marks as number,
-    })) as AssessSession[],
+    practicals: itemRows.filter((i) => i.kind === "practical"),
+    tests: itemRows.filter((i) => i.kind === "test"),
+    exams: itemRows.filter((i) => i.kind === "exam"),
     marks: marks.rows.map((x) => ({
-      sessionId: x.session_id as number,
+      itemId: x.session_id as number,
       studentId: x.student_id as string,
       score: x.score == null ? null : Number(x.score),
     })) as AssessMark[],
-    tests: tests.rows.map((x) => ({
-      studentId: x.student_id as string,
-      score: x.score == null ? null : Number(x.score),
-    })) as AssessTest[],
   };
 }
 
 export async function saveAssessment(
   groupId: string,
-  marks: AssessMark[],
-  tests: AssessTest[]
+  marks: AssessMark[]
 ): Promise<void> {
   await ensureMigrated();
   for (const m of marks) {
-    if (m.score == null || Number.isNaN(m.score)) continue;
-    await db.query(
-      `INSERT INTO wiserfiles_assessment_marks (session_id, student_id, score)
-       VALUES ($1, $2, $3)
-       ON CONFLICT (session_id, student_id) DO UPDATE SET score = $3`,
-      [m.sessionId, m.studentId, m.score]
-    );
-  }
-  for (const t of tests) {
-    if (t.score == null || Number.isNaN(t.score)) continue;
-    await db.query(
-      `INSERT INTO wiserfiles_assessment_tests (group_id, student_id, score)
-       VALUES ($1, $2, $3)
-       ON CONFLICT (group_id, student_id) DO UPDATE SET score = $3`,
-      [groupId, t.studentId, t.score]
-    );
+    if (m.score == null || Number.isNaN(m.score)) {
+      await db.query(
+        `DELETE FROM wiserfiles_assessment_marks WHERE session_id = $1 AND student_id = $2`,
+        [m.itemId, m.studentId]
+      );
+    } else {
+      await db.query(
+        `INSERT INTO wiserfiles_assessment_marks (session_id, student_id, score)
+         VALUES ($1, $2, $3)
+         ON CONFLICT (session_id, student_id) DO UPDATE SET score = $3`,
+        [m.itemId, m.studentId, m.score]
+      );
+    }
   }
 }
