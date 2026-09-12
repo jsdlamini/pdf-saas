@@ -2007,6 +2007,23 @@ body[data-studio-editor="true"] footer {
   text-align: left;
   color: #111827;
 }
+/* Sticky first column (name + ID) so it stays visible while scrolling the
+   mark columns horizontally on phones — prevents marking the wrong student. */
+.studio-assess-table th:first-child,
+.studio-assess-table td:first-child {
+  position: sticky;
+  left: 0;
+  z-index: 2;
+  min-width: 150px;
+}
+.studio-assess-table th:first-child {
+  background: #e5e7eb;
+  box-shadow: 1px 0 0 #d1d5db;
+}
+.studio-assess-table td:first-child {
+  background: #ffffff;
+  box-shadow: 1px 0 0 #e5e7eb;
+}
 .studio-assess-sid {
   display: block;
   font-size: 10px;
