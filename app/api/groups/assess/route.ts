@@ -1,6 +1,6 @@
 import { auth } from "@clerk/nextjs/server";
 import { getUserRole } from "@/lib/user-roles";
-import { getAssessment, saveAssessment, type AssessMark, type AssessTest } from "@/lib/assess-store";
+import { getAssessment, saveAssessment, type AssessMark } from "@/lib/assess-store";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -35,14 +35,9 @@ export async function POST(request: Request) {
   const body = (await request.json().catch(() => null)) as {
     groupId?: string;
     marks?: AssessMark[];
-    tests?: AssessTest[];
   } | null;
   if (!body || typeof body.groupId !== "string") return jsonError("Invalid payload.", 400);
 
-  await saveAssessment(
-    body.groupId,
-    Array.isArray(body.marks) ? body.marks : [],
-    Array.isArray(body.tests) ? body.tests : []
-  );
+  await saveAssessment(body.groupId, Array.isArray(body.marks) ? body.marks : []);
   return Response.json({ ok: true });
 }

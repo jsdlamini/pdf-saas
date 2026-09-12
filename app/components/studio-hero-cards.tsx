@@ -155,12 +155,19 @@ export default function StudioHeroCards({ onLaunch }: { onLaunch?: () => void })
   const [count, setCount] = useState(0);
   const [fading, setFading] = useState(false);
   const reducedRef = useRef(false);
+  const codeRef = useRef<HTMLPreElement | null>(null);
 
   useEffect(() => {
     reducedRef.current =
       typeof window !== "undefined" &&
       Boolean(window.matchMedia?.("(prefers-reduced-motion: reduce)").matches);
   }, []);
+
+  // Keep the fixed-height code area scrolled to the newest line as it types.
+  useEffect(() => {
+    const el = codeRef.current;
+    if (el) el.scrollTop = el.scrollHeight;
+  }, [count, active]);
 
   const slide = SLIDES[active];
 
@@ -242,7 +249,7 @@ export default function StudioHeroCards({ onLaunch }: { onLaunch?: () => void })
           </span>
           <span className="studio-hero-showcase-launch">Start project →</span>
         </div>
-        <pre className="studio-hero-showcase-code-text">
+        <pre ref={codeRef} className="studio-hero-showcase-code-text">
           {highlight(slide.code.slice(0, count), slide.id).map((tok, i) => (
             <span key={i} style={{ color: tok.color }}>
               {tok.text}

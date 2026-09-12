@@ -1425,18 +1425,21 @@ export default function ResearchStudioPage() {
   const [openTabs, setOpenTabs] = useState<string[]>([]);
 
   // Study-group memberships (students add themselves; groups are static config).
-  const [groups, setGroups] = useState<{ id: string; name: string; schedule: string; capacity: number; sessionCount: number; members: number; joined: boolean }[]>([]);
+  const [groups, setGroups] = useState<{ id: string; name: string; schedule: string; capacity: number; sessionCount: number; testCount: number; examCount: number; members: number; joined: boolean }[]>([]);
   const [groupsIsAdmin, setGroupsIsAdmin] = useState(false);
   const [groupsIsAssistant, setGroupsIsAssistant] = useState(false);
   const [assessGroupOpen, setAssessGroupOpen] = useState<string | null>(null);
   const [assessData, setAssessData] = useState<{
-    students: { userId: string; name: string; surname: string; studentId: string }[];
-    sessions: { id: number; title: string; maxMarks: number }[];
-    marks: { sessionId: number; studentId: string; score: number | null }[];
-    tests: { studentId: string; score: number | null }[];
+    students: { userId: string; name: string; surname: string; studentId: string; programme: string }[];
+    practicals: { id: number; title: string; maxMarks: number }[];
+    tests: { id: number; title: string; maxMarks: number }[];
+    exams: { id: number; title: string; maxMarks: number }[];
+    marks: { itemId: number; studentId: string; score: number | null }[];
   } | null>(null);
   const [assessBusy, setAssessBusy] = useState(false);
   const [assessNotice, setAssessNotice] = useState("");
+  const [assessSearch, setAssessSearch] = useState("");
+  const assessSaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [buttonVisibility, setButtonVisibility] = useState<Record<string, boolean> | null>(null);
   const [groupsBusy, setGroupsBusy] = useState<string | null>(null);
   const [groupsError, setGroupsError] = useState("");
@@ -1452,6 +1455,8 @@ export default function ResearchStudioPage() {
   const [editSchedule, setEditSchedule] = useState("");
   const [editCapacity, setEditCapacity] = useState("50");
   const [editSessionCount, setEditSessionCount] = useState("4");
+  const [editTestCount, setEditTestCount] = useState("1");
+  const [editExamCount, setEditExamCount] = useState("1");
   const [editError, setEditError] = useState("");
 
   // Auto-collapse the file tree and preview on narrow screens so the editor is
@@ -6193,12 +6198,14 @@ export default function ResearchStudioPage() {
     }
   }
 
-  function openEditGroup(g: { id: string; name: string; schedule: string; capacity: number; sessionCount: number }) {
+  function openEditGroup(g: { id: string; name: string; schedule: string; capacity: number; sessionCount: number; testCount: number; examCount: number }) {
     setEditGroupOpen(g.id);
     setEditName(g.name);
     setEditSchedule(g.schedule);
     setEditCapacity(String(g.capacity));
     setEditSessionCount(String(g.sessionCount));
+    setEditTestCount(String(g.testCount));
+    setEditExamCount(String(g.examCount));
     setEditError("");
   }
 
@@ -6222,6 +6229,8 @@ export default function ResearchStudioPage() {
           schedule: editSchedule,
           capacity: Number(editCapacity) || 50,
           sessionCount: Number(editSessionCount) || 4,
+          testCount: Number(editTestCount) || 1,
+          examCount: Number(editExamCount) || 1,
         }),
       });
       if (!res.ok) {
@@ -6281,50 +6290,45 @@ export default function ResearchStudioPage() {
     }
   }
 
-  function setMark(sessionId: number, studentId: string, value: string) {
+  async function saveSingleMark(itemId: number, studentId: string, score: number | null) {
+    if (!assessGroupOpen) return;
+    try {
+      const res = await fetch("/api/groups/assess", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ groupId: assessGroupOpen, marks: [{ itemId, studentId, score }] }),
+      });
+      if (res.ok) showToast("Mark saved", "success");
+      else showToast("Couldn't save the mark", "error");
+    } catch {
+      showToast("Couldn't save the mark", "error");
+    }
+  }
+
+  function setMark(itemId: number, studentId: string, value: string) {
     const score = value.trim() === "" ? null : Number(value);
     setAssessData((cur) =>
       cur
         ? {
             ...cur,
             marks: [
-              ...cur.marks.filter((m) => !(m.sessionId === sessionId && m.studentId === studentId)),
-              { sessionId, studentId, score },
+              ...cur.marks.filter((m) => !(m.itemId === itemId && m.studentId === studentId)),
+              { itemId, studentId, score },
             ],
           }
         : cur
     );
+    // Save shortly after the user stops typing.
+    if (assessSaveTimerRef.current) clearTimeout(assessSaveTimerRef.current);
+    assessSaveTimerRef.current = setTimeout(() => {
+      void saveSingleMark(itemId, studentId, score);
+    }, 700);
   }
 
-  function setTest(studentId: string, value: string) {
+  function blurMark(itemId: number, studentId: string, value: string) {
+    if (assessSaveTimerRef.current) clearTimeout(assessSaveTimerRef.current);
     const score = value.trim() === "" ? null : Number(value);
-    setAssessData((cur) =>
-      cur
-        ? {
-            ...cur,
-            tests: [...cur.tests.filter((t) => t.studentId !== studentId), { studentId, score }],
-          }
-        : cur
-    );
-  }
-
-  async function saveAssess() {
-    if (!assessGroupOpen || !assessData) return;
-    setAssessBusy(true);
-    try {
-      const res = await fetch("/api/groups/assess", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ groupId: assessGroupOpen, marks: assessData.marks, tests: assessData.tests }),
-      });
-      if (!res.ok) throw new Error();
-      setAssessNotice("Marks saved.");
-      setAssessGroupOpen(null);
-    } catch {
-      setAssessNotice("Couldn't save the marks.");
-    } finally {
-      setAssessBusy(false);
-    }
+    void saveSingleMark(itemId, studentId, score);
   }
 
   if (workspaceScreen === "projects") {
@@ -6895,8 +6899,16 @@ export default function ResearchStudioPage() {
                   <Input id="edit-capacity" type="number" min={1} max={200} value={editCapacity} onChange={(e) => setEditCapacity(e.target.value)} />
                 </div>
                 <div className="space-y-1.5">
-                  <Label htmlFor="edit-sessions">Practical sessions</Label>
-                  <Input id="edit-sessions" type="number" min={1} max={50} value={editSessionCount} onChange={(e) => setEditSessionCount(e.target.value)} />
+                  <Label htmlFor="edit-sessions">Practicals</Label>
+                  <Input id="edit-sessions" type="number" min={0} max={50} value={editSessionCount} onChange={(e) => setEditSessionCount(e.target.value)} />
+                </div>
+                <div className="space-y-1.5">
+                  <Label htmlFor="edit-tests">Tests</Label>
+                  <Input id="edit-tests" type="number" min={0} max={20} value={editTestCount} onChange={(e) => setEditTestCount(e.target.value)} />
+                </div>
+                <div className="space-y-1.5">
+                  <Label htmlFor="edit-exams">Examinations</Label>
+                  <Input id="edit-exams" type="number" min={0} max={20} value={editExamCount} onChange={(e) => setEditExamCount(e.target.value)} />
                 </div>
                 {editError ? <p className="text-xs font-semibold text-[var(--danger)]">{editError}</p> : null}
               </div>
@@ -6912,34 +6924,45 @@ export default function ResearchStudioPage() {
             <DialogContent className="sm:max-w-5xl">
               <DialogHeader>
                 <DialogTitle>Assess {groups.find((g) => g.id === assessGroupOpen)?.name || "group"}</DialogTitle>
-                <DialogDescription>Enter marks per practical session and the test score.</DialogDescription>
+                <DialogDescription>Enter marks per practical, test, and examination.</DialogDescription>
               </DialogHeader>
               {!assessData ? (
                 <p style={{ fontSize: 12, color: "var(--text-muted, #64748b)" }}>{assessNotice || "Loading…"}</p>
               ) : (() => {
-                const markMap = new Map(assessData.marks.map((m) => [`${m.sessionId}:${m.studentId}`, m.score]));
-                const testMap = new Map(assessData.tests.map((t) => [t.studentId, t.score]));
+                const allItems = [...assessData.practicals, ...assessData.tests, ...assessData.exams];
+                const markMap = new Map(assessData.marks.map((m) => [`${m.itemId}:${m.studentId}`, m.score]));
+                const q = assessSearch.trim().toLowerCase();
+                const filtered = q
+                  ? assessData.students.filter((st) =>
+                      `${st.name} ${st.surname} ${st.studentId} ${st.programme}`.toLowerCase().includes(q)
+                    )
+                  : assessData.students;
                 return (
                   <>
+                    <input
+                      value={assessSearch}
+                      onChange={(e) => setAssessSearch(e.target.value)}
+                      placeholder="Search students..."
+                      className="studio-assess-search"
+                    />
                     <div className="studio-assess-scroll">
                       <table className="studio-assess-table">
                         <thead>
                           <tr>
                             <th>Student</th>
-                            {assessData.sessions.map((s) => (
+                            {allItems.map((s) => (
                               <th key={s.id} title={`Max ${s.maxMarks} marks`}>{s.title}</th>
                             ))}
-                            <th>Test</th>
                           </tr>
                         </thead>
                         <tbody>
-                          {assessData.students.map((st) => (
+                          {filtered.map((st) => (
                             <tr key={st.userId}>
                               <td className="studio-assess-student">
-                                {st.name} {st.surname}
-                                {st.studentId ? <span className="studio-assess-sid">{st.studentId}</span> : null}
+                                <span>{st.name} {st.surname}</span>
+                                <span className="studio-assess-sid">{st.studentId}{st.programme ? ` · ${st.programme}` : ""}</span>
                               </td>
-                              {assessData.sessions.map((s) => {
+                              {allItems.map((s) => {
                                 const val = markMap.get(`${s.id}:${st.userId}`);
                                 return (
                                   <td key={s.id}>
@@ -6949,29 +6972,28 @@ export default function ResearchStudioPage() {
                                       max={s.maxMarks}
                                       value={val == null ? "" : String(val)}
                                       onChange={(e) => setMark(s.id, st.userId, e.target.value)}
+                                      onBlur={(e) => blurMark(s.id, st.userId, e.target.value)}
                                       className="studio-assess-input"
                                     />
                                   </td>
                                 );
                               })}
-                              <td>
-                                <input
-                                  type="number"
-                                  min={0}
-                                  value={testMap.get(st.userId) == null ? "" : String(testMap.get(st.userId))}
-                                  onChange={(e) => setTest(st.userId, e.target.value)}
-                                  className="studio-assess-input"
-                                />
-                              </td>
                             </tr>
                           ))}
+                          {filtered.length === 0 ? (
+                            <tr>
+                              <td colSpan={allItems.length + 1} className="studio-assess-student">No students match.</td>
+                            </tr>
+                          ) : null}
                         </tbody>
                       </table>
                     </div>
                     <DialogFooter>
                       {assessNotice ? <span style={{ fontSize: 11, color: "var(--text-muted, #64748b)" }}>{assessNotice}</span> : null}
+                      <a href={`/api/groups/assess/export?group=${assessGroupOpen}`} download className="studio-btn studio-btn-secondary" style={{ height: 30, fontSize: 11, padding: "0 10px", textDecoration: "none" }}>
+                        Export Excel
+                      </a>
                       <Button variant="outline" onClick={() => setAssessGroupOpen(null)}>Close</Button>
-                      <Button onClick={() => void saveAssess()} disabled={assessBusy}>{assessBusy ? "Saving…" : "Save marks"}</Button>
                     </DialogFooter>
                   </>
                 );
@@ -7263,6 +7285,20 @@ export default function ResearchStudioPage() {
               <path d="M3 9l7-6 7 6v8a1 1 0 0 1-1 1h-4v-5H8v5H4a1 1 0 0 1-1-1V9z" strokeLinecap="round" strokeLinejoin="round" />
             </svg>
           </a>
+          {groupsIsAdmin ? (
+            <a
+              href="/dashboard"
+              className="studio-btn studio-btn-ghost"
+              aria-label="Admin dashboard"
+              title="Admin dashboard"
+              style={{ textDecoration: "none" }}
+            >
+              <svg viewBox="0 0 20 20" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="1.8">
+                <path d="M3 4h4v4H3zM8 4h4v4H8zM13 4h4v4h-4zM3 10h4v4H3zM8 10h4v4H8zM13 10h4v4h-4z" strokeLinecap="round" strokeLinejoin="round" />
+              </svg>
+              <span className="hidden sm:inline">Dashboard</span>
+            </a>
+          ) : null}
           <button
             type="button"
             onClick={() => {
