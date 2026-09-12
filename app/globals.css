@@ -1980,7 +1980,8 @@ body[data-studio-editor="true"] footer {
   font-size: 12px;
 }
 .studio-assess-scroll {
-  overflow-x: auto;
+  overflow: auto;
+  max-height: min(60vh, 520px);
 }
 .studio-assess-table {
   border-collapse: collapse;
@@ -2003,12 +2004,16 @@ body[data-studio-editor="true"] footer {
   font-weight: 700;
   color: #111827;
 }
+/* Sticky header row + sticky first column so both scroll axes stay anchored. */
+.studio-assess-table thead th {
+  position: sticky;
+  top: 0;
+  z-index: 3;
+}
 .studio-assess-table td.studio-assess-student {
   text-align: left;
   color: #111827;
 }
-/* Sticky first column (name + ID) so it stays visible while scrolling the
-   mark columns horizontally on phones — prevents marking the wrong student. */
 .studio-assess-table th:first-child,
 .studio-assess-table td:first-child {
   position: sticky;
@@ -2019,6 +2024,7 @@ body[data-studio-editor="true"] footer {
 .studio-assess-table th:first-child {
   background: #e5e7eb;
   box-shadow: 1px 0 0 #d1d5db;
+  z-index: 4;
 }
 .studio-assess-table td:first-child {
   background: #ffffff;
