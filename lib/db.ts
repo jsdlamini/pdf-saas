@@ -6,20 +6,46 @@
 // pool. One shared pool and a lazy, idempotent migration removes all of that.
 
 import { Pool } from "pg";
+import { execSync } from "node:child_process";
 
 // NOTE: do not throw at import time. `next build` imports every route that
 // imports this module, and the builder stage has no DATABASE_URL — a top-level
 // throw breaks the build. Fail loudly in ensureMigrated() instead.
-const connectionString = process.env.DATABASE_URL;
+
+// Resolve the DB hostname to an IP once and connect by IP. Docker's embedded
+// DNS can intermittently stall for long-lived Node processes, which surfaced
+// as "timeout exceeded when trying to connect" and a 15s+ delay on every
+// request. Connecting by IP removes that per-connection lookup entirely.
+function resolveDbHost(url: string): string {
+  if (!url) return url;
+  try {
+    const u = new URL(url);
+    const host = u.hostname;
+    if (host === "localhost" || /^\d{1,3}(\.\d{1,3}){3}$/.test(host)) return url;
+    const out = execSync(`getent hosts ${host}`, { encoding: "utf8", timeout: 3000 });
+    const ip = out.trim().split(/\s+/)[0];
+    if (ip) {
+      u.hostname = ip;
+      return u.toString();
+    }
+  } catch {
+    // fall through to the original hostname
+  }
+  return url;
+}
+
+let connectionString = resolveDbHost(process.env.DATABASE_URL || "");
 
 let pool = createDbPool();
 
 function createDbPool(): Pool {
+  // Re-resolve on every pool creation so a DB container IP change heals itself.
+  connectionString = resolveDbHost(process.env.DATABASE_URL || "");
   const p = new Pool({
     connectionString: connectionString || "postgresql://localhost:5432/__missing__",
     max: 10,
     idleTimeoutMillis: 30_000,
-    connectionTimeoutMillis: 15_000,
+    connectionTimeoutMillis: 8_000,
     // TCP keepalive so long-lived idle connections are detected as dead.
     keepAlive: true,
   });
