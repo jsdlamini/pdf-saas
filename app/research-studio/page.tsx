@@ -6589,10 +6589,7 @@ export default function ResearchStudioPage() {
             </p>
           ) : authLoaded ? (
             <div className="studio-auth-cta">
-              <span>Sign in to sync across devices.</span>
-              <SignInButton mode="modal">
-                <button type="button">Sign in</button>
-              </SignInButton>
+              <span>Sign in above to sync your projects across devices.</span>
             </div>
           ) : null}
 
