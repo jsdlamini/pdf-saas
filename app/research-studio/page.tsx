@@ -6794,7 +6794,7 @@ export default function ResearchStudioPage() {
         {renderNewProjectDialog()}
         {groupsOpen ? (
           <Dialog open onOpenChange={(open) => { if (!open) setGroupsOpen(false); }}>
-            <DialogContent className="sm:max-w-3xl">
+            <DialogContent className="sm:max-w-3xl max-h-[85vh] overflow-y-auto overscroll-contain">
               <DialogHeader>
                 <DialogTitle>Practical groups</DialogTitle>
                 <DialogDescription>
