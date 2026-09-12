@@ -6879,6 +6879,20 @@ export default function ResearchStudioPage() {
                 </svg>
                 Import
               </button>
+              {groupsIsAdmin ? (
+                <a
+                  href="/dashboard"
+                  className="studio-btn studio-btn-ghost"
+                  aria-label="Admin dashboard"
+                  title="Admin dashboard"
+                  style={{ textDecoration: "none" }}
+                >
+                  <svg viewBox="0 0 20 20" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="1.8">
+                    <path d="M3 4h4v4H3zM8 4h4v4H8zM13 4h4v4h-4zM3 10h4v4H3zM8 10h4v4H8zM13 10h4v4h-4z" strokeLinecap="round" strokeLinejoin="round" />
+                  </svg>
+                  Dashboard
+                </a>
+              ) : null}
             </div>
           </div>
 
