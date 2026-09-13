@@ -157,15 +157,15 @@ export default function DashboardPage() {
 
       {/* Tab navigation */}
       <div className="mx-auto max-w-5xl px-6 md:px-10 pt-6">
-        <div className="flex gap-2 rounded-xl bg-slate-100 p-1">
+        <div className="flex gap-1 rounded-xl border border-slate-200 bg-white p-1 shadow-sm">
           {(["reporting", "users", "settings"] as const).map((t) => (
             <button
               key={t}
               type="button"
               onClick={() => setTab(t)}
-              className={`flex-1 rounded-lg px-4 py-2 text-sm font-semibold capitalize transition ${tab === t ? "bg-white text-cyan-700 shadow-sm" : "text-slate-500 hover:text-slate-800"}`}
+              className={`flex-1 rounded-lg px-4 py-2 text-sm font-semibold capitalize transition ${tab === t ? "bg-cyan-600 text-white shadow-sm" : "text-slate-600 hover:bg-slate-50"}`}
             >
-              {t}
+              {t === "users" ? "Users & Roles" : t === "settings" ? "Settings" : "Reporting"}
             </button>
           ))}
         </div>
@@ -606,14 +606,14 @@ export default function DashboardPage() {
       )}
 
       {tab === "users" && (
-          <>
-            {/* User Management */}
-            <UserManagement />
-          </>
-        )}
+        <div className="mx-auto max-w-5xl px-6 md:px-10 py-6 space-y-6">
+          {/* User Management */}
+          <UserManagement />
+        </div>
+      )}
 
       {tab === "settings" && (
-        <>
+        <div className="mx-auto max-w-5xl px-6 md:px-10 py-6 space-y-6">
           {/* Studio Button Visibility */}
           <ButtonVisibilitySettings />
 
@@ -622,7 +622,7 @@ export default function DashboardPage() {
 
           {/* Marketing Snippets */}
           <MarketingSection />
-        </>
+        </div>
       )}
 
       {countryDrill ? (
