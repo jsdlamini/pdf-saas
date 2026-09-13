@@ -588,6 +588,132 @@ add_test(NAME mylib COMMAND test_mylib)
       { path: "README.md", kind: "file", content: "# mylib\n" },
     ],
   },
+  {
+    slug: "report",
+    name: "Report",
+    description: "Structured report with title page, table of contents, chapters, and references.",
+    entries: [
+      {
+        path: "main.tex",
+        kind: "file",
+        content: String.raw`\documentclass[11pt]{report}
+\usepackage[margin=1in]{geometry}
+\usepackage{graphicx}
+\usepackage{amsmath,amssymb}
+\usepackage{hyperref}
+
+\title{Report Title}
+\author{Author Name}
+\date{\today}
+
+\begin{document}
+\maketitle
+\tableofcontents
+
+\begin{abstract}
+Executive summary of the report.
+\end{abstract}
+
+\chapter{Introduction}
+\section{Background}
+\section{Objectives}
+
+\chapter{Methodology}
+\chapter{Results}
+\chapter{Conclusion}
+
+\bibliographystyle{plain}
+\bibliography{refs}
+\end{document}
+`,
+      },
+      { path: "sections/", kind: "folder", content: "" },
+      { path: "figures/", kind: "folder", content: "" },
+      { path: "refs.bib", kind: "file", content: "" },
+    ],
+  },
+  {
+    slug: "thesis",
+    name: "Thesis / Dissertation",
+    description: "Chapter-based thesis skeleton with front matter and bibliography.",
+    entries: [
+      {
+        path: "main.tex",
+        kind: "file",
+        content: String.raw`\documentclass[12pt]{report}
+\usepackage[margin=1in]{geometry}
+\usepackage{graphicx}
+\usepackage{amsmath,amssymb}
+\usepackage{hyperref}
+
+\title{Thesis Title}
+\author{Author Name}
+\date{\today}
+
+\begin{document}
+\maketitle
+\tableofcontents
+
+\chapter{Introduction}
+\input{chapters/introduction}
+
+\chapter{Literature Review}
+\input{chapters/literature-review}
+
+\chapter{Methodology}
+\input{chapters/methodology}
+
+\chapter{Results}
+\input{chapters/results}
+
+\chapter{Conclusion}
+\input{chapters/conclusion}
+
+\bibliographystyle{plain}
+\bibliography{refs}
+\end{document}
+`,
+      },
+      { path: "chapters/", kind: "folder", content: "" },
+      { path: "chapters/introduction.tex", kind: "file", content: "Write your introduction here.\n" },
+      { path: "chapters/literature-review.tex", kind: "file", content: "Summarise prior work here.\n" },
+      { path: "chapters/methodology.tex", kind: "file", content: "Describe your method here.\n" },
+      { path: "chapters/results.tex", kind: "file", content: "Present your results here.\n" },
+      { path: "chapters/conclusion.tex", kind: "file", content: "Conclude here.\n" },
+      { path: "refs.bib", kind: "file", content: "" },
+    ],
+  },
+  {
+    slug: "data-analysis",
+    name: "Data Analysis (Python)",
+    description: "Pandas + Matplotlib starter for loading data, summarising, and plotting.",
+    entries: [
+      {
+        path: "main.py",
+        kind: "file",
+        content: `import pandas as pd
+import matplotlib.pyplot as plt
+
+# Load a CSV and show a quick summary.
+df = pd.read_csv("data.csv")
+
+print(df.describe())
+print("Missing values:")
+print(df.isna().sum())
+
+# Plot the first numeric column as a histogram.
+numeric = df.select_dtypes(include="number")
+if not numeric.empty:
+    numeric.iloc[:, 0].hist(bins=30)
+    plt.title(numeric.columns[0])
+    plt.tight_layout()
+    plt.savefig("figure.png")
+    print("Saved figure.png")
+`,
+      },
+      { path: "data.csv", kind: "file", content: "x,y\n1,2\n2,4\n3,6\n4,8\n5,10\n" },
+    ],
+  },
 ];
 
 export function getTemplateBySlug(slug: string) {
