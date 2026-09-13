@@ -8,9 +8,19 @@ function jsonError(message: string, status: number) {
   return Response.json({ error: message }, { status });
 }
 
-export async function GET() {
+function csvCell(value: unknown): string {
+  const s = value == null ? "" : String(value);
+  return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
+}
+
+export async function GET(request: Request) {
   const access = await requireDashboardAccess();
   if (access.error) return jsonError(access.error, access.status);
+
+  const url = new URL(request.url);
+  const daysParam = parseInt(url.searchParams.get("days") || "15", 10);
+  const days = [15, 30, 90].includes(daysParam) ? daysParam : 15;
+  const asCsv = url.searchParams.get("format") === "csv";
 
   const pool = db;
 
@@ -21,10 +31,10 @@ export async function GET() {
         `SELECT tool, COUNT(*) as count FROM wiserfiles_analytics WHERE event = 'pageview' AND tool IS NOT NULL AND tool != 'home' GROUP BY tool ORDER BY count DESC LIMIT 15`
       ),
       pool.query(
-        `SELECT DATE(created_at) as date, COUNT(*) as count FROM wiserfiles_analytics WHERE event = 'pageview' AND created_at > NOW() - INTERVAL '15 days' GROUP BY DATE(created_at) ORDER BY date ASC`
+        `SELECT DATE(created_at) as date, COUNT(*) as count FROM wiserfiles_analytics WHERE event = 'pageview' AND created_at > NOW() - INTERVAL '${days} days' GROUP BY DATE(created_at) ORDER BY date ASC`
       ),
       pool.query(
-        `SELECT DATE(created_at) as date, COUNT(DISTINCT ip_hash) as count FROM wiserfiles_analytics WHERE event = 'pageview' AND created_at > NOW() - INTERVAL '15 days' GROUP BY DATE(created_at) ORDER BY date ASC`
+        `SELECT DATE(created_at) as date, COUNT(DISTINCT ip_hash) as count FROM wiserfiles_analytics WHERE event = 'pageview' AND created_at > NOW() - INTERVAL '${days} days' GROUP BY DATE(created_at) ORDER BY date ASC`
       ),
       pool.query(
         `SELECT referrer, COUNT(*) as count FROM wiserfiles_analytics WHERE event = 'pageview' AND referrer IS NOT NULL AND referrer != 'direct' GROUP BY referrer ORDER BY count DESC LIMIT 10`
@@ -56,7 +66,7 @@ export async function GET() {
       ),
     ]);
 
-    return Response.json({
+    const payload = {
       totalPageviews: parseInt(pageviews.rows[0]?.total || "0"),
       tools: tools.rows,
       daily: daily.rows,
@@ -74,7 +84,47 @@ export async function GET() {
         current: parseInt(weekOverWeek.rows[0]?.current || "0"),
         previous: parseInt(weekOverWeek.rows[0]?.previous || "0"),
       },
-    });
+    };
+
+    if (asCsv) {
+      const lines: string[] = [];
+      lines.push("Summary");
+      lines.push("Metric,Value");
+      lines.push(`Total pageviews,${payload.totalPageviews}`);
+      lines.push(`Unique visitors,${payload.uniqueVisitors}`);
+      lines.push(`Returning visitors,${payload.returningVisitors}`);
+      lines.push(`7-day pageviews,${payload.weekOverWeek.current}`);
+      lines.push(`Prior 7-day pageviews,${payload.weekOverWeek.previous}`);
+      lines.push("");
+      lines.push(`Daily pageviews (last ${days} days)`);
+      lines.push("Date,Pageviews,Visitors");
+      const visitorMap = new Map(payload.dailyVisitors.map((d) => [d.date, d.count]));
+      for (const d of payload.daily) {
+        lines.push(`${csvCell(d.date)},${csvCell(d.count)},${csvCell(visitorMap.get(d.date) ?? 0)}`);
+      }
+      lines.push("");
+      lines.push("Top tools");
+      lines.push("Tool,Pageviews");
+      for (const t of payload.tools) lines.push(`${csvCell(t.tool)},${csvCell(t.count)}`);
+      lines.push("");
+      lines.push("Top referrers");
+      lines.push("Referrer,Pageviews");
+      for (const r of payload.referrers) lines.push(`${csvCell(r.referrer)},${csvCell(r.count)}`);
+      lines.push("");
+      lines.push("Top pages");
+      lines.push("Path,Pageviews");
+      for (const p of payload.topPaths) lines.push(`${csvCell(p.path)},${csvCell(p.count)}`);
+
+      const csv = "\uFEFF" + lines.join("\n") + "\n";
+      return new Response(csv, {
+        headers: {
+          "Content-Type": "text/csv; charset=utf-8",
+          "Content-Disposition": `attachment; filename="wiserfiles-analytics-${days}d.csv"`,
+        },
+      });
+    }
+
+    return Response.json(payload);
   } catch (e) {
     return jsonError("Failed to load analytics.", 500);
   }
