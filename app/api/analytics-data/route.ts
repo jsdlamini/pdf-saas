@@ -21,6 +21,7 @@ export async function GET(request: Request) {
   const daysParam = parseInt(url.searchParams.get("days") || "15", 10);
   const days = [15, 30, 90].includes(daysParam) ? daysParam : 15;
   const asCsv = url.searchParams.get("format") === "csv";
+  const day = url.searchParams.get("day") || "";
 
   const pool = db;
 
@@ -93,6 +94,18 @@ export async function GET(request: Request) {
         tools: tools.rows.reduce((sum, t) => sum + parseInt(t.count, 10), 0),
         actions: events.rows.filter((e) => e.event !== "pageview").reduce((sum, e) => sum + parseInt(e.count, 10), 0),
       },
+      dayEvents: day
+        ? (await pool.query(
+            `SELECT event, detail, user_id, ip_hash, created_at FROM wiserfiles_analytics WHERE DATE(created_at) = $1 ORDER BY created_at DESC LIMIT 300`,
+            [day]
+          )).rows
+        : [],
+      daySummary: day
+        ? (await pool.query(
+            `SELECT event, COUNT(*) as count FROM wiserfiles_analytics WHERE DATE(created_at) = $1 GROUP BY event ORDER BY count DESC`,
+            [day]
+          )).rows
+        : [],
     };
 
     if (asCsv) {
