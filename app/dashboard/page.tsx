@@ -61,6 +61,24 @@ export default function DashboardPage() {
       .finally(() => setLoading(false));
   }, [isSignedIn, days]);
 
+  // Poll live users every 15s so the "online now" card updates in real time.
+  useEffect(() => {
+    if (!isSignedIn) return;
+    let cancelled = false;
+    const poll = () => {
+      fetch("/api/analytics-data?live=1")
+        .then((r) => r.json())
+        .then((d) => {
+          if (cancelled || !d.liveUsers) return;
+          setData((cur) => (cur ? { ...cur, liveUsers: d.liveUsers } : cur));
+        })
+        .catch(() => { /* best-effort */ });
+    };
+    poll();
+    const id = setInterval(poll, 15000);
+    return () => { cancelled = true; clearInterval(id); };
+  }, [isSignedIn]);
+
   if (!isLoaded || loading) {
     return (
       <div className="flex items-center justify-center min-h-[60vh]">
