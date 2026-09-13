@@ -969,32 +969,67 @@ function AiQuotaSettings() {
 function UserActivity({ data }: { data: AnalyticsData | null }) {
   const events = data?.events || [];
   const recent = data?.recentEvents || [];
+  const [day, setDay] = useState("");
+  const [dayEvents, setDayEvents] = useState<Array<{ event: string; detail: string | null; user_id: string | null; ip_hash: string | null; created_at: string }>>([]);
+  const [daySummary, setDaySummary] = useState<Array<{ event: string; count: string }>>([]);
+  const [dayLoading, setDayLoading] = useState(false);
+
+  useEffect(() => {
+    if (!day) { setDayEvents([]); setDaySummary([]); return; }
+    let cancelled = false;
+    setDayLoading(true);
+    fetch(`/api/analytics-data?day=${day}`)
+      .then((r) => r.json())
+      .then((d) => {
+        if (cancelled) return;
+        setDayEvents(d.dayEvents || []);
+        setDaySummary(d.daySummary || []);
+      })
+      .catch(() => {})
+      .finally(() => { if (!cancelled) setDayLoading(false); });
+    return () => { cancelled = true; };
+  }, [day]);
+
+  const list = day ? dayEvents : recent;
+  const summary = day ? daySummary : events;
 
   return (
     <div className="rounded-2xl border border-slate-200/60 bg-white p-6 shadow-sm mt-6">
-      <div className="flex items-center justify-between mb-4">
+      <div className="flex items-center justify-between mb-4 flex-wrap gap-3">
         <div>
           <h2 className="text-base font-semibold text-slate-900">User Activity</h2>
           <p className="text-xs text-slate-500 mt-0.5">Every action and visit — pageviews, compiles, AI use, exports, invites.</p>
         </div>
-        <span className="rounded-full bg-cyan-100 px-2.5 py-0.5 text-[10px] font-bold text-cyan-800">
-          {recent.length} recent
-        </span>
+        <div className="flex items-center gap-2">
+          <input
+            type="date"
+            value={day}
+            onChange={(e) => setDay(e.target.value)}
+            className="rounded-lg border border-slate-200 px-2.5 py-1 text-xs text-slate-700"
+            aria-label="Filter activity by day"
+          />
+          {day ? (
+            <button type="button" onClick={() => setDay("")} className="rounded-lg border border-slate-200 px-2.5 py-1 text-xs font-semibold text-slate-600 hover:bg-slate-100">Clear</button>
+          ) : null}
+          <span className="rounded-full bg-cyan-100 px-2.5 py-0.5 text-[10px] font-bold text-cyan-800">
+            {day ? `${list.length} on ${day}` : `${list.length} recent`}
+          </span>
+        </div>
       </div>
 
-      {events.length > 0 ? (
+      {summary.length > 0 ? (
         <div className="mb-4 flex flex-wrap gap-2">
-          {events.map((e) => (
+          {summary.map((e) => (
             <span key={e.event} className="rounded-full bg-slate-100 px-3 py-1 text-xs font-medium text-slate-700">
               {e.event} <span className="font-bold">{e.count}</span>
             </span>
           ))}
         </div>
       ) : (
-        <p className="text-xs text-slate-400 mb-4">No activity events recorded yet.</p>
+        <p className="text-xs text-slate-400 mb-4">{day ? (dayLoading ? "Loading…" : "No activity recorded that day.") : "No activity events recorded yet."}</p>
       )}
 
-      {recent.length > 0 ? (
+      {list.length > 0 ? (
         <div className="overflow-x-auto">
           <table className="w-full text-left text-sm">
             <thead>
@@ -1006,7 +1041,7 @@ function UserActivity({ data }: { data: AnalyticsData | null }) {
               </tr>
             </thead>
             <tbody>
-              {recent.map((e, i) => (
+              {list.map((e, i) => (
                 <tr key={i} className="border-b border-slate-100">
                   <td className="py-2 pr-3 font-medium text-slate-800">{e.event}</td>
                   <td className="py-2 pr-3 text-slate-500">{e.detail || "—"}</td>
