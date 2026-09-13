@@ -1434,6 +1434,7 @@ export default function ResearchStudioPage() {
   // Study-group memberships (students add themselves; groups are static config).
   const [groups, setGroups] = useState<{ id: string; name: string; schedule: string; capacity: number; sessionCount: number; testCount: number; examCount: number; members: number; joined: boolean }[]>([]);
   const [groupsIsAdmin, setGroupsIsAdmin] = useState(false);
+  const [isAdmin, setIsAdmin] = useState(false);
   const [groupsIsAssistant, setGroupsIsAssistant] = useState(false);
   const [assessGroupOpen, setAssessGroupOpen] = useState<string | null>(null);
   const [assessData, setAssessData] = useState<{
@@ -6141,6 +6142,7 @@ export default function ResearchStudioPage() {
       }
       setGroups(data.groups);
       setGroupsIsAdmin(Boolean(data?.isAdmin));
+      setIsAdmin(Boolean(data?.isAdmin));
       setGroupsIsAssistant(Boolean(data?.isAssistant));
       setGroupsError("");
     } catch {
@@ -6159,8 +6161,9 @@ export default function ResearchStudioPage() {
   async function loadButtonVisibility() {
     try {
       const res = await fetch("/api/studio-buttons");
-      const data = (await res.json().catch(() => null)) as { buttons?: Record<string, boolean> } | null;
+      const data = (await res.json().catch(() => null)) as { buttons?: Record<string, boolean>; isAdmin?: boolean } | null;
       if (data?.buttons) setButtonVisibility(data.buttons);
+      if (data?.isAdmin != null) setIsAdmin(Boolean(data.isAdmin));
     } catch {
       // Non-blocking: fall back to showing all buttons.
     }
@@ -6812,7 +6815,7 @@ export default function ResearchStudioPage() {
                   Practical Groups
                 </button>
               ) : null}
-              {groupsIsAdmin ? (
+              {isAdmin ? (
                 <a
                   href="/dashboard"
                   className="studio-btn"
@@ -7640,7 +7643,7 @@ export default function ResearchStudioPage() {
               <path d="M3 9l7-6 7 6v8a1 1 0 0 1-1 1h-4v-5H8v5H4a1 1 0 0 1-1-1V9z" strokeLinecap="round" strokeLinejoin="round" />
             </svg>
           </a>
-          {groupsIsAdmin ? (
+          {isAdmin ? (
             <a
               href="/dashboard"
               className="studio-btn studio-btn-ghost"

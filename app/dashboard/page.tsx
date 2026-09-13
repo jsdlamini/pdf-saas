@@ -21,6 +21,7 @@ type AnalyticsData = {
   hourly?: Array<{ hour: number; count: string }>;
   funnel?: { home: number; tools: number; actions: number };
   retention?: Array<{ week: string; visitors: number; returned: number }>;
+  liveUsers?: Array<{ user_id: string; last_seen: string; name?: string }>;
 };
 
 export default function DashboardPage() {
@@ -179,6 +180,26 @@ export default function DashboardPage() {
           </div>
         </div>
       </div>
+
+      {/* Live now */}
+      {(data.liveUsers && data.liveUsers.length > 0) ? (
+        <div className="mx-auto max-w-5xl px-6 md:px-10">
+          <div className="rounded-2xl border border-emerald-200 bg-emerald-50 p-4">
+            <div className="flex items-center gap-2">
+              <span className="relative flex h-2.5 w-2.5">
+                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75" />
+                <span className="relative inline-flex h-2.5 w-2.5 rounded-full bg-emerald-500" />
+              </span>
+              <h2 className="text-sm font-semibold text-emerald-900">{data.liveUsers.length} user{data.liveUsers.length !== 1 ? "s" : ""} online now</h2>
+            </div>
+            <div className="mt-2 flex flex-wrap gap-2">
+              {data.liveUsers.map((u) => (
+                <span key={u.user_id} className="rounded-full bg-white px-3 py-1 text-xs font-medium text-emerald-800 ring-1 ring-emerald-200">{u.name || u.user_id.slice(0, 12)}</span>
+              ))}
+            </div>
+          </div>
+        </div>
+      ) : null}
 
       {/* Charts section */}
       <div className="mx-auto max-w-5xl px-6 md:px-10 py-6 space-y-6">
@@ -1007,9 +1028,13 @@ function UserActivity({ data }: { data: AnalyticsData | null }) {
   const events = data?.events || [];
   const recent = data?.recentEvents || [];
   const [day, setDay] = useState("");
+  const [search, setSearch] = useState("");
   const [dayEvents, setDayEvents] = useState<Array<{ event: string; detail: string | null; user_id: string | null; ip_hash: string | null; country: string | null; duration_ms: number | null; created_at: string; name?: string }>>([]);
   const [daySummary, setDaySummary] = useState<Array<{ event: string; count: string }>>([]);
   const [dayLoading, setDayLoading] = useState(false);
+  const [userMetrics, setUserMetrics] = useState<any | null>(null);
+  const [metricsLoading, setMetricsLoading] = useState(false);
+  const [metricsError, setMetricsError] = useState("");
 
   useEffect(() => {
     if (!day) { setDayEvents([]); setDaySummary([]); return; }
@@ -1027,7 +1052,29 @@ function UserActivity({ data }: { data: AnalyticsData | null }) {
     return () => { cancelled = true; };
   }, [day]);
 
-  const list = day ? dayEvents : recent;
+  async function viewUser(userId: string) {
+    setUserMetrics(null);
+    setMetricsError("");
+    setMetricsLoading(true);
+    try {
+      const r = await fetch(`/api/admin-user-metrics?userId=${encodeURIComponent(userId)}`);
+      const d = await r.json();
+      if (!r.ok) throw new Error(d.error || "Could not load metrics.");
+      setUserMetrics(d.metrics);
+    } catch (e) {
+      setMetricsError(e instanceof Error ? e.message : "Could not load metrics.");
+    } finally {
+      setMetricsLoading(false);
+    }
+  }
+
+  const baseList = day ? dayEvents : recent;
+  const q = search.trim().toLowerCase();
+  const list = q
+    ? baseList.filter((e) =>
+        `${e.event} ${e.detail || ""} ${e.name || ""} ${e.user_id || ""} ${e.ip_hash || ""} ${e.country || ""}`.toLowerCase().includes(q)
+      )
+    : baseList;
   const summary = day ? daySummary : events;
 
   return (
@@ -1039,6 +1086,14 @@ function UserActivity({ data }: { data: AnalyticsData | null }) {
         </div>
         <div className="flex items-center gap-2">
           <input
+            type="search"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder="Search activity…"
+            className="rounded-lg border border-slate-200 px-2.5 py-1 text-xs text-slate-700"
+            aria-label="Search activity"
+          />
+          <input
             type="date"
             value={day}
             onChange={(e) => setDay(e.target.value)}
@@ -1049,7 +1104,7 @@ function UserActivity({ data }: { data: AnalyticsData | null }) {
             <button type="button" onClick={() => setDay("")} className="rounded-lg border border-slate-200 px-2.5 py-1 text-xs font-semibold text-slate-600 hover:bg-slate-100">Clear</button>
           ) : null}
           <span className="rounded-full bg-cyan-100 px-2.5 py-0.5 text-[10px] font-bold text-cyan-800">
-            {day ? `${list.length} on ${day}` : `${list.length} recent`}
+            {list.length} shown
           </span>
         </div>
       </div>
@@ -1080,18 +1135,74 @@ function UserActivity({ data }: { data: AnalyticsData | null }) {
               </tr>
             </thead>
             <tbody>
-              {list.map((e, i) => (
-                <tr key={i} className="border-b border-slate-100">
-                  <td className="py-2 pr-3 font-medium text-slate-800">{e.event}</td>
-                  <td className="py-2 pr-3 text-slate-500">{e.detail || "—"}</td>
-                  <td className="py-2 pr-3 text-slate-700">{e.name || (e.user_id && e.user_id !== "guest" ? e.user_id.slice(0, 12) : e.ip_hash ? `anon · ${e.ip_hash.slice(0, 8)}` : "Guest")}</td>
-                  <td className="py-2 pr-3 text-slate-500">{e.country || "—"}</td>
-                  <td className="py-2 pr-3 text-slate-500">{e.duration_ms != null ? `${(e.duration_ms / 1000).toFixed(1)}s` : "—"}</td>
-                  <td className="py-2 text-slate-400">{new Date(e.created_at).toLocaleString()}</td>
-                </tr>
-              ))}
+              {list.map((e, i) => {
+                const clickable = e.user_id && e.user_id !== "guest";
+                return (
+                  <tr key={i} className="border-b border-slate-100">
+                    <td className="py-2 pr-3 font-medium text-slate-800">{e.event}</td>
+                    <td className="py-2 pr-3 text-slate-500">{e.detail || "—"}</td>
+                    <td className="py-2 pr-3 text-slate-700">
+                      {clickable ? (
+                        <button type="button" onClick={() => void viewUser(e.user_id as string)} className="font-semibold text-cyan-700 hover:text-cyan-900 hover:underline underline-offset-2">
+                          {e.name || (e.user_id as string).slice(0, 12)}
+                        </button>
+                      ) : (
+                        e.name || (e.ip_hash ? `anon · ${e.ip_hash.slice(0, 8)}` : "Guest")
+                      )}
+                    </td>
+                    <td className="py-2 pr-3 text-slate-500">{e.country || "—"}</td>
+                    <td className="py-2 pr-3 text-slate-500">{e.duration_ms != null ? `${(e.duration_ms / 1000).toFixed(1)}s` : "—"}</td>
+                    <td className="py-2 text-slate-400">{new Date(e.created_at).toLocaleString()}</td>
+                  </tr>
+                );
+              })}
             </tbody>
           </table>
+        </div>
+      ) : null}
+
+      {userMetrics || metricsLoading || metricsError ? (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 p-4" onClick={() => { setUserMetrics(null); setMetricsError(""); }}>
+          <div className="w-full max-w-2xl max-h-[85vh] overflow-y-auto rounded-2xl border border-slate-200 bg-white p-6 shadow-2xl" onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-center justify-between">
+              <h3 className="text-lg font-semibold text-slate-900">User Metrics</h3>
+              <button type="button" onClick={() => { setUserMetrics(null); setMetricsError(""); }} className="text-slate-400 hover:text-slate-700">✕</button>
+            </div>
+            {metricsLoading ? (
+              <p className="text-sm text-slate-500 mt-3">Loading…</p>
+            ) : metricsError ? (
+              <p className="text-sm text-rose-600 mt-3">{metricsError}</p>
+            ) : userMetrics ? (
+              <div className="mt-4 space-y-4">
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                  <div className="rounded-lg bg-slate-50 p-3"><p className="text-[10px] uppercase text-slate-400">Pageviews</p><p className="text-lg font-bold text-slate-800">{userMetrics.pageviews}</p></div>
+                  <div className="rounded-lg bg-slate-50 p-3"><p className="text-[10px] uppercase text-slate-400">Events</p><p className="text-lg font-bold text-slate-800">{userMetrics.totalEvents}</p></div>
+                  <div className="rounded-lg bg-slate-50 p-3"><p className="text-[10px] uppercase text-slate-400">Location</p><p className="text-sm font-semibold text-slate-800">{[userMetrics.city, userMetrics.country].filter(Boolean).join(", ") || "—"}</p></div>
+                  <div className="rounded-lg bg-slate-50 p-3"><p className="text-[10px] uppercase text-slate-400">Last seen</p><p className="text-sm font-semibold text-slate-800">{userMetrics.lastSeen ? new Date(userMetrics.lastSeen).toLocaleString() : "—"}</p></div>
+                </div>
+                <div>
+                  <h4 className="text-sm font-semibold text-slate-900">Tools used</h4>
+                  <div className="mt-2 flex flex-wrap gap-2">
+                    {(userMetrics.tools || []).map((t: any) => (
+                      <span key={t.tool} className="rounded-full bg-slate-100 px-3 py-1 text-xs text-slate-700">{t.tool} · {t.count}</span>
+                    ))}
+                    {(!userMetrics.tools || userMetrics.tools.length === 0) ? <span className="text-xs text-slate-400">None recorded</span> : null}
+                  </div>
+                </div>
+                <div>
+                  <h4 className="text-sm font-semibold text-slate-900">Recent activity</h4>
+                  <div className="mt-2 max-h-48 space-y-1 overflow-y-auto">
+                    {(userMetrics.recent || []).map((r: any, i: number) => (
+                      <div key={i} className="flex items-center justify-between rounded bg-slate-50 px-2 py-1 text-xs">
+                        <span className="text-slate-700">{r.event}{r.detail ? ` — ${r.detail}` : ""}</span>
+                        <span className="text-slate-400">{new Date(r.created_at).toLocaleString()}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            ) : null}
+          </div>
         </div>
       ) : null}
     </div>

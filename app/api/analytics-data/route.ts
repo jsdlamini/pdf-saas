@@ -124,28 +124,34 @@ export async function GET(request: Request) {
              GROUP BY w1.week
              ORDER BY w1.week ASC`
           )).rows,
+      liveUsers: (await pool.query(
+        `SELECT user_id, MAX(created_at) AS last_seen FROM wiserfiles_analytics WHERE created_at > NOW() - INTERVAL '5 minutes' AND user_id IS NOT NULL AND user_id != 'guest' GROUP BY user_id ORDER BY last_seen DESC LIMIT 50`
+      )).rows,
     };
 
-    // Resolve names/emails for a selected day's events so the reviewer can see
-    // exactly who did what (best-effort, deduped by user id).
-    if (day && payload.dayEvents.length > 0) {
-      const ids = [...new Set(payload.dayEvents.map((e) => e.user_id).filter((id) => id && id !== "guest"))];
-      const nameMap = new Map<string, string>();
-      if (ids.length > 0) {
-        try {
-          const client = await clerkClient();
-          for (const id of ids.slice(0, 100)) {
-            try {
-              const u = await client.users.getUser(id);
-              const name = [u.firstName, u.lastName].filter(Boolean).join(" ").trim() || u.username || "";
-              const email = u.primaryEmailAddress?.emailAddress || "";
-              nameMap.set(id, name ? `${name}${email ? ` (${email})` : ""}` : email);
-            } catch { /* skip unresolvable */ }
-          }
-        } catch { /* best-effort */ }
-      }
-      payload.dayEvents = payload.dayEvents.map((e) => ({ ...e, name: nameMap.get(e.user_id) || "" }));
+    // Resolve names/emails for the selected day's events and live users so the
+    // reviewer can see exactly who did what (best-effort, deduped by user id).
+    const allIds = [
+      ...(day ? payload.dayEvents.map((e) => e.user_id) : []),
+      ...payload.liveUsers.map((e) => e.user_id),
+    ].filter((id): id is string => Boolean(id) && id !== "guest");
+    const uniqueIds = [...new Set(allIds)];
+    const nameMap = new Map<string, string>();
+    if (uniqueIds.length > 0) {
+      try {
+        const client = await clerkClient();
+        for (const id of uniqueIds.slice(0, 100)) {
+          try {
+            const u = await client.users.getUser(id);
+            const name = [u.firstName, u.lastName].filter(Boolean).join(" ").trim() || u.username || "";
+            const email = u.primaryEmailAddress?.emailAddress || "";
+            nameMap.set(id, name ? `${name}${email ? ` (${email})` : ""}` : email);
+          } catch { /* skip unresolvable */ }
+        }
+      } catch { /* best-effort */ }
     }
+    payload.dayEvents = payload.dayEvents.map((e) => ({ ...e, name: nameMap.get(e.user_id) || "" }));
+    payload.liveUsers = payload.liveUsers.map((e) => ({ ...e, name: nameMap.get(e.user_id) || "" }));
 
     if (asCsv) {
       const lines: string[] = [];
