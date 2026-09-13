@@ -6,17 +6,18 @@ import { useAuth } from "@clerk/nextjs";
 
 const ANALYTICS_ENDPOINT = "/api/analytics";
 
-function track(event: string, data?: Record<string, string>) {
+function track(event: string, data?: Record<string, string | number>) {
+  const payload = { event, ...data };
   try {
     navigator.sendBeacon(
       ANALYTICS_ENDPOINT,
-      JSON.stringify({ event, ...data })
+      JSON.stringify(payload)
     );
   } catch {
     fetch(ANALYTICS_ENDPOINT, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ event, ...data }),
+      body: JSON.stringify(payload),
       keepalive: true,
     }).catch(() => { /* deliberately silent: best-effort */ });
   }
@@ -54,6 +55,6 @@ export function useAnalytics() {
   }, [pathname, searchParams, isLoaded, userId]);
 }
 
-export function trackEvent(event: string, data?: Record<string, string>) {
+export function trackEvent(event: string, data?: Record<string, string | number>) {
   track(event, data);
 }

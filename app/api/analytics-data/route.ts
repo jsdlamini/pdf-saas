@@ -1,5 +1,6 @@
 import { db } from "@/lib/db";
 import { requireDashboardAccess } from "@/lib/dashboard-access";
+import { clerkClient } from "@clerk/nextjs/server";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -96,7 +97,7 @@ export async function GET(request: Request) {
       },
       dayEvents: day
         ? (await pool.query(
-            `SELECT event, detail, user_id, ip_hash, created_at FROM wiserfiles_analytics WHERE DATE(created_at) = $1 ORDER BY created_at DESC LIMIT 300`,
+            `SELECT event, detail, user_id, ip_hash, country, city, duration_ms, created_at FROM wiserfiles_analytics WHERE DATE(created_at) = $1 ORDER BY created_at DESC LIMIT 300`,
             [day]
           )).rows
         : [],
@@ -124,6 +125,27 @@ export async function GET(request: Request) {
              ORDER BY w1.week ASC`
           )).rows,
     };
+
+    // Resolve names/emails for a selected day's events so the reviewer can see
+    // exactly who did what (best-effort, deduped by user id).
+    if (day && payload.dayEvents.length > 0) {
+      const ids = [...new Set(payload.dayEvents.map((e) => e.user_id).filter((id) => id && id !== "guest"))];
+      const nameMap = new Map<string, string>();
+      if (ids.length > 0) {
+        try {
+          const client = await clerkClient();
+          for (const id of ids.slice(0, 100)) {
+            try {
+              const u = await client.users.getUser(id);
+              const name = [u.firstName, u.lastName].filter(Boolean).join(" ").trim() || u.username || "";
+              const email = u.primaryEmailAddress?.emailAddress || "";
+              nameMap.set(id, name ? `${name}${email ? ` (${email})` : ""}` : email);
+            } catch { /* skip unresolvable */ }
+          }
+        } catch { /* best-effort */ }
+      }
+      payload.dayEvents = payload.dayEvents.map((e) => ({ ...e, name: nameMap.get(e.user_id) || "" }));
+    }
 
     if (asCsv) {
       const lines: string[] = [];

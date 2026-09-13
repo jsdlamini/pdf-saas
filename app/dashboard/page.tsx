@@ -13,7 +13,7 @@ type AnalyticsData = {
   countries: Array<{ country: string; count: string }>;
   cities: Array<{ city: string; country: string; count: string }>;
   events?: Array<{ event: string; count: string }>;
-  recentEvents?: Array<{ event: string; detail: string | null; user_id: string | null; ip_hash: string | null; created_at: string }>;
+  recentEvents?: Array<{ event: string; detail: string | null; user_id: string | null; ip_hash: string | null; country?: string | null; duration_ms?: number | null; created_at: string; name?: string }>;
   homePageviews?: number;
   topPaths?: Array<{ path: string; count: string }>;
   returningVisitors?: number;
@@ -1007,7 +1007,7 @@ function UserActivity({ data }: { data: AnalyticsData | null }) {
   const events = data?.events || [];
   const recent = data?.recentEvents || [];
   const [day, setDay] = useState("");
-  const [dayEvents, setDayEvents] = useState<Array<{ event: string; detail: string | null; user_id: string | null; ip_hash: string | null; created_at: string }>>([]);
+  const [dayEvents, setDayEvents] = useState<Array<{ event: string; detail: string | null; user_id: string | null; ip_hash: string | null; country: string | null; duration_ms: number | null; created_at: string; name?: string }>>([]);
   const [daySummary, setDaySummary] = useState<Array<{ event: string; count: string }>>([]);
   const [dayLoading, setDayLoading] = useState(false);
 
@@ -1073,7 +1073,9 @@ function UserActivity({ data }: { data: AnalyticsData | null }) {
               <tr className="border-b border-slate-200 text-xs text-slate-500">
                 <th className="py-2 pr-3 font-semibold">Event</th>
                 <th className="py-2 pr-3 font-semibold">Detail</th>
-                <th className="py-2 pr-3 font-semibold">User</th>
+                <th className="py-2 pr-3 font-semibold">Who</th>
+                <th className="py-2 pr-3 font-semibold">Location</th>
+                <th className="py-2 pr-3 font-semibold">Duration</th>
                 <th className="py-2 font-semibold">Time</th>
               </tr>
             </thead>
@@ -1082,7 +1084,9 @@ function UserActivity({ data }: { data: AnalyticsData | null }) {
                 <tr key={i} className="border-b border-slate-100">
                   <td className="py-2 pr-3 font-medium text-slate-800">{e.event}</td>
                   <td className="py-2 pr-3 text-slate-500">{e.detail || "—"}</td>
-                  <td className="py-2 pr-3 text-slate-500">{e.user_id ? e.user_id.slice(0, 12) : (e.ip_hash || "anonymous")}</td>
+                  <td className="py-2 pr-3 text-slate-700">{e.name || (e.user_id && e.user_id !== "guest" ? e.user_id.slice(0, 12) : e.ip_hash ? `anon · ${e.ip_hash.slice(0, 8)}` : "Guest")}</td>
+                  <td className="py-2 pr-3 text-slate-500">{e.country || "—"}</td>
+                  <td className="py-2 pr-3 text-slate-500">{e.duration_ms != null ? `${(e.duration_ms / 1000).toFixed(1)}s` : "—"}</td>
                   <td className="py-2 text-slate-400">{new Date(e.created_at).toLocaleString()}</td>
                 </tr>
               ))}
