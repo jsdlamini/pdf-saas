@@ -19,13 +19,14 @@ export async function POST(request: NextRequest) {
 
   try {
     const body = await request.json();
-    const { event, path, referrer, tool, userId, detail } = body as {
+    const { event, path, referrer, tool, userId, detail, durationMs } = body as {
       event: string;
       path?: string;
       referrer?: string;
       tool?: string;
       userId?: string;
       detail?: string;
+      durationMs?: number | string;
     };
 
     const boundedEvent = bounded(event, 50);
@@ -35,6 +36,8 @@ export async function POST(request: NextRequest) {
     const boundedTool = bounded(tool, 100);
     const boundedUserId = bounded(userId, 200);
     const boundedDetail = bounded(detail, 2000);
+    const durationMsNum = typeof durationMs === "number" ? durationMs : typeof durationMs === "string" ? Number(durationMs) : NaN;
+    const boundedDuration = Number.isFinite(durationMsNum) && durationMsNum >= 0 ? Math.round(durationMsNum) : null;
 
     // Simple Postgres-backed analytics via the shared pool.
     await ensureMigrated();
@@ -71,8 +74,8 @@ export async function POST(request: NextRequest) {
     }
 
     await pool.query(
-      `INSERT INTO wiserfiles_analytics (event, path, referrer, tool, user_agent, ip_hash, country, city, user_id, detail)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)`,
+      `INSERT INTO wiserfiles_analytics (event, path, referrer, tool, user_agent, ip_hash, country, city, user_id, detail, duration_ms)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)`,
       [
         boundedEvent,
         boundedPath,
@@ -84,6 +87,7 @@ export async function POST(request: NextRequest) {
         city,
         boundedUserId,
         boundedDetail,
+        boundedDuration,
       ]
     );
 

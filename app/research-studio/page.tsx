@@ -1044,9 +1044,13 @@ export default function ResearchStudioPage() {
   const { user: clerkUser } = useUser();
   const hasHydratedServerProjectsRef = useRef(false);
 
-  function trackStudioEvent(event: string, detail?: string) {
+  function trackStudioEvent(event: string, detail?: string, durationMs?: number) {
     try {
-      trackEvent(event, { userId: userId || "guest", detail: detail || "" });
+      trackEvent(event, {
+        userId: userId || "guest",
+        detail: detail || "",
+        ...(durationMs != null ? { durationMs } : {}),
+      });
     } catch {}
   }
 
@@ -4977,6 +4981,7 @@ export default function ResearchStudioPage() {
   }
 
   async function runCodeInTerminal() {
+    const started = Date.now();
     if (!activeEntry) {
       setCompileNotice("No file selected to run.");
       return;
@@ -5035,7 +5040,7 @@ export default function ResearchStudioPage() {
       }).catch(() => {});
 
       setCompileNotice(`Running ${lang} code in the terminal.`);
-      trackStudioEvent("run-code", lang);
+      trackStudioEvent("run-code", lang, Date.now() - started);
     } catch (runError) {
       setCompileNotice(runError instanceof Error ? runError.message : "Code execution failed.");
     } finally {
@@ -5044,6 +5049,7 @@ export default function ResearchStudioPage() {
   }
 
   async function compileProject() {
+    const started = Date.now();
     // Guest compile quota: allow 10 free compiles per hour, then prompt sign-in.
     if (!userId) {
       const GUEST_COMPILE_LIMIT = 10;
@@ -5218,7 +5224,7 @@ export default function ResearchStudioPage() {
           ? `Compiled ${rootPath} with warnings: ${warningsHeader}`
           : `Compiled ${rootPath} using ${engine}.`
       );
-      trackStudioEvent("compile", "latex");
+      trackStudioEvent("compile", "latex", Date.now() - started);
 
       // Increment guest compile counter (10 per hour window)
       if (!userId) {
