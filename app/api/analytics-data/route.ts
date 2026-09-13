@@ -23,6 +23,7 @@ export async function GET(request: Request) {
   const days = [15, 30, 90].includes(daysParam) ? daysParam : 15;
   const asCsv = url.searchParams.get("format") === "csv";
   const day = url.searchParams.get("day") || "";
+  const country = url.searchParams.get("country") || "";
 
   const pool = db;
 
@@ -127,6 +128,12 @@ export async function GET(request: Request) {
       liveUsers: (await pool.query(
         `SELECT user_id, MAX(created_at) AS last_seen FROM wiserfiles_analytics WHERE created_at > NOW() - INTERVAL '5 minutes' AND user_id IS NOT NULL AND user_id != 'guest' GROUP BY user_id ORDER BY last_seen DESC LIMIT 50`
       )).rows,
+      countryEvents: country
+        ? (await pool.query(
+            `SELECT user_id, ip_hash, event, detail, tool, path, city, created_at FROM wiserfiles_analytics WHERE country = $1 ORDER BY created_at DESC LIMIT 300`,
+            [country]
+          )).rows
+        : [],
     };
 
     // Resolve names/emails for the selected day's events and live users so the
@@ -134,6 +141,7 @@ export async function GET(request: Request) {
     const allIds = [
       ...(day ? payload.dayEvents.map((e) => e.user_id) : []),
       ...payload.liveUsers.map((e) => e.user_id),
+      ...payload.countryEvents.map((e) => e.user_id),
     ].filter((id): id is string => Boolean(id) && id !== "guest");
     const uniqueIds = [...new Set(allIds)];
     const nameMap = new Map<string, string>();
@@ -152,6 +160,7 @@ export async function GET(request: Request) {
     }
     payload.dayEvents = payload.dayEvents.map((e) => ({ ...e, name: nameMap.get(e.user_id) || "" }));
     payload.liveUsers = payload.liveUsers.map((e) => ({ ...e, name: nameMap.get(e.user_id) || "" }));
+    payload.countryEvents = payload.countryEvents.map((e) => ({ ...e, name: nameMap.get(e.user_id) || "" }));
 
     if (asCsv) {
       const lines: string[] = [];
