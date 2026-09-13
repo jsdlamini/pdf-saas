@@ -22,6 +22,7 @@ type AnalyticsData = {
   funnel?: { home: number; tools: number; actions: number };
   retention?: Array<{ week: string; visitors: number; returned: number }>;
   liveUsers?: Array<{ user_id: string; last_seen: string; name?: string }>;
+  countryEvents?: Array<{ user_id: string | null; ip_hash: string | null; event: string; detail: string | null; tool: string | null; path: string | null; city: string | null; created_at: string; name?: string }>;
 };
 
 export default function DashboardPage() {
@@ -30,6 +31,22 @@ export default function DashboardPage() {
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(true);
   const [days, setDays] = useState(15);
+  const [countryDrill, setCountryDrill] = useState<{ country: string; events: AnalyticsData["countryEvents"] } | null>(null);
+  const [countryLoading, setCountryLoading] = useState(false);
+
+  async function viewCountry(country: string) {
+    setCountryDrill({ country, events: [] });
+    setCountryLoading(true);
+    try {
+      const r = await fetch(`/api/analytics-data?country=${encodeURIComponent(country)}`);
+      const d = await r.json();
+      setCountryDrill({ country, events: d.countryEvents || [] });
+    } catch {
+      setCountryDrill({ country, events: [] });
+    } finally {
+      setCountryLoading(false);
+    }
+  }
 
   useEffect(() => {
     if (!isSignedIn) { setLoading(false); return; }
@@ -522,16 +539,21 @@ export default function DashboardPage() {
         <div className="rounded-2xl border border-slate-200/60 bg-white p-6 shadow-sm">
           <h2 className="text-base font-semibold text-slate-900 mb-4">Visitors by Country</h2>
           {data.countries && data.countries.length > 0 ? (
-            <div className="grid gap-2 sm:grid-cols-2 md:grid-cols-3">
-              {data.countries.slice(0, 15).map((c, i) => (
-                <div key={c.country} className="flex items-center gap-2 rounded-lg border border-slate-100 px-3 py-2 text-sm">
-                  <span className="text-lg">{
-                    { 'South Africa': '🇿🇦', 'United States': '🇺🇸', 'United Kingdom': '🇬🇧', 'Germany': '🇩🇪', 'France': '🇫🇷', 'India': '🇮🇳', 'Canada': '🇨🇦', 'Australia': '🇦🇺', 'Nigeria': '🇳🇬', 'Kenya': '🇰🇪', 'Botswana': '🇧🇼', 'Zimbabwe': '🇿🇼', 'Namibia': '🇳🇦', 'Mozambique': '🇲🇿', 'Lesotho': '🇱🇸', 'Malawi': '🇲🇼', 'Zambia': '🇿🇲', 'Tanzania': '🇹🇿', 'Ghana': '🇬🇭' }[c.country] || '🌍'
-                  }</span>
-                  <span className="flex-1 font-medium text-slate-700">{c.country}</span>
-                  <span className="text-xs font-semibold text-slate-500">{c.count}</span>
-                </div>
-              ))}
+            <div className="space-y-1">
+              {data.countries.slice(0, 15).map((c) => {
+                const maxCountry = Math.max(...data.countries.map((x) => parseInt(x.count)), 1);
+                const flag = { 'South Africa': '🇿🇦', 'United States': '🇺🇸', 'United Kingdom': '🇬🇧', 'Germany': '🇩🇪', 'France': '🇫🇷', 'India': '🇮🇳', 'Canada': '🇨🇦', 'Australia': '🇦🇺', 'Nigeria': '🇳🇬', 'Kenya': '🇰🇪', 'Botswana': '🇧🇼', 'Zimbabwe': '🇿🇼', 'Namibia': '🇳🇦', 'Mozambique': '🇲🇿', 'Lesotho': '🇱🇸', 'Malawi': '🇲🇼', 'Zambia': '🇿🇲', 'Tanzania': '🇹🇿', 'Ghana': '🇬🇭' }[c.country] || '🌍';
+                return (
+                  <button key={c.country} type="button" onClick={() => void viewCountry(c.country)} className="group flex w-full items-center gap-3 rounded-lg px-2 py-1.5 text-left transition hover:bg-slate-50" title="See who did what">
+                    <span className="text-lg">{flag}</span>
+                    <span className="w-36 truncate text-sm font-medium text-slate-700 group-hover:text-cyan-700">{c.country}</span>
+                    <div className="h-2 flex-1 overflow-hidden rounded-full bg-slate-100">
+                      <div className="h-full rounded-full bg-gradient-to-r from-cyan-500 to-sky-400" style={{ width: `${(parseInt(c.count) / maxCountry) * 100}%` }} />
+                    </div>
+                    <span className="w-12 text-right text-xs font-semibold text-slate-500">{c.count}</span>
+                  </button>
+                );
+              })}
             </div>
           ) : (
             <div className="flex flex-col items-center justify-center py-10 text-slate-400">
@@ -555,6 +577,33 @@ export default function DashboardPage() {
         {/* Marketing Snippets */}
         <MarketingSection />
       </div>
+
+      {countryDrill ? (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 p-4" onClick={() => setCountryDrill(null)}>
+          <div className="w-full max-w-3xl max-h-[85vh] overflow-y-auto rounded-2xl border border-slate-200 bg-white p-6 shadow-2xl" onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-center justify-between">
+              <h3 className="text-lg font-semibold text-slate-900">Activity from {countryDrill.country}</h3>
+              <button type="button" onClick={() => setCountryDrill(null)} className="text-slate-400 hover:text-slate-700">✕</button>
+            </div>
+            {countryLoading ? (
+              <p className="text-sm text-slate-500 mt-3">Loading…</p>
+            ) : countryDrill.events && countryDrill.events.length > 0 ? (
+              <div className="mt-4 space-y-1">
+                {countryDrill.events.map((e, i) => (
+                  <div key={i} className="flex flex-wrap items-center gap-x-3 gap-y-1 rounded bg-slate-50 px-3 py-2 text-sm">
+                    <span className="font-medium text-slate-800">{e.event}</span>
+                    <span className="flex-1 min-w-[160px] text-slate-500">{e.detail || e.path || e.tool || "—"}</span>
+                    <span className="text-slate-700">{e.name || (e.ip_hash ? `anon · ${e.ip_hash.slice(0, 8)}` : "Guest")}</span>
+                    <span className="text-xs text-slate-400">{new Date(e.created_at).toLocaleString()}</span>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <p className="text-sm text-slate-400 mt-3">No activity recorded for this country.</p>
+            )}
+          </div>
+        </div>
+      ) : null}
     </main>
   );
 }
