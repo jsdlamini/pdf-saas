@@ -106,6 +106,23 @@ export async function GET(request: Request) {
             [day]
           )).rows
         : [],
+      retention: day
+        ? []
+        : (await pool.query(
+            `WITH weekly AS (
+               SELECT DATE_TRUNC('week', created_at) AS week, ip_hash
+               FROM wiserfiles_analytics
+               WHERE event = 'pageview' AND created_at > NOW() - INTERVAL '8 weeks'
+               GROUP BY week, ip_hash
+             )
+             SELECT TO_CHAR(w1.week, 'YYYY-MM-DD') AS week,
+                    COUNT(DISTINCT w1.ip_hash)::int AS visitors,
+                    COUNT(DISTINCT w2.ip_hash)::int AS returned
+             FROM weekly w1
+             LEFT JOIN weekly w2 ON w2.ip_hash = w1.ip_hash AND w2.week = w1.week + INTERVAL '1 week'
+             GROUP BY w1.week
+             ORDER BY w1.week ASC`
+          )).rows,
     };
 
     if (asCsv) {

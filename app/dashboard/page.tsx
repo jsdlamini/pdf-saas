@@ -20,6 +20,7 @@ type AnalyticsData = {
   weekOverWeek?: { current: number; previous: number };
   hourly?: Array<{ hour: number; count: string }>;
   funnel?: { home: number; tools: number; actions: number };
+  retention?: Array<{ week: string; visitors: number; returned: number }>;
 };
 
 export default function DashboardPage() {
@@ -354,6 +355,42 @@ export default function DashboardPage() {
                 </div>
               ));
             })()}
+          </div>
+        </div>
+
+        {/* Weekly retention */}
+        <div className="rounded-2xl border border-slate-200/60 bg-white p-6 shadow-sm">
+          <h2 className="text-base font-semibold text-slate-900">Weekly Retention</h2>
+          <p className="text-xs text-slate-500 mt-0.5">Visitors who returned the following week</p>
+          <div className="mt-4 overflow-x-auto">
+            <table className="w-full text-left text-sm">
+              <thead>
+                <tr className="border-b border-slate-200 text-xs text-slate-500">
+                  <th className="py-2 pr-3 font-semibold">Week of</th>
+                  <th className="py-2 pr-3 font-semibold">Visitors</th>
+                  <th className="py-2 pr-3 font-semibold">Returned next week</th>
+                  <th className="py-2 font-semibold">Retention</th>
+                </tr>
+              </thead>
+              <tbody>
+                {(data.retention ?? []).map((r) => {
+                  const pct = r.visitors > 0 ? Math.round((r.returned / r.visitors) * 100) : 0;
+                  return (
+                    <tr key={r.week} className="border-b border-slate-100">
+                      <td className="py-2 pr-3 text-slate-700">{r.week}</td>
+                      <td className="py-2 pr-3 text-slate-700">{r.visitors}</td>
+                      <td className="py-2 pr-3 text-slate-700">{r.returned}</td>
+                      <td className="py-2">
+                        <span className="inline-flex items-center gap-1.5">
+                          <div className="h-1.5 w-20 rounded-full bg-slate-100"><div className="h-full rounded-full bg-emerald-500" style={{ width: `${pct}%` }} /></div>
+                          <span className="text-xs font-semibold text-slate-600">{pct}%</span>
+                        </span>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
           </div>
         </div>
 
