@@ -18,6 +18,7 @@ type AnalyticsData = {
   topPaths?: Array<{ path: string; count: string }>;
   returningVisitors?: number;
   weekOverWeek?: { current: number; previous: number };
+  hourly?: Array<{ hour: number; count: string }>;
 };
 
 export default function DashboardPage() {
@@ -298,6 +299,33 @@ export default function DashboardPage() {
                 : <p className="text-sm text-slate-400">No page data yet.</p>}
             </div>
           </div>
+        </div>
+
+        {/* Peak hours */}
+        <div className="rounded-2xl border border-slate-200/60 bg-white p-6 shadow-sm">
+          <div className="mb-4">
+            <h2 className="text-base font-semibold text-slate-900">Peak Hours</h2>
+            <p className="text-xs text-slate-500 mt-0.5">Pageviews by hour of day (last {days} days)</p>
+          </div>
+          {(() => {
+            const hours = data.hourly ?? [];
+            const max = Math.max(...hours.map((h) => Number(h.count) || 0), 1);
+            const byHour = new Map(hours.map((h) => [h.hour, Number(h.count) || 0]));
+            return (
+              <div className="flex items-end gap-1 h-36">
+                {Array.from({ length: 24 }, (_, hour) => {
+                  const count = byHour.get(hour) || 0;
+                  const height = Math.max(4, Math.round((count / max) * 128));
+                  return (
+                    <div key={hour} className="group relative flex flex-1 flex-col items-center justify-end">
+                      <div className="w-full rounded-t bg-gradient-to-t from-cyan-500 to-sky-400" style={{ height: `${height}px` }} />
+                      <span className="mt-1 text-[9px] text-slate-400">{hour % 6 === 0 ? `${hour}h` : ""}</span>
+                    </div>
+                  );
+                })}
+              </div>
+            );
+          })()}
         </div>
 
         {/* Traffic distribution */}
