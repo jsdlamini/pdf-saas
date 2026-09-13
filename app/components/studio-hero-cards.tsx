@@ -203,7 +203,7 @@ export default function StudioHeroCards({ onLaunch }: { onLaunch?: () => void })
 
   return (
     <div className="studio-hero-showcase" style={{ opacity: fading ? 0 : 1 }}>
-      <div className="studio-hero-showcase-copy">
+      <div key={`copy-${active}`} className="studio-hero-showcase-copy studio-hero-unfold">
         <h1 className="studio-hero-showcase-title" style={{ color: slide.accent }}>
           {slide.title}
         </h1>
@@ -227,7 +227,8 @@ export default function StudioHeroCards({ onLaunch }: { onLaunch?: () => void })
         </ul>
       </div>
       <div
-        className="studio-hero-showcase-code"
+        key={`code-${active}`}
+        className="studio-hero-showcase-code studio-hero-unfold"
         style={{ borderTop: `3px solid ${slide.accent}` }}
         role="button"
         tabIndex={0}

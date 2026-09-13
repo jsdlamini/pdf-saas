@@ -8,12 +8,16 @@ type AnalyticsData = {
   uniqueVisitors: number;
   tools: Array<{ tool: string; count: string }>;
   daily: Array<{ date: string; count: string }>;
+  dailyVisitors?: Array<{ date: string; count: string }>;
   referrers: Array<{ referrer: string; count: string }>;
   countries: Array<{ country: string; count: string }>;
   cities: Array<{ city: string; country: string; count: string }>;
   events?: Array<{ event: string; count: string }>;
   recentEvents?: Array<{ event: string; detail: string | null; user_id: string | null; ip_hash: string | null; created_at: string }>;
   homePageviews?: number;
+  topPaths?: Array<{ path: string; count: string }>;
+  returningVisitors?: number;
+  weekOverWeek?: { current: number; previous: number };
 };
 
 export default function DashboardPage() {
@@ -103,7 +107,7 @@ export default function DashboardPage() {
             </div>
             <div>
               <h1 className="font-display text-2xl font-bold text-white">WiserFiles Analytics</h1>
-              <p className="text-sm text-slate-400">Last 30 days</p>
+              <p className="text-sm text-slate-400">Last 15 days</p>
             </div>
           </div>
         </div>
@@ -178,7 +182,7 @@ export default function DashboardPage() {
           <div className="flex items-center justify-between mb-5">
             <div>
               <h2 className="text-base font-semibold text-slate-900">Daily Pageviews</h2>
-              <p className="text-xs text-slate-500 mt-0.5">Last 30 days</p>
+              <p className="text-xs text-slate-500 mt-0.5">Last 15 days</p>
             </div>
             <span className="rounded-full bg-cyan-100 px-2.5 py-0.5 text-[10px] font-bold text-cyan-800">
               {data.daily.reduce((sum, d) => sum + parseInt(d.count), 0).toLocaleString()} total
@@ -228,6 +232,48 @@ export default function DashboardPage() {
           <div className="mt-8 flex justify-between text-[10px] text-slate-400">
             <span>{(data.daily[data.daily.length - 1]?.date || "").toString().slice(0, 10)}</span>
             <span>{(data.daily[0]?.date || "").toString().slice(0, 10)}</span>
+          </div>
+        </div>
+
+        {/* More analytics */}
+        <div className="grid gap-6 lg:grid-cols-2">
+          <div className="rounded-2xl border border-slate-200/60 bg-white p-6 shadow-sm">
+            <h2 className="text-base font-semibold text-slate-900">Engagement</h2>
+            <p className="text-xs text-slate-500 mt-0.5">Repeat visits and week-over-week momentum</p>
+            <div className="mt-4 grid grid-cols-2 gap-4">
+              <div className="rounded-xl bg-slate-50 p-4">
+                <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">Returning visitors</p>
+                <p className="mt-1 text-2xl font-bold text-slate-800">{data.returningVisitors?.toLocaleString() ?? "—"}</p>
+              </div>
+              <div className="rounded-xl bg-slate-50 p-4">
+                <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">7-day pageviews</p>
+                <p className="mt-1 text-2xl font-bold text-slate-800">{data.weekOverWeek?.current?.toLocaleString() ?? "—"}</p>
+                {(() => {
+                  const prev = data.weekOverWeek?.previous ?? 0;
+                  const cur = data.weekOverWeek?.current ?? 0;
+                  const pct = prev > 0 ? Math.round(((cur - prev) / prev) * 100) : null;
+                  return pct == null ? null : (
+                    <p className={`text-xs font-semibold ${pct >= 0 ? "text-emerald-600" : "text-rose-600"}`}>
+                      {pct >= 0 ? "▲" : "▼"} {Math.abs(pct)}% vs prior 7 days
+                    </p>
+                  );
+                })()}
+              </div>
+            </div>
+          </div>
+          <div className="rounded-2xl border border-slate-200/60 bg-white p-6 shadow-sm">
+            <h2 className="text-base font-semibold text-slate-900">Top Pages</h2>
+            <p className="text-xs text-slate-500 mt-0.5">Most visited routes</p>
+            <div className="mt-4 space-y-2">
+              {(data.topPaths && data.topPaths.length > 0)
+                ? data.topPaths.map((p) => (
+                    <div key={p.path} className="flex items-center justify-between rounded-lg bg-slate-50 px-3 py-2">
+                      <span className="truncate font-mono text-xs text-slate-700">{p.path}</span>
+                      <span className="text-xs font-semibold text-slate-500">{p.count}</span>
+                    </div>
+                  ))
+                : <p className="text-sm text-slate-400">No page data yet.</p>}
+            </div>
           </div>
         </div>
 
