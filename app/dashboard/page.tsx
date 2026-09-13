@@ -31,6 +31,7 @@ export default function DashboardPage() {
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(true);
   const [days, setDays] = useState(15);
+  const [tab, setTab] = useState<"reporting" | "users" | "settings">("reporting");
   const [countryDrill, setCountryDrill] = useState<{ country: string; events: AnalyticsData["countryEvents"] } | null>(null);
   const [countryLoading, setCountryLoading] = useState(false);
 
@@ -154,6 +155,24 @@ export default function DashboardPage() {
         </div>
       </div>
 
+      {/* Tab navigation */}
+      <div className="mx-auto max-w-5xl px-6 md:px-10 pt-6">
+        <div className="flex gap-2 rounded-xl bg-slate-100 p-1">
+          {(["reporting", "users", "settings"] as const).map((t) => (
+            <button
+              key={t}
+              type="button"
+              onClick={() => setTab(t)}
+              className={`flex-1 rounded-lg px-4 py-2 text-sm font-semibold capitalize transition ${tab === t ? "bg-white text-cyan-700 shadow-sm" : "text-slate-500 hover:text-slate-800"}`}
+            >
+              {t}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {tab === "reporting" && (
+      <>
       {/* KPI cards — overlap the header */}
       <div className="mx-auto max-w-5xl px-6 md:px-10 -mt-10">
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
@@ -579,22 +598,32 @@ export default function DashboardPage() {
             </div>
           )}
         </div>
-
-        {/* User Management */}
-        <UserManagement />
-
-        {/* Studio Button Visibility */}
-        <ButtonVisibilitySettings />
-
-        {/* AI Quota Settings */}
-        <AiQuotaSettings />
+      </div>
 
         {/* User Activity */}
         <UserActivity data={data} />
+      </>
+      )}
 
-        {/* Marketing Snippets */}
-        <MarketingSection />
-      </div>
+      {tab === "users" && (
+          <>
+            {/* User Management */}
+            <UserManagement />
+          </>
+        )}
+
+      {tab === "settings" && (
+        <>
+          {/* Studio Button Visibility */}
+          <ButtonVisibilitySettings />
+
+          {/* AI Quota Settings */}
+          <AiQuotaSettings />
+
+          {/* Marketing Snippets */}
+          <MarketingSection />
+        </>
+      )}
 
       {countryDrill ? (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 p-4" onClick={() => setCountryDrill(null)}>
