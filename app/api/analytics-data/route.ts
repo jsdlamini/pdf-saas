@@ -27,6 +27,34 @@ export async function GET(request: Request) {
 
   const pool = db;
 
+  // Lightweight live-users poll (no refresh needed): returns just the people
+  // active in the last 5 minutes with resolved names.
+  if (url.searchParams.get("live") === "1") {
+    try {
+      const liveRows = (await pool.query(
+        `SELECT user_id, MAX(created_at) AS last_seen FROM wiserfiles_analytics WHERE created_at > NOW() - INTERVAL '5 minutes' AND user_id IS NOT NULL AND user_id != 'guest' GROUP BY user_id ORDER BY last_seen DESC LIMIT 50`
+      )).rows;
+      const ids = [...new Set(liveRows.map((e) => e.user_id as string).filter(Boolean))];
+      const nameMap = new Map<string, string>();
+      if (ids.length) {
+        try {
+          const client = await clerkClient();
+          for (const id of ids.slice(0, 50)) {
+            try {
+              const u = await client.users.getUser(id);
+              const name = [u.firstName, u.lastName].filter(Boolean).join(" ").trim() || u.username || "";
+              const email = u.primaryEmailAddress?.emailAddress || "";
+              nameMap.set(id, name ? `${name}${email ? ` (${email})` : ""}` : email);
+            } catch { /* skip */ }
+          }
+        } catch { /* best-effort */ }
+      }
+      return Response.json({ liveUsers: liveRows.map((e) => ({ ...e, name: nameMap.get(e.user_id as string) || "" })) });
+    } catch {
+      return Response.json({ liveUsers: [] });
+    }
+  }
+
   try {
     const [pageviews, tools, daily, dailyVisitors, referrers, totalUsers, countries, cities, events, recent, homePageviews, topPaths, returningVisitors, weekOverWeek, hourly] = await Promise.all([
       pool.query(`SELECT COUNT(*) as total FROM wiserfiles_analytics WHERE event = 'pageview'`),
