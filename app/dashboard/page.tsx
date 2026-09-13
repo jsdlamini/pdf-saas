@@ -19,6 +19,7 @@ type AnalyticsData = {
   returningVisitors?: number;
   weekOverWeek?: { current: number; previous: number };
   hourly?: Array<{ hour: number; count: string }>;
+  funnel?: { home: number; tools: number; actions: number };
 };
 
 export default function DashboardPage() {
@@ -326,6 +327,34 @@ export default function DashboardPage() {
               </div>
             );
           })()}
+        </div>
+
+        {/* Conversion funnel */}
+        <div className="rounded-2xl border border-slate-200/60 bg-white p-6 shadow-sm">
+          <h2 className="text-base font-semibold text-slate-900">Conversion Funnel</h2>
+          <p className="text-xs text-slate-500 mt-0.5">Home → tool → completed action</p>
+          <div className="mt-4 space-y-3">
+            {(() => {
+              const f = data.funnel ?? { home: 0, tools: 0, actions: 0 };
+              const steps = [
+                { label: "Visited home", value: f.home, color: "#f59e0b" },
+                { label: "Used a tool", value: f.tools, color: "#06b6d4" },
+                { label: "Completed an action", value: f.actions, color: "#10b981" },
+              ];
+              const max = Math.max(...steps.map((s) => s.value), 1);
+              return steps.map((s) => (
+                <div key={s.label}>
+                  <div className="flex items-center justify-between text-sm">
+                    <span className="font-medium text-slate-700">{s.label}</span>
+                    <span className="text-slate-500">{s.value.toLocaleString()}</span>
+                  </div>
+                  <div className="mt-1 h-3 w-full overflow-hidden rounded-full bg-slate-100">
+                    <div style={{ width: `${(s.value / max) * 100}%`, background: s.color }} className="h-full rounded-full" />
+                  </div>
+                </div>
+              ));
+            })()}
+          </div>
         </div>
 
         {/* Traffic distribution */}
