@@ -88,6 +88,11 @@ export async function GET(request: Request) {
         previous: parseInt(weekOverWeek.rows[0]?.previous || "0"),
       },
       hourly: hourly.rows,
+      funnel: {
+        home: parseInt(homePageviews.rows[0]?.total || "0"),
+        tools: tools.rows.reduce((sum, t) => sum + parseInt(t.count, 10), 0),
+        actions: events.rows.filter((e) => e.event !== "pageview").reduce((sum, e) => sum + parseInt(e.count, 10), 0),
+      },
     };
 
     if (asCsv) {
