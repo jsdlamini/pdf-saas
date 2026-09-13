@@ -1833,6 +1833,25 @@ body[data-studio-editor="true"] footer {
   white-space: pre-wrap;
   word-break: break-word;
 }
+
+/* Unfold-in transition: the slide opens outward from a centre crease instead
+   of jumping in, so language changes read like a page opening. */
+.studio-hero-unfold {
+  animation: studio-hero-unfold 650ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+@keyframes studio-hero-unfold {
+  from {
+    opacity: 0;
+    clip-path: inset(0 50% 0 50%);
+  }
+  to {
+    opacity: 1;
+    clip-path: inset(0 0 0 0);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .studio-hero-unfold { animation: none; }
+}
 .studio-hero-cursor {
   display: inline-block;
   width: 8px;
