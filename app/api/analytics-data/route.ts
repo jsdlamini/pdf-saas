@@ -25,7 +25,7 @@ export async function GET(request: Request) {
   const pool = db;
 
   try {
-    const [pageviews, tools, daily, dailyVisitors, referrers, totalUsers, countries, cities, events, recent, homePageviews, topPaths, returningVisitors, weekOverWeek] = await Promise.all([
+    const [pageviews, tools, daily, dailyVisitors, referrers, totalUsers, countries, cities, events, recent, homePageviews, topPaths, returningVisitors, weekOverWeek, hourly] = await Promise.all([
       pool.query(`SELECT COUNT(*) as total FROM wiserfiles_analytics WHERE event = 'pageview'`),
       pool.query(
         `SELECT tool, COUNT(*) as count FROM wiserfiles_analytics WHERE event = 'pageview' AND tool IS NOT NULL AND tool != 'home' GROUP BY tool ORDER BY count DESC LIMIT 15`
@@ -64,6 +64,9 @@ export async function GET(request: Request) {
       pool.query(
         `SELECT (SELECT COUNT(*) FROM wiserfiles_analytics WHERE event = 'pageview' AND created_at > NOW() - INTERVAL '7 days') as current, (SELECT COUNT(*) FROM wiserfiles_analytics WHERE event = 'pageview' AND created_at > NOW() - INTERVAL '14 days' AND created_at <= NOW() - INTERVAL '7 days') as previous`
       ),
+      pool.query(
+        `SELECT EXTRACT(HOUR FROM created_at)::int as hour, COUNT(*) as count FROM wiserfiles_analytics WHERE event = 'pageview' AND created_at > NOW() - INTERVAL '${days} days' GROUP BY hour ORDER BY hour ASC`
+      ),
     ]);
 
     const payload = {
@@ -84,6 +87,7 @@ export async function GET(request: Request) {
         current: parseInt(weekOverWeek.rows[0]?.current || "0"),
         previous: parseInt(weekOverWeek.rows[0]?.previous || "0"),
       },
+      hourly: hourly.rows,
     };
 
     if (asCsv) {
@@ -114,6 +118,10 @@ export async function GET(request: Request) {
       lines.push("Top pages");
       lines.push("Path,Pageviews");
       for (const p of payload.topPaths) lines.push(`${csvCell(p.path)},${csvCell(p.count)}`);
+      lines.push("");
+      lines.push("Hourly pageviews");
+      lines.push("Hour,Pageviews");
+      for (const h of payload.hourly) lines.push(`${csvCell(h.hour)},${csvCell(h.count)}`);
 
       const csv = "\uFEFF" + lines.join("\n") + "\n";
       return new Response(csv, {
