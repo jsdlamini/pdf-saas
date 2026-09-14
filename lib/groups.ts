@@ -26,6 +26,7 @@ export const VALID_PROGRAMMES = [
   "BSc.GISc",
   "Bsc. Act. Fin Math",
   "B.Eng(Electrical And Electronics)",
+  "BEd Secondary Science",
 ] as const;
 
 export function isValidProgramme(value: string): boolean {
