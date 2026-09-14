@@ -499,6 +499,24 @@ html[data-theme="dark"] .ai-workflow-card:hover {
 .studio-terminal-error { color: #f0883e; }
 
 /* ── Buttons ───── */
+/* Pointer cursor on every interactive control (buttons, links, selects, and
+   form inputs) so clickable elements read as clickable. */
+button:not(:disabled),
+[role="button"]:not([aria-disabled="true"]),
+a,
+select:not(:disabled),
+summary,
+input[type="checkbox"],
+input[type="radio"],
+input[type="date"],
+input[type="search"] {
+  cursor: pointer;
+}
+button:disabled,
+[aria-disabled="true"] {
+  cursor: not-allowed;
+}
+
 .studio-btn {
   display: inline-flex;
   align-items: center;

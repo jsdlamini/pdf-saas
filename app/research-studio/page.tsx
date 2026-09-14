@@ -1460,6 +1460,7 @@ export default function ResearchStudioPage() {
   const [joinError, setJoinError] = useState("");
   const [groupsOpen, setGroupsOpen] = useState(false);
   const [editGroupOpen, setEditGroupOpen] = useState<string | null>(null);
+  const [createGroupOpen, setCreateGroupOpen] = useState(false);
   const [editName, setEditName] = useState("");
   const [editSchedule, setEditSchedule] = useState("");
   const [editCapacity, setEditCapacity] = useState("50");
@@ -6267,6 +6268,81 @@ export default function ResearchStudioPage() {
     }
   }
 
+  function openCreateGroup() {
+    setEditName("");
+    setEditSchedule("");
+    setEditCapacity("50");
+    setEditSessionCount("4");
+    setEditTestCount("1");
+    setEditExamCount("1");
+    setEditError("");
+    setCreateGroupOpen(true);
+  }
+
+  async function submitCreateGroup() {
+    if (!editName.trim()) {
+      setEditError("Name is required.");
+      return;
+    }
+    setEditError("");
+    setGroupsBusy("__create__");
+    try {
+      const res = await fetch("/api/groups", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "create",
+          name: editName,
+          schedule: editSchedule,
+          capacity: Number(editCapacity) || 50,
+          sessionCount: Number(editSessionCount) || 4,
+          testCount: Number(editTestCount) || 1,
+          examCount: Number(editExamCount) || 1,
+        }),
+      });
+      if (!res.ok) {
+        const data = (await res.json().catch(() => null)) as { error?: string } | null;
+        setEditError(data?.error || "Could not create the group.");
+      } else {
+        setCreateGroupOpen(false);
+        await loadGroups();
+      }
+    } catch {
+      setEditError("Could not create the group.");
+    } finally {
+      setGroupsBusy(null);
+    }
+  }
+
+  async function handleDeleteGroup(groupId: string) {
+    const group = groups.find((g) => g.id === groupId);
+    const ok = await confirmModal(
+      `Delete ${group?.name || "group"}?`,
+      "This removes the group, its members, and its assessment marks. This cannot be undone.",
+      "Delete group",
+      true
+    );
+    if (!ok) return;
+    setGroupsBusy(groupId);
+    try {
+      const res = await fetch("/api/groups", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "delete", groupId }),
+      });
+      if (!res.ok) {
+        const data = (await res.json().catch(() => null)) as { error?: string } | null;
+        setCompileNotice(data?.error || "Could not delete the group.");
+      } else {
+        await loadGroups();
+      }
+    } catch {
+      setCompileNotice("Could not delete the group.");
+    } finally {
+      setGroupsBusy(null);
+    }
+  }
+
   async function handleLeaveGroup(groupId: string) {
     const group = groups.find((g) => g.id === groupId);
     const ok = await confirmModal(
@@ -7154,7 +7230,13 @@ export default function ResearchStudioPage() {
                 </DialogDescription>
               </DialogHeader>
               {groupsIsAdmin ? (
-                <div style={{ display: "flex", justifyContent: "flex-end" }}>
+                <div style={{ display: "flex", justifyContent: "flex-end", gap: 8 }}>
+                  <button type="button" onClick={openCreateGroup} className="studio-btn studio-btn-primary" style={{ height: 30, fontSize: 11, padding: "0 10px" }}>
+                    <svg viewBox="0 0 20 20" style={{ width: 14, height: 14 }} fill="none" stroke="currentColor" strokeWidth="2">
+                      <path d="M10 4v12M4 10h12" strokeLinecap="round" strokeLinejoin="round" />
+                    </svg>
+                    New group
+                  </button>
                   <a href="/api/groups/pdf?group=all" download className="studio-btn studio-btn-ghost" style={{ height: 30, fontSize: 11, padding: "0 10px", textDecoration: "none" }} title="Download all students across groups">
                     <svg viewBox="0 0 20 20" style={{ width: 14, height: 14 }} fill="none" stroke="currentColor" strokeWidth="1.8">
                       <path d="M10 3v9m0 0l-3-3m3 3l3-3M4 14v2h12v-2" strokeLinecap="round" strokeLinejoin="round" />
@@ -7225,6 +7307,9 @@ export default function ResearchStudioPage() {
                                 </svg>
                                 PDF
                               </a>
+                              <button type="button" onClick={() => void handleDeleteGroup(g.id)} disabled={groupsBusy === g.id} className="studio-btn studio-btn-danger" style={{ height: 30, fontSize: 11, padding: "0 10px" }} title="Delete group">
+                                {groupsBusy === g.id ? "…" : "Delete"}
+                              </button>
                             </>
                           ) : null}
                         </div>
@@ -7356,6 +7441,47 @@ export default function ResearchStudioPage() {
                   </>
                 );
               })()}
+            </DialogContent>
+          </Dialog>
+        ) : null}
+        {createGroupOpen ? (
+          <Dialog open onOpenChange={(open) => { if (!open) setCreateGroupOpen(false); }}>
+            <DialogContent className="sm:max-w-md">
+              <DialogHeader>
+                <DialogTitle>New practical group</DialogTitle>
+                <DialogDescription>Create a new group students can join.</DialogDescription>
+              </DialogHeader>
+              <div className="space-y-3">
+                <div className="space-y-1.5">
+                  <Label htmlFor="create-name">Name</Label>
+                  <Input id="create-name" value={editName} onChange={(e) => setEditName(e.target.value)} />
+                </div>
+                <div className="space-y-1.5">
+                  <Label htmlFor="create-schedule">Schedule</Label>
+                  <Input id="create-schedule" value={editSchedule} onChange={(e) => setEditSchedule(e.target.value)} />
+                </div>
+                <div className="space-y-1.5">
+                  <Label htmlFor="create-capacity">Capacity</Label>
+                  <Input id="create-capacity" type="number" min={1} max={200} value={editCapacity} onChange={(e) => setEditCapacity(e.target.value)} />
+                </div>
+                <div className="space-y-1.5">
+                  <Label htmlFor="create-practicals">Practicals</Label>
+                  <Input id="create-practicals" type="number" min={0} max={50} value={editSessionCount} onChange={(e) => setEditSessionCount(e.target.value)} />
+                </div>
+                <div className="space-y-1.5">
+                  <Label htmlFor="create-tests">Tests</Label>
+                  <Input id="create-tests" type="number" min={0} max={20} value={editTestCount} onChange={(e) => setEditTestCount(e.target.value)} />
+                </div>
+                <div className="space-y-1.5">
+                  <Label htmlFor="create-exams">Examinations</Label>
+                  <Input id="create-exams" type="number" min={0} max={20} value={editExamCount} onChange={(e) => setEditExamCount(e.target.value)} />
+                </div>
+                {editError ? <p className="text-xs font-semibold text-[var(--danger)]">{editError}</p> : null}
+              </div>
+              <DialogFooter>
+                <Button variant="outline" onClick={() => setCreateGroupOpen(false)}>Cancel</Button>
+                <Button onClick={() => void submitCreateGroup()} disabled={groupsBusy === "__create__"}>Create</Button>
+              </DialogFooter>
             </DialogContent>
           </Dialog>
         ) : null}
