@@ -1,6 +1,6 @@
 import { auth } from "@clerk/nextjs/server";
 import { getUserRole } from "@/lib/user-roles";
-import { listGroups, joinGroup, leaveGroup, updateGroup } from "@/lib/groups-store";
+import { listGroups, joinGroup, leaveGroup, updateGroup, createGroup, deleteGroup } from "@/lib/groups-store";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -53,6 +53,29 @@ export async function POST(request: Request) {
     examCount?: number;
   } | null;
   if (!body || typeof body.groupId !== "string") return jsonError("Invalid payload.", 400);
+
+  if (body.action === "create") {
+    const role = await getUserRole(userId);
+    if (role !== "admin") return jsonError("Admin access required.", 403);
+    const result = await createGroup({
+      name: typeof body.name === "string" ? body.name : "",
+      schedule: typeof body.schedule === "string" ? body.schedule : "",
+      capacity: typeof body.capacity === "number" ? body.capacity : 50,
+      sessionCount: typeof body.sessionCount === "number" ? body.sessionCount : 4,
+      testCount: typeof body.testCount === "number" ? body.testCount : 1,
+      examCount: typeof body.examCount === "number" ? body.examCount : 1,
+    });
+    if (!result.ok) return jsonError(result.error || "Could not create the group.", 400);
+    return Response.json({ ok: true, id: result.id });
+  }
+
+  if (body.action === "delete") {
+    const role = await getUserRole(userId);
+    if (role !== "admin") return jsonError("Admin access required.", 403);
+    const ok = await deleteGroup(body.groupId);
+    if (!ok) return jsonError("Group not found.", 404);
+    return Response.json({ ok: true });
+  }
 
   if (body.action === "update") {
     const role = await getUserRole(userId);

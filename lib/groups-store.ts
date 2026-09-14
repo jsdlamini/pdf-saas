@@ -130,6 +130,41 @@ export async function updateGroup(
   return (r.rowCount ?? 0) > 0;
 }
 
+export async function createGroup(fields: {
+  name: string;
+  schedule: string;
+  capacity: number;
+  sessionCount: number;
+  testCount: number;
+  examCount: number;
+}): Promise<{ ok: boolean; id?: string; error?: string }> {
+  await ensureMigrated();
+  const name = fields.name.trim();
+  if (!name) return { ok: false, error: "Name is required." };
+  const slug = name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "") || "group";
+  const id = `group-${slug}-${Date.now().toString(36).slice(-4)}`;
+  const capacity = Math.max(1, Math.min(200, Math.round(fields.capacity) || 50));
+  const sessionCount = Math.max(0, Math.min(50, Math.round(fields.sessionCount) || 0));
+  const testCount = Math.max(0, Math.min(20, Math.round(fields.testCount) || 0));
+  const examCount = Math.max(0, Math.min(20, Math.round(fields.examCount) || 0));
+  const sort = await db.query(`SELECT COALESCE(MAX(sort_order), -1)::int + 1 AS n FROM wiserfiles_groups`);
+  await db.query(
+    `INSERT INTO wiserfiles_groups (id, name, schedule, capacity, session_count, test_count, exam_count, sort_order)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
+    [id, name, fields.schedule.trim(), capacity, sessionCount, testCount, examCount, sort.rows[0]?.n ?? 0]
+  );
+  return { ok: true, id };
+}
+
+export async function deleteGroup(groupId: string): Promise<boolean> {
+  await ensureMigrated();
+  // Members have no FK, so remove them explicitly; sessions cascade to marks.
+  await db.query(`DELETE FROM wiserfiles_group_members WHERE group_id = $1`, [groupId]);
+  await db.query(`DELETE FROM wiserfiles_group_sessions WHERE group_id = $1`, [groupId]);
+  const r = await db.query(`DELETE FROM wiserfiles_groups WHERE id = $1`, [groupId]);
+  return (r.rowCount ?? 0) > 0;
+}
+
 async function countMembers(groupId: string): Promise<number> {
   const r = await db.query(
     `SELECT COUNT(*)::int AS n FROM wiserfiles_group_members WHERE group_id = $1`,
