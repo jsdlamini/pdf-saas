@@ -96,6 +96,7 @@ services:
       - sandboxnet
     mem_limit: 2g
     cpus: 1
+    pids_limit: 1024
 
 networks:
   # Shared external network (created outside this project). nginx-proxy lives
