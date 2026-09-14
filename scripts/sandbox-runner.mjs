@@ -10,6 +10,7 @@
 
 import { execFile, spawn } from "node:child_process";
 import { randomBytes } from "node:crypto";
+import { readFileSync } from "node:fs";
 import { chmod, mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { createServer } from "node:http";
 import { tmpdir } from "node:os";
@@ -65,6 +66,25 @@ function cleanupTermSession(id) {
   if (s.cleanupTimer) clearTimeout(s.cleanupTimer);
   termSessions.delete(id);
   if (s.tempDir) rm(s.tempDir, { recursive: true, force: true }).catch(() => {});
+}
+
+// Kill a process and its whole descendant tree. `script` puts its shell child
+// in a new session (setsid), so killing only script's process group leaks the
+// `sh`/`bash` children and eventually exhausts the container's process slots
+// ("Cannot fork"). Walk /proc/<pid>/task/<pid>/children and kill each subtree
+// bottom-up, then the group and the process itself.
+function killTree(pid) {
+  try {
+    const children = readFileSync(`/proc/${pid}/task/${pid}/children`, "utf8")
+      .trim()
+      .split(/\s+/)
+      .filter(Boolean);
+    for (const childPid of children) killTree(parseInt(childPid, 10));
+  } catch {
+    // /proc may not expose children for exited processes; ignore.
+  }
+  try { process.kill(-pid, "SIGKILL"); } catch { /* not a group leader */ }
+  try { process.kill(pid, "SIGKILL"); } catch { /* already gone */ }
 }
 
 const ALLOWED = new Set([
@@ -328,7 +348,7 @@ const server = createServer(async (req, res) => {
     session.killTimer = setTimeout(() => {
       if (session.running) {
         session.stderr += "\n[Terminal session timed out]\n";
-        try { process.kill(-child.pid, "SIGKILL"); } catch { child.kill("SIGKILL"); }
+        killTree(child.pid);
       }
     }, TERM_TIMEOUT_MS);
 
@@ -387,7 +407,7 @@ const server = createServer(async (req, res) => {
     const s = termSessions.get(id);
     if (s) {
       if (s.running) {
-        try { process.kill(-s.child.pid, "SIGKILL"); } catch { s.child.kill("SIGKILL"); }
+        killTree(s.child.pid);
       }
       cleanupTermSession(id);
     }
