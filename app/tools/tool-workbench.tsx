@@ -783,6 +783,16 @@ function EditToolGlyph({ mode }: { mode: EditToolMode }) {
   }
 }
 
+function hexToRgb01(hex: string): { r: number; g: number; b: number } {
+  const m = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex.trim());
+  if (!m) return { r: 0.06, g: 0.06, b: 0.35 };
+  return {
+    r: parseInt(m[1], 16) / 255,
+    g: parseInt(m[2], 16) / 255,
+    b: parseInt(m[3], 16) / 255,
+  };
+}
+
 function trimSignatureCanvas(canvas: HTMLCanvasElement): string {
   const context = canvas.getContext("2d");
   if (!context) return canvas.toDataURL("image/png");
@@ -935,8 +945,9 @@ export default function ToolWorkbench({ tool }: WorkbenchProps) {
   });
   const [compressPreset, setCompressPreset] = useState<"screen" | "ebook" | "print" | "custom">("screen");
   const [signatureMode, setSignatureMode] = useState<"text" | "draw">("text");
+  const [signatureColor, setSignatureColor] = useState("#0f172a");
   const [signatureDrawn, setSignatureDrawn] = useState(false);
-  const [signatures, setSignatures] = useState<Array<{ id: string; kind: "text" | "draw"; text?: string; dataUrl?: string; xRatio: number; yRatio: number; pageNumber: number | null; rotation?: number; widthRatio?: number; heightRatio?: number }>>([]);
+  const [signatures, setSignatures] = useState<Array<{ id: string; kind: "text" | "draw"; text?: string; dataUrl?: string; xRatio: number; yRatio: number; pageNumber: number | null; rotation?: number; widthRatio?: number; heightRatio?: number; color?: string }>>([]);
   const [activeSignatureId, setActiveSignatureId] = useState("");
   const [savedSignatures, setSavedSignatures] = useState<Array<{ id: string; kind: "text" | "draw"; label: string; text?: string; dataUrl?: string }>>(() => {
     if (typeof window === "undefined") return [];
@@ -3928,7 +3939,7 @@ export default function ToolWorkbench({ tool }: WorkbenchProps) {
     context.lineCap = "round";
     context.lineJoin = "round";
     context.lineWidth = 2.4;
-    context.strokeStyle = "#0f172a";
+    context.strokeStyle = signatureColor;
   }
 
   function redrawSignatureCanvas() {
@@ -3955,14 +3966,14 @@ export default function ToolWorkbench({ tool }: WorkbenchProps) {
     context.lineCap = "round";
     context.lineJoin = "round";
     context.lineWidth = 2.4;
-    context.strokeStyle = "#0f172a";
+    context.strokeStyle = signatureColor;
 
     for (const stroke of signatureStrokesRef.current) {
       if (!stroke.length) continue;
       if (stroke.length === 1) {
         context.beginPath();
         context.arc(stroke[0].x, stroke[0].y, 1.2, 0, Math.PI * 2);
-        context.fillStyle = "#0f172a";
+        context.fillStyle = signatureColor;
         context.fill();
         continue;
       }
@@ -4009,14 +4020,14 @@ export default function ToolWorkbench({ tool }: WorkbenchProps) {
     context.lineCap = "round";
     context.lineJoin = "round";
     context.lineWidth = 2.4;
-    context.strokeStyle = "#0f172a";
+    context.strokeStyle = signatureColor;
 
     for (const stroke of temporaryStrokes) {
       if (!stroke.length) continue;
       if (stroke.length === 1) {
         context.beginPath();
         context.arc(stroke[0].x, stroke[0].y, 1.2, 0, Math.PI * 2);
-        context.fillStyle = "#0f172a";
+        context.fillStyle = signatureColor;
         context.fill();
       } else {
         context.beginPath();
@@ -4100,7 +4111,7 @@ export default function ToolWorkbench({ tool }: WorkbenchProps) {
         ctx.lineCap = "round";
         ctx.lineJoin = "round";
         ctx.lineWidth = 2.4;
-        ctx.strokeStyle = "#0f172a";
+        ctx.strokeStyle = signatureColor;
         signatureImageRef.current = img;
         setSignatureDrawn(true);
       };
@@ -4124,6 +4135,7 @@ export default function ToolWorkbench({ tool }: WorkbenchProps) {
         id: `docsig-${Date.now()}`,
         kind: "text" as const,
         text,
+        color: signatureColor,
         xRatio: 0.82 - (count % 3) * 0.06,
         yRatio: 0.12 + Math.floor(count / 3) * 0.08,
         pageNumber: targetPage,
@@ -5882,12 +5894,13 @@ export default function ToolWorkbench({ tool }: WorkbenchProps) {
                     translate(-anchorX, -anchorY)
                   );
                 }
+                const sigRgb = hexToRgb01(sig.color || signatureColor);
                 page.drawText(sig.text, {
                   x: clamp(anchorX - textWidth / 2, 12, width - textWidth - 12),
                   y: clamp(anchorY - textSize / 2, 12, height - textSize - 12),
                   size: textSize,
                   font,
-                  color: rgb(0.06, 0.06, 0.35),
+                  color: rgb(sigRgb.r, sigRgb.g, sigRgb.b),
                 });
                 if (shouldRotate) page.pushOperators(popGraphicsState());
               }
@@ -7511,6 +7524,18 @@ export default function ToolWorkbench({ tool }: WorkbenchProps) {
                       Draw
                     </button>
                   </div>
+                </div>
+
+                <div className="flex items-center gap-2">
+                  <label className="text-xs font-medium text-slate-600" htmlFor="signature-color">Ink color</label>
+                  <input
+                    id="signature-color"
+                    type="color"
+                    value={signatureColor}
+                    onChange={(e) => { setSignatureColor(e.target.value); redrawSignatureCanvas(); }}
+                    className="h-8 w-12 cursor-pointer rounded border border-slate-300 bg-white p-0.5"
+                  />
+                  <span className="text-xs font-mono text-slate-500">{signatureColor}</span>
                 </div>
 
               {signatureMode === "draw" ? (
