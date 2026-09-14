@@ -684,6 +684,12 @@ function UserManagement() {
   const [metrics, setMetrics] = useState<UserMetrics | null>(null);
   const [metricsLoading, setMetricsLoading] = useState(false);
   const [metricsError, setMetricsError] = useState("");
+  const [search, setSearch] = useState("");
+  const [roleFilter, setRoleFilter] = useState("");
+  const [sortField, setSortField] = useState<"email" | "role" | "created_at">("email");
+  const [sortDir, setSortDir] = useState<"asc" | "desc">("asc");
+  const [page, setPage] = useState(1);
+  const PER_PAGE = 15;
 
   useEffect(() => {
     fetch("/api/admin-users")
@@ -729,18 +735,64 @@ function UserManagement() {
     setMetricsError("");
   }
 
+  function toggleSort(field: "email" | "role" | "created_at") {
+    if (sortField === field) {
+      setSortDir((d) => (d === "asc" ? "desc" : "asc"));
+    } else {
+      setSortField(field);
+      setSortDir("asc");
+    }
+    setPage(1);
+  }
+
+  const filtered = users
+    .filter((u) => {
+      const q = search.trim().toLowerCase();
+      const matchQ = !q || u.email.toLowerCase().includes(q);
+      const matchRole = !roleFilter || u.role === roleFilter;
+      return matchQ && matchRole;
+    })
+    .sort((a, b) => {
+      const av = String(a[sortField] ?? "");
+      const bv = String(b[sortField] ?? "");
+      const cmp = av.localeCompare(bv);
+      return sortDir === "asc" ? cmp : -cmp;
+    });
+  const totalPages = Math.max(1, Math.ceil(filtered.length / PER_PAGE));
+  const paged = filtered.slice((page - 1) * PER_PAGE, page * PER_PAGE);
+
   if (!loaded) return null;
 
   return (
     <div className="rounded-2xl border border-slate-200/60 bg-white p-6 shadow-sm">
-      <div className="flex items-center justify-between mb-1">
+      <div className="flex items-center justify-between mb-1 flex-wrap gap-3">
         <div>
           <h2 className="text-base font-semibold text-slate-900">User Management</h2>
-          <p className="text-xs text-slate-500 mt-0.5">Click a user to see their usage metrics. Promote or demote admins.</p>
+          <p className="text-xs text-slate-500 mt-0.5">Search, filter, and manage users.</p>
         </div>
         <span className="rounded-full bg-purple-100 px-2.5 py-0.5 text-[10px] font-bold text-purple-800">
-          {users.length} user{users.length !== 1 ? "s" : ""}
+          {filtered.length} user{filtered.length !== 1 ? "s" : ""}
         </span>
+      </div>
+      <div className="flex items-center gap-2 mt-3 mb-4 flex-wrap">
+        <input
+          type="search"
+          value={search}
+          onChange={(e) => { setSearch(e.target.value); setPage(1); }}
+          placeholder="Search email…"
+          className="h-9 w-full max-w-xs rounded-lg border border-slate-200 px-3 text-sm text-slate-700"
+        />
+        <select
+          value={roleFilter}
+          onChange={(e) => { setRoleFilter(e.target.value); setPage(1); }}
+          className="h-9 rounded-lg border border-slate-200 px-2 text-sm text-slate-700"
+          aria-label="Filter by role"
+        >
+          <option value="">All roles</option>
+          <option value="user">user</option>
+          <option value="assistant">assistant</option>
+          <option value="admin">admin</option>
+        </select>
       </div>
       {!users.length ? (
         <div className="flex flex-col items-center justify-center py-10 text-slate-400">
@@ -752,18 +804,25 @@ function UserManagement() {
           <p className="text-xs mt-1">Users appear here after signing in and accessing the app.</p>
         </div>
       ) : (
+        <>
         <div className="mt-4 overflow-x-auto">
           <table className="w-full text-sm">
             <thead>
               <tr className="border-b border-slate-200 text-left text-xs uppercase tracking-[0.1em] text-slate-500">
-                <th className="py-2 pr-4 font-semibold">Email</th>
-                <th className="py-2 pr-4 font-semibold">Role</th>
-                <th className="py-2 pr-4 font-semibold">Joined</th>
+                <th className="py-2 pr-4 font-semibold">
+                  <button type="button" onClick={() => toggleSort("email")} className="uppercase tracking-[0.1em] hover:text-slate-800">Email {sortField === "email" ? (sortDir === "asc" ? "↑" : "↓") : ""}</button>
+                </th>
+                <th className="py-2 pr-4 font-semibold">
+                  <button type="button" onClick={() => toggleSort("role")} className="uppercase tracking-[0.1em] hover:text-slate-800">Role {sortField === "role" ? (sortDir === "asc" ? "↑" : "↓") : ""}</button>
+                </th>
+                <th className="py-2 pr-4 font-semibold">
+                  <button type="button" onClick={() => toggleSort("created_at")} className="uppercase tracking-[0.1em] hover:text-slate-800">Joined {sortField === "created_at" ? (sortDir === "asc" ? "↑" : "↓") : ""}</button>
+                </th>
                 <th className="py-2 font-semibold">Actions</th>
               </tr>
             </thead>
             <tbody>
-              {users.map((u) => (
+              {paged.map((u) => (
                 <tr key={u.user_id} className="border-b border-slate-100 hover:bg-slate-50 transition-colors">
                   <td className="py-2.5 pr-4 text-slate-700">
                     <button
@@ -815,6 +874,18 @@ function UserManagement() {
             </tbody>
           </table>
         </div>
+        {totalPages > 1 ? (
+          <div className="mt-4 flex items-center justify-between">
+            <span className="text-xs text-slate-500">
+              Page {page} of {totalPages} · {filtered.length} user{filtered.length !== 1 ? "s" : ""}
+            </span>
+            <div className="flex items-center gap-2">
+              <button type="button" onClick={() => setPage((p) => Math.max(1, p - 1))} disabled={page <= 1} className="rounded-lg border border-slate-200 px-3 py-1.5 text-xs font-semibold text-slate-600 hover:bg-slate-50 disabled:opacity-40">Previous</button>
+              <button type="button" onClick={() => setPage((p) => Math.min(totalPages, p + 1))} disabled={page >= totalPages} className="rounded-lg border border-slate-200 px-3 py-1.5 text-xs font-semibold text-slate-600 hover:bg-slate-50 disabled:opacity-40">Next</button>
+            </div>
+          </div>
+        ) : null}
+        </>
       )}
 
       {selected ? (
