@@ -156,7 +156,7 @@ export default function DashboardPage() {
       </div>
 
       {/* Tab navigation */}
-      <div className="mx-auto max-w-5xl px-6 md:px-10 pt-6">
+      <div className="relative z-20 mx-auto max-w-5xl px-6 md:px-10 pt-6">
         <div className="flex gap-1 rounded-xl border border-slate-200 bg-white p-1 shadow-sm">
           {(["reporting", "users", "settings"] as const).map((t) => (
             <button
@@ -173,8 +173,8 @@ export default function DashboardPage() {
 
       {tab === "reporting" && (
       <>
-      {/* KPI cards — overlap the header */}
-      <div className="mx-auto max-w-5xl px-6 md:px-10 mt-4">
+      {/* KPI cards — below the tab bar */}
+      <div className="mx-auto max-w-5xl px-6 md:px-10 mt-8">
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
           <div className="group rounded-2xl border border-slate-200/60 bg-white  p-5 shadow-lg shadow-slate-200/50 transition hover:shadow-xl hover:-translate-y-0.5">
             <div className="flex items-center gap-3">
