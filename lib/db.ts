@@ -70,7 +70,12 @@ export const db = {
         return await pool.query(sql, params);
       } catch (error) {
         const msg = error instanceof Error ? error.message : String(error);
-        if (attempt >= 2 || !msg.includes("timeout exceeded when trying to connect")) throw error;
+        if (!msg.includes("timeout exceeded when trying to connect")) throw error;
+        // Recreate the pool so a stale connection/DNS state (e.g. a DB
+        // container IP change after a deploy) heals on the next attempt
+        // instead of retrying the same dead pool.
+        pool = createDbPool();
+        if (attempt >= 2) throw error;
         await new Promise((resolve) => setTimeout(resolve, 700 * (attempt + 1)));
       }
     }
