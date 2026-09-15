@@ -739,6 +739,7 @@ export async function POST(request: Request) {
 
   let hasMissingEngine = false;
   const engineErrors: string[] = [];
+  const missingEngineDetails: string[] = [];
   const autoInstallAttempts = new Set<string>();
   const corruptFigures: string[] = [];
   let lastLogData: { text?: string; fileName?: string } | null = null;
@@ -786,11 +787,20 @@ export async function POST(request: Request) {
       }
       const maybeCode = error as { code?: string };
       const detail = extractErrorDetail(error);
-      const missingBinary =
-        maybeCode.code === "ENOENT" || detail.toLowerCase().includes("command not found");
+      // Only a genuine spawn failure (ENOENT) means the binary itself is absent.
+      // Matching "command not found" in stderr was a false positive: latexmk
+      // reports real LaTeX errors that way for missing sub-commands, and we were
+      // misclassifying them as a missing engine, hiding the true error.
+      const missingBinary = maybeCode.code === "ENOENT";
 
       if (missingBinary) {
         hasMissingEngine = true;
+        missingEngineDetails.push(`${engine.name}: ${detail || "spawn failed"}`);
+        console.error(
+          "[latex-compile] spawn ENOENT",
+          engine.binary,
+          JSON.stringify({ code: maybeCode.code, message: error instanceof Error ? error.message : String(error) })
+        );
         continue;
       }
 
@@ -848,8 +858,11 @@ export async function POST(request: Request) {
   }
 
   if (hasMissingEngine && !engineErrors.length) {
+    const engineDetail = missingEngineDetails.length
+      ? `\n\nEngine diagnostics:\n${missingEngineDetails.join("\n")}`
+      : "";
     return jsonError(
-      "No LaTeX engine available. Install texliveonfly, tectonic, or latexmk on the server host.",
+      `No LaTeX engine available. Install texliveonfly, tectonic, or latexmk on the server host.${engineDetail}`,
       503,
       lastLogData?.text,
       lastLogData?.fileName
