@@ -719,6 +719,7 @@ export async function POST(request: Request) {
     return jsonError("Compile limit reached. Sign in for unlimited compiling.", 429);
   }
 
+  try {
   let payload: CompileRequestPayload;
 
   try {
@@ -893,4 +894,14 @@ export async function POST(request: Request) {
     lastLogData?.text,
     lastLogData?.fileName
   );
+  } catch (unhandled) {
+    console.error(
+      "[latex-compile] unhandled error:",
+      unhandled instanceof Error ? unhandled.stack || unhandled.message : String(unhandled)
+    );
+    return jsonError(
+      `Compile failed unexpectedly: ${unhandled instanceof Error ? unhandled.message : String(unhandled)}`,
+      500
+    );
+  }
 }
