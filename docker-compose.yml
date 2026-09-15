@@ -86,6 +86,9 @@ services:
     image: ${WEB_IMAGE:-pdf-saas-web:local}
     container_name: pdf-saas-sandbox
     restart: unless-stopped
+    # tini as PID 1 reaps orphaned/zombie children (orphaned sh/bash/python3 from
+    # killed terminal sessions) so they cannot exhaust the pids_limit.
+    init: true
     command: ["node", "scripts/sandbox-runner.mjs"]
     user: "app"
     depends_on:
