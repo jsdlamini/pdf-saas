@@ -51,7 +51,7 @@ function execWithStdin(command, args, { stdin = "", timeout = CODE_TIMEOUT_MS, m
 const PORT = Number(process.env.SANDBOX_PORT || 3100);
 const TIMEOUT_MS = 30_000;
 const CODE_TIMEOUT_MS = 15_000;
-const TERM_TIMEOUT_MS = 10 * 60_000;
+const TERM_IDLE_TIMEOUT_MS = 5 * 60_000;
 const MAX_OUTPUT = 64 * 1024;
 
 // Interactive terminal sessions: a live process with an open stdin, polled for
@@ -62,10 +62,26 @@ const termSessions = new Map();
 function cleanupTermSession(id) {
   const s = termSessions.get(id);
   if (!s) return;
-  if (s.killTimer) clearTimeout(s.killTimer);
+  if (s.idleTimer) clearTimeout(s.idleTimer);
   if (s.cleanupTimer) clearTimeout(s.cleanupTimer);
   termSessions.delete(id);
   if (s.tempDir) rm(s.tempDir, { recursive: true, force: true }).catch(() => {});
+}
+
+// (Re)arm the idle watchdog. Every real activity (stdin, file sync) resets it;
+// if nothing arrives for TERM_IDLE_TIMEOUT_MS the session and its whole
+// descendant tree are killed. Polling does NOT reset it — the client polls
+// continuously even while the user is away.
+function armTermIdle(id) {
+  const s = termSessions.get(id);
+  if (!s || !s.running) return;
+  if (s.idleTimer) clearTimeout(s.idleTimer);
+  s.idleTimer = setTimeout(() => {
+    if (s.running) {
+      s.stderr += "\n[Terminal closed after 5 minutes of inactivity]\n";
+      killTree(s.child.pid);
+    }
+  }, TERM_IDLE_TIMEOUT_MS);
 }
 
 // Kill a process and its whole descendant tree. `script` puts its shell child
@@ -324,7 +340,7 @@ const server = createServer(async (req, res) => {
       exitCode: null,
       stdout: "",
       stderr: "",
-      killTimer: null,
+      idleTimer: null,
       cleanupTimer: null,
     };
     const cap = () => {
@@ -342,17 +358,11 @@ const server = createServer(async (req, res) => {
     child.on("close", (code) => {
       session.running = false;
       session.exitCode = code ?? 0;
-      if (session.killTimer) clearTimeout(session.killTimer);
+      if (session.idleTimer) clearTimeout(session.idleTimer);
       session.cleanupTimer = setTimeout(() => cleanupTermSession(id), 60_000);
     });
-    session.killTimer = setTimeout(() => {
-      if (session.running) {
-        session.stderr += "\n[Terminal session timed out]\n";
-        killTree(child.pid);
-      }
-    }, TERM_TIMEOUT_MS);
-
     termSessions.set(id, session);
+    armTermIdle(id);
     return json(res, 200, { sessionId: id });
   }
 
@@ -365,6 +375,7 @@ const server = createServer(async (req, res) => {
     if (!s.running) return json(res, 200, { ok: true, closed: true });
     const data = typeof body.data === "string" ? body.data : "";
     s.child.stdin.write(data);
+    armTermIdle(id);
     return json(res, 200, { ok: true });
   }
 
@@ -383,6 +394,7 @@ const server = createServer(async (req, res) => {
         if (safe) await mkdir(join(s.tempDir, safe), { recursive: true });
       }
     }
+    armTermIdle(id);
     return json(res, 200, { ok: true });
   }
 
