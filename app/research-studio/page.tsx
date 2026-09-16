@@ -1377,9 +1377,12 @@ export default function ResearchStudioPage() {
 
   // Re-fit the terminal to the panel whenever it is resized by dragging.
   useEffect(() => {
-    if (xtermRef.current) {
-      try { xtermRef.current.fit(); } catch { /* ignore */ }
-    }
+    const raf = requestAnimationFrame(() => {
+      if (xtermRef.current) {
+        try { xtermRef.current.onResize(); } catch { /* ignore */ }
+      }
+    });
+    return () => cancelAnimationFrame(raf);
   }, [termHeight]);
 
   // Initialise the xterm.js terminal (and start the shell session) when the
