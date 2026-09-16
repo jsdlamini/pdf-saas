@@ -1349,6 +1349,38 @@ export default function ResearchStudioPage() {
   const termSessionPromiseRef = useRef<Promise<string | null> | null>(null);
   const termPollTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const termSeenRef = useRef(0);
+  const [termHeight, setTermHeight] = useState(320);
+
+  // Drag-to-resize for the terminal panel. Dragging the handle up grows it.
+  function startTermDrag(e: { clientY: number; preventDefault: () => void }) {
+    e.preventDefault();
+    const startY = e.clientY;
+    const startHeight = termHeight;
+    document.body.style.userSelect = "none";
+    document.body.style.cursor = "ns-resize";
+    const onMove = (ev: PointerEvent) => {
+      const next = Math.max(
+        90,
+        Math.min(Math.round(window.innerHeight * 0.85), startHeight + (startY - ev.clientY))
+      );
+      setTermHeight(next);
+    };
+    const onUp = () => {
+      window.removeEventListener("pointermove", onMove);
+      window.removeEventListener("pointerup", onUp);
+      document.body.style.userSelect = "";
+      document.body.style.cursor = "";
+    };
+    window.addEventListener("pointermove", onMove);
+    window.addEventListener("pointerup", onUp);
+  }
+
+  // Re-fit the terminal to the panel whenever it is resized by dragging.
+  useEffect(() => {
+    if (xtermRef.current) {
+      try { xtermRef.current.fit(); } catch { /* ignore */ }
+    }
+  }, [termHeight]);
 
   // Initialise the xterm.js terminal (and start the shell session) when the
   // panel opens. xterm renders the prompt, echoes input, and keeps the cursor
@@ -9084,10 +9116,22 @@ export default function ResearchStudioPage() {
             borderTop: "1px solid #333",
             background: "#000",
             color: "#f0f0f0",
-            height: "42vh", display: "flex", flexDirection: "column",
+            height: termHeight, display: "flex", flexDirection: "column",
             overflow: "hidden",
           }}
         >
+          <div
+            onPointerDown={startTermDrag}
+            title="Drag to resize terminal"
+            aria-label="Drag to resize terminal"
+            style={{
+              height: 7, cursor: "ns-resize", flexShrink: 0,
+              display: "flex", alignItems: "center", justifyContent: "center",
+              borderBottom: "1px solid #222", userSelect: "none", touchAction: "none",
+            }}
+          >
+            <div style={{ width: 44, height: 4, borderRadius: 2, background: "#555" }} />
+          </div>
           <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "5px 10px", borderBottom: "1px solid #222", color: "#999", fontSize: 11 }}>
             <span style={{ fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.06em", color: "#ccc" }}>Terminal</span>
             {termRunning ? <span style={{ color: "#4ade80" }}>● running</span> : null}
