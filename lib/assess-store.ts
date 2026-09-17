@@ -131,3 +131,51 @@ export async function saveAssessment(
     }
   }
 }
+
+export type StudentScoreRow = {
+  id: number;
+  title: string;
+  maxMarks: number;
+  score: number | null;
+};
+
+/** A student's own practical + test scores (never the exam). */
+export async function getStudentScores(
+  groupId: string,
+  userId: string
+): Promise<{ practicals: StudentScoreRow[]; tests: StudentScoreRow[] }> {
+  await ensureItems(groupId);
+
+  const items = await db.query(
+    `SELECT id, kind, title, max_marks
+     FROM wiserfiles_group_sessions
+     WHERE group_id = $1 AND kind IN ('practical', 'test')
+     ORDER BY kind ASC, sort_order ASC, id ASC`,
+    [groupId]
+  );
+  const marks = await db.query(
+    `SELECT m.session_id, m.score
+     FROM wiserfiles_assessment_marks m
+     JOIN wiserfiles_group_sessions s ON s.id = m.session_id
+     WHERE s.group_id = $1 AND m.student_id = $2`,
+    [groupId, userId]
+  );
+  const markMap = new Map<number, number | null>(
+    marks.rows.map((x) => [x.session_id as number, x.score == null ? null : Number(x.score)])
+  );
+  const toRow = (x: {
+    id: number;
+    title: string;
+    max_marks: number;
+  }): StudentScoreRow => ({
+    id: x.id,
+    title: x.title as string,
+    maxMarks: x.max_marks as number,
+    score: markMap.get(x.id) ?? null,
+  });
+
+  return {
+    practicals: items.rows.filter((x) => x.kind === "practical").map((x) => toRow(x as { id: number; title: string; max_marks: number })),
+    tests: items.rows.filter((x) => x.kind === "test").map((x) => toRow(x as { id: number; title: string; max_marks: number })),
+  };
+}
