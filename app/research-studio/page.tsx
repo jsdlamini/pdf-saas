@@ -1482,6 +1482,12 @@ export default function ResearchStudioPage() {
   const [assessBusy, setAssessBusy] = useState(false);
   const [assessNotice, setAssessNotice] = useState("");
   const [assessSearch, setAssessSearch] = useState("");
+  const [scoresGroupOpen, setScoresGroupOpen] = useState<string | null>(null);
+  const [scoresData, setScoresData] = useState<{
+    practicals: { id: number; title: string; maxMarks: number; score: number | null }[];
+    tests: { id: number; title: string; maxMarks: number; score: number | null }[];
+  } | null>(null);
+  const [scoresNotice, setScoresNotice] = useState("");
   const assessSaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [buttonVisibility, setButtonVisibility] = useState<Record<string, boolean> | null>(null);
   const [groupsBusy, setGroupsBusy] = useState<string | null>(null);
@@ -6421,6 +6427,22 @@ export default function ResearchStudioPage() {
     }
   }
 
+  async function openScores(groupId: string) {
+    setScoresGroupOpen(groupId);
+    setScoresData(null);
+    setScoresNotice("");
+    try {
+      const res = await fetch(`/api/groups/scores?group=${encodeURIComponent(groupId)}`);
+      if (!res.ok) {
+        const payload = (await res.json().catch(() => null)) as { error?: string } | null;
+        throw new Error(payload?.error || "Couldn't load your scores.");
+      }
+      setScoresData(await res.json());
+    } catch (error) {
+      setScoresNotice(error instanceof Error ? error.message : "Couldn't load your scores.");
+    }
+  }
+
   async function saveSingleMark(itemId: number, studentId: string, score: number | null) {
     if (!assessGroupOpen) return;
     try {
@@ -7326,6 +7348,11 @@ export default function ResearchStudioPage() {
                               {full ? "Full" : groupsBusy === g.id ? "Joining…" : "Join group"}
                             </button>
                           )}
+                          {g.joined && (!buttonVisibility || buttonVisibility.scores) ? (
+                            <button type="button" onClick={() => void openScores(g.id)} className="studio-btn studio-btn-ghost" style={{ height: 30, fontSize: 11, padding: "0 10px" }} title="View my practical and test scores">
+                              My scores
+                            </button>
+                          ) : null}
                           {groupsIsAdmin || groupsIsAssistant ? (
                             <button type="button" onClick={() => void openAssess(g.id)} className="studio-btn studio-btn-ghost" style={{ height: 30, fontSize: 11, padding: "0 10px" }} title="Assess students">
                               Assess
@@ -7474,6 +7501,70 @@ export default function ResearchStudioPage() {
                       <Button variant="outline" onClick={() => setAssessGroupOpen(null)}>Close</Button>
                     </DialogFooter>
                   </>
+                );
+              })()}
+            </DialogContent>
+          </Dialog>
+        ) : null}
+        {scoresGroupOpen ? (
+          <Dialog open onOpenChange={(open) => { if (!open) setScoresGroupOpen(null); }}>
+            <DialogContent className="sm:max-w-xl">
+              <DialogHeader>
+                <DialogTitle>My scores — {groups.find((g) => g.id === scoresGroupOpen)?.name || "group"}</DialogTitle>
+                <DialogDescription>Your practical and test marks. Examinations are released separately.</DialogDescription>
+              </DialogHeader>
+              {!scoresData ? (
+                <p style={{ fontSize: 12, color: "var(--text-muted, #64748b)" }}>{scoresNotice || "Loading…"}</p>
+              ) : (() => {
+                const rows = [
+                  ...scoresData.practicals.map((s) => ({ ...s, kind: "Practical" as const })),
+                  ...scoresData.tests.map((s) => ({ ...s, kind: "Test" as const })),
+                ];
+                const total = rows.reduce((a, s) => a + (s.score ?? 0), 0);
+                const maxTotal = rows.reduce((a, s) => a + s.maxMarks, 0);
+                return (
+                  <div className="space-y-4">
+                    <div className="studio-assess-scroll">
+                      <table className="studio-assess-table">
+                        <thead>
+                          <tr>
+                            <th>Type</th>
+                            <th>Item</th>
+                            <th style={{ textAlign: "right" }}>Score</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {rows.map((s) => (
+                            <tr key={`${s.kind}-${s.id}`}>
+                              <td>{s.kind}</td>
+                              <td>{s.title}</td>
+                              <td style={{ textAlign: "right", fontVariantNumeric: "tabular-nums" }}>
+                                {s.score == null ? "—" : `${s.score} / ${s.maxMarks}`}
+                              </td>
+                            </tr>
+                          ))}
+                          {rows.length === 0 ? (
+                            <tr>
+                              <td colSpan={3} className="studio-assess-student">No practicals or tests for this group yet.</td>
+                            </tr>
+                          ) : null}
+                        </tbody>
+                        {rows.length > 0 ? (
+                          <tfoot>
+                            <tr>
+                              <td colSpan={2} style={{ fontWeight: 700 }}>Total</td>
+                              <td style={{ textAlign: "right", fontWeight: 700, fontVariantNumeric: "tabular-nums" }}>
+                                {total} / {maxTotal}
+                              </td>
+                            </tr>
+                          </tfoot>
+                        ) : null}
+                      </table>
+                    </div>
+                    <DialogFooter>
+                      <Button variant="outline" onClick={() => setScoresGroupOpen(null)}>Close</Button>
+                    </DialogFooter>
+                  </div>
                 );
               })()}
             </DialogContent>
