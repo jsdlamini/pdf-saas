@@ -46,6 +46,8 @@ COPY scripts/pdf2word-structured.py ./scripts/pdf2word-structured.py
 COPY scripts/pdf2excel.py ./scripts/pdf2excel.py
 COPY scripts/pdf2powerpoint.py ./scripts/pdf2powerpoint.py
 COPY scripts/redact-pdf.py ./scripts/redact-pdf.py
+COPY scripts/assess-export.py ./scripts/assess-export.py
+COPY scripts/roster-export.py ./scripts/roster-export.py
 COPY scripts/sandbox-runner.mjs ./scripts/sandbox-runner.mjs
 COPY vendor/doctest/doctest.h /doctest/doctest.h
 COPY scripts/log-binary-versions.sh ./scripts/log-binary-versions.sh

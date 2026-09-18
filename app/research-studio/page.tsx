@@ -1494,6 +1494,9 @@ export default function ResearchStudioPage() {
   const [groupsError, setGroupsError] = useState("");
   const [groupsLoading, setGroupsLoading] = useState(true);
   const [joinGroupOpen, setJoinGroupOpen] = useState<string | null>(null);
+  const [switchFromGroup, setSwitchFromGroup] = useState<string | null>(null);
+  const [switchBusy, setSwitchBusy] = useState<string | null>(null);
+  const [switchError, setSwitchError] = useState("");
   const [joinName, setJoinName] = useState("");
   const [joinSurname, setJoinSurname] = useState("");
   const [joinProgramme, setJoinProgramme] = useState("");
@@ -6384,33 +6387,33 @@ export default function ResearchStudioPage() {
     }
   }
 
-  async function handleLeaveGroup(groupId: string) {
-    const group = groups.find((g) => g.id === groupId);
-    const ok = await confirmModal(
-      `Leave ${group?.name || "group"}?`,
-      "Are you sure you want to leave this group?",
-      "Leave group",
-      true
-    );
-    if (!ok) return;
-    setGroupsBusy(groupId);
+  function openSwitchGroup(groupId: string) {
+    setSwitchFromGroup(groupId);
+    setSwitchError("");
+  }
+
+  async function handleSwitchGroup(toGroupId: string) {
+    if (!switchFromGroup) return;
+    setSwitchBusy(toGroupId);
+    setSwitchError("");
     try {
       const res = await fetch("/api/groups", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ action: "leave", groupId }),
+        body: JSON.stringify({ action: "switch", groupId: switchFromGroup, toGroupId }),
       });
+      const data = (await res.json().catch(() => null)) as { error?: string } | null;
       if (!res.ok) {
-        const data = (await res.json().catch(() => null)) as { error?: string } | null;
-        setCompileNotice(data?.error || "Could not leave the group.");
+        setSwitchError(data?.error || "Could not switch groups.");
       } else {
-        setCompileNotice("Left the group.");
+        setSwitchFromGroup(null);
+        setCompileNotice("Switched group — your marks moved with you.");
+        await loadGroups();
       }
-      await loadGroups();
     } catch {
-      setCompileNotice("Could not leave the group.");
+      setSwitchError("Could not switch groups.");
     } finally {
-      setGroupsBusy(null);
+      setSwitchBusy(null);
     }
   }
 
@@ -7294,11 +7297,14 @@ export default function ResearchStudioPage() {
                     </svg>
                     New group
                   </button>
-                  <a href="/api/groups/pdf?group=all" download className="studio-btn studio-btn-ghost" style={{ height: 30, fontSize: 11, padding: "0 10px", textDecoration: "none" }} title="Download all students across groups">
+                  <a href="/api/groups/pdf?group=all" download className="studio-btn studio-btn-ghost" style={{ height: 30, fontSize: 11, padding: "0 10px", textDecoration: "none" }} title="Download all students with marks (PDF)">
                     <svg viewBox="0 0 20 20" style={{ width: 14, height: 14 }} fill="none" stroke="currentColor" strokeWidth="1.8">
                       <path d="M10 3v9m0 0l-3-3m3 3l3-3M4 14v2h12v-2" strokeLinecap="round" strokeLinejoin="round" />
                     </svg>
-                    Export all students
+                    All students (PDF)
+                  </a>
+                  <a href="/api/groups/excel?group=all" download className="studio-btn studio-btn-ghost" style={{ height: 30, fontSize: 11, padding: "0 10px", textDecoration: "none" }} title="Download all students with marks (Excel)">
+                    All students (Excel)
                   </a>
                 </div>
               ) : null}
@@ -7340,8 +7346,8 @@ export default function ResearchStudioPage() {
                         </div>
                         <div className="studio-group-actions">
                           {g.joined ? (
-                            <button type="button" onClick={() => void handleLeaveGroup(g.id)} disabled={groupsBusy === g.id} className="studio-btn studio-btn-danger" style={{ height: 30, fontSize: 11, padding: "0 12px" }}>
-                              {groupsBusy === g.id ? "…" : "Leave"}
+                            <button type="button" onClick={() => openSwitchGroup(g.id)} className="studio-btn studio-btn-ghost" style={{ height: 30, fontSize: 11, padding: "0 12px" }} title="Switch to another group">
+                              Switch
                             </button>
                           ) : (
                             <button type="button" onClick={() => openJoinGroup(g.id)} disabled={full || groupsBusy === g.id} className="studio-btn studio-btn-primary" style={{ height: 30, fontSize: 11, padding: "0 12px" }}>
@@ -7363,11 +7369,14 @@ export default function ResearchStudioPage() {
                               <button type="button" onClick={() => openEditGroup(g)} className="studio-btn studio-btn-ghost" style={{ height: 30, fontSize: 11, padding: "0 10px" }} title="Edit group">
                                 Edit
                               </button>
-                              <a href={`/api/groups/pdf?group=${g.id}`} download className="studio-btn studio-btn-ghost" style={{ height: 30, fontSize: 11, padding: "0 10px", textDecoration: "none" }} title="Download roster PDF">
+                              <a href={`/api/groups/pdf?group=${g.id}`} download className="studio-btn studio-btn-ghost" style={{ height: 30, fontSize: 11, padding: "0 10px", textDecoration: "none" }} title="Download roster PDF (with marks)">
                                 <svg viewBox="0 0 20 20" style={{ width: 14, height: 14 }} fill="none" stroke="currentColor" strokeWidth="1.8">
                                   <path d="M10 3v9m0 0l-3-3m3 3l3-3M4 14v2h12v-2" strokeLinecap="round" strokeLinejoin="round" />
                                 </svg>
                                 PDF
+                              </a>
+                              <a href={`/api/groups/excel?group=${g.id}`} download className="studio-btn studio-btn-ghost" style={{ height: 30, fontSize: 11, padding: "0 10px", textDecoration: "none" }} title="Download roster Excel (with marks)">
+                                Excel
                               </a>
                               <button type="button" onClick={() => void handleDeleteGroup(g.id)} disabled={groupsBusy === g.id} className="studio-btn studio-btn-danger" style={{ height: 30, fontSize: 11, padding: "0 10px" }} title="Delete group">
                                 {groupsBusy === g.id ? "…" : "Delete"}
@@ -7651,6 +7660,44 @@ export default function ResearchStudioPage() {
                 <Button onClick={() => void submitJoinGroup()} disabled={groupsBusy === joinGroupOpen}>
                   {groupsBusy === joinGroupOpen ? "Joining…" : "Join group"}
                 </Button>
+              </DialogFooter>
+            </DialogContent>
+          </Dialog>
+        ) : null}
+        {switchFromGroup ? (
+          <Dialog open onOpenChange={(open) => { if (!open) setSwitchFromGroup(null); }}>
+            <DialogContent className="sm:max-w-md">
+              <DialogHeader>
+                <DialogTitle>Switch group</DialogTitle>
+                <DialogDescription>
+                  Moving from {groups.find((g) => g.id === switchFromGroup)?.name || "this group"}.
+                  Your practical and test marks move with you.
+                </DialogDescription>
+              </DialogHeader>
+              {switchError ? <p className="text-xs font-semibold text-[var(--danger)]">{switchError}</p> : null}
+              {(() => {
+                const options = groups.filter((g) => g.id !== switchFromGroup && !g.joined && g.members < g.capacity);
+                if (options.length === 0) {
+                  return <p style={{ fontSize: 12, color: "var(--text-muted, #64748b)" }}>No other groups have space available right now.</p>;
+                }
+                return (
+                  <div className="space-y-2">
+                    {options.map((g) => (
+                      <div key={g.id} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 10 }}>
+                        <div>
+                          <p style={{ fontWeight: 600, fontSize: 13 }}>{g.name}</p>
+                          <p style={{ fontSize: 11, color: "var(--text-muted, #64748b)" }}>{g.schedule} · {g.members}/{g.capacity}</p>
+                        </div>
+                        <Button variant="outline" onClick={() => void handleSwitchGroup(g.id)} disabled={switchBusy === g.id}>
+                          {switchBusy === g.id ? "Switching…" : "Switch"}
+                        </Button>
+                      </div>
+                    ))}
+                  </div>
+                );
+              })()}
+              <DialogFooter>
+                <Button variant="outline" onClick={() => setSwitchFromGroup(null)}>Cancel</Button>
               </DialogFooter>
             </DialogContent>
           </Dialog>

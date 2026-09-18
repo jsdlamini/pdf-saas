@@ -430,6 +430,20 @@ const MIGRATIONS: string[] = [
     score NUMERIC,
     PRIMARY KEY (group_id, student_id)
   )`,
+
+  // ── Practical-group switches (student moved between groups) ──
+  `CREATE TABLE IF NOT EXISTS wiserfiles_group_switch_log (
+    id SERIAL PRIMARY KEY,
+    user_id TEXT NOT NULL,
+    student_id TEXT NOT NULL DEFAULT '',
+    name TEXT NOT NULL DEFAULT '',
+    surname TEXT NOT NULL DEFAULT '',
+    from_group_id TEXT NOT NULL,
+    to_group_id TEXT NOT NULL,
+    switched_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+  )`,
+  `CREATE INDEX IF NOT EXISTS wiserfiles_group_switch_log_at_idx
+   ON wiserfiles_group_switch_log (switched_at DESC)`,
 ];
 
 let migrationPromise: Promise<void> | null = null;
