@@ -35,13 +35,13 @@ export async function GET(request: Request) {
     filename = `${group.id}-roster.xlsx`;
   }
 
-  const rows = await getRosterWithMarks(all ? null : groupId);
+  const data = await getRosterWithMarks(all ? null : groupId);
   const dir = await mkdtemp(join(tmpdir(), "roster-export-"));
   const jsonPath = join(dir, "data.json");
   const xlsxPath = join(dir, "roster.xlsx");
 
   try {
-    await writeFile(jsonPath, JSON.stringify(rows), "utf8");
+    await writeFile(jsonPath, JSON.stringify(data), "utf8");
     await execFileAsync("python3", [join(process.cwd(), "scripts", "roster-export.py"), jsonPath, xlsxPath], {
       maxBuffer: 16 * 1024 * 1024,
     });
