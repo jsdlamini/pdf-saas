@@ -323,3 +323,33 @@ export async function listAllGroupMembers(): Promise<AggregatedMember[]> {
     groupName: x.group_name as string,
   }));
 }
+
+export type MultiJoinRow = {
+  userId: string;
+  name: string;
+  surname: string;
+  studentId: string;
+  groups: string[];
+};
+
+/** Accounts holding membership in more than one practical group (a legacy\n *  multi-join state, now prevented). Used to flag duplicates for cleanup. */
+export async function listMultiJoinMembers(): Promise<MultiJoinRow[]> {
+  await ensureMigrated();
+  const r = await db.query(
+    `SELECT m.user_id, MAX(m.name) AS name, MAX(m.surname) AS surname, MAX(m.student_id) AS student_id,
+            COUNT(DISTINCT m.group_id)::int AS n,
+            string_agg(g.name, ', ' ORDER BY g.sort_order) AS groups
+     FROM wiserfiles_group_members m
+     JOIN wiserfiles_groups g ON g.id = m.group_id
+     GROUP BY m.user_id
+     HAVING COUNT(DISTINCT m.group_id) > 1
+     ORDER BY n DESC, MAX(m.surname) ASC`
+  );
+  return r.rows.map((x) => ({
+    userId: x.user_id as string,
+    name: x.name as string,
+    surname: x.surname as string,
+    studentId: x.student_id as string,
+    groups: String(x.groups || "").split(", ").filter(Boolean),
+  }));
+}
