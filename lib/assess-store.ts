@@ -132,6 +132,13 @@ export async function saveAssessment(
   }
 }
 
+export type RosterColumn = {
+  kind: "practical" | "test" | "exam";
+  order: number;
+  title: string;
+  maxMarks: number;
+};
+
 export type RosterMarkRow = {
   group: string;
   userId: string;
@@ -139,15 +146,16 @@ export type RosterMarkRow = {
   surname: string;
   programme: string;
   studentId: string;
-  practical: { score: number | null; max: number };
-  test: { score: number | null; max: number };
-  exam: { score: number | null; max: number };
+  /** Raw scores, aligned with the columns array. */
+  scores: (number | null)[];
 };
 
-/** Roster of group members with their practical/test/exam mark totals. */
-export async function getRosterWithMarks(groupId: string | null): Promise<RosterMarkRow[]> {
+/** Roster of group members with raw per-item marks (Practical 1, 2, …, Test 1, …). */
+export async function getRosterWithMarks(
+  groupId: string | null
+): Promise<{ columns: RosterColumn[]; rows: RosterMarkRow[] }> {
   await ensureMigrated();
-  const where = groupId ? "WHERE m.group_id = $1" : "";
+  const where = groupId ? "WHERE group_id = $1" : "";
   const params = groupId ? [groupId] : [];
 
   const members = await db.query(
@@ -159,35 +167,48 @@ export async function getRosterWithMarks(groupId: string | null): Promise<Roster
     params
   );
 
-  // Sum of session maxima per group + kind (independent of whether marks exist).
-  const maxima = await db.query(
-    `SELECT group_id, kind, SUM(max_marks) AS max_total
+  // Distinct assessment columns across the selected groups, in practical,
+  // test, exam order, then by position.
+  const cols = await db.query(
+    `SELECT kind, sort_order, MAX(title) AS title, MAX(max_marks) AS max_marks
      FROM wiserfiles_group_sessions
      ${groupId ? "WHERE group_id = $1" : ""}
-     GROUP BY group_id, kind`,
+     GROUP BY kind, sort_order
+     ORDER BY CASE kind WHEN 'practical' THEN 0 WHEN 'test' THEN 1 ELSE 2 END ASC, sort_order ASC`,
     params
   );
-  const maxMap = new Map<string, number>();
-  for (const x of maxima.rows) maxMap.set(`${x.group_id}:${x.kind}`, Number(x.max_total));
+  const columns: RosterColumn[] = cols.rows.map((x) => ({
+    kind: x.kind as RosterColumn["kind"],
+    order: x.sort_order as number,
+    title: x.title as string,
+    maxMarks: x.max_marks as number,
+  }));
 
-  // Sum of a student's marks per group + kind.
+  // Sessions keyed by group + kind + sort_order so each student's raw score
+  // maps to their own group's item of the same position.
+  const sessions = await db.query(
+    `SELECT group_id, kind, sort_order, id FROM wiserfiles_group_sessions`
+  );
+  const sessionByKey = new Map<string, number>();
+  for (const x of sessions.rows) {
+    sessionByKey.set(`${x.group_id}:${x.kind}:${x.sort_order}`, x.id as number);
+  }
+
   const marks = await db.query(
-    `SELECT m.student_id, s.group_id, s.kind, SUM(m.score) AS total
-     FROM wiserfiles_assessment_marks m
-     JOIN wiserfiles_group_sessions s ON s.id = m.session_id
-     ${groupId ? "WHERE s.group_id = $1" : ""}
-     GROUP BY m.student_id, s.group_id, s.kind`,
-    params
+    `SELECT student_id, session_id, score FROM wiserfiles_assessment_marks`
   );
-  const markMap = new Map<string, number>();
-  for (const x of marks.rows) markMap.set(`${x.student_id}:${x.group_id}:${x.kind}`, Number(x.total));
+  const markMap = new Map<string, number | null>();
+  for (const x of marks.rows) {
+    markMap.set(`${x.student_id}:${x.session_id}`, x.score == null ? null : Number(x.score));
+  }
 
-  return members.rows.map((m) => {
+  const rows: RosterMarkRow[] = members.rows.map((m) => {
     const uid = m.user_id as string;
     const gid = m.group_id as string;
-    const get = (kind: string) => ({
-      score: markMap.has(`${uid}:${gid}:${kind}`) ? (markMap.get(`${uid}:${gid}:${kind}`) as number) : null,
-      max: maxMap.get(`${gid}:${kind}`) ?? 0,
+    const scores = columns.map((c) => {
+      const sid = sessionByKey.get(`${gid}:${c.kind}:${c.order}`);
+      if (sid == null) return null;
+      return markMap.has(`${uid}:${sid}`) ? (markMap.get(`${uid}:${sid}`) as number | null) : null;
     });
     return {
       group: m.group_name as string,
@@ -196,11 +217,11 @@ export async function getRosterWithMarks(groupId: string | null): Promise<Roster
       surname: m.surname as string,
       programme: m.programme as string,
       studentId: m.student_id as string,
-      practical: get("practical"),
-      test: get("test"),
-      exam: get("exam"),
+      scores,
     };
   });
+
+  return { columns, rows };
 }
 
 export type StudentScoreRow = {
