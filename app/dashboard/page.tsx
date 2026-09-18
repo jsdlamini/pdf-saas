@@ -604,6 +604,8 @@ export default function DashboardPage() {
         <UserActivity data={data} />
         {/* Group switch log */}
         <GroupSwitchLog />
+        {/* Multi-join flags */}
+        <MultiJoinFlags />
       </>
       )}
 
@@ -1044,6 +1046,56 @@ function GroupSwitchLog() {
                     <td className="py-2 pr-4 text-slate-500">{r.fromName}</td>
                     <td className="py-2 pr-4 text-slate-700 font-medium">{r.toName}</td>
                     <td className="py-2 pr-4 text-slate-500">{fmt(r.switchedAt)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function MultiJoinFlags() {
+  const [rows, setRows] = useState<Array<{
+    userId: string; name: string; surname: string; studentId: string; groups: string[];
+  }> | null>(null);
+
+  useEffect(() => {
+    fetch("/api/groups/multi-joins")
+      .then((r) => { if (!r.ok) throw new Error(); return r.json(); })
+      .then((d) => setRows((d as { members?: typeof rows }).members ?? []))
+      .catch(() => setRows([]));
+  }, []);
+
+  return (
+    <div className="mx-auto max-w-5xl px-6 md:px-10 mt-6">
+      <div className="rounded-2xl border border-amber-200/70 bg-amber-50/40 p-6 shadow-sm">
+        <div className="mb-1">
+          <h2 className="text-base font-semibold text-slate-900">Multi-join flags</h2>
+          <p className="text-xs text-slate-500 mt-0.5">Accounts holding membership in more than one practical group (legacy duplicates).</p>
+        </div>
+        {!rows ? (
+          <p className="text-xs text-slate-400 mt-3">Loading…</p>
+        ) : rows.length === 0 ? (
+          <p className="text-xs text-slate-400 mt-3">No multi-join accounts.</p>
+        ) : (
+          <div className="mt-4 overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b border-amber-200 text-left text-xs uppercase tracking-[0.1em] text-slate-500">
+                  <th className="py-2 pr-4 font-semibold">Student</th>
+                  <th className="py-2 pr-4 font-semibold">Student ID</th>
+                  <th className="py-2 pr-4 font-semibold">Groups</th>
+                </tr>
+              </thead>
+              <tbody>
+                {rows.map((r) => (
+                  <tr key={r.userId} className="border-b border-amber-100">
+                    <td className="py-2 pr-4 text-slate-700">{r.name} {r.surname}</td>
+                    <td className="py-2 pr-4 text-slate-500">{r.studentId}</td>
+                    <td className="py-2 pr-4 text-slate-700 font-medium">{r.groups.join(", ")}</td>
                   </tr>
                 ))}
               </tbody>
