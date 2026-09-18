@@ -7333,6 +7333,7 @@ export default function ResearchStudioPage() {
                     const full = g.members >= g.capacity;
                     const pct = Math.min(100, Math.round((g.members / g.capacity) * 100));
                     const pctColor = full ? "#ef4444" : pct >= 70 ? "#f59e0b" : "#4ade80";
+                    const inAnyGroup = groups.some((x) => x.joined);
                     return (
                       <article key={g.id} className="studio-group-card">
                         <div>
@@ -7349,11 +7350,11 @@ export default function ResearchStudioPage() {
                             <button type="button" onClick={() => openSwitchGroup(g.id)} className="studio-btn studio-btn-ghost" style={{ height: 30, fontSize: 11, padding: "0 12px" }} title="Switch to another group">
                               Switch
                             </button>
-                          ) : (
+                          ) : !inAnyGroup ? (
                             <button type="button" onClick={() => openJoinGroup(g.id)} disabled={full || groupsBusy === g.id} className="studio-btn studio-btn-primary" style={{ height: 30, fontSize: 11, padding: "0 12px" }}>
                               {full ? "Full" : groupsBusy === g.id ? "Joining…" : "Join group"}
                             </button>
-                          )}
+                          ) : null}
                           {g.joined && (!buttonVisibility || buttonVisibility.scores) ? (
                             <button type="button" onClick={() => void openScores(g.id)} className="studio-btn studio-btn-ghost" style={{ height: 30, fontSize: 11, padding: "0 10px" }} title="View my practical and test scores">
                               My scores

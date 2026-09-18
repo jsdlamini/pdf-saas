@@ -96,6 +96,16 @@ export async function joinGroup(
     return { ok: true, members: await countMembers(groupId) };
   }
 
+  // A student may hold membership in at most one practical group; moving to
+  // another must go through the switch flow (which migrates marks + logs).
+  const other = await db.query(
+    `SELECT group_id FROM wiserfiles_group_members WHERE user_id = $1 AND group_id <> $2 LIMIT 1`,
+    [userId, groupId]
+  );
+  if (other.rows.length > 0) {
+    return { ok: false, error: "You are already in another group — switch instead." };
+  }
+
   const n = await countMembers(groupId);
   if (n >= capacity) return { ok: false, error: "This group is full." };
 
