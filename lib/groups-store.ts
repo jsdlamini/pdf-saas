@@ -108,10 +108,112 @@ export async function joinGroup(
   return { ok: true, members: await countMembers(groupId) };
 }
 
-export async function leaveGroup(userId: string, groupId: string): Promise<{ members: number }> {
+// Copy a student's marks from one group to the corresponding sessions of
+// another (matched by kind + sort_order), creating missing target sessions as
+// needed. Called on a group switch so no earned marks are lost.
+async function migrateMarksBetweenGroups(userId: string, fromGroupId: string, toGroupId: string): Promise<void> {
   await ensureMigrated();
-  await db.query(`DELETE FROM wiserfiles_group_members WHERE user_id = $1 AND group_id = $2`, [userId, groupId]);
-  return { members: await countMembers(groupId) };
+  await db.query(
+    `INSERT INTO wiserfiles_group_sessions (group_id, kind, title, max_marks, sort_order)
+     SELECT $2, f.kind, f.title, f.max_marks, f.sort_order
+     FROM wiserfiles_group_sessions f
+     WHERE f.group_id = $1
+       AND NOT EXISTS (
+         SELECT 1 FROM wiserfiles_group_sessions t
+         WHERE t.group_id = $2 AND t.kind = f.kind AND t.sort_order = f.sort_order
+       )`,
+    [fromGroupId, toGroupId]
+  );
+  await db.query(
+    `INSERT INTO wiserfiles_assessment_marks (session_id, student_id, score)
+     SELECT t.id, m.student_id, m.score
+     FROM wiserfiles_assessment_marks m
+     JOIN wiserfiles_group_sessions f ON f.id = m.session_id
+     JOIN wiserfiles_group_sessions t ON t.group_id = $3 AND t.kind = f.kind AND t.sort_order = f.sort_order
+     WHERE f.group_id = $1 AND m.student_id = $2
+     ON CONFLICT (session_id, student_id) DO UPDATE SET score = EXCLUDED.score`,
+    [fromGroupId, userId, toGroupId]
+  );
+}
+
+export async function switchGroup(
+  userId: string,
+  fromGroupId: string,
+  toGroupId: string
+): Promise<{ ok: boolean; error?: string }> {
+  await ensureGroupsSeeded();
+  if (fromGroupId === toGroupId) return { ok: false, error: "You are already in that group." };
+
+  const from = await db.query(
+    `SELECT name, surname, programme, student_id FROM wiserfiles_group_members
+     WHERE user_id = $1 AND group_id = $2`,
+    [userId, fromGroupId]
+  );
+  if (from.rows.length === 0) return { ok: false, error: "You are not a member of that group." };
+  const member = from.rows[0];
+
+  const to = await db.query(`SELECT capacity FROM wiserfiles_groups WHERE id = $1`, [toGroupId]);
+  if (to.rows.length === 0) return { ok: false, error: "Unknown target group." };
+  const toCount = await countMembers(toGroupId);
+  if (toCount >= (to.rows[0].capacity as number)) return { ok: false, error: "That group is full." };
+
+  await migrateMarksBetweenGroups(userId, fromGroupId, toGroupId);
+
+  await db.query(`DELETE FROM wiserfiles_group_members WHERE user_id = $1 AND group_id = $2`, [userId, fromGroupId]);
+  await db.query(
+    `INSERT INTO wiserfiles_group_members (user_id, group_id, name, surname, programme, student_id)
+     VALUES ($1, $2, $3, $4, $5, $6)
+     ON CONFLICT (user_id, group_id) DO UPDATE SET name = $3, surname = $4, programme = $5, student_id = $6`,
+    [userId, toGroupId, member.name as string, member.surname as string, member.programme as string, member.student_id as string]
+  );
+
+  await db.query(
+    `INSERT INTO wiserfiles_group_switch_log (user_id, student_id, name, surname, from_group_id, to_group_id)
+     VALUES ($1, $2, $3, $4, $5, $6)`,
+    [userId, member.student_id as string, member.name as string, member.surname as string, fromGroupId, toGroupId]
+  );
+
+  return { ok: true };
+}
+
+export type GroupSwitchRow = {
+  id: number;
+  userId: string;
+  studentId: string;
+  name: string;
+  surname: string;
+  fromGroupId: string;
+  toGroupId: string;
+  fromName: string;
+  toName: string;
+  switchedAt: string;
+};
+
+export async function listGroupSwitches(): Promise<GroupSwitchRow[]> {
+  await ensureMigrated();
+  const r = await db.query(
+    `SELECT s.id, s.user_id, s.student_id, s.name, s.surname,
+            s.from_group_id, s.to_group_id, s.switched_at,
+            COALESCE(g1.name, s.from_group_id) AS from_name,
+            COALESCE(g2.name, s.to_group_id) AS to_name
+     FROM wiserfiles_group_switch_log s
+     LEFT JOIN wiserfiles_groups g1 ON g1.id = s.from_group_id
+     LEFT JOIN wiserfiles_groups g2 ON g2.id = s.to_group_id
+     ORDER BY s.switched_at DESC
+     LIMIT 200`
+  );
+  return r.rows.map((x) => ({
+    id: x.id as number,
+    userId: x.user_id as string,
+    studentId: x.student_id as string,
+    name: x.name as string,
+    surname: x.surname as string,
+    fromGroupId: x.from_group_id as string,
+    toGroupId: x.to_group_id as string,
+    fromName: x.from_name as string,
+    toName: x.to_name as string,
+    switchedAt: x.switched_at as string,
+  }));
 }
 
 export async function updateGroup(

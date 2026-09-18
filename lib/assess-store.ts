@@ -132,6 +132,77 @@ export async function saveAssessment(
   }
 }
 
+export type RosterMarkRow = {
+  group: string;
+  userId: string;
+  name: string;
+  surname: string;
+  programme: string;
+  studentId: string;
+  practical: { score: number | null; max: number };
+  test: { score: number | null; max: number };
+  exam: { score: number | null; max: number };
+};
+
+/** Roster of group members with their practical/test/exam mark totals. */
+export async function getRosterWithMarks(groupId: string | null): Promise<RosterMarkRow[]> {
+  await ensureMigrated();
+  const where = groupId ? "WHERE m.group_id = $1" : "";
+  const params = groupId ? [groupId] : [];
+
+  const members = await db.query(
+    `SELECT m.user_id, m.name, m.surname, m.programme, m.student_id, m.group_id, g.name AS group_name
+     FROM wiserfiles_group_members m
+     JOIN wiserfiles_groups g ON g.id = m.group_id
+     ${where}
+     ORDER BY g.sort_order ASC, LOWER(m.surname) ASC, LOWER(m.name) ASC`,
+    params
+  );
+
+  // Sum of session maxima per group + kind (independent of whether marks exist).
+  const maxima = await db.query(
+    `SELECT group_id, kind, SUM(max_marks) AS max_total
+     FROM wiserfiles_group_sessions
+     ${groupId ? "WHERE group_id = $1" : ""}
+     GROUP BY group_id, kind`,
+    params
+  );
+  const maxMap = new Map<string, number>();
+  for (const x of maxima.rows) maxMap.set(`${x.group_id}:${x.kind}`, Number(x.max_total));
+
+  // Sum of a student's marks per group + kind.
+  const marks = await db.query(
+    `SELECT m.student_id, s.group_id, s.kind, SUM(m.score) AS total
+     FROM wiserfiles_assessment_marks m
+     JOIN wiserfiles_group_sessions s ON s.id = m.session_id
+     ${groupId ? "WHERE s.group_id = $1" : ""}
+     GROUP BY m.student_id, s.group_id, s.kind`,
+    params
+  );
+  const markMap = new Map<string, number>();
+  for (const x of marks.rows) markMap.set(`${x.student_id}:${x.group_id}:${x.kind}`, Number(x.total));
+
+  return members.rows.map((m) => {
+    const uid = m.user_id as string;
+    const gid = m.group_id as string;
+    const get = (kind: string) => ({
+      score: markMap.has(`${uid}:${gid}:${kind}`) ? (markMap.get(`${uid}:${gid}:${kind}`) as number) : null,
+      max: maxMap.get(`${gid}:${kind}`) ?? 0,
+    });
+    return {
+      group: m.group_name as string,
+      userId: uid,
+      name: m.name as string,
+      surname: m.surname as string,
+      programme: m.programme as string,
+      studentId: m.student_id as string,
+      practical: get("practical"),
+      test: get("test"),
+      exam: get("exam"),
+    };
+  });
+}
+
 export type StudentScoreRow = {
   id: number;
   title: string;

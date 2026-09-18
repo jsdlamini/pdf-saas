@@ -602,6 +602,8 @@ export default function DashboardPage() {
 
         {/* User Activity */}
         <UserActivity data={data} />
+        {/* Group switch log */}
+        <GroupSwitchLog />
       </>
       )}
 
@@ -994,6 +996,64 @@ const STUDIO_BUTTONS: Array<{ key: string; label: string }> = [
   { key: "scores", label: "View My Assessment Scores" },
 ];
 const STUDIO_ROLES = ["user", "assistant", "admin"] as const;
+
+function GroupSwitchLog() {
+  const [rows, setRows] = useState<Array<{
+    id: number; name: string; surname: string; studentId: string;
+    fromName: string; toName: string; switchedAt: string;
+  }> | null>(null);
+
+  useEffect(() => {
+    fetch("/api/groups/switches")
+      .then((r) => { if (!r.ok) throw new Error(); return r.json(); })
+      .then((d) => setRows((d as { switches?: typeof rows }).switches ?? []))
+      .catch(() => setRows([]));
+  }, []);
+
+  const fmt = (iso: string) =>
+    new Date(iso).toLocaleString("en-GB", { dateStyle: "medium", timeStyle: "short" });
+
+  return (
+    <div className="mx-auto max-w-5xl px-6 md:px-10 mt-6">
+      <div className="rounded-2xl border border-slate-200/60 bg-white p-6 shadow-sm">
+        <div className="mb-1">
+          <h2 className="text-base font-semibold text-slate-900">Group Switch Log</h2>
+          <p className="text-xs text-slate-500 mt-0.5">Students who moved between practical groups — their marks moved with them.</p>
+        </div>
+        {!rows ? (
+          <p className="text-xs text-slate-400 mt-3">Loading…</p>
+        ) : rows.length === 0 ? (
+          <p className="text-xs text-slate-400 mt-3">No group switches recorded yet.</p>
+        ) : (
+          <div className="mt-4 overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b border-slate-200 text-left text-xs uppercase tracking-[0.1em] text-slate-500">
+                  <th className="py-2 pr-4 font-semibold">Student</th>
+                  <th className="py-2 pr-4 font-semibold">Student ID</th>
+                  <th className="py-2 pr-4 font-semibold">From</th>
+                  <th className="py-2 pr-4 font-semibold">To</th>
+                  <th className="py-2 pr-4 font-semibold">When</th>
+                </tr>
+              </thead>
+              <tbody>
+                {rows.map((r) => (
+                  <tr key={r.id} className="border-b border-slate-100">
+                    <td className="py-2 pr-4 text-slate-700">{r.name} {r.surname}</td>
+                    <td className="py-2 pr-4 text-slate-500">{r.studentId}</td>
+                    <td className="py-2 pr-4 text-slate-500">{r.fromName}</td>
+                    <td className="py-2 pr-4 text-slate-700 font-medium">{r.toName}</td>
+                    <td className="py-2 pr-4 text-slate-500">{fmt(r.switchedAt)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
 
 function ButtonVisibilitySettings() {
   const [config, setConfig] = useState<ButtonConfigShape | null>(null);

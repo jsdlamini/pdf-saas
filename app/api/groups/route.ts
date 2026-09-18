@@ -1,6 +1,6 @@
 import { auth } from "@clerk/nextjs/server";
 import { getUserRole } from "@/lib/user-roles";
-import { listGroups, joinGroup, leaveGroup, updateGroup, createGroup, deleteGroup } from "@/lib/groups-store";
+import { listGroups, joinGroup, switchGroup, updateGroup, createGroup, deleteGroup } from "@/lib/groups-store";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -42,6 +42,7 @@ export async function POST(request: Request) {
   const body = (await request.json().catch(() => null)) as {
     action?: string;
     groupId?: string;
+    toGroupId?: string;
     name?: string;
     surname?: string;
     programme?: string;
@@ -103,9 +104,11 @@ export async function POST(request: Request) {
     return Response.json({ ok: true, joined: true, members: result.members });
   }
 
-  if (body.action === "leave") {
-    const result = await leaveGroup(userId, body.groupId);
-    return Response.json({ ok: true, joined: false, members: result.members });
+  if (body.action === "switch") {
+    if (typeof body.toGroupId !== "string") return jsonError("Target group required.", 400);
+    const result = await switchGroup(userId, body.groupId, body.toGroupId);
+    if (!result.ok) return jsonError(result.error || "Could not switch groups.", 409);
+    return Response.json({ ok: true, joined: true });
   }
 
   return jsonError("Unknown action.", 400);
