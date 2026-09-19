@@ -850,7 +850,12 @@ export async function POST(request: Request) {
       }
 
       const hint = getMissingStyPackageHint(detail);
-      engineErrors.push(`${engine.name}: ${detail}${hint ? `\nHint: ${hint}` : ""}`);
+      const nonAsciiHint = /ByteString|greater than 255/.test(detail)
+        ? "Your document contains a non-ASCII character (e.g. ≠, ≤, ≥, −). Replace it with the LaTeX command (e.g. \\neq, \\leq, \\geq) or compile with XeLaTeX."
+        : "";
+      engineErrors.push(
+        `${engine.name}: ${detail}${hint ? `\nHint: ${hint}` : ""}${nonAsciiHint ? `\nHint: ${nonAsciiHint}` : ""}`
+      );
     } finally {
       if (tempDir && !tempDirPersistent) {
         await rm(tempDir, { recursive: true, force: true });
