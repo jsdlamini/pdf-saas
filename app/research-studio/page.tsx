@@ -1836,7 +1836,7 @@ export default function ResearchStudioPage() {
   }, [userId, activeProjectId, clerkUser?.fullName, clerkUser?.firstName]);
 
   // Collaborative document sync (polling-based optimistic concurrency).
-  const collabRevisionRef = useRef(0);
+  const collabRevisionsRef = useRef<Record<string, number>>({});
   const applyingRemoteRef = useRef(false);
   const collabPostTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -1846,13 +1846,14 @@ export default function ResearchStudioPage() {
     collabPostTimerRef.current = setTimeout(async () => {
       collabPostTimerRef.current = null;
       try {
+        const baseRevision = collabRevisionsRef.current[selectedPath] ?? 0;
         const res = await fetch("/api/collab-sync", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ projectId: activeProjectId, filePath: selectedPath, content: activeSource, baseRevision: collabRevisionRef.current }),
+          body: JSON.stringify({ projectId: activeProjectId, filePath: selectedPath, content: activeSource, baseRevision }),
         });
         const data = (await res.json()) as { content?: string; revision?: number; conflict?: boolean };
-        if (data.revision) collabRevisionRef.current = data.revision;
+        if (data.revision) collabRevisionsRef.current[selectedPath] = data.revision;
         if (data.conflict && typeof data.content === "string") {
           applyingRemoteRef.current = true;
           updateActiveFile(data.content);
@@ -1865,7 +1866,7 @@ export default function ResearchStudioPage() {
     return () => {
       if (collabPostTimerRef.current) clearTimeout(collabPostTimerRef.current);
     };
-  }, [activeSource, userId, activeProjectId]);
+  }, [activeSource, userId, activeProjectId, selectedPath]);
 
   useEffect(() => {
     if (!activeProjectId) return;
@@ -1875,10 +1876,11 @@ export default function ResearchStudioPage() {
       try {
         const res = await fetch(`/api/collab-sync?projectId=${encodeURIComponent(activeProjectId)}&filePath=${encodeURIComponent(selectedPath)}`);
         const data = (await res.json()) as { content?: string | null; revision?: number };
-        if (data.revision && data.revision > collabRevisionRef.current && typeof data.content === "string") {
+        const localRev = collabRevisionsRef.current[selectedPath] ?? 0;
+        if (data.revision && data.revision > localRev && typeof data.content === "string") {
           applyingRemoteRef.current = true;
           updateActiveFile(data.content);
-          collabRevisionRef.current = data.revision;
+          collabRevisionsRef.current[selectedPath] = data.revision;
           applyingRemoteRef.current = false;
         }
       } catch {
@@ -1901,6 +1903,10 @@ export default function ResearchStudioPage() {
     const interval = setInterval(() => {
       void pullRemote();
     }, 5000);
+
+    // Sync the newly-selected file's revision right away so a stale base
+    // revision can never trigger a conflict that overwrites local edits.
+    void pullRemote();
 
     return () => {
       clearInterval(interval);
