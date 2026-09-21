@@ -5192,7 +5192,7 @@ export default function ResearchStudioPage() {
       // to sending images inline when the upload fails, or when there is no
       // per-user store at all (guests).
       let compileFiles = allFiles;
-      if (userId && activeProjectId && !accountSyncUnavailable && imageFiles.length) {
+      if (userId && activeProjectId && imageFiles.length) {
         try {
           await uploadProjectAssets(activeProjectId, imageFiles);
           compileFiles = allFiles.filter((e) => !isBinaryAssetPath(e.path));
@@ -5669,17 +5669,20 @@ export default function ResearchStudioPage() {
 
     // Sync to the account in the background so the import dialog closes as
     // soon as local parsing finishes instead of waiting on a slow upload. The
-    // compiler re-uploads figures on its own, so this is a belt-and-suspenders
-    // copy, not a gate on the dialog.
-    if (snapshotToSync && userId && !accountSyncUnavailable) {
+    // asset store is filesystem-backed (independent of the database), so
+    // upload figures first, then sync the DB snapshot only if it is available.
+    if (snapshotToSync && userId) {
       const snapshot = snapshotToSync;
       const assets = snapshot.entries
         .filter((e) => e.kind === "file" && isBinaryAssetPath(e.path) && e.content)
         .map((e) => ({ path: e.path, content: e.content }));
       void (async () => {
+        if (assets.length) {
+          await uploadProjectAssets(snapshot.id, assets).catch(() => { /* compile retries */ });
+        }
+        if (accountSyncUnavailable) return;
         try {
           await upsertProjectSnapshotToServer(snapshot);
-          if (assets.length) await uploadProjectAssets(snapshot.id, assets);
         } catch (error) {
           const message = error instanceof Error ? error.message : "Could not sync this project.";
           if (isAccountSyncUnavailableMessage(message)) {
@@ -5737,6 +5740,20 @@ export default function ResearchStudioPage() {
       setAutoSaveStatus("unsaved");
       setCompileNotice(`Added ${files.length} file(s) to ${targetLabel}.`);
       showToast(`Uploaded ${files.length} file(s) to ${targetLabel}`, "success");
+
+      // Persist binary assets to the server store immediately (not only on
+      // compile) so a reload can rehydrate them — otherwise a project that is
+      // closed before its first compile loses every image.
+      if (userId && activeProjectId) {
+        const images = nextEntries.filter(
+          (e) => e.kind === "file" && isBinaryAssetPath(e.path) && e.content
+        );
+        if (images.length) {
+          void uploadProjectAssets(activeProjectId, images).catch(() => {
+            // best-effort: compile will retry the upload
+          });
+        }
+      }
     } catch (error) {
       const message = error instanceof Error ? error.message : "Upload failed.";
       setCompileNotice(`Upload failed: ${message}`);
