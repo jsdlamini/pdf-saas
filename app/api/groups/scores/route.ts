@@ -20,11 +20,14 @@ export async function GET(request: Request) {
   if (!groupId) return jsonError("Group required.", 400);
 
   const member = await db.query(
-    `SELECT 1 FROM wiserfiles_group_members WHERE group_id = $1 AND user_id = $2`,
+    `SELECT student_id FROM wiserfiles_group_members WHERE group_id = $1 AND user_id = $2`,
     [groupId, userId]
   );
   if (member.rows.length === 0) return jsonError("Join the group to view your scores.", 403);
 
-  const scores = await getStudentScores(groupId, userId);
+  // Key scores by the student number (not the account) so a user who shares
+  // an account with another student can only ever see their own marks.
+  const studentNumber = member.rows[0].student_id as string;
+  const scores = await getStudentScores(groupId, studentNumber);
   return Response.json(scores);
 }
