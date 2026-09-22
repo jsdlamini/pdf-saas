@@ -164,6 +164,10 @@ function sandboxedEnv(tempDir, extra = {}) {
     HOME: tempDir,
     TMPDIR: tempDir,
     LANG: "C.UTF-8",
+    // Print help()/pydoc output in full instead of invoking an interactive
+    // pager (less/more) that leaves the terminal stuck on a black "(END)" screen.
+    PAGER: "cat",
+    LESS: "-FRX",
     ...extra,
   };
 }
