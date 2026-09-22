@@ -1402,6 +1402,7 @@ export default function ResearchStudioPage() {
         cursorBlink: true,
         fontSize: 13,
         fontFamily: "var(--font-mono), monospace",
+        scrollback: 5000,
         theme: { background: "#000000", foreground: "#f0f0f0", cursor: "#4ade80" },
       });
       const fit = new FitAddon();

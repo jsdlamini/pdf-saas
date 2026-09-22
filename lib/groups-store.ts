@@ -88,6 +88,17 @@ export async function joinGroup(
   if (!isValidProgramme(programme)) return { ok: false, error: "Choose a valid programme." };
   if (!isValidStudentId(studentId)) return { ok: false, error: "Student ID must be 6 or 9 digits." };
 
+  // A student number is a unique personal identifier: it must not be shared
+  // across accounts. Students may share a device, but each must sign in to
+  // their own account to join.
+  const usedByOther = await db.query(
+    `SELECT user_id FROM wiserfiles_group_members WHERE student_id = $1 AND user_id <> $2 LIMIT 1`,
+    [studentId, userId]
+  );
+  if (usedByOther.rows.length > 0) {
+    return { ok: false, error: "This student number is already registered to another account. Sign in to your own account." };
+  }
+
   const existing = await db.query(
     `SELECT 1 FROM wiserfiles_group_members WHERE user_id = $1 AND group_id = $2`,
     [userId, groupId]
