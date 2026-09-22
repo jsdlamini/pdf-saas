@@ -8325,6 +8325,18 @@ export default function ResearchStudioPage() {
                   </button>
                   <button
                     type="button"
+                    onClick={() => uploadFilesToFolder("")}
+                    className="studio-btn studio-btn-ghost"
+                    style={{ width: 24, height: 24, padding: 0 }}
+                    aria-label="Upload files"
+                    title="Upload files to the project root"
+                  >
+                    <svg viewBox="0 0 20 20" style={{ width: 14, height: 14 }} fill="none" stroke="currentColor" strokeWidth="2">
+                      <path d="M10 3v9m0 0l-3-3m3 3l3-3M4 14v2h12v-2" strokeLinecap="round" strokeLinejoin="round" />
+                    </svg>
+                  </button>
+                  <button
+                    type="button"
                     onClick={() => setLeftPaneCollapsed(true)}
                     className="studio-btn studio-btn-ghost"
                     style={{ width: 24, height: 24, padding: 0 }}
