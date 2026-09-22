@@ -42,7 +42,7 @@ def main() -> None:
             student.get("programme", ""),
         ]
         for item in practicals + tests + exams:
-            row.append(mark_map.get((item.get("id"), student.get("userId"))))
+            row.append(mark_map.get((item.get("id"), student.get("studentId"))))
         ws.append(row)
 
     wb.save(sys.argv[2])

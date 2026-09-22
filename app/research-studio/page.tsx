@@ -7501,7 +7501,7 @@ export default function ResearchStudioPage() {
                                 <span className="studio-assess-sid">{st.studentId}{st.programme ? ` · ${st.programme}` : ""}</span>
                               </td>
                               {allItems.map((s) => {
-                                const val = markMap.get(`${s.id}:${st.userId}`);
+                                const val = markMap.get(`${s.id}:${st.studentId}`);
                                 return (
                                   <td key={s.id}>
                                     <input
@@ -7509,8 +7509,8 @@ export default function ResearchStudioPage() {
                                       min={0}
                                       max={s.maxMarks}
                                       value={val == null ? "" : String(val)}
-                                      onChange={(e) => setMark(s.id, st.userId, e.target.value)}
-                                      onBlur={(e) => blurMark(s.id, st.userId, e.target.value)}
+                                      onChange={(e) => setMark(s.id, st.studentId, e.target.value)}
+                                      onBlur={(e) => blurMark(s.id, st.studentId, e.target.value)}
                                       className="studio-assess-input"
                                     />
                                   </td>

@@ -203,16 +203,16 @@ export async function getRosterWithMarks(
   }
 
   const rows: RosterMarkRow[] = members.rows.map((m) => {
-    const uid = m.user_id as string;
+    const studentNumber = m.student_id as string;
     const gid = m.group_id as string;
     const scores = columns.map((c) => {
       const sid = sessionByKey.get(`${gid}:${c.kind}:${c.order}`);
       if (sid == null) return null;
-      return markMap.has(`${uid}:${sid}`) ? (markMap.get(`${uid}:${sid}`) as number | null) : null;
+      return markMap.has(`${studentNumber}:${sid}`) ? (markMap.get(`${studentNumber}:${sid}`) as number | null) : null;
     });
     return {
       group: m.group_name as string,
-      userId: uid,
+      userId: m.user_id as string,
       name: m.name as string,
       surname: m.surname as string,
       programme: m.programme as string,
@@ -231,10 +231,11 @@ export type StudentScoreRow = {
   score: number | null;
 };
 
-/** A student's own practical + test scores (never the exam). */
+/** A student's own practical + test scores (never the exam), keyed by the
+ *  student number so one account can never see another student's marks. */
 export async function getStudentScores(
   groupId: string,
-  userId: string
+  studentNumber: string
 ): Promise<{ practicals: StudentScoreRow[]; tests: StudentScoreRow[] }> {
   await ensureItems(groupId);
 
@@ -250,7 +251,7 @@ export async function getStudentScores(
      FROM wiserfiles_assessment_marks m
      JOIN wiserfiles_group_sessions s ON s.id = m.session_id
      WHERE s.group_id = $1 AND m.student_id = $2`,
-    [groupId, userId]
+    [groupId, studentNumber]
   );
   const markMap = new Map<number, number | null>(
     marks.rows.map((x) => [x.session_id as number, x.score == null ? null : Number(x.score)])
