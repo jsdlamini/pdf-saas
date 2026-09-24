@@ -4977,6 +4977,68 @@ export default function ResearchStudioPage() {
     setAddFileError("");
   }
 
+  function moveEntry(sourcePath: string, targetFolderPath: string) {
+    const target = projectEntries.find((entry) => entry.path === sourcePath);
+    if (!target) return;
+
+    const base = sourcePath.split("/").filter(Boolean).pop() || sourcePath;
+    const folderPrefix = targetFolderPath ? `${targetFolderPath.replace(/\/+$/, "")}/` : "";
+    const isFolder = target.kind === "folder";
+    const nextBase = `${folderPrefix}${base}${isFolder ? "/" : ""}`;
+
+    if (nextBase === sourcePath) return;
+
+    // Never move a folder into itself or one of its descendants.
+    if (isFolder && (targetFolderPath === sourcePath || targetFolderPath.startsWith(sourcePath))) {
+      setAddFileError("Cannot move a folder into itself or a subfolder.");
+      return;
+    }
+
+    const conflict = projectEntries.some((entry) => {
+      if (entry.path === sourcePath) return false;
+      if (!isFolder) return entry.path === nextBase;
+      return entry.path === nextBase || entry.path.startsWith(nextBase);
+    });
+    if (conflict) {
+      setAddFileError("A file or folder with that name already exists there.");
+      return;
+    }
+
+    setProjectEntries((current) =>
+      current.map((entry) => {
+        if (!isFolder) {
+          return entry.path === sourcePath ? { ...entry, path: nextBase } : entry;
+        }
+        if (entry.path === sourcePath || entry.path.startsWith(sourcePath)) {
+          const suffix = entry.path.slice(sourcePath.length);
+          return { ...entry, path: `${nextBase}${suffix}` };
+        }
+        return entry;
+      })
+    );
+
+    setSelectedPath((current) => {
+      if (!isFolder) return current === sourcePath ? nextBase : current;
+      if (current === sourcePath || current.startsWith(sourcePath)) {
+        const suffix = current.slice(sourcePath.length);
+        return `${nextBase}${suffix}`;
+      }
+      return current;
+    });
+    setOpenTabs((tabs) =>
+      tabs.map((p) => {
+        if (!isFolder) return p === sourcePath ? nextBase : p;
+        if (p === sourcePath || p.startsWith(sourcePath)) {
+          return `${nextBase}${p.slice(sourcePath.length)}`;
+        }
+        return p;
+      })
+    );
+    setAddFileError("");
+    setAutoSaveStatus("unsaved");
+    showToast(`Moved ${base} to ${targetFolderPath ? targetFolderPath.replace(/\/+$/, "") : "root"}`, "success");
+  }
+
   async function showProjectEntryActions(entry: ProjectEntry) {
     const action = await projectEntryActionSheet(entry);
     if (action.isConfirmed) {
@@ -6041,12 +6103,29 @@ export default function ResearchStudioPage() {
             className={`studio-tree-node ${isActive ? "studio-tree-node-active" : ""}`}
             style={{ "--depth": depth } as React.CSSProperties}
             onContextMenu={(event) => openTreeContextMenu(event, node, explicitFolder)}
-            draggable={!isFolder && isImagePath(node.path)}
+            draggable
             onDragStart={(event) => {
-              if (isFolder || !isImagePath(node.path)) return;
-              event.dataTransfer.setData("application/x-wiserfiles-image", node.path);
+              // Move within the tree (files and folders).
+              event.dataTransfer.setData("application/x-wiserfiles-move", node.path);
+              event.dataTransfer.effectAllowed = "move";
+              // Images also keep their editor-insert payload.
+              if (!isFolder && isImagePath(node.path)) {
+                event.dataTransfer.setData("application/x-wiserfiles-image", node.path);
+              }
               event.dataTransfer.setData("text/plain", node.path);
-              event.dataTransfer.effectAllowed = "copy";
+            }}
+            onDragOver={(event) => {
+              if (!isFolder) return;
+              if (!Array.from(event.dataTransfer.types).includes("application/x-wiserfiles-move")) return;
+              event.preventDefault();
+              event.dataTransfer.dropEffect = "move";
+            }}
+            onDrop={(event) => {
+              if (!isFolder) return;
+              event.preventDefault();
+              const source = event.dataTransfer.getData("application/x-wiserfiles-move");
+              if (!source || source === node.path) return;
+              moveEntry(source, node.path);
             }}
           >
             {isFolder ? (
@@ -8377,7 +8456,21 @@ export default function ResearchStudioPage() {
                 </button>
               </div>
               {addFileError ? <p style={{ padding: "4px 12px", fontSize: 11, color: "#ef4444" }}>{addFileError}</p> : null}
-              <div className="studio-filetree-body" onContextMenu={openRootContextMenu}>
+              <div
+                className="studio-filetree-body"
+                onContextMenu={openRootContextMenu}
+                onDragOver={(event) => {
+                  if (Array.from(event.dataTransfer.types).includes("application/x-wiserfiles-move")) {
+                    event.preventDefault();
+                    event.dataTransfer.dropEffect = "move";
+                  }
+                }}
+                onDrop={(event) => {
+                  event.preventDefault();
+                  const source = event.dataTransfer.getData("application/x-wiserfiles-move");
+                  if (source) moveEntry(source, "");
+                }}
+              >
                 {renderProjectTree(projectTree)}
               </div>
               {!isCodeMode && documentOutline.length > 0 ? (
