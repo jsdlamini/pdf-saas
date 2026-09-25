@@ -4394,25 +4394,29 @@ export default function ResearchStudioPage() {
 
   async function renameSavedProject(projectId: string) {
     const target = savedProjects.find((item) => item.id === projectId);
-    if (!target) return;
+    const currentName = target?.name ?? (projectId === activeProjectId ? projectName : "");
+    if (!currentName) return;
 
-    const nextName = await promptModal("Rename project", "Project name", target.name, "Rename");
-    if (!nextName || nextName === target.name) return;
+    const nextName = await promptModal("Rename project", "Project name", currentName, "Rename");
+    if (!nextName || nextName === currentName) return;
 
     const updatedAt = new Date().toISOString();
-    setSavedProjects((current) =>
-      current.map((item) => (item.id === projectId ? { ...item, name: nextName, updatedAt } : item))
-    );
 
-    const snapshot = savedProjectSnapshots.find((project) => project.id === projectId) || null;
-    if (snapshot) {
-      const nextSnapshot = {
-        ...snapshot,
-        name: nextName,
-        updatedAt,
-      };
-      persistProjectSnapshot(nextSnapshot);
-      queueServerProjectSync(nextSnapshot);
+    if (target) {
+      setSavedProjects((current) =>
+        current.map((item) => (item.id === projectId ? { ...item, name: nextName, updatedAt } : item))
+      );
+
+      const snapshot = savedProjectSnapshots.find((project) => project.id === projectId) || null;
+      if (snapshot) {
+        const nextSnapshot = {
+          ...snapshot,
+          name: nextName,
+          updatedAt,
+        };
+        persistProjectSnapshot(nextSnapshot);
+        queueServerProjectSync(nextSnapshot);
+      }
     }
 
     if (projectId === activeProjectId) {
@@ -7360,6 +7364,16 @@ export default function ResearchStudioPage() {
                           </button>
                           <button
                             type="button"
+                            onClick={() => void renameSavedProject(item.id)}
+                            className="studio-btn studio-btn-secondary studio-card-btn"
+                            title={`Rename ${item.name}`}
+                            aria-label={`Rename ${item.name}`}
+                          >
+                            <svg viewBox="0 0 20 20" className="studio-card-btn-icon" aria-hidden="true"><path d="M13.5 4.5l2 2L7 15H5v-2l8.5-8.5z" strokeLinecap="round" strokeLinejoin="round" /></svg>
+                            <span className="studio-card-btn-label">Rename</span>
+                          </button>
+                          <button
+                            type="button"
                             onClick={() => deleteSavedProject(item.id)}
                             className="studio-btn studio-btn-danger studio-card-btn"
                             title={`Delete ${item.name}`}
@@ -7895,7 +7909,19 @@ export default function ResearchStudioPage() {
             <span className="hidden sm:inline">Back</span>
           </button>
           <span style={{ color: "var(--border-color, #334155)" }} className="hidden sm:inline">|</span>
-          <span className="studio-topbar-title">{projectName}</span>
+          <button
+            type="button"
+            className="studio-topbar-title"
+            title="Rename project"
+            aria-label="Rename project"
+            onClick={() => activeProjectId && void renameSavedProject(activeProjectId)}
+            style={{ background: "none", border: "none", cursor: "pointer", padding: 0, color: "inherit", font: "inherit" }}
+          >
+            {projectName}
+            <svg viewBox="0 0 20 20" style={{ width: 12, height: 12, marginLeft: 6, opacity: 0.6, verticalAlign: "middle" }} fill="none" stroke="currentColor" strokeWidth="2">
+              <path d="M13.5 4.5l2 2L7 15H5v-2l8.5-8.5z" strokeLinecap="round" strokeLinejoin="round" />
+            </svg>
+          </button>
           <span className={`studio-topbar-meta ${autoSaveStatus === "saved" ? "studio-status-saved" : autoSaveStatus === "unsaved" ? "studio-status-unsaved" : ""}`}>
             {autoSaveStatus === "saved" ? `Saved ${autoSaveTimestamp || ""}` : autoSaveStatus === "saving" ? "Saving..." : "Unsaved"}
           </span>
