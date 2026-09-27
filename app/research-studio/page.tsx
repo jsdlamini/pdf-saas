@@ -1375,6 +1375,30 @@ export default function ResearchStudioPage() {
     window.addEventListener("pointerup", onUp);
   }
 
+  // Copy terminal text to the clipboard. On touch devices there is no
+  // Ctrl+C / right-click, so this button is the reliable copy path. Copies the
+  // current selection when one exists, otherwise the whole transcript.
+  async function copyTerminalOutput() {
+    const x = xtermRef.current;
+    if (!x?.term) return;
+    let text = x.term.getSelection();
+    if (!text) {
+      x.term.selectAll();
+      text = x.term.getSelection();
+      x.term.clearSelection();
+    }
+    if (!text) {
+      setCompileNotice("Terminal is empty — nothing to copy.");
+      return;
+    }
+    try {
+      await navigator.clipboard.writeText(text);
+      setCompileNotice("Terminal output copied to clipboard.");
+    } catch {
+      setCompileNotice("Couldn't access the clipboard — long-press to select and copy.");
+    }
+  }
+
   // Re-fit the terminal to the panel whenever it is resized by dragging.
   useEffect(() => {
     const raf = requestAnimationFrame(() => {
@@ -9432,6 +9456,7 @@ export default function ResearchStudioPage() {
           <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "5px 10px", borderBottom: "1px solid #222", color: "#999", fontSize: 11 }}>
             <span style={{ fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.06em", color: "#ccc" }}>Terminal</span>
             {termRunning ? <span style={{ color: "#4ade80" }}>● running</span> : null}
+            <button type="button" onClick={() => void copyTerminalOutput()} aria-label="Copy terminal output" title="Copy terminal output" style={{ background: "none", border: "1px solid #333", color: "#ccc", cursor: "pointer", borderRadius: 4, padding: "1px 8px", fontSize: 11, marginLeft: 8 }}>Copy</button>
             <button type="button" onClick={() => { stopTerminalSession(); setTerminalOpen(false); }} aria-label="Close terminal" style={{ marginLeft: "auto", background: "none", border: "none", color: "#999", cursor: "pointer", fontSize: 16 }}>×</button>
           </div>
           <div

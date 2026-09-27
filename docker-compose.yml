@@ -81,7 +81,9 @@ services:
 
   # Isolated execution for user code/commands. Reuses the web image (same
   # toolchain) but runs only the sandbox runner, with NO app environment and NO
-  # route to the database or the internet (sandboxnet is internal).
+  # route to the database. Outbound internet is allowed so user code can fetch
+  # datasets/files (e.g. the-verdict.txt); the sandbox stays on its own bridge
+  # network, isolated from the db (default net) and webnet.
   sandbox:
     image: ${WEB_IMAGE:-pdf-saas-web:local}
     container_name: pdf-saas-sandbox
@@ -108,7 +110,6 @@ networks:
   webnet:
     external: true
     name: ${WEB_EXTERNAL_NETWORK:-docker_webnet}
-  # Internal-only network between web and sandbox. No internet, no db.
+  # Bridge network between web and sandbox. No db; outbound internet allowed.
   sandboxnet:
     driver: bridge
-    internal: true
