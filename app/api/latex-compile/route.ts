@@ -1,7 +1,7 @@
 import { execFile } from "node:child_process";
 import { copyFile, mkdir, mkdtemp, readFile, readdir, rm, stat, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { dirname, join, normalize } from "node:path";
+import { basename, dirname, join, normalize } from "node:path";
 import { promisify } from "node:util";
 import { auth } from "@clerk/nextjs/server";
 import { diagnoseLatexErrors, diagnoseMissingFigures, isBinaryAssetName, looksLikeBase64, stripDataUrlPrefix, validMagicBytes } from "@/lib/latex-diagnostics";
@@ -236,24 +236,27 @@ function sanitizeFileName(fileName: string) {
 }
 
 function buildPdfOutputPath(rootFile: string) {
-  const normalized = normalize(rootFile);
-  const extensionIndex = normalized.lastIndexOf(".");
-  if (extensionIndex === -1) return `${normalized}.pdf`;
-  return `${normalized.slice(0, extensionIndex)}.pdf`;
+  // latexmk/pdflatex write the output to the current working directory using
+  // the file's basename, NOT next to the input. A root like tests/paper.tex
+  // therefore produces ./paper.pdf, not ./tests/paper.pdf.
+  const base = basename(normalize(rootFile));
+  const extensionIndex = base.lastIndexOf(".");
+  if (extensionIndex === -1) return `${base}.pdf`;
+  return `${base.slice(0, extensionIndex)}.pdf`;
 }
 
 function buildLogOutputPath(rootFile: string) {
-  const normalized = normalize(rootFile);
-  const extensionIndex = normalized.lastIndexOf(".");
-  if (extensionIndex === -1) return `${normalized}.log`;
-  return `${normalized.slice(0, extensionIndex)}.log`;
+  const base = basename(normalize(rootFile));
+  const extensionIndex = base.lastIndexOf(".");
+  if (extensionIndex === -1) return `${base}.log`;
+  return `${base.slice(0, extensionIndex)}.log`;
 }
 
 function buildSynctexPath(rootFile: string) {
-  const normalized = normalize(rootFile);
-  const extensionIndex = normalized.lastIndexOf(".");
-  if (extensionIndex === -1) return `${normalized}.synctex.gz`;
-  return `${normalized.slice(0, extensionIndex)}.synctex.gz`;
+  const base = basename(normalize(rootFile));
+  const extensionIndex = base.lastIndexOf(".");
+  if (extensionIndex === -1) return `${base}.synctex.gz`;
+  return `${base.slice(0, extensionIndex)}.synctex.gz`;
 }
 
 async function readMainLogIfAvailable(tempDir: string, rootFile: string) {
