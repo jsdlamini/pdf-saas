@@ -787,12 +787,20 @@ export async function POST(request: Request) {
         lastLogData = await readMainLogIfAvailable(tempDir, rootFile);
       }
       const maybeCode = error as { code?: string };
-      const detail = extractErrorDetail(error);
-      // Only a genuine spawn failure (ENOENT) means the binary itself is absent.
-      // Matching "command not found" in stderr was a false positive: latexmk
-      // reports real LaTeX errors that way for missing sub-commands, and we were
-      // misclassifying them as a missing engine, hiding the true error.
-      const missingBinary = maybeCode.code === "ENOENT";
+      // Only a genuine spawn failure means the binary itself is absent. An
+      // ENOENT with syscall "open" is the *output* PDF being missing (the
+      // engine ran but produced no PDF), not a missing engine.
+      const missingBinary =
+        maybeCode.code === "ENOENT" && (error as { syscall?: string }).syscall === "spawn";
+      let detail = extractErrorDetail(error);
+      // When the compiler ran but wrote no PDF, surface the real LaTeX errors
+      // from the log instead of the unhelpful "ENOENT open ...pdf".
+      if (/ENOENT.*\.pdf/i.test(detail) && lastLogData?.text) {
+        const logErrors = diagnoseLatexErrors(lastLogData.text);
+        detail = logErrors.length
+          ? `LaTeX produced no PDF. ${logErrors.join(" ")}`
+          : "LaTeX produced no PDF — the compiler ran but wrote no output. Check the log for details.";
+      }
 
       if (missingBinary) {
         hasMissingEngine = true;
