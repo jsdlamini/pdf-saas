@@ -40,6 +40,7 @@ export default function PdfPreview({
   const [findIndex, setFindIndex] = useState(0);
   const [currentPage, setCurrentPage] = useState(1);
   const [pageInput, setPageInput] = useState("1");
+  const [viewMode, setViewMode] = useState<"continuous" | "single">("continuous");
 
   const computeScale = useCallback(async (pdf: PDFDocumentProxy, mode: Zoom) => {
     const container = containerRef.current;
@@ -336,6 +337,9 @@ export default function PdfPreview({
         <span className="studio-pdf-tool-pct">{Math.round(scale * 100)}%</span>
         <button type="button" className="studio-pdf-tool-btn" onClick={() => setZoom(Math.min(4, scale + 0.1))}>+</button>
         <span className="studio-pdf-tool-sep" />
+        <button type="button" className={viewMode === "continuous" ? "studio-pdf-tool-btn active" : "studio-pdf-tool-btn"} onClick={() => setViewMode("continuous")} title="Continuous scroll">Continuous</button>
+        <button type="button" className={viewMode === "single" ? "studio-pdf-tool-btn active" : "studio-pdf-tool-btn"} onClick={() => setViewMode("single")} title="One page at a time">Single</button>
+        <span className="studio-pdf-tool-sep" />
         <button type="button" className="studio-pdf-tool-btn" onClick={() => goToPage(currentPage - 1)} disabled={currentPage <= 1} aria-label="Previous page" title="Previous page">‹</button>
         <span className="studio-pdf-page-nav">
           <input
@@ -398,7 +402,7 @@ export default function PdfPreview({
           <button type="button" className="studio-pdf-tool-btn" onClick={() => { setFindOpen(false); setFindQuery(""); findQueryRef.current = ""; applyFind(""); }} aria-label="Close search">×</button>
         </div>
       ) : null}
-      <div ref={containerRef} className="studio-pdf-scroll">
+      <div ref={containerRef} className={viewMode === "single" ? "studio-pdf-scroll studio-pdf-scroll-single" : "studio-pdf-scroll"}>
         {error ? <p className="studio-pdf-error">{error}</p> : null}
       </div>
     </div>
