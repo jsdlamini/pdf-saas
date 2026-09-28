@@ -19,7 +19,7 @@ export default function StudioAccount() {
   return (
     <div className="flex items-center gap-2">
       <SignUpButton mode="modal">
-        <button type="button" className="studio-btn studio-btn-primary">
+        <button type="button" className="studio-btn studio-btn-primary studio-hide-phone">
           Sign up
         </button>
       </SignUpButton>

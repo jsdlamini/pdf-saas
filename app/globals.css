@@ -2722,36 +2722,76 @@ body[data-studio-editor="true"] footer {
     display: none;
   }
 
+  /* Phones get a hamburger menu instead of the desktop menubar. The menubar
+     is hidden by default and shown as a full-screen vertical menu when open. */
   .studio-menubar {
-    height: auto;
-    min-height: 32px;
-    flex-wrap: wrap;
-    padding: 4px 8px;
+    display: none;
   }
 
-  .studio-menu-trigger {
-    white-space: nowrap;
-    flex-shrink: 0;
-    padding: 5px 10px;
-  }
-
-  /* Full-width mobile menu sheet anchored just below the menubar (top set in
-     JS as --studio-menu-sheet-top), instead of a floating desktop dropdown. */
-  .studio-menu-dropdown {
+  .studio-menubar.studio-menubar-open {
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+    gap: 2px;
     position: fixed;
-    left: 8px;
-    right: 8px;
-    top: var(--studio-menu-sheet-top, 74px);
+    top: 42px;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    height: auto;
+    min-height: 0;
+    padding: 8px;
+    overflow-y: auto;
+    z-index: 90;
+    background: var(--bg-secondary, #131620);
+    border-bottom: 1px solid var(--border-color, #334155);
+  }
+
+  .studio-menubar-open .studio-menu-group {
+    position: static;
+    width: 100%;
+  }
+
+  .studio-menubar-open .studio-menu-trigger {
+    width: 100%;
+    text-align: left;
+    font-size: 15px;
+    padding: 12px 14px;
+    border-radius: 8px;
+    white-space: normal;
+  }
+
+  .studio-menubar-open .studio-menu-dropdown {
+    position: static;
+    left: auto;
+    right: auto;
+    top: auto;
     min-width: 0;
     max-width: none;
-    max-height: calc(100vh - var(--studio-menu-sheet-top, 74px) - 12px);
-    overflow-y: auto;
-    border-radius: 12px;
+    max-height: none;
+    overflow: visible;
+    box-shadow: none;
+    border: none;
+    background: transparent;
+    padding: 0 0 4px 10px;
+    border-radius: 0;
   }
 
-  .studio-menu-item {
-    padding: 12px 14px;
+  .studio-menubar-open .studio-menu-item {
     font-size: 14px;
+    padding: 11px 14px;
+  }
+
+  /* Tighter topbar so every icon fits without clipping on a phone. */
+  .studio-topbar {
+    gap: 6px;
+  }
+  .studio-topbar-right {
+    gap: 4px;
+  }
+  .studio-collab-btn {
+    padding-left: 8px;
+    padding-right: 8px;
   }
 
   .studio-project-grid {
