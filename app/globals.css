@@ -2730,13 +2730,15 @@ body[data-studio-editor="true"] footer {
   }
 
   /* Phones get a hamburger menu instead of the desktop menubar. The menubar
-     is hidden by default and shown as a full-screen vertical menu when open. */
+     is hidden by default and shown as a full-screen vertical menu when open.
+     !important is needed because the base .studio-menubar rule (which sets
+     display:flex) appears later in the cascade. */
   .studio-menubar {
-    display: none;
+    display: none !important;
   }
 
   .studio-menubar.studio-menubar-open {
-    display: flex;
+    display: flex !important;
     flex-direction: column;
     align-items: stretch;
     gap: 2px;
