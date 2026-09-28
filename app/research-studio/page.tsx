@@ -8068,6 +8068,7 @@ export default function ResearchStudioPage() {
                   className="studio-btn studio-btn-secondary"
                   aria-label="Stop compile"
                   title="Stop compile"
+                  style={{ background: "#ef4444", color: "#fff", border: "1px solid #dc2626" }}
                 >
                   <svg viewBox="0 0 20 20" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="2">
                     <rect x="6" y="6" width="8" height="8" rx="1" />
