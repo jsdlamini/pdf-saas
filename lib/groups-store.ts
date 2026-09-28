@@ -347,12 +347,12 @@ export type MultiJoinRow = {
 export async function listMultiJoinMembers(): Promise<MultiJoinRow[]> {
   await ensureMigrated();
   const r = await db.query(
-    `SELECT m.user_id, MAX(m.name) AS name, MAX(m.surname) AS surname, MAX(m.student_id) AS student_id,
+    `SELECT MAX(m.user_id) AS user_id, MAX(m.name) AS name, MAX(m.surname) AS surname, m.student_id,
             COUNT(DISTINCT m.group_id)::int AS n,
             string_agg(g.name, ', ' ORDER BY g.sort_order) AS groups
      FROM wiserfiles_group_members m
      JOIN wiserfiles_groups g ON g.id = m.group_id
-     GROUP BY m.user_id
+     GROUP BY m.student_id
      HAVING COUNT(DISTINCT m.group_id) > 1
      ORDER BY n DESC, MAX(m.surname) ASC`
   );
