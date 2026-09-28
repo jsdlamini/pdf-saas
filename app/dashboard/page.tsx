@@ -602,6 +602,8 @@ export default function DashboardPage() {
 
         {/* User Activity */}
         <UserActivity data={data} />
+        {/* Top active users (non-students) */}
+        <ActiveUsers />
         {/* Group switch log */}
         <GroupSwitchLog />
         {/* Multi-join flags */}
@@ -1475,6 +1477,160 @@ function UserActivity({ data }: { data: AnalyticsData | null }) {
                     {(userMetrics.recent || []).map((r: any, i: number) => (
                       <div key={i} className="flex items-center justify-between rounded bg-slate-50 px-2 py-1 text-xs">
                         <span className="text-slate-700">{r.event}{r.detail ? ` — ${r.detail}` : ""}</span>
+                        <span className="text-slate-400">{new Date(r.created_at).toLocaleString()}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            ) : null}
+          </div>
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
+function ActiveUsers() {
+  const [users, setUsers] = useState<Array<{
+    user_id: string; name: string; email: string; isStudent: boolean;
+    events: number; activeDays: number; pageviews: number; actions: number;
+    lastSeen: string; topTools: string[];
+  }> | null>(null);
+  const [nonStudentsOnly, setNonStudentsOnly] = useState(true);
+  const [days, setDays] = useState(30);
+  const [detail, setDetail] = useState<any | null>(null);
+  const [detailLoading, setDetailLoading] = useState(false);
+  const [detailError, setDetailError] = useState("");
+
+  useEffect(() => {
+    let cancelled = false;
+    fetch(`/api/admin-active-users?days=${days}&students=${nonStudentsOnly ? "0" : "1"}`)
+      .then((r) => r.json())
+      .then((d) => { if (!cancelled) setUsers((d as { users?: typeof users }).users ?? []); })
+      .catch(() => { if (!cancelled) setUsers([]); });
+    return () => { cancelled = true; };
+  }, [days, nonStudentsOnly]);
+
+  async function viewUser(userId: string) {
+    setDetail(null);
+    setDetailError("");
+    setDetailLoading(true);
+    try {
+      const r = await fetch(`/api/admin-user-metrics?userId=${encodeURIComponent(userId)}`);
+      const d = await r.json();
+      if (!r.ok) throw new Error(d.error || "Could not load metrics.");
+      setDetail(d.metrics);
+    } catch (e) {
+      setDetailError(e instanceof Error ? e.message : "Could not load metrics.");
+    } finally {
+      setDetailLoading(false);
+    }
+  }
+
+  return (
+    <div className="mx-auto max-w-5xl px-6 md:px-10 mt-6">
+      <div className="rounded-2xl border border-slate-200/60 bg-white p-6 shadow-sm">
+        <div className="flex items-center justify-between mb-4 flex-wrap gap-3">
+          <div>
+            <h2 className="text-base font-semibold text-slate-900">Top active users</h2>
+            <p className="text-xs text-slate-500 mt-0.5">
+              Ranked by activity. Non-students are signed-in users not in a practical group — the people to watch and support.
+            </p>
+          </div>
+          <div className="flex items-center gap-2">
+            <select value={days} onChange={(e) => setDays(Number(e.target.value))} className="rounded-lg border border-slate-200 px-2.5 py-1 text-xs text-slate-700" aria-label="Activity window">
+              <option value={30}>30 days</option>
+              <option value={90}>90 days</option>
+              <option value={365}>1 year</option>
+            </select>
+            <button
+              type="button"
+              onClick={() => setNonStudentsOnly((v) => !v)}
+              className={`rounded-lg border px-2.5 py-1 text-xs font-semibold ${nonStudentsOnly ? "border-cyan-200 bg-cyan-50 text-cyan-800" : "border-slate-200 text-slate-600 hover:bg-slate-100"}`}
+            >
+              {nonStudentsOnly ? "Non-students" : "All users"}
+            </button>
+          </div>
+        </div>
+
+        {!users ? (
+          <p className="text-xs text-slate-400">Loading…</p>
+        ) : users.length === 0 ? (
+          <p className="text-xs text-slate-400">No active {nonStudentsOnly ? "non-student" : ""} users in this window.</p>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full text-left text-sm">
+              <thead>
+                <tr className="border-b border-slate-200 text-xs uppercase tracking-[0.1em] text-slate-500">
+                  <th className="py-2 pr-4 font-semibold">User</th>
+                  <th className="py-2 pr-4 font-semibold">Type</th>
+                  <th className="py-2 pr-4 font-semibold">Events</th>
+                  <th className="py-2 pr-4 font-semibold">Days active</th>
+                  <th className="py-2 pr-4 font-semibold">Top tools</th>
+                  <th className="py-2 font-semibold">Last seen</th>
+                </tr>
+              </thead>
+              <tbody>
+                {users.map((u) => (
+                  <tr key={u.user_id} className="border-b border-slate-100">
+                    <td className="py-2 pr-4">
+                      <button type="button" onClick={() => void viewUser(u.user_id)} className="font-semibold text-cyan-700 hover:text-cyan-900 hover:underline underline-offset-2">
+                        {u.name || u.email || u.user_id.slice(0, 12)}
+                      </button>
+                      {u.email && u.name ? <p className="text-xs text-slate-400">{u.email}</p> : null}
+                    </td>
+                    <td className="py-2 pr-4">
+                      <span className={`rounded-full px-2 py-0.5 text-[10px] font-bold ${u.isStudent ? "bg-slate-100 text-slate-600" : "bg-cyan-100 text-cyan-800"}`}>
+                        {u.isStudent ? "Student" : "Non-student"}
+                      </span>
+                    </td>
+                    <td className="py-2 pr-4 text-slate-700">{u.events} <span className="text-xs text-slate-400">({u.actions} actions)</span></td>
+                    <td className="py-2 pr-4 text-slate-700">{u.activeDays}</td>
+                    <td className="py-2 pr-4 text-slate-500">{u.topTools.length ? u.topTools.join(", ") : "—"}</td>
+                    <td className="py-2 text-slate-400">{new Date(u.lastSeen).toLocaleString()}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
+
+      {detail || detailLoading || detailError ? (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 p-4" onClick={() => { setDetail(null); setDetailError(""); }}>
+          <div className="w-full max-w-2xl max-h-[85vh] overflow-y-auto rounded-2xl border border-slate-200 bg-white p-6 shadow-2xl" onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-center justify-between">
+              <h3 className="text-lg font-semibold text-slate-900">User activity detail</h3>
+              <button type="button" onClick={() => { setDetail(null); setDetailError(""); }} className="text-slate-400 hover:text-slate-700">✕</button>
+            </div>
+            {detailLoading ? (
+              <p className="text-sm text-slate-500 mt-3">Loading…</p>
+            ) : detailError ? (
+              <p className="text-sm text-rose-600 mt-3">{detailError}</p>
+            ) : detail ? (
+              <div className="mt-4 space-y-4">
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                  <div className="rounded-lg bg-slate-50 p-3"><p className="text-[10px] uppercase text-slate-400">Pageviews</p><p className="text-lg font-bold text-slate-800">{detail.pageviews}</p></div>
+                  <div className="rounded-lg bg-slate-50 p-3"><p className="text-[10px] uppercase text-slate-400">Events</p><p className="text-lg font-bold text-slate-800">{detail.totalEvents}</p></div>
+                  <div className="rounded-lg bg-slate-50 p-3"><p className="text-[10px] uppercase text-slate-400">Location</p><p className="text-sm font-semibold text-slate-800">{[detail.city, detail.country].filter(Boolean).join(", ") || "—"}</p></div>
+                  <div className="rounded-lg bg-slate-50 p-3"><p className="text-[10px] uppercase text-slate-400">Last seen</p><p className="text-sm font-semibold text-slate-800">{detail.lastSeen ? new Date(detail.lastSeen).toLocaleString() : "—"}</p></div>
+                </div>
+                <div>
+                  <h4 className="text-sm font-semibold text-slate-900">Tools used</h4>
+                  <div className="mt-2 flex flex-wrap gap-2">
+                    {(detail.tools || []).map((t: any) => (
+                      <span key={t.tool} className="rounded-full bg-slate-100 px-3 py-1 text-xs text-slate-700">{t.tool} · {t.count}</span>
+                    ))}
+                    {(!detail.tools || detail.tools.length === 0) ? <span className="text-xs text-slate-400">None recorded</span> : null}
+                  </div>
+                </div>
+                <div>
+                  <h4 className="text-sm font-semibold text-slate-900">Recent activity</h4>
+                  <div className="mt-2 max-h-48 space-y-1 overflow-y-auto">
+                    {(detail.recent || []).map((r: any, i: number) => (
+                      <div key={i} className="flex items-center justify-between rounded bg-slate-50 px-2 py-1 text-xs">
+                        <span className="text-slate-700">{r.event}{r.detail ? ` — ${r.detail}` : ""}{r.tool ? ` · ${r.tool}` : ""}</span>
                         <span className="text-slate-400">{new Date(r.created_at).toLocaleString()}</span>
                       </div>
                     ))}
