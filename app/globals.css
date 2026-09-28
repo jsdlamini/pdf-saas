@@ -2732,11 +2732,26 @@ body[data-studio-editor="true"] footer {
   .studio-menu-trigger {
     white-space: nowrap;
     flex-shrink: 0;
-    padding: 4px 8px;
+    padding: 5px 10px;
   }
 
+  /* Full-width mobile menu sheet anchored just below the menubar (top set in
+     JS as --studio-menu-sheet-top), instead of a floating desktop dropdown. */
   .studio-menu-dropdown {
-    max-width: calc(100vw - 16px);
+    position: fixed;
+    left: 8px;
+    right: 8px;
+    top: var(--studio-menu-sheet-top, 74px);
+    min-width: 0;
+    max-width: none;
+    max-height: calc(100vh - var(--studio-menu-sheet-top, 74px) - 12px);
+    overflow-y: auto;
+    border-radius: 12px;
+  }
+
+  .studio-menu-item {
+    padding: 12px 14px;
+    font-size: 14px;
   }
 
   .studio-project-grid {

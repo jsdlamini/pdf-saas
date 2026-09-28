@@ -1652,6 +1652,18 @@ export default function ResearchStudioPage() {
   const [pdfAnchor, setPdfAnchor] = useState<{ page: number; x: number; y: number } | null>(null);
   const [showShortcuts, setShowShortcuts] = useState(false);
   const [openMenu, setOpenMenu] = useState("");
+  const menubarRef = useRef<HTMLDivElement | null>(null);
+
+  // Open a menubar dropdown. On mobile the dropdown is a full-width fixed
+  // sheet, so measure the menubar's bottom edge for its top offset.
+  function openMenuWithSheet(key: string) {
+    const next = openMenu === key ? "" : key;
+    if (next && menubarRef.current) {
+      const bottom = Math.round(menubarRef.current.getBoundingClientRect().bottom);
+      document.documentElement.style.setProperty("--studio-menu-sheet-top", `${bottom}px`);
+    }
+    setOpenMenu(next);
+  }
 
   // Close menu dropdown on outside click
   useEffect(() => {
@@ -8182,6 +8194,7 @@ export default function ResearchStudioPage() {
 
       {/* ── Menu Bar ──────────────────────────────── */}
       <div
+        ref={menubarRef}
         className="studio-menubar"
         onMouseLeave={() => {
           if (menuHoverTimerRef.current) {
@@ -8306,7 +8319,7 @@ export default function ResearchStudioPage() {
           <div key={menu.key} className="studio-menu-group">
             <button
               type="button"
-              onClick={() => setOpenMenu(openMenu === menu.key ? "" : menu.key)}
+              onClick={() => openMenuWithSheet(menu.key)}
               onMouseEnter={() => {
                 if (menuCloseTimerRef.current) {
                   clearTimeout(menuCloseTimerRef.current);
@@ -8484,7 +8497,7 @@ export default function ResearchStudioPage() {
                     title="Upload files to the project root"
                   >
                     <svg viewBox="0 0 20 20" style={{ width: 14, height: 14 }} fill="none" stroke="currentColor" strokeWidth="2">
-                      <path d="M10 3v9m0 0l-3-3m3 3l3-3M4 14v2h12v-2" strokeLinecap="round" strokeLinejoin="round" />
+                      <path d="M10 12V3m0 0l-3 3m3-3l3 3M4 14v2h12v-2" strokeLinecap="round" strokeLinejoin="round" />
                     </svg>
                   </button>
                   <button
