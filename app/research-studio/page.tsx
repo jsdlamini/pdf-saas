@@ -11,6 +11,7 @@ import katex from "katex";
 import "katex/dist/katex.min.css";
 import { useCallback, useEffect, useEffectEvent, useMemo, useRef, useState } from "react";
 import { useSearchParams } from "next/navigation";
+import dynamic from "next/dynamic";
 import Swal from "sweetalert2";
 import { getTemplateBySlug, RESEARCH_TEMPLATES, type ResearchTemplate } from "@/lib/research-templates";
 import { LatexEditor, EDITOR_THEMES, type EditorThemeId, type EditorFindRange } from "../components/latex-editor";
@@ -38,7 +39,11 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import "@xterm/xterm/css/xterm.css";
 import { QRCodeSVG } from "qrcode.react";
-import PdfPreview, { type PdfHighlight } from "../components/pdf-preview";
+import type { PdfHighlight } from "../components/pdf-preview";
+
+// Lazy-load the PDF preview so pdfjs-dist (large) only downloads after the
+// first successful compile, not on initial studio load.
+const PdfPreview = dynamic(() => import("../components/pdf-preview"), { ssr: false });
 
 type StudioEditorAdapter = {
   selectionStart: number;

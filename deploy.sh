@@ -100,8 +100,9 @@ case "$DEPLOY_MODE" in
     ;;
 esac
 
-# Clean up dangling images
-echo "Cleaning up old images..."
+# Clean up dangling images and build cache (build cache grows fastest).
+echo "Cleaning up old images and build cache..."
 docker image prune -f
+docker builder prune -f
 
 echo "$(date '+%Y-%m-%d %H:%M:%S') - Deployment complete."
