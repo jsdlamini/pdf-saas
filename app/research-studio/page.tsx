@@ -404,6 +404,19 @@ function scanLabels(entries: ProjectEntry[]): LabelItem[] {
   return labels;
 }
 
+// Image files that can be passed to \includegraphics (paths relative to the
+// project root, without a leading ./).
+function scanFigureFiles(entries: ProjectEntry[]): string[] {
+  const imageExt = /\.(png|jpe?g|gif|webp|svg|eps|pdf|tiff?)$/i;
+  const paths: string[] = [];
+  for (const e of entries) {
+    if (e.kind !== "file") continue;
+    const p = e.path.replace(/^\.\//, "");
+    if (imageExt.test(p)) paths.push(p);
+  }
+  return paths.sort();
+}
+
 function parseAbstractContent(source: string): string {
   const absStart = source.indexOf("\\begin{abstract}");
   const absEnd = source.indexOf("\\end{abstract}");
@@ -1692,6 +1705,15 @@ export default function ResearchStudioPage() {
   const projectTree = useMemo(() => buildProjectTree(projectEntries), [projectEntries]);
   const citationKeys = useMemo(() => scanCitationKeys(projectEntries), [projectEntries]);
   const labelItems = useMemo(() => scanLabels(projectEntries), [projectEntries]);
+  const figurePaths = useMemo(() => scanFigureFiles(projectEntries), [projectEntries]);
+  const completionContext = useMemo(
+    () => ({
+      bibKeys: citationKeys.map((c) => c.key),
+      labels: labelItems.map((l) => l.name),
+      figures: figurePaths,
+    }),
+    [citationKeys, labelItems, figurePaths]
+  );
   const autoExpandedFolders = useMemo(
     () => buildActiveAncestorExpansion(activeEntry?.path ?? "", projectEntries),
     [activeEntry?.path, projectEntries]
@@ -8776,6 +8798,7 @@ export default function ResearchStudioPage() {
                 highlightRanges={currentFileFindRanges}
                 fontSize={editorFontSize}
                 onFontSizeChange={setEditorFontSize}
+                completionContext={completionContext}
                 className="studio-editor-codemirror"
               />
               {collabCursors.length > 0 ? (

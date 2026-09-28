@@ -20,7 +20,7 @@ import {
   drawSelection,
   type DecorationSet,
 } from "@codemirror/view";
-import { closeBrackets } from "@codemirror/autocomplete";
+import { closeBrackets, autocompletion, type CompletionContext, type CompletionResult } from "@codemirror/autocomplete";
 import {
   defaultKeymap,
   history,
@@ -44,6 +44,12 @@ export type EditorLanguage = "latex" | "python" | "cpp";
 
 export type EditorFindRange = { from: number; to: number };
 
+export type EditorCompletionContext = {
+  bibKeys: string[];
+  labels: string[];
+  figures: string[];
+};
+
 export type LatexEditorProps = {
   value: string;
   onChange: (value: string) => void;
@@ -61,6 +67,7 @@ export type LatexEditorProps = {
   onSelectionChange?: (cursor: number) => void;
   onDragOver?: (event: DragEvent) => void;
   onDrop?: (event: DragEvent) => void;
+  completionContext?: EditorCompletionContext;
 };
 
 const languages: Record<EditorLanguage, Extension> = {
@@ -303,6 +310,7 @@ export function LatexEditor({
   onSelectionChange,
   onDragOver,
   onDrop,
+  completionContext,
 }: LatexEditorProps) {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const viewRef = useRef<EditorView | null>(null);
@@ -321,6 +329,8 @@ export function LatexEditor({
   onDragOverRef.current = onDragOver;
   const onDropRef = useRef(onDrop);
   onDropRef.current = onDrop;
+  const completionContextRef = useRef<EditorCompletionContext | undefined>(undefined);
+  completionContextRef.current = completionContext;
   const fontSizeRef = useRef(fontSize);
   fontSizeRef.current = fontSize;
   const onFontSizeChangeRef = useRef(onFontSizeChange);
@@ -373,6 +383,31 @@ export function LatexEditor({
         bracketMatching(),
         indentOnInput(),
         closeBrackets(),
+        autocompletion({
+          override: [
+            (context: CompletionContext): CompletionResult | null => {
+              const { state, pos } = context;
+              const line = state.doc.lineAt(pos);
+              const lineBefore = state.doc.sliceString(line.from, pos);
+              const m = /\\(cite|citep|citet|parencite|ref|eqref|includegraphics)\*?\{([^{}\n]*)$/.exec(lineBefore);
+              if (!m) return null;
+              const command = m[1];
+              const partial = m[2];
+              const data = completionContextRef.current;
+              let list: string[] = [];
+              if (command === "ref" || command === "eqref") list = data?.labels ?? [];
+              else if (command === "includegraphics") list = data?.figures ?? [];
+              else if (command === "cite" || command === "citep" || command === "citet" || command === "parencite") list = data?.bibKeys ?? [];
+              else return null;
+              if (!list.length) return null;
+              return {
+                from: pos - partial.length,
+                options: list.map((label) => ({ label, type: "text" })),
+                validFor: /^[^\s{},]*$/,
+              };
+            },
+          ],
+        }),
         EditorView.lineWrapping,
         readOnlyCompartment.of(EditorState.readOnly.of(readOnly)),
         EditorView.updateListener.of((update) => {
