@@ -23,13 +23,23 @@ export default function PdfPreview({
   const containerRef = useRef<HTMLDivElement | null>(null);
   const pdfRef = useRef<PDFDocumentProxy | null>(null);
   const taskRef = useRef<{ destroy: () => Promise<void> } | null>(null);
-  const pageMetasRef = useRef<{ canvas: HTMLCanvasElement; width: number; height: number }[]>([]);
+  const pageMetasRef = useRef<
+    { canvas: HTMLCanvasElement; width: number; height: number; wrapper: HTMLDivElement; spans: { el: HTMLSpanElement; text: string }[] }[]
+  >([]);
   const tokenRef = useRef(0);
   const lastScaleRef = useRef(0);
+  const findQueryRef = useRef("");
+  const findHitsRef = useRef<HTMLSpanElement[]>([]);
   const [zoom, setZoom] = useState<Zoom>("fit-width");
   const [scale, setScale] = useState(1);
   const [pageCount, setPageCount] = useState(0);
   const [error, setError] = useState("");
+  const [findOpen, setFindOpen] = useState(false);
+  const [findQuery, setFindQuery] = useState("");
+  const [findTotal, setFindTotal] = useState(0);
+  const [findIndex, setFindIndex] = useState(0);
+  const [currentPage, setCurrentPage] = useState(1);
+  const [pageInput, setPageInput] = useState("1");
 
   const computeScale = useCallback(async (pdf: PDFDocumentProxy, mode: Zoom) => {
     const container = containerRef.current;
@@ -46,6 +56,57 @@ export default function PdfPreview({
     return Math.max(0.2, Math.min(4, mode));
   }, []);
 
+  // Find-in-PDF: highlight matching text-layer spans and jump between hits.
+  const applyFind = useCallback((q: string) => {
+    for (const el of findHitsRef.current) {
+      el.classList.remove("studio-pdf-find-hit", "studio-pdf-find-active");
+    }
+    findHitsRef.current = [];
+    const needle = q.trim().toLowerCase();
+    if (!needle) {
+      setFindTotal(0);
+      setFindIndex(0);
+      return;
+    }
+    const hits: HTMLSpanElement[] = [];
+    for (const meta of pageMetasRef.current) {
+      for (const s of meta.spans) {
+        if (s.text.includes(needle)) {
+          s.el.classList.add("studio-pdf-find-hit");
+          hits.push(s.el);
+        }
+      }
+    }
+    findHitsRef.current = hits;
+    setFindTotal(hits.length);
+    if (hits.length) {
+      hits[0].classList.add("studio-pdf-find-active");
+      hits[0].scrollIntoView({ behavior: "smooth", block: "center" });
+      setFindIndex(0);
+    } else {
+      setFindIndex(0);
+    }
+  }, []);
+
+  const activateFind = useCallback((index: number) => {
+    const hits = findHitsRef.current;
+    if (!hits.length) return;
+    const clamped = ((index % hits.length) + hits.length) % hits.length;
+    for (const el of hits) el.classList.remove("studio-pdf-find-active");
+    const el = hits[clamped];
+    el.classList.add("studio-pdf-find-active");
+    el.scrollIntoView({ behavior: "smooth", block: "center" });
+    setFindIndex(clamped);
+  }, []);
+
+  const goToPage = useCallback((n: number) => {
+    const meta = pageMetasRef.current[n - 1];
+    if (!meta) return;
+    meta.wrapper.scrollIntoView({ behavior: "smooth", block: "start" });
+    setCurrentPage(n);
+    setPageInput(String(n));
+  }, []);
+
   const render = useCallback(
     async (mode: Zoom) => {
       const pdf = pdfRef.current;
@@ -58,6 +119,7 @@ export default function PdfPreview({
       const dpr = window.devicePixelRatio || 1;
       container.innerHTML = "";
       pageMetasRef.current = [];
+      findHitsRef.current = [];
       for (let p = 1; p <= pdf.numPages; p++) {
         if (token !== tokenRef.current) return;
         const page = await pdf.getPage(p);
@@ -86,6 +148,7 @@ export default function PdfPreview({
         const textLayer = document.createElement("div");
         textLayer.className = "textLayer";
         wrapper.appendChild(textLayer);
+        const spans: { el: HTMLSpanElement; text: string }[] = [];
         try {
           const textContent = await page.getTextContent();
           const cssViewport = page.getViewport({ scale: s });
@@ -105,14 +168,17 @@ export default function PdfPreview({
               span.style.transform = `rotate(${angle}rad)`;
             }
             textLayer.appendChild(span);
+            spans.push({ el: span, text: item.str.toLowerCase() });
           }
         } catch { /* text layer is best-effort */ }
 
         container.appendChild(wrapper);
-        pageMetasRef.current.push({ canvas, width: cssW, height: cssH });
+        pageMetasRef.current.push({ canvas, width: cssW, height: cssH, wrapper, spans });
       }
+      // Re-apply an active search after a re-render (zoom or recompile).
+      if (findQueryRef.current.trim()) applyFind(findQueryRef.current);
     },
-    [computeScale]
+    [computeScale, applyFind]
   );
 
   useEffect(() => {
@@ -239,6 +305,27 @@ export default function PdfPreview({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [highlight]);
 
+  // Track the visible page for the page-number input + prev/next controls.
+  useEffect(() => {
+    const container = containerRef.current;
+    if (!container) return;
+    const onScroll = () => {
+      const containerTop = container.getBoundingClientRect().top;
+      let page = 1;
+      for (const meta of pageMetasRef.current) {
+        if (meta.wrapper.getBoundingClientRect().top <= containerTop + 40) {
+          page = Number(meta.wrapper.dataset.page || "1");
+        } else {
+          break;
+        }
+      }
+      setCurrentPage(page);
+      setPageInput(String(page));
+    };
+    container.addEventListener("scroll", onScroll, { passive: true });
+    return () => container.removeEventListener("scroll", onScroll);
+  }, []);
+
   return (
     <div style={{ display: "flex", flexDirection: "column", height: "100%", minHeight: 0, background: "#3b3f46" }}>
       <div className="studio-pdf-toolbar">
@@ -249,8 +336,68 @@ export default function PdfPreview({
         <span className="studio-pdf-tool-pct">{Math.round(scale * 100)}%</span>
         <button type="button" className="studio-pdf-tool-btn" onClick={() => setZoom(Math.min(4, scale + 0.1))}>+</button>
         <span className="studio-pdf-tool-sep" />
-        <span className="studio-pdf-tool-pct">{pageCount} page{pageCount === 1 ? "" : "s"}</span>
+        <button type="button" className="studio-pdf-tool-btn" onClick={() => goToPage(currentPage - 1)} disabled={currentPage <= 1} aria-label="Previous page" title="Previous page">‹</button>
+        <span className="studio-pdf-page-nav">
+          <input
+            className="studio-pdf-page-input"
+            value={pageInput}
+            onChange={(e) => setPageInput(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") {
+                const n = parseInt(pageInput, 10);
+                if (Number.isFinite(n) && n >= 1 && n <= pageCount) goToPage(n);
+                else setPageInput(String(currentPage));
+              }
+            }}
+            inputMode="numeric"
+            aria-label="Go to page"
+          />
+          <span className="studio-pdf-tool-pct">/ {pageCount}</span>
+        </span>
+        <button type="button" className="studio-pdf-tool-btn" onClick={() => goToPage(currentPage + 1)} disabled={currentPage >= pageCount} aria-label="Next page" title="Next page">›</button>
+        <span className="studio-pdf-tool-sep" />
+        <button
+          type="button"
+          className={findOpen ? "studio-pdf-tool-btn active" : "studio-pdf-tool-btn"}
+          onClick={() => {
+            if (findOpen) {
+              setFindOpen(false);
+              setFindQuery("");
+              findQueryRef.current = "";
+              applyFind("");
+            } else {
+              setFindOpen(true);
+            }
+          }}
+          aria-label="Find in document"
+          title="Find in document"
+        >
+          <svg viewBox="0 0 20 20" style={{ width: 12, height: 12 }} fill="none" stroke="currentColor" strokeWidth="2">
+            <circle cx="9" cy="9" r="4" />
+            <path d="M12.5 12.5L16 16" strokeLinecap="round" />
+          </svg>
+        </button>
       </div>
+      {findOpen ? (
+        <div className="studio-pdf-findbar">
+          <input
+            autoFocus
+            value={findQuery}
+            onChange={(e) => {
+              setFindQuery(e.target.value);
+              findQueryRef.current = e.target.value;
+              applyFind(e.target.value);
+            }}
+            placeholder="Find in document…"
+            className="studio-pdf-find-input"
+            aria-label="Find in document"
+          />
+          <span className="studio-pdf-find-count">{findTotal ? `${findIndex + 1}/${findTotal}` : "0/0"}</span>
+          <button type="button" className="studio-pdf-tool-btn" onClick={() => activateFind(findIndex - 1)} disabled={!findTotal} aria-label="Previous match">Prev</button>
+          <button type="button" className="studio-pdf-tool-btn" onClick={() => activateFind(findIndex + 1)} disabled={!findTotal} aria-label="Next match">Next</button>
+          <button type="button" className="studio-pdf-tool-btn" onClick={() => { setFindOpen(false); setFindQuery(""); findQueryRef.current = ""; applyFind(""); }} aria-label="Close search">×</button>
+        </div>
+      ) : null}
       <div ref={containerRef} className="studio-pdf-scroll">
         {error ? <p className="studio-pdf-error">{error}</p> : null}
       </div>
