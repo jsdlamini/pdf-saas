@@ -1587,6 +1587,81 @@ body[data-studio-editor="true"] footer {
   padding: 16px;
 }
 
+/* Find-in-PDF search bar + page navigation. */
+.studio-pdf-findbar {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 8px;
+  border-bottom: 1px solid var(--border-color, #2a3140);
+  background: var(--bg-secondary, #10131b);
+  flex-shrink: 0;
+}
+
+.studio-pdf-find-input {
+  flex: 1;
+  min-width: 120px;
+  height: 24px;
+  padding: 0 8px;
+  border-radius: 5px;
+  border: 1px solid var(--border-color, #2a3140);
+  background: var(--bg-primary, #0d1017);
+  color: var(--text-primary, #e6ebf2);
+  font-size: 12px;
+  outline: none;
+}
+
+.studio-pdf-find-input:focus {
+  border-color: var(--accent-color, #60a5fa);
+}
+
+.studio-pdf-find-count {
+  font-size: 11px;
+  color: var(--text-muted, #7c8798);
+  min-width: 36px;
+  text-align: center;
+}
+
+.studio-pdf-page-nav {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+}
+
+.studio-pdf-page-input {
+  width: 34px;
+  height: 22px;
+  padding: 0 2px;
+  border-radius: 5px;
+  border: 1px solid var(--border-color, #2a3140);
+  background: var(--bg-primary, #0d1017);
+  color: var(--text-primary, #e6ebf2);
+  font-size: 11px;
+  text-align: center;
+  outline: none;
+}
+
+.studio-pdf-page-input:focus {
+  border-color: var(--accent-color, #60a5fa);
+}
+
+.studio-pdf-tool-btn:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+/* Highlight layers on the transparent PDF text layer. */
+.textLayer span.studio-pdf-find-hit {
+  background: rgba(250, 204, 21, 0.38);
+  border-radius: 2px;
+  box-shadow: 0 0 0 1px rgba(250, 204, 21, 0.25);
+}
+
+.textLayer span.studio-pdf-find-active {
+  background: rgba(249, 115, 22, 0.8);
+  border-radius: 2px;
+}
+
 /* ── Editor toolbar ───── */
 .studio-editor-toolbar {
   display: flex;
