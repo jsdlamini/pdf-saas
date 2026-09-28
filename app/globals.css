@@ -1527,6 +1527,16 @@ body[data-studio-editor="true"] footer {
   background: #3b3f46;
 }
 
+/* Single-page mode: snap each page into view one at a time. proximity (not
+   mandatory) so a zoomed page taller than the viewport can still be scrolled. */
+.studio-pdf-scroll-single {
+  scroll-snap-type: y proximity;
+}
+
+.studio-pdf-scroll-single .studio-pdf-page {
+  scroll-snap-align: start;
+}
+
 .studio-pdf-page {
   box-shadow: 0 2px 12px rgba(0, 0, 0, 0.5);
   border-radius: 2px;
