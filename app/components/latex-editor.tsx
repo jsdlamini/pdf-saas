@@ -20,6 +20,7 @@ import {
   drawSelection,
   type DecorationSet,
 } from "@codemirror/view";
+import { closeBrackets } from "@codemirror/autocomplete";
 import {
   defaultKeymap,
   history,
@@ -345,8 +346,33 @@ export function LatexEditor({
           { key: "Mod-d", run: selectNextOccurrence },
           { key: "Mod-Shift-l", run: selectSelectionMatches },
         ]),
+        // Auto-close LaTeX environments: Enter right after \begin{env} inserts
+        // a matching \end{env} and puts the cursor on the indented blank line.
+        keymap.of([
+          {
+            key: "Enter",
+            run: (view) => {
+              const { state } = view;
+              const { from, to } = state.selection.main;
+              if (from !== to) return false;
+              const line = state.doc.lineAt(from);
+              const lineText = state.doc.sliceString(line.from, line.to);
+              const m = /^\s*\\begin\{([^}]*)\}\s*$/.exec(lineText);
+              if (!m) return false;
+              const env = m[1];
+              const head = `\\begin{${env}}\n\t`;
+              view.dispatch({
+                changes: { from: line.from, to: line.to, insert: `${head}\n\\end{${env}}` },
+                selection: { anchor: line.from + head.length },
+                scrollIntoView: true,
+              });
+              return true;
+            },
+          },
+        ]),
         bracketMatching(),
         indentOnInput(),
+        closeBrackets(),
         EditorView.lineWrapping,
         readOnlyCompartment.of(EditorState.readOnly.of(readOnly)),
         EditorView.updateListener.of((update) => {
