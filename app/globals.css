@@ -1381,6 +1381,13 @@ html[data-theme="light"] .studio-projects-panel {
   border-radius: 2px;
 }
 
+/* Spell-check squiggle (lazy-loaded typo-js decorations). */
+.cm-spell-error {
+  text-decoration: underline wavy #f87171;
+  text-decoration-skip-ink: none;
+  text-underline-offset: 2px;
+}
+
 /* Hide the global site footer while the Research Studio editor is open. */
 body[data-studio-editor="true"] footer {
   display: none;

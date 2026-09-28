@@ -21,6 +21,7 @@ import {
   type DecorationSet,
 } from "@codemirror/view";
 import { closeBrackets, autocompletion, type CompletionContext, type CompletionResult } from "@codemirror/autocomplete";
+import { loadSpellcheckExtension } from "@/lib/spellcheck";
 import {
   defaultKeymap,
   history,
@@ -276,6 +277,7 @@ const findHighlightField = StateField.define<DecorationSet>({
 const readOnlyCompartment = new Compartment();
 const languageCompartment = new Compartment();
 const themeCompartment = new Compartment();
+const spellcheckCompartment = new Compartment();
 
 // ── Font-size controls (buttons, Shift +/-, Shift/Ctrl/Cmd + wheel) ──────────
 const FONT_SIZE_MIN = 9;
@@ -410,6 +412,7 @@ export function LatexEditor({
         }),
         EditorView.lineWrapping,
         readOnlyCompartment.of(EditorState.readOnly.of(readOnly)),
+        spellcheckCompartment.of([]),
         EditorView.updateListener.of((update) => {
           if (update.docChanged) {
             onChangeRef.current(update.state.doc.toString());
@@ -464,6 +467,24 @@ export function LatexEditor({
       viewRef.current = null;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Lazy-load the spell checker (typo-js + dictionary) and reconfigure the
+  // editor once it's ready, keeping it out of the initial bundle.
+  useEffect(() => {
+    let cancelled = false;
+    void loadSpellcheckExtension()
+      .then((ext) => {
+        if (cancelled) return;
+        const view = viewRef.current;
+        if (view) view.dispatch({ effects: spellcheckCompartment.reconfigure(ext) });
+      })
+      .catch(() => {
+        /* spell check is optional */
+      });
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   // Sync external value changes (file switch, collaboration pull, AI edit).
