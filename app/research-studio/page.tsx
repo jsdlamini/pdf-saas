@@ -7,12 +7,10 @@ import { showToast } from "../components/toast";
 import CommandPalette from "../components/command-palette";
 import { trackEvent } from "../components/analytics";
 import JSZip from "jszip";
-import katex from "katex";
 import "katex/dist/katex.min.css";
 import { useCallback, useEffect, useEffectEvent, useMemo, useRef, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import dynamic from "next/dynamic";
-import Swal from "sweetalert2";
 import { getTemplateBySlug, RESEARCH_TEMPLATES, type ResearchTemplate } from "@/lib/research-templates";
 import { LatexEditor, EDITOR_THEMES, type EditorThemeId, type EditorFindRange } from "../components/latex-editor";
 import { LearnStudio } from "../components/learn-studio";
@@ -25,8 +23,6 @@ import { renderPdfFirstPagePreview } from "@/lib/transforms/rasterize";
 import { VALID_PROGRAMMES } from "@/lib/groups";
 import { classifyUpload, joinUploadPath } from "@/lib/project-upload";
 import { Button } from "@/components/ui/button";
-import ReactMarkdown from "react-markdown";
-import confetti from "canvas-confetti";
 import {
   Dialog,
   DialogContent,
@@ -38,12 +34,30 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import "@xterm/xterm/css/xterm.css";
-import { QRCodeSVG } from "qrcode.react";
 import type { PdfHighlight } from "../components/pdf-preview";
 
 // Lazy-load the PDF preview so pdfjs-dist (large) only downloads after the
 // first successful compile, not on initial studio load.
 const PdfPreview = dynamic(() => import("../components/pdf-preview"), { ssr: false });
+
+// Lazy-load other heavy, on-demand dependencies so they stay out of the
+// initial studio bundle (dialogs, equations, markdown, QR codes, confetti).
+const ReactMarkdown = dynamic(() => import("react-markdown"), { ssr: false });
+const QRCodeSVG = dynamic(() => import("qrcode.react").then((m) => m.QRCodeSVG), { ssr: false });
+
+let swalModulePromise: Promise<any> | null = null;
+function getSwalModule(): Promise<any> {
+  if (!swalModulePromise) swalModulePromise = import("sweetalert2").then((m) => m.default);
+  return swalModulePromise;
+}
+async function fireSwal(config: Record<string, unknown>) {
+  const Swal = await getSwalModule();
+  return Swal.fire(config);
+}
+async function fireConfetti(opts: Record<string, unknown>) {
+  const confetti = (await import("canvas-confetti")).default;
+  return confetti(opts);
+}
 
 type StudioEditorAdapter = {
   selectionStart: number;
@@ -636,7 +650,7 @@ int main() {
 }
 
 async function confirmModal(title: string, text: string, confirmButtonText: string, danger = false) {
-  const result = await Swal.fire({
+  const result = await fireSwal({
     title,
     text,
     icon: danger ? "warning" : "question",
@@ -655,7 +669,7 @@ async function confirmModal(title: string, text: string, confirmButtonText: stri
 }
 
 async function promptModal(title: string, inputLabel: string, inputValue: string, confirmButtonText: string) {
-  const result = await Swal.fire({
+  const result = await fireSwal({
     title,
     input: "text",
     inputLabel,
@@ -676,7 +690,7 @@ async function promptModal(title: string, inputLabel: string, inputValue: string
       input: "swal-prompt-input",
       inputLabel: "swal-prompt-label",
     },
-    inputValidator: (value) => {
+    inputValidator: (value: string) => {
       if (!value || !value.trim()) {
         return "Enter a value.";
       }
@@ -689,7 +703,7 @@ async function promptModal(title: string, inputLabel: string, inputValue: string
 }
 
 async function projectEntryActionSheet(entry: ProjectEntry) {
-  const result = await Swal.fire({
+  const result = await fireSwal({
     title: entry.path,
     text: "Choose an action",
     icon: "question",
@@ -1649,6 +1663,7 @@ export default function ResearchStudioPage() {
   const menuHoverTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const menuCloseTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [equationTooltip, setEquationTooltip] = useState<{ top: number; left: number; latex: string } | null>(null);
+  const [equationHtml, setEquationHtml] = useState<string>("");
   const [wordCount, setWordCount] = useState<{ words: number; chars: number; abstractWords: number }>({ words: 0, chars: 0, abstractWords: 0 });
   const [loadingProject, setLoadingProject] = useState(false);
   const [synctexRecords, setSynctexRecords] = useState<SynctexRecord[]>([]);
@@ -2381,6 +2396,27 @@ export default function ResearchStudioPage() {
       }
     }, 500);
   }
+
+  // Render the hovered equation to HTML lazily (katex loads on first use).
+  useEffect(() => {
+    if (!equationTooltip) {
+      setEquationHtml("");
+      return;
+    }
+    let cancelled = false;
+    void (async () => {
+      try {
+        const katex = (await import("katex")).default;
+        const html = katex.renderToString(equationTooltip.latex, { displayMode: true, throwOnError: true });
+        if (!cancelled) setEquationHtml(html);
+      } catch {
+        if (!cancelled) setEquationHtml('<span style="font-size:12px;color:#ef4444">Could not render equation</span>');
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [equationTooltip]);
 
   function onEditorDragOver(event: DragEvent) {
     if (!event.dataTransfer) return;
@@ -3790,8 +3826,8 @@ export default function ResearchStudioPage() {
         if (practice) {
           setCompileNotice("Practice passed — no points recorded, not on the leaderboard.");
         } else {
-          confetti({ particleCount: 90, spread: 70, origin: { y: 0.6 } });
-          if (data.firstSolve) setTimeout(() => confetti({ particleCount: 160, spread: 100, origin: { y: 0.4 } }), 250);
+          void fireConfetti({ particleCount: 90, spread: 70, origin: { y: 0.6 } });
+          if (data.firstSolve) setTimeout(() => void fireConfetti({ particleCount: 160, spread: 100, origin: { y: 0.4 } }), 250);
         }
       }
     } catch (error) {
@@ -4061,7 +4097,7 @@ export default function ResearchStudioPage() {
       .replace(/^-+|-+$/g, "")
       .slice(0, 100) || "my-project";
 
-    const { value } = await Swal.fire({
+    const { value } = await fireSwal({
       title: "Push to GitHub",
       html: `
         <div style="text-align:left;display:flex;flex-direction:column;gap:10px">
@@ -4081,7 +4117,7 @@ export default function ResearchStudioPage() {
       preConfirm: () => {
         const repo = (document.getElementById("swal-gh-repo") as HTMLInputElement)?.value?.trim();
         const isPrivate = (document.getElementById("swal-gh-private") as HTMLInputElement)?.checked;
-        if (!repo) { Swal.showValidationMessage("Enter a repository name"); return false; }
+        if (!repo) { void getSwalModule().then((Swal) => Swal.showValidationMessage("Enter a repository name")); return false; }
         return { repo, isPrivate };
       },
     });
@@ -4230,7 +4266,7 @@ export default function ResearchStudioPage() {
       .map((r) => `<option value="${r.full_name || r.name}">${r.name}${r.private ? " (private)" : ""}</option>`)
       .join("");
 
-    const result = await Swal.fire({
+    const result = await fireSwal({
       title: "Open from GitHub",
       html: `
         <div style="text-align:left;display:flex;flex-direction:column;gap:10px">
@@ -4689,7 +4725,7 @@ export default function ResearchStudioPage() {
   function createProjectFromTemplate(template: ResearchTemplate) {
     if (!userId && savedProjects.length >= GUEST_PROJECT_LIMIT) {
       setCompileNotice("Guest limit reached: sign in to create more than 5 projects.");
-      void Swal.fire({
+      void fireSwal({
         title: "Project limit reached",
         html: `Guest users can save up to ${GUEST_PROJECT_LIMIT} projects.
           <a href="#" onclick="window.Clerk && window.Clerk.openSignIn && window.Clerk.openSignIn(); return false;" style="color:#0f766e;font-weight:600">Sign in</a>
@@ -4796,7 +4832,7 @@ export default function ResearchStudioPage() {
   function createNewProject() {
     if (!userId && savedProjects.length >= GUEST_PROJECT_LIMIT) {
       setCompileNotice("Guest limit reached: sign in to create more projects.");
-      void Swal.fire({
+      void fireSwal({
         title: "Project limit reached",
         html: `Guest users can save up to ${GUEST_PROJECT_LIMIT} projects. <a href="#" onclick="window.Clerk && window.Clerk.openSignIn && window.Clerk.openSignIn(); return false;" style="color:#0f766e;font-weight:600">Sign in</a> or <a href="#" onclick="window.Clerk && window.Clerk.openSignUp && window.Clerk.openSignUp(); return false;" style="color:#0f766e;font-weight:600">create an account</a> to continue.`,
         icon: "info",
@@ -5133,7 +5169,7 @@ export default function ResearchStudioPage() {
       return;
     }
 
-    if (action.dismiss === Swal.DismissReason.cancel) {
+    if (action.dismiss === "cancel") {
       await deleteProjectEntry(entry.path);
     }
   }
@@ -5256,7 +5292,7 @@ export default function ResearchStudioPage() {
       const now = Date.now();
       timestamps = timestamps.filter((t) => typeof t === "number" && now - t < GUEST_COMPILE_WINDOW_MS);
       if (timestamps.length >= GUEST_COMPILE_LIMIT) {
-        await Swal.fire({
+        await fireSwal({
           title: "Compile limit reached",
           html: `You've used your ${GUEST_COMPILE_LIMIT} free compiles this hour.
             <a href="#" onclick="window.Clerk && window.Clerk.openSignIn && window.Clerk.openSignIn(); return false;" style="color:#0f766e;font-weight:600">Sign in</a>
@@ -8883,15 +8919,7 @@ export default function ResearchStudioPage() {
                 <div
                   className="studio-eq-tooltip"
                   style={{ top: `${equationTooltip.top}px`, left: `${equationTooltip.left}px` }}
-                  dangerouslySetInnerHTML={{
-                    __html: (() => {
-                      try {
-                        return katex.renderToString(equationTooltip.latex, { displayMode: true, throwOnError: true });
-                      } catch {
-                        return '<span style="font-size:12px;color:#ef4444">Could not render equation</span>';
-                      }
-                    })(),
-                  }}
+                  dangerouslySetInnerHTML={{ __html: equationHtml }}
                 />
               ) : null}
             </div>
