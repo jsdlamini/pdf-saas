@@ -723,13 +723,36 @@ export async function POST(request: Request) {
   }
 
   try {
-  let payload: CompileRequestPayload;
+    let payload: CompileRequestPayload;
 
-  try {
-    payload = (await request.json()) as CompileRequestPayload;
-  } catch {
-    return jsonError("Invalid JSON payload.", 400);
-  }
+    try {
+      const raw = await request.text();
+      if (!raw.trim()) {
+        return jsonError("Empty compile payload.", 400);
+      }
+      try {
+        payload = JSON.parse(raw) as CompileRequestPayload;
+      } catch (parseError) {
+        console.error(
+          "[latex-compile] invalid JSON body:",
+          JSON.stringify({
+            bytes: raw.length,
+            head: raw.slice(0, 200),
+            error: parseError instanceof Error ? parseError.message : String(parseError),
+          })
+        );
+        return jsonError(
+          "Compile payload could not be read. If the project has many large figures, try re-importing the project.",
+          400
+        );
+      }
+    } catch (readError) {
+      console.error(
+        "[latex-compile] failed to read request body:",
+        readError instanceof Error ? readError.message : String(readError)
+      );
+      return jsonError("Compile payload could not be read.", 400);
+    }
 
   const files = payload.files ?? [];
   if (!Array.isArray(files) || !files.length) {

@@ -9401,6 +9401,9 @@ export default function ResearchStudioPage() {
                     <button type="button" onClick={() => void compileProject()} className="studio-btn studio-btn-primary">
                       Compile to preview
                     </button>
+                    <p style={{ fontSize: 11, color: "var(--text-muted, #64748b)", marginTop: 10, maxWidth: 260, textAlign: "center" }}>
+                      Tip: after compiling, double-click any spot in the PDF to jump to that line in your source.
+                    </p>
                   </div>
                 )}
               </div>
