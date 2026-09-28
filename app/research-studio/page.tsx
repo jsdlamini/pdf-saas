@@ -1652,6 +1652,7 @@ export default function ResearchStudioPage() {
   const [pdfAnchor, setPdfAnchor] = useState<{ page: number; x: number; y: number } | null>(null);
   const [showShortcuts, setShowShortcuts] = useState(false);
   const [openMenu, setOpenMenu] = useState("");
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const menubarRef = useRef<HTMLDivElement | null>(null);
 
   // Open a menubar dropdown. On mobile the dropdown is a full-width fixed
@@ -1674,6 +1675,17 @@ export default function ResearchStudioPage() {
     document.addEventListener("mousedown", handler);
     return () => document.removeEventListener("mousedown", handler);
   }, [openMenu]);
+
+  // Close the mobile menu on outside tap.
+  useEffect(() => {
+    if (!mobileMenuOpen) return;
+    const handler = (e: MouseEvent) => {
+      const t = e.target as HTMLElement;
+      if (!t.closest(".studio-menubar") && !t.closest(".studio-mobile-menu-btn")) setMobileMenuOpen(false);
+    };
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, [mobileMenuOpen]);
   const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const equationHoverRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const wordCountTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -7957,6 +7969,17 @@ export default function ResearchStudioPage() {
         <div className="studio-topbar-left">
           <button
             type="button"
+            onClick={() => setMobileMenuOpen((o) => !o)}
+            className="studio-btn studio-btn-ghost studio-mobile-menu-btn sm:hidden"
+            aria-label="Menu"
+            style={{ width: 32, padding: 0 }}
+          >
+            <svg viewBox="0 0 20 20" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="1.8">
+              <path d="M3 5h14M3 10h14M3 15h14" strokeLinecap="round" />
+            </svg>
+          </button>
+          <button
+            type="button"
             onClick={openProjectsBoard}
             className="studio-btn studio-btn-ghost"
             aria-label="Back to projects board"
@@ -8099,7 +8122,7 @@ export default function ResearchStudioPage() {
           <button
             type="button"
             onClick={openCollaborateDialog}
-            className="studio-btn inline-flex items-center gap-1.5 rounded-lg bg-gradient-to-r from-purple-500 to-indigo-500 px-3 py-1.5 text-xs font-bold text-white shadow-lg shadow-purple-500/30 transition hover:scale-105 hover:shadow-xl hover:shadow-purple-500/40"
+            className="studio-btn studio-collab-btn inline-flex items-center gap-1.5 rounded-lg bg-gradient-to-r from-purple-500 to-indigo-500 px-3 py-1.5 text-xs font-bold text-white shadow-lg shadow-purple-500/30 transition hover:scale-105 hover:shadow-xl hover:shadow-purple-500/40"
             aria-label="Collaborate"
           >
             <svg viewBox="0 0 20 20" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="2">
@@ -8195,7 +8218,7 @@ export default function ResearchStudioPage() {
       {/* ── Menu Bar ──────────────────────────────── */}
       <div
         ref={menubarRef}
-        className="studio-menubar"
+        className={mobileMenuOpen ? "studio-menubar studio-menubar-open" : "studio-menubar"}
         onMouseLeave={() => {
           if (menuHoverTimerRef.current) {
             clearTimeout(menuHoverTimerRef.current);
@@ -8335,7 +8358,7 @@ export default function ResearchStudioPage() {
               <div className="studio-menu-dropdown">
                 {menu.items.map((item: any, i: number) => (
                   item === "-" ? <hr key={i} className="studio-menu-divider" /> :
-                  <button key={i} type="button" onClick={item.action} className="studio-menu-item">{item.label}</button>
+                  <button key={i} type="button" onClick={() => { item.action(); setMobileMenuOpen(false); }} className="studio-menu-item">{item.label}</button>
                 ))}
               </div>
             ) : null}
