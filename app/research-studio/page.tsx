@@ -1734,6 +1734,7 @@ export default function ResearchStudioPage() {
 
   const isCodeMode = editorMode === "python" || editorMode === "cpp";
   const activeSource = activeEntry?.content ?? "";
+  const [cursorPos, setCursorPos] = useState(0);
 
   // Close the terminal when leaving code mode — LaTeX only renders a PDF.
   useEffect(() => {
@@ -2251,6 +2252,7 @@ export default function ResearchStudioPage() {
   }
 
   function handleEditorCursorChange(cursor: number) {
+    setCursorPos(cursor);
     updateIntellisenseFromInput(activeSource, cursor);
   }
 
@@ -9561,6 +9563,43 @@ export default function ResearchStudioPage() {
           />
         </div>
       ) : null}
+
+      {/* Status bar (editor footer) */}
+      <footer className="studio-statusbar">
+        <div className="studio-statusbar-left">
+          <span className="studio-statusbar-lang">
+            {editorMode === "latex" ? "LaTeX" : editorMode === "python" ? "Python" : "C++"}
+          </span>
+          <span className="studio-statusbar-item">
+            {(() => {
+              const before = activeSource.slice(0, cursorPos);
+              const line = before.split("\n").length;
+              const col = cursorPos - before.lastIndexOf("\n");
+              return `Ln ${line}, Col ${col}`;
+            })()}
+          </span>
+          {!isCodeMode ? <span className="studio-statusbar-item">{wordCount.words} words</span> : null}
+        </div>
+        <div className="studio-statusbar-right">
+          <span className="studio-statusbar-item">
+            {compileBusy || codeRunBusy ? (
+              <strong>{isCodeMode ? "Running…" : "Compiling…"}</strong>
+            ) : (
+              <strong>{lastCompileAt === "Not compiled yet" ? "Ready" : `Compiled ${lastCompileAt}`}</strong>
+            )}
+          </span>
+          <button
+            type="button"
+            onClick={() => setShowShortcuts(true)}
+            className="studio-btn studio-btn-ghost"
+            style={{ height: 20, fontSize: 10, padding: "0 6px" }}
+            title="Keyboard shortcuts"
+            aria-label="Keyboard shortcuts"
+          >
+            ?
+          </button>
+        </div>
+      </footer>
     </main>
   );
 }
