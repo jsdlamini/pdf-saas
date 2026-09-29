@@ -8065,7 +8065,6 @@ export default function ResearchStudioPage() {
                 disabled={codeRunBusy}
                 className="studio-btn studio-btn-primary studio-run-button"
                 aria-label={codeRunBusy ? "Running code" : "Run code"}
-                style={{ background: "#4ade80", color: "#000" }}
               >
                 <svg viewBox="0 0 20 20" className="h-4 w-4" fill="currentColor" stroke="none">
                   <path d="M7 4l9 6-9 6V4z" />
@@ -8169,7 +8168,8 @@ export default function ResearchStudioPage() {
           <button
             type="button"
             onClick={openCollaborateDialog}
-            className="studio-btn studio-collab-btn inline-flex items-center gap-1.5 rounded-lg bg-gradient-to-r from-purple-500 to-indigo-500 px-3 py-1.5 text-xs font-bold text-white shadow-lg shadow-purple-500/30 transition hover:scale-105 hover:shadow-xl hover:shadow-purple-500/40"
+            className="studio-btn studio-collab-btn inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-bold text-white shadow-md shadow-purple-500/25 transition hover:shadow-lg hover:shadow-purple-500/40"
+            style={{ background: "#7c3aed", border: "1px solid rgba(255, 255, 255, 0.12)" }}
             aria-label="Collaborate"
           >
             <svg viewBox="0 0 20 20" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="2">
