@@ -5361,7 +5361,7 @@ export default function ResearchStudioPage() {
     setAiFixSummary("");
     setAiFixSuggestions([]);
     setCompileBusy(true);
-    setCompileNotice("Compiling project on server...");
+    setCompileNotice("Preparing project…");
     compileAbortRef.current?.abort();
     const controller = new AbortController();
     compileAbortRef.current = controller;
@@ -5380,6 +5380,8 @@ export default function ResearchStudioPage() {
           // Keep images inline so the compile still has figures.
         }
       }
+
+      setCompileNotice("Compiling on server…");
 
       let response: Response;
       try {
@@ -5451,10 +5453,11 @@ export default function ResearchStudioPage() {
 
       const engine = response.headers.get("X-Latex-Engine") || "server engine";
       const warningsHeader = response.headers.get("X-Latex-Warnings");
+      const compileSeconds = ((Date.now() - started) / 1000).toFixed(1);
       setCompileNotice(
         warningsHeader
-          ? `Compiled ${rootPath} with warnings: ${warningsHeader}`
-          : `Compiled ${rootPath} using ${engine}.`
+          ? `Compiled ${rootPath} in ${compileSeconds}s with warnings: ${warningsHeader}`
+          : `Compiled ${rootPath} using ${engine} in ${compileSeconds}s.`
       );
       trackStudioEvent("compile", "latex", Date.now() - started);
 
