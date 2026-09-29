@@ -527,26 +527,33 @@ button:disabled,
   border-radius: 8px;
   font-size: 12px;
   font-weight: 600;
+  letter-spacing: 0.01em;
   border: 1px solid transparent;
   cursor: pointer;
-  transition: all 0.15s ease;
+  transition: background 0.15s ease, color 0.15s ease, border-color 0.15s ease, box-shadow 0.15s ease, transform 0.06s ease;
   white-space: nowrap;
   outline: none;
 }
 
 .studio-btn:focus-visible {
-  box-shadow: 0 0 0 2px var(--accent-color, #4ade80);
+  box-shadow: 0 0 0 3px var(--accent-dim, rgba(96, 165, 250, 0.25));
+}
+
+.studio-btn:active:not(:disabled) {
+  transform: translateY(1px);
 }
 
 .studio-btn-primary {
   background: var(--accent-color, #4ade80);
   color: #0d0f17;
   border-color: var(--accent-color, #4ade80);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.35), inset 0 1px 0 rgba(255, 255, 255, 0.14);
 }
 
 .studio-btn-primary:hover:not(:disabled) {
   background: var(--accent-hover, #22c55e);
   border-color: var(--accent-hover, #22c55e);
+  box-shadow: 0 6px 16px -4px var(--accent-dim, rgba(74, 222, 128, 0.45));
 }
 
 .studio-btn-primary:disabled {
@@ -555,15 +562,17 @@ button:disabled,
 }
 
 .studio-btn-secondary {
-  background: transparent;
-  color: var(--text-secondary, #94a3b8);
+  background: var(--bg-surface, #1a1f2c);
+  color: var(--text-primary, #e2e8f0);
   border-color: var(--border-color, #334155);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.25);
 }
 
 .studio-btn-secondary:hover:not(:disabled) {
-  background: rgba(255, 255, 255, 0.05);
+  background: var(--bg-surface, #1a1f2c);
   color: var(--text-primary, #e2e8f0);
-  border-color: rgba(255, 255, 255, 0.15);
+  border-color: var(--accent-color, #60a5fa);
+  box-shadow: 0 3px 10px -2px rgba(0, 0, 0, 0.45);
 }
 
 .studio-btn-ghost {
@@ -574,7 +583,7 @@ button:disabled,
 }
 
 .studio-btn-ghost:hover:not(:disabled) {
-  background: rgba(255, 255, 255, 0.06);
+  background: var(--accent-dim, rgba(96, 165, 250, 0.14));
   color: var(--text-primary, #e2e8f0);
 }
 
@@ -585,12 +594,56 @@ button:disabled,
 }
 
 .studio-btn-danger:hover {
-  background: rgba(239, 68, 68, 0.1);
+  background: rgba(239, 68, 68, 0.14);
+  color: #f87171;
 }
 
 .studio-btn-icon {
   width: 32px;
   padding: 0;
+}
+
+/* ── Studio status bar (editor footer) ───── */
+.studio-statusbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  height: 26px;
+  padding: 0 12px;
+  background: var(--bg-secondary, #10131b);
+  border-top: 1px solid var(--border-color, #2a3140);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--text-secondary, #94a3b8);
+  flex-shrink: 0;
+  user-select: none;
+}
+
+.studio-statusbar-left,
+.studio-statusbar-right {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  min-width: 0;
+}
+
+.studio-statusbar-item {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.studio-statusbar-item strong {
+  color: var(--text-primary, #e2e8f0);
+  font-weight: 600;
+}
+
+.studio-statusbar-lang {
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--accent-color, #60a5fa);
 }
 
 /* ── Layout grid ───── */
