@@ -604,6 +604,8 @@ export default function DashboardPage() {
         <UserActivity data={data} />
         {/* Top active users (non-students) */}
         <ActiveUsers />
+        {/* LaTeX usage */}
+        <LatexUsage />
         {/* Group switch log */}
         <GroupSwitchLog />
         {/* Multi-join flags */}
@@ -1487,6 +1489,68 @@ function UserActivity({ data }: { data: AnalyticsData | null }) {
           </div>
         </div>
       ) : null}
+    </div>
+  );
+}
+
+function LatexUsage() {
+  const [users, setUsers] = useState<Array<{
+    user_id: string; name: string; email: string; compiles: number;
+    activeDays: number; projects: number; lastSeen: string;
+  }> | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    fetch('/api/admin-latex-usage')
+      .then((r) => r.json())
+      .then((d) => { if (!cancelled) setUsers((d as { users?: typeof users }).users ?? []); })
+      .catch(() => { if (!cancelled) setUsers([]); });
+    return () => { cancelled = true; };
+  }, []);
+
+  return (
+    <div className="mx-auto max-w-5xl px-6 md:px-10 mt-6">
+      <div className="rounded-2xl border border-slate-200/60 bg-white p-6 shadow-sm">
+        <div className="mb-4">
+          <h2 className="text-base font-semibold text-slate-900">LaTeX users</h2>
+          <p className="text-xs text-slate-500 mt-0.5">
+            Users who have used the Research Studio LaTeX editor — how often they compile and how many projects they hold.
+          </p>
+        </div>
+        {!users ? (
+          <p className="text-xs text-slate-400">Loading…</p>
+        ) : users.length === 0 ? (
+          <p className="text-xs text-slate-400">No LaTeX usage recorded yet.</p>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full text-left text-sm">
+              <thead>
+                <tr className="border-b border-slate-200 text-xs uppercase tracking-[0.1em] text-slate-500">
+                  <th className="py-2 pr-4 font-semibold">User</th>
+                  <th className="py-2 pr-4 font-semibold">Compiles</th>
+                  <th className="py-2 pr-4 font-semibold">Days active</th>
+                  <th className="py-2 pr-4 font-semibold">Projects</th>
+                  <th className="py-2 font-semibold">Last seen</th>
+                </tr>
+              </thead>
+              <tbody>
+                {users.map((u) => (
+                  <tr key={u.user_id} className="border-b border-slate-100">
+                    <td className="py-2 pr-4">
+                      <span className="font-semibold text-slate-800">{u.name || u.email || u.user_id.slice(0, 12)}</span>
+                      {u.email && u.name ? <p className="text-xs text-slate-400">{u.email}</p> : null}
+                    </td>
+                    <td className="py-2 pr-4 text-slate-700">{u.compiles}</td>
+                    <td className="py-2 pr-4 text-slate-700">{u.activeDays}</td>
+                    <td className="py-2 pr-4 text-slate-700">{u.projects}</td>
+                    <td className="py-2 text-slate-400">{new Date(u.lastSeen).toLocaleString()}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
     </div>
   );
 }

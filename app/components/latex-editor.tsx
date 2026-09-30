@@ -69,6 +69,7 @@ export type LatexEditorProps = {
   onDragOver?: (event: DragEvent) => void;
   onDrop?: (event: DragEvent) => void;
   completionContext?: EditorCompletionContext;
+  spellcheckEnabled?: boolean;
 };
 
 const languages: Record<EditorLanguage, Extension> = {
@@ -313,6 +314,7 @@ export function LatexEditor({
   onDragOver,
   onDrop,
   completionContext,
+  spellcheckEnabled = false,
 }: LatexEditorProps) {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const viewRef = useRef<EditorView | null>(null);
@@ -469,15 +471,21 @@ export function LatexEditor({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Lazy-load the spell checker (typo-js + dictionary) and reconfigure the
-  // editor once it's ready, keeping it out of the initial bundle.
+  // Lazy-load the spell checker (typo-js + dictionary) only for LaTeX and only
+  // when explicitly enabled. Python/C++ never load it.
   useEffect(() => {
+    const view = viewRef.current;
+    if (!view) return;
+    if (!spellcheckEnabled || language !== "latex") {
+      view.dispatch({ effects: spellcheckCompartment.reconfigure([]) });
+      return;
+    }
     let cancelled = false;
     void loadSpellcheckExtension()
       .then((ext) => {
         if (cancelled) return;
-        const view = viewRef.current;
-        if (view) view.dispatch({ effects: spellcheckCompartment.reconfigure(ext) });
+        const v = viewRef.current;
+        if (v) v.dispatch({ effects: spellcheckCompartment.reconfigure(ext) });
       })
       .catch(() => {
         /* spell check is optional */
@@ -485,7 +493,7 @@ export function LatexEditor({
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [spellcheckEnabled, language]);
 
   // Sync external value changes (file switch, collaboration pull, AI edit).
   useEffect(() => {

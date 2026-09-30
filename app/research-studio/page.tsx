@@ -1671,6 +1671,7 @@ export default function ResearchStudioPage() {
   const [pdfHighlight, setPdfHighlight] = useState<PdfHighlight>(null);
   const [pdfAnchor, setPdfAnchor] = useState<{ page: number; x: number; y: number } | null>(null);
   const [showShortcuts, setShowShortcuts] = useState(false);
+  const [spellcheckEnabled, setSpellcheckEnabled] = useState(false);
   const [openMenu, setOpenMenu] = useState("");
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const menubarRef = useRef<HTMLDivElement | null>(null);
@@ -8371,6 +8372,7 @@ export default function ResearchStudioPage() {
               { label: leftPaneCollapsed ? "Show File Tree" : "Hide File Tree", action: () => { setOpenMenu(""); setLeftPaneCollapsed(!leftPaneCollapsed); } },
               "-",
               { label: "Version History", action: () => { setOpenMenu(""); setHistoryOpen(true); } },
+              ...(!isCodeMode ? [{ label: spellcheckEnabled ? "Disable Spell Check" : "Enable Spell Check", action: () => { setOpenMenu(""); setSpellcheckEnabled((v) => !v); } }] as any[] : []),
               { label: "Keyboard Shortcuts", action: () => { setOpenMenu(""); setShowShortcuts(!showShortcuts); } },
               "-",
               { label: terminalOpen ? "Hide Terminal" : "Terminal", action: () => { setOpenMenu(""); setTerminalOpen((o) => !o); } },
@@ -8882,6 +8884,7 @@ export default function ResearchStudioPage() {
                 fontSize={editorFontSize}
                 onFontSizeChange={setEditorFontSize}
                 completionContext={completionContext}
+                spellcheckEnabled={spellcheckEnabled}
                 className="studio-editor-codemirror"
               />
               {collabCursors.length > 0 ? (
