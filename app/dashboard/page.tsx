@@ -1560,15 +1560,88 @@ function LatexUsage() {
     return () => { cancelled = true; };
   }, []);
 
+  const [emailOpen, setEmailOpen] = useState(false);
+  const [emailSubject, setEmailSubject] = useState("");
+  const [emailBody, setEmailBody] = useState("");
+  const [emailSending, setEmailSending] = useState(false);
+  const [emailResult, setEmailResult] = useState<string | null>(null);
+
+  async function sendEmails(mode: 'encouragement' | 'custom') {
+    setEmailSending(true);
+    setEmailResult(null);
+    try {
+      const r = await fetch('/api/admin-email-users', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(mode === 'encouragement' ? { mode } : { mode, subject: emailSubject, body: emailBody }),
+      });
+      const d = await r.json();
+      if (!r.ok) throw new Error(d.error || 'Send failed.');
+      setEmailResult(`Sent ${d.sent}, failed ${d.failed}.`);
+      setEmailOpen(false);
+    } catch (e) {
+      setEmailResult(e instanceof Error ? e.message : 'Send failed.');
+    } finally {
+      setEmailSending(false);
+    }
+  }
+
   return (
     <div className="mx-auto max-w-5xl px-6 md:px-10 mt-6">
       <div className="rounded-2xl border border-slate-200/60 bg-white p-6 shadow-sm">
-        <div className="mb-4">
-          <h2 className="text-base font-semibold text-slate-900">LaTeX users</h2>
-          <p className="text-xs text-slate-500 mt-0.5">
-            Users who have used the Research Studio LaTeX editor — how often they compile and how many projects they hold.
-          </p>
+        <div className="mb-4 flex items-start justify-between gap-3 flex-wrap">
+          <div>
+            <h2 className="text-base font-semibold text-slate-900">LaTeX users</h2>
+            <p className="text-xs text-slate-500 mt-0.5">
+              Users who have used the Research Studio LaTeX editor — how often they compile and how many projects they hold.
+            </p>
+          </div>
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={() => void sendEmails('encouragement')}
+              disabled={emailSending}
+              className="rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-1.5 text-xs font-semibold text-emerald-700 hover:bg-emerald-100 disabled:opacity-50"
+            >
+              Send encouragement email
+            </button>
+            <button
+              type="button"
+              onClick={() => setEmailOpen((v) => !v)}
+              className="rounded-lg border border-slate-200 px-3 py-1.5 text-xs font-semibold text-slate-600 hover:bg-slate-100"
+            >
+              Bulk email
+            </button>
+          </div>
         </div>
+        {emailResult ? <p className="mb-3 text-xs font-semibold text-slate-700">{emailResult}</p> : null}
+        {emailOpen ? (
+          <div className="mb-4 rounded-lg border border-slate-200 bg-slate-50 p-3">
+            <input
+              value={emailSubject}
+              onChange={(e) => setEmailSubject(e.target.value)}
+              placeholder="Subject"
+              className="mb-2 w-full rounded-lg border border-slate-200 px-2.5 py-1.5 text-sm text-slate-700 outline-none focus:border-emerald-400"
+            />
+            <textarea
+              value={emailBody}
+              onChange={(e) => setEmailBody(e.target.value)}
+              placeholder="Message — the Research Studio link is appended automatically."
+              className="h-28 w-full rounded-lg border border-slate-200 px-2.5 py-1.5 text-sm text-slate-700 outline-none focus:border-emerald-400"
+            />
+            <div className="mt-2 flex justify-end gap-2">
+              <button type="button" onClick={() => setEmailOpen(false)} className="rounded-lg px-3 py-1.5 text-xs font-semibold text-slate-500 hover:bg-slate-200">Cancel</button>
+              <button
+                type="button"
+                onClick={() => void sendEmails('custom')}
+                disabled={emailSending || !emailSubject.trim() || !emailBody.trim()}
+                className="rounded-lg bg-slate-900 px-3 py-1.5 text-xs font-bold text-white hover:bg-slate-700 disabled:opacity-50"
+              >
+                {emailSending ? 'Sending…' : 'Send to all'}
+              </button>
+            </div>
+          </div>
+        ) : null}
         {!users ? (
           <p className="text-xs text-slate-400">Loading…</p>
         ) : users.length === 0 ? (
