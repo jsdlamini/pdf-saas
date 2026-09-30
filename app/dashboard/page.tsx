@@ -1561,10 +1561,27 @@ function LatexUsage() {
   }, []);
 
   const [emailOpen, setEmailOpen] = useState(false);
+  const [emailTarget, setEmailTarget] = useState<{ userId: string; name: string } | null>(null);
   const [emailSubject, setEmailSubject] = useState("");
   const [emailBody, setEmailBody] = useState("");
   const [emailSending, setEmailSending] = useState(false);
   const [emailResult, setEmailResult] = useState<string | null>(null);
+
+  function openEmailFor(userId: string, name: string) {
+    setEmailTarget({ userId, name });
+    setEmailSubject("");
+    setEmailBody("");
+    setEmailResult(null);
+    setEmailOpen(true);
+  }
+
+  function openBulkEmail() {
+    setEmailTarget(null);
+    setEmailSubject("");
+    setEmailBody("");
+    setEmailResult(null);
+    setEmailOpen((v) => !v);
+  }
 
   async function sendEmails(mode: 'encouragement' | 'custom') {
     setEmailSending(true);
@@ -1573,7 +1590,11 @@ function LatexUsage() {
       const r = await fetch('/api/admin-email-users', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(mode === 'encouragement' ? { mode } : { mode, subject: emailSubject, body: emailBody }),
+        body: JSON.stringify(
+          mode === 'encouragement'
+            ? { mode, ...(emailTarget ? { userId: emailTarget.userId } : {}) }
+            : { mode, subject: emailSubject, body: emailBody, ...(emailTarget ? { userId: emailTarget.userId } : {}) }
+        ),
       });
       const d = await r.json();
       if (!r.ok) throw new Error(d.error || 'Send failed.');
@@ -1607,7 +1628,7 @@ function LatexUsage() {
             </button>
             <button
               type="button"
-              onClick={() => setEmailOpen((v) => !v)}
+              onClick={() => openBulkEmail()}
               className="rounded-lg border border-slate-200 px-3 py-1.5 text-xs font-semibold text-slate-600 hover:bg-slate-100"
             >
               Bulk email
@@ -1617,6 +1638,9 @@ function LatexUsage() {
         {emailResult ? <p className="mb-3 text-xs font-semibold text-slate-700">{emailResult}</p> : null}
         {emailOpen ? (
           <div className="mb-4 rounded-lg border border-slate-200 bg-slate-50 p-3">
+            <p className="mb-2 text-xs font-semibold text-slate-700">
+              {emailTarget ? `Email ${emailTarget.name}` : 'Bulk email — sends to all LaTeX users'}
+            </p>
             <input
               value={emailSubject}
               onChange={(e) => setEmailSubject(e.target.value)}
@@ -1664,6 +1688,11 @@ function LatexUsage() {
                     <td className="py-2 pr-4">
                       <span className="font-semibold text-slate-800">{u.name || u.email || u.user_id.slice(0, 12)}</span>
                       {u.email && u.name ? <p className="text-xs text-slate-400">{u.email}</p> : null}
+                      {u.email ? (
+                        <button type="button" onClick={() => openEmailFor(u.user_id, u.name || u.email)} className="mt-1 text-[11px] font-semibold text-cyan-700 hover:text-cyan-900 hover:underline">
+                          Email
+                        </button>
+                      ) : null}
                     </td>
                     <td className="py-2 pr-4 text-slate-700">{u.compiles}</td>
                     <td className="py-2 pr-4 text-slate-700">{u.failed}</td>

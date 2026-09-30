@@ -140,12 +140,15 @@ export async function POST(request: Request) {
     subject?: string;
     body?: string;
     onlyZeroCompiles?: boolean;
+    userId?: string;
   } | null;
   if (!body || !body.mode) return jsonError("mode is required.", 400);
 
   const users = await resolveLatexUsers();
   let targets = users.filter((u) => u.email);
-  if (body.onlyZeroCompiles !== false) {
+  if (body.userId) {
+    targets = targets.filter((u) => u.user_id === body.userId);
+  } else if (body.onlyZeroCompiles !== false) {
     targets = targets.filter((u) => u.succeeded === 0);
   }
   if (!targets.length) return jsonError("No reachable users matched.", 400);
