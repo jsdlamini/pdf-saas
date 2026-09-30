@@ -1672,6 +1672,12 @@ export default function ResearchStudioPage() {
   const [pdfAnchor, setPdfAnchor] = useState<{ page: number; x: number; y: number } | null>(null);
   const [showShortcuts, setShowShortcuts] = useState(false);
   const [spellcheckEnabled, setSpellcheckEnabled] = useState(false);
+  const [feedbackOpen, setFeedbackOpen] = useState(false);
+  const [feedbackRating, setFeedbackRating] = useState<number | null>(null);
+  const [feedbackMessage, setFeedbackMessage] = useState("");
+  const [feedbackSending, setFeedbackSending] = useState(false);
+  const [feedbackSent, setFeedbackSent] = useState(false);
+  const [compileFailedPrompt, setCompileFailedPrompt] = useState(false);
   const [openMenu, setOpenMenu] = useState("");
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const menubarRef = useRef<HTMLDivElement | null>(null);
@@ -1685,6 +1691,32 @@ export default function ResearchStudioPage() {
       document.documentElement.style.setProperty("--studio-menu-sheet-top", `${bottom}px`);
     }
     setOpenMenu(next);
+  }
+
+  async function submitFeedback(kind: "general" | "compile-failed", opts?: { rating?: number | null; reason?: string; message?: string }) {
+    setFeedbackSending(true);
+    try {
+      await fetch("/api/feedback", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          kind,
+          rating: opts?.rating ?? null,
+          reason: opts?.reason,
+          message: opts?.message,
+          path: activeProjectId ? "/research-studio" : undefined,
+        }),
+      });
+      setFeedbackSent(true);
+      setFeedbackOpen(false);
+      setCompileFailedPrompt(false);
+      setFeedbackRating(null);
+      setFeedbackMessage("");
+    } catch {
+      /* best-effort */
+    } finally {
+      setFeedbackSending(false);
+    }
   }
 
   // Close menu dropdown on outside click
@@ -5521,6 +5553,7 @@ export default function ResearchStudioPage() {
     } catch (compileError) {
       const message = compileError instanceof Error ? compileError.message : "Compile failed.";
       trackStudioEvent("compile-failed", "latex", Date.now() - started);
+      setCompileFailedPrompt(true);
       if (message === "Compile stopped.") {
         setCompileNotice("Ready.");
         appendPreviewError("Compile stopped.");
@@ -8247,6 +8280,19 @@ export default function ResearchStudioPage() {
           </button>
           <button
             type="button"
+            onClick={() => setFeedbackOpen(true)}
+            className="studio-btn studio-btn-ghost"
+            aria-label="Send feedback"
+            title="Send feedback"
+            style={{ width: 32, padding: 0 }}
+          >
+            <svg viewBox="0 0 20 20" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="1.8">
+              <path d="M3 11a8 8 0 1 1 14 0v3a2 2 0 0 1-2 2h-2l-3 3-3-3H5a2 2 0 0 1-2-2v-3z" strokeLinecap="round" strokeLinejoin="round" />
+              <path d="M7 9h6M7 12h4" strokeLinecap="round" />
+            </svg>
+          </button>
+          <button
+            type="button"
             onClick={() => setShowShortcuts((c) => !c)}
             className="studio-btn studio-btn-ghost studio-hide-phone"
             aria-label="Keyboard shortcuts"
@@ -9611,6 +9657,56 @@ export default function ResearchStudioPage() {
           </button>
         </div>
       </footer>
+
+      {/* Feedback modal */}
+      {feedbackOpen ? (
+        <div className="fixed inset-0 z-[120] flex items-center justify-center bg-slate-900/60 p-4" onClick={() => { setFeedbackOpen(false); setFeedbackRating(null); setFeedbackMessage(""); }}>
+          <div className="w-full max-w-md rounded-xl border border-slate-700 bg-slate-900 p-5 shadow-2xl" onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-center justify-between">
+              <h3 className="text-base font-semibold text-slate-100">Send feedback</h3>
+              <button type="button" onClick={() => { setFeedbackOpen(false); setFeedbackRating(null); setFeedbackMessage(""); }} className="text-slate-400 hover:text-slate-200" aria-label="Close">×</button>
+            </div>
+            {feedbackSent ? (
+              <p className="text-sm text-slate-300 mt-3">Thanks — your feedback was recorded.</p>
+            ) : (
+              <>
+                <p className="text-xs text-slate-400 mt-2">How was the Research Studio?</p>
+                <div className="flex gap-1 mt-2">
+                  {[1, 2, 3, 4, 5].map((n) => (
+                    <button key={n} type="button" onClick={() => setFeedbackRating(n)} className={`h-9 w-9 rounded-lg border text-lg ${feedbackRating === n ? "border-emerald-400 bg-emerald-400/20 text-emerald-300" : "border-slate-600 text-slate-300 hover:border-slate-400"}`}>{n}</button>
+                  ))}
+                </div>
+                <textarea value={feedbackMessage} onChange={(e) => setFeedbackMessage(e.target.value)} placeholder="Anything we should know? (optional)" className="mt-3 h-24 w-full rounded-lg border border-slate-700 bg-slate-800 p-2 text-sm text-slate-100 outline-none focus:border-emerald-400" />
+                <div className="mt-3 flex justify-end gap-2">
+                  <button type="button" onClick={() => { setFeedbackOpen(false); setFeedbackRating(null); setFeedbackMessage(""); }} className="rounded-lg px-3 py-1.5 text-xs font-semibold text-slate-300 hover:bg-slate-800">Cancel</button>
+                  <button type="button" disabled={feedbackSending || (feedbackRating === null && !feedbackMessage.trim())} onClick={() => void submitFeedback("general", { rating: feedbackRating, message: feedbackMessage })} className="rounded-lg bg-emerald-500 px-3 py-1.5 text-xs font-bold text-slate-900 hover:bg-emerald-400 disabled:opacity-50">
+                    {feedbackSending ? "Sending…" : "Send"}
+                  </button>
+                </div>
+              </>
+            )}
+          </div>
+        </div>
+      ) : null}
+
+      {/* Post-compile-failure prompt */}
+      {compileFailedPrompt && !isCodeMode ? (
+        <div className="fixed bottom-10 left-1/2 z-[110] w-[min(520px,calc(100vw-24px))] -translate-x-1/2 rounded-xl border border-slate-700 bg-slate-900 px-4 py-3 shadow-2xl">
+          <div className="flex items-start gap-3">
+            <div className="min-w-0">
+              <p className="text-xs font-semibold text-slate-200">Compile didn't work — what went wrong?</p>
+              <div className="mt-2 flex flex-wrap gap-1.5">
+                {["The error was unclear", "I couldn't get it to compile", "Something else"].map((reason) => (
+                  <button key={reason} type="button" onClick={() => void submitFeedback("compile-failed", { reason })} className="rounded-full border border-slate-600 px-2.5 py-1 text-[11px] text-slate-300 hover:border-emerald-400 hover:text-emerald-300">
+                    {reason}
+                  </button>
+                ))}
+              </div>
+            </div>
+            <button type="button" onClick={() => setCompileFailedPrompt(false)} className="text-slate-500 hover:text-slate-300" aria-label="Dismiss">×</button>
+          </div>
+        </div>
+      ) : null}
     </main>
   );
 }

@@ -153,6 +153,18 @@ const MIGRATIONS: string[] = [
   `ALTER TABLE wiserfiles_analytics ADD COLUMN IF NOT EXISTS detail TEXT`,
   `ALTER TABLE wiserfiles_analytics ADD COLUMN IF NOT EXISTS duration_ms INTEGER`,
 
+  `CREATE TABLE IF NOT EXISTS wiserfiles_feedback (
+    id SERIAL PRIMARY KEY,
+    user_id TEXT,
+    email TEXT,
+    kind TEXT NOT NULL DEFAULT 'general',
+    rating INTEGER,
+    reason TEXT,
+    message TEXT,
+    path TEXT,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+  )`,
+
   `CREATE TABLE IF NOT EXISTS wiserfiles_user_roles (
     user_id TEXT PRIMARY KEY,
     email TEXT NOT NULL,

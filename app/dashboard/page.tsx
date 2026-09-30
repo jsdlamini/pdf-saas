@@ -606,6 +606,8 @@ export default function DashboardPage() {
         <ActiveUsers />
         {/* LaTeX usage */}
         <LatexUsage />
+        {/* Feedback */}
+        <Feedback />
         {/* Group switch log */}
         <GroupSwitchLog />
         {/* Multi-join flags */}
@@ -1489,6 +1491,56 @@ function UserActivity({ data }: { data: AnalyticsData | null }) {
           </div>
         </div>
       ) : null}
+    </div>
+  );
+}
+
+function Feedback() {
+  const [feedback, setFeedback] = useState<Array<{
+    id: number; email: string; kind: string; rating: number | null;
+    reason: string; message: string; path: string; createdAt: string;
+  }> | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    fetch('/api/feedback')
+      .then((r) => r.json())
+      .then((d) => { if (!cancelled) setFeedback((d as { feedback?: typeof feedback }).feedback ?? []); })
+      .catch(() => { if (!cancelled) setFeedback([]); });
+    return () => { cancelled = true; };
+  }, []);
+
+  return (
+    <div className="mx-auto max-w-5xl px-6 md:px-10 mt-6">
+      <div className="rounded-2xl border border-slate-200/60 bg-white p-6 shadow-sm">
+        <div className="mb-4">
+          <h2 className="text-base font-semibold text-slate-900">User feedback</h2>
+          <p className="text-xs text-slate-500 mt-0.5">Ratings and comments submitted in the studio, including post-compile "what went wrong" prompts.</p>
+        </div>
+        {!feedback ? (
+          <p className="text-xs text-slate-400">Loading…</p>
+        ) : feedback.length === 0 ? (
+          <p className="text-xs text-slate-400">No feedback yet.</p>
+        ) : (
+          <div className="space-y-3">
+            {feedback.map((f) => (
+              <div key={f.id} className="rounded-lg border border-slate-100 bg-slate-50 p-3">
+                <div className="flex items-center gap-2 flex-wrap">
+                  {f.rating != null ? (
+                    <span className="text-sm font-bold text-slate-800">{'★'.repeat(f.rating)}{'☆'.repeat(5 - f.rating)}</span>
+                  ) : null}
+                  <span className={`rounded-full px-2 py-0.5 text-[10px] font-bold ${f.kind === 'compile-failed' ? 'bg-amber-100 text-amber-800' : 'bg-cyan-100 text-cyan-800'}`}>
+                    {f.kind === 'compile-failed' ? 'compile issue' : 'general'}
+                  </span>
+                  <span className="text-xs text-slate-400">{f.email || 'anonymous'} · {new Date(f.createdAt).toLocaleString()}</span>
+                </div>
+                {f.reason ? <p className="mt-1 text-xs text-slate-600">{f.reason}</p> : null}
+                {f.message ? <p className="mt-1 text-sm text-slate-700">{f.message}</p> : null}
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
     </div>
   );
 }
