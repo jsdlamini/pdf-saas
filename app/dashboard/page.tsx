@@ -1569,8 +1569,10 @@ function LatexUsage() {
 
   function openEmailFor(userId: string, name: string) {
     setEmailTarget({ userId, name });
-    setEmailSubject("");
-    setEmailBody("");
+    setEmailSubject("Your research project is ready to compile");
+    setEmailBody(
+      `Hi ${name || "there"},\n\nWe noticed you set up a research project but haven't been able to compile it yet. We've just fixed the LaTeX compiler, so it should work now.\n\nReturn to the Research Studio here:\nhttps://pdf.idealsoftwaresolutions.com/research-studio\n\nIf anything still fails, the error message will tell you exactly what to fix.`
+    );
     setEmailResult(null);
     setEmailOpen(true);
   }
