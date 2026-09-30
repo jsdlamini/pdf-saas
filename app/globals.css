@@ -4118,3 +4118,15 @@ html[data-theme="light"] .studio-dark ::-webkit-scrollbar-thumb {
 .challenge-markdown pre { background: rgba(15, 23, 42, 0.06); border-radius: 8px; padding: 8px 10px; overflow-x: auto; margin: 0.5rem 0; }
 .challenge-markdown pre code { background: transparent; padding: 0; }
 .challenge-markdown ul, .challenge-markdown ol { margin: 0 0 0.5rem; padding-left: 1.25rem; }
+
+/* Toast animations */
+@keyframes toast-in {
+  from { opacity: 0; transform: translateY(-10px) scale(0.97); }
+  to { opacity: 1; transform: none; }
+}
+@keyframes toast-out {
+  from { opacity: 1; transform: none; }
+  to { opacity: 0; transform: translateY(-10px) scale(0.97); }
+}
+.toast-enter { animation: toast-in 0.25s cubic-bezier(0.22, 1, 0.36, 1) both; }
+.toast-exit { animation: toast-out 0.3s ease both; }
