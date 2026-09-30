@@ -4859,6 +4859,10 @@ export default function ResearchStudioPage() {
       setNewProjectError("Enter a project name.");
       return;
     }
+    if (savedProjects.some((p) => p.name === name)) {
+      setNewProjectError(`A project named "${name}" already exists. Use a different name, or open the existing one.`);
+      return;
+    }
     const type = newProjectType;
     const templateSlug = newProjectTemplate;
 
@@ -5516,6 +5520,7 @@ export default function ResearchStudioPage() {
       });
     } catch (compileError) {
       const message = compileError instanceof Error ? compileError.message : "Compile failed.";
+      trackStudioEvent("compile-failed", "latex", Date.now() - started);
       if (message === "Compile stopped.") {
         setCompileNotice("Ready.");
         appendPreviewError("Compile stopped.");
