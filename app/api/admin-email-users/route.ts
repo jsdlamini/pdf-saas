@@ -110,7 +110,13 @@ function encouragementHtml(name: string): string {
 }
 
 function customHtml(body: string): string {
-  const paragraphs = body
+  // Auto-linkify plain URLs so a pasted link becomes clickable. Already-linked
+  // (<a href=...>) URLs and other HTML the sender writes are left untouched.
+  const withLinks = body.replace(
+    /(?<!href=\")(?<!>)(https?:\/\/[^\s<>]+)/g,
+    '<a href="$1" style="color:#1e40af;font-weight:600">$1</a>'
+  );
+  const paragraphs = withLinks
     .split(/\n{2,}/)
     .map((p) => `<p>${p.replace(/\n/g, "<br>")}</p>`)
     .join("");
