@@ -152,6 +152,10 @@ export async function POST(request: Request) {
 
   const users = await resolveLatexUsers();
   let targets = users.filter((u) => u.email);
+  console.error('[admin-email-users] POST', JSON.stringify({
+    mode: body.mode, userId: body.userId ?? null, withEmail: targets.length,
+    subjectLen: (body.subject || '').length, bodyLen: (body.body || '').length,
+  }));
   if (body.userId) {
     targets = targets.filter((u) => u.user_id === body.userId);
   } else if (body.onlyZeroCompiles !== false) {
