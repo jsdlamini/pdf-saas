@@ -1652,7 +1652,7 @@ function LatexUsage() {
             <textarea
               value={emailBody}
               onChange={(e) => setEmailBody(e.target.value)}
-              placeholder="Message — the Research Studio link is appended automatically."
+              placeholder="Message — paste links and they'll become clickable; the Research Studio link is appended automatically."
               className="h-28 w-full rounded-lg border border-slate-200 px-2.5 py-1.5 text-sm text-slate-700 outline-none focus:border-emerald-400"
             />
             <div className="mt-2 flex justify-end gap-2">
@@ -1663,7 +1663,7 @@ function LatexUsage() {
                 disabled={emailSending || !emailSubject.trim() || !emailBody.trim()}
                 className="rounded-lg bg-slate-900 px-3 py-1.5 text-xs font-bold text-white hover:bg-slate-700 disabled:opacity-50"
               >
-                {emailSending ? 'Sending…' : 'Send to all'}
+                {emailSending ? 'Sending…' : emailTarget ? 'Send email' : 'Send to all'}
               </button>
             </div>
           </div>
