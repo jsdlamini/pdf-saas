@@ -20,14 +20,16 @@ export async function GET() {
     await pool.query(
       `SELECT
          user_id,
-         COUNT(*) FILTER (WHERE event = 'compile' AND detail = 'latex')::int AS compiles,
+         COUNT(*) FILTER (WHERE event IN ('compile', 'compile-failed') AND detail = 'latex')::int AS attempts,
+         COUNT(*) FILTER (WHERE event = 'compile' AND detail = 'latex')::int AS succeeded,
+         COUNT(*) FILTER (WHERE event = 'compile-failed' AND detail = 'latex')::int AS failed,
          COUNT(DISTINCT DATE(created_at))::int AS active_days,
          MAX(created_at) AS last_seen
        FROM wiserfiles_analytics
        WHERE user_id IS NOT NULL AND user_id != 'guest'
-         AND ((event = 'compile' AND detail = 'latex') OR (event = 'pageview' AND tool = 'research-studio'))
+         AND ((event IN ('compile', 'compile-failed') AND detail = 'latex') OR (event = 'pageview' AND tool = 'research-studio'))
        GROUP BY user_id
-       ORDER BY compiles DESC, active_days DESC
+       ORDER BY attempts DESC, active_days DESC
        LIMIT 100`
     )
   ).rows;
@@ -71,7 +73,9 @@ export async function GET() {
       user_id: id,
       name: nameMap.get(id) || "",
       email: emailMap.get(id) || "",
-      compiles: r.compiles as number,
+      compiles: r.succeeded as number,
+      attempts: r.attempts as number,
+      failed: r.failed as number,
       activeDays: r.active_days as number,
       projects: projByUser.get(id) ?? 0,
       lastSeen: r.last_seen,

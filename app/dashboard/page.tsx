@@ -1495,7 +1495,7 @@ function UserActivity({ data }: { data: AnalyticsData | null }) {
 
 function LatexUsage() {
   const [users, setUsers] = useState<Array<{
-    user_id: string; name: string; email: string; compiles: number;
+    user_id: string; name: string; email: string; compiles: number; attempts: number; failed: number;
     activeDays: number; projects: number; lastSeen: string;
   }> | null>(null);
 
@@ -1527,8 +1527,8 @@ function LatexUsage() {
               <thead>
                 <tr className="border-b border-slate-200 text-xs uppercase tracking-[0.1em] text-slate-500">
                   <th className="py-2 pr-4 font-semibold">User</th>
-                  <th className="py-2 pr-4 font-semibold">Compiles</th>
-                  <th className="py-2 pr-4 font-semibold">Days active</th>
+                  <th className="py-2 pr-4 font-semibold">Succeeded</th>
+                  <th className="py-2 pr-4 font-semibold">Failed</th>
                   <th className="py-2 pr-4 font-semibold">Projects</th>
                   <th className="py-2 font-semibold">Last seen</th>
                 </tr>
@@ -1541,7 +1541,7 @@ function LatexUsage() {
                       {u.email && u.name ? <p className="text-xs text-slate-400">{u.email}</p> : null}
                     </td>
                     <td className="py-2 pr-4 text-slate-700">{u.compiles}</td>
-                    <td className="py-2 pr-4 text-slate-700">{u.activeDays}</td>
+                    <td className="py-2 pr-4 text-slate-700">{u.failed}</td>
                     <td className="py-2 pr-4 text-slate-700">{u.projects}</td>
                     <td className="py-2 text-slate-400">{new Date(u.lastSeen).toLocaleString()}</td>
                   </tr>
