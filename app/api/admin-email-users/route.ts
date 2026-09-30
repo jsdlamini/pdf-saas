@@ -94,39 +94,47 @@ async function sendEmail(to: string, subject: string, html: string) {
   }
 }
 
-function encouragementHtml(name: string): string {
+function shell(title: string, bodyHtml: string, ctaLabel: string): string {
   return `
-    <div style="font-family: Inter, -apple-system, sans-serif; color: #0f172a; line-height: 1.6">
-      <h2 style="margin: 0 0 12px">Your research project is ready to compile</h2>
-      <p>Hi ${name},</p>
-      <p>We noticed you set up a research project but it hasn't compiled yet. We've just fixed several issues with the LaTeX compiler, so it should work now.</p>
-      <p>Click below to return to the Research Studio and try again:</p>
-      <p style="margin: 20px 0">
-        <a href="${STUDIO_URL}" style="background:#4ade80;color:#0f172a;padding:10px 20px;border-radius:6px;text-decoration:none;font-weight:600">Open Research Studio</a>
-      </p>
-      <p style="color:#64748b;font-size:13px">If anything still fails, the error message will now tell you exactly what to fix.</p>
-    </div>`;
+  <div style="margin:0; padding:24px; background:#f1f5f9; font-family:'Inter',-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif; color:#0f172a;">
+    <div style="max-width:600px; margin:0 auto; background:#ffffff; border-radius:16px; overflow:hidden; box-shadow:0 10px 40px rgba(15,23,42,.10);">
+      <div style="background:linear-gradient(120deg,#10b981 0%,#0ea5e9 100%); padding:26px 32px;">
+        <div style="font-size:12px; font-weight:700; letter-spacing:.08em; text-transform:uppercase; color:rgba(255,255,255,.85);">Research Studio</div>
+        <div style="font-size:21px; font-weight:800; color:#ffffff; margin-top:4px; line-height:1.3;">${title}</div>
+      </div>
+      <div style="padding:28px 32px; font-size:15px; line-height:1.65;">
+        ${bodyHtml}
+        <div style="text-align:center; margin:28px 0 8px;">
+          <a href="${STUDIO_URL}" style="display:inline-block; background:#10b981; color:#ffffff; padding:13px 28px; border-radius:10px; font-weight:700; text-decoration:none; box-shadow:0 4px 16px rgba(16,185,129,.35);">${ctaLabel}</a>
+        </div>
+      </div>
+      <div style="padding:18px 32px; background:#f8fafc; border-top:1px solid #e2e8f0; color:#94a3b8; font-size:12px;">
+        Research Studio &middot; pdf.idealsoftwaresolutions.com
+      </div>
+    </div>
+  </div>`;
+}
+
+function encouragementHtml(name: string): string {
+  const body = `<p style="margin:0 0 16px;">Hi ${name},</p>
+    <p style="margin:0 0 16px;">We noticed you set up a research project but it hasn't compiled yet. We've just fixed several issues with the LaTeX compiler, so it should work now.</p>
+    <p style="margin:0 0 4px;">Click the button below to return to the Research Studio and try again.</p>
+    <p style="margin:0; color:#64748b; font-size:13px;">If anything still fails, the error message will now tell you exactly what to fix.</p>`;
+  return shell("Your project is ready to compile", body, "Open Research Studio");
 }
 
 function customHtml(body: string): string {
-  // Auto-linkify plain URLs so a pasted link becomes clickable. Already-linked
-  // (<a href=...>) URLs and other HTML the sender writes are left untouched.
   const withLinks = body.replace(
-    /(?<!href=\")(?<!>)(https?:\/\/[^\s<>]+)/g,
-    '<a href="$1" style="color:#1e40af;font-weight:600">$1</a>'
+    /(?<!href=")(?<!>)(https?:\/\/[^\s<>]+)/g,
+    '<a href="$1" style="color:#0ea5e9;font-weight:600;">$1</a>'
   );
   const paragraphs = withLinks
     .split(/\n{2,}/)
-    .map((p) => `<p>${p.replace(/\n/g, "<br>")}</p>`)
+    .map((p) => `<p style="margin:0 0 14px;">${p.replace(/\n/g, "<br>")}</p>`)
     .join("");
-  return `
-    <div style="font-family: Inter, -apple-system, sans-serif; color: #0f172a; line-height: 1.6">
-      ${paragraphs}
-      <p style="margin: 20px 0">
-        <a href="${STUDIO_URL}" style="background:#4ade80;color:#0f172a;padding:10px 20px;border-radius:6px;text-decoration:none;font-weight:600">Open Research Studio</a>
-      </p>
-    </div>`;
+  return shell("A note from your lecturer", paragraphs, "Open Research Studio");
 }
+
 
 export async function GET() {
   const access = await requireDashboardAccess();
