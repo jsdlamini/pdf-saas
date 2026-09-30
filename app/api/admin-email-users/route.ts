@@ -33,8 +33,7 @@ async function resolveLatexUsers(): Promise<LatexUser[]> {
        WHERE user_id IS NOT NULL AND user_id != 'guest'
          AND ((event IN ('compile', 'compile-failed') AND detail = 'latex') OR (event = 'pageview' AND tool = 'research-studio'))
        GROUP BY user_id
-       ORDER BY succeeded ASC, failed DESC
-       LIMIT 200`
+       ORDER BY succeeded ASC, failed DESC`
     )
   ).rows;
 
