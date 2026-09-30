@@ -2,6 +2,7 @@
 
 import { SignInButton, useAuth } from "@clerk/nextjs";
 import { useEffect, useState } from "react";
+import { showToast } from "@/app/components/toast";
 
 type AnalyticsData = {
   totalPageviews: number;
@@ -1601,9 +1602,12 @@ function LatexUsage() {
       const d = await r.json();
       if (!r.ok) throw new Error(d.error || 'Send failed.');
       setEmailResult(`Sent ${d.sent}, failed ${d.failed}.`);
+      showToast(`Email sent — ${d.sent} delivered, ${d.failed} failed.`, d.failed ? 'error' : 'success');
       setEmailOpen(false);
     } catch (e) {
-      setEmailResult(e instanceof Error ? e.message : 'Send failed.');
+      const msg = e instanceof Error ? e.message : 'Send failed.';
+      setEmailResult(msg);
+      showToast(msg, 'error');
     } finally {
       setEmailSending(false);
     }
