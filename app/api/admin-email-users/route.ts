@@ -100,7 +100,7 @@ function shell(title: string, bodyHtml: string, ctaLabel: string): string {
     <div style="max-width:600px; margin:0 auto; background:#ffffff; border-radius:16px; overflow:hidden; box-shadow:0 10px 40px rgba(15,23,42,.10);">
       <div style="background:linear-gradient(120deg,#10b981 0%,#0ea5e9 100%); padding:26px 32px;">
         <div style="font-size:12px; font-weight:700; letter-spacing:.08em; text-transform:uppercase; color:rgba(255,255,255,.85);">Research Studio</div>
-        <div style="font-size:21px; font-weight:800; color:#ffffff; margin-top:4px; line-height:1.3;">${title}</div>
+        ${title ? `<div style="font-size:21px; font-weight:800; color:#ffffff; margin-top:4px; line-height:1.3;">${title}</div>` : ""}
       </div>
       <div style="padding:28px 32px; font-size:15px; line-height:1.65;">
         ${bodyHtml}
@@ -132,7 +132,7 @@ function customHtml(body: string): string {
     .split(/\n{2,}/)
     .map((p) => `<p style="margin:0 0 14px;">${p.replace(/\n/g, "<br>")}</p>`)
     .join("");
-  return shell("A note from your lecturer", paragraphs, "Open Research Studio");
+  return shell("", paragraphs, "Open Research Studio");
 }
 
 
