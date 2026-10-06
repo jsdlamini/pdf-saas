@@ -132,7 +132,11 @@ export async function joinGroup(
 // Copy a student's marks from one group to the corresponding sessions of
 // another (matched by kind + sort_order), creating missing target sessions as
 // needed. Called on a group switch so no earned marks are lost.
-async function migrateMarksBetweenGroups(userId: string, fromGroupId: string, toGroupId: string): Promise<void> {
+//
+// Marks are keyed by the student's 6/9-digit student number (see
+// saveAssessment), NOT the Clerk user id, so this must be passed the student
+// number for the match to find anything.
+async function migrateMarksBetweenGroups(studentNumber: string, fromGroupId: string, toGroupId: string): Promise<void> {
   await ensureMigrated();
   await db.query(
     `INSERT INTO wiserfiles_group_sessions (group_id, kind, title, max_marks, sort_order)
@@ -153,7 +157,7 @@ async function migrateMarksBetweenGroups(userId: string, fromGroupId: string, to
      JOIN wiserfiles_group_sessions t ON t.group_id = $3 AND t.kind = f.kind AND t.sort_order = f.sort_order
      WHERE f.group_id = $1 AND m.student_id = $2
      ON CONFLICT (session_id, student_id) DO UPDATE SET score = EXCLUDED.score`,
-    [fromGroupId, userId, toGroupId]
+    [fromGroupId, studentNumber, toGroupId]
   );
 }
 
@@ -178,7 +182,7 @@ export async function switchGroup(
   const toCount = await countMembers(toGroupId);
   if (toCount >= (to.rows[0].capacity as number)) return { ok: false, error: "That group is full." };
 
-  await migrateMarksBetweenGroups(userId, fromGroupId, toGroupId);
+  await migrateMarksBetweenGroups(member.student_id as string, fromGroupId, toGroupId);
 
   await db.query(`DELETE FROM wiserfiles_group_members WHERE user_id = $1 AND group_id = $2`, [userId, fromGroupId]);
   await db.query(
