@@ -1,4 +1,5 @@
-import { auth } from "@clerk/nextjs/server";
+import type { NextRequest } from "next/server";
+import { getAuth } from "@clerk/nextjs/server";
 import { createRateLimiter } from "@/lib/rate-limit";
 import { proxyTerminal } from "@/lib/terminal-proxy";
 
@@ -12,8 +13,8 @@ function jsonError(msg: string, status: number) {
 }
 
 // Stop a running terminal session.
-export async function POST(request: Request) {
-  const { userId } = await auth();
+export async function POST(request: NextRequest) {
+  const { userId } = await getAuth(request);
   if (!userId) return jsonError("Sign in required.", 401);
   if (!checkRateLimit(`terminal-kill:${userId}`)) return jsonError("Too many requests.", 429);
 

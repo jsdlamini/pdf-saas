@@ -1072,9 +1072,17 @@ function DiffText({ expected, actual }: { expected: string; actual: string }) {
 
 export default function ResearchStudioPage() {
   const initialState = useMemo(() => loadInitialResearchStudioState(), []);
-  const { isLoaded: authLoaded, userId } = useAuth();
+  const { isLoaded: authLoaded, userId, getToken } = useAuth();
   const { user: clerkUser } = useUser();
   const hasHydratedServerProjectsRef = useRef(false);
+
+  // A fresh Clerk session token per terminal request, so long-running code is
+  // not cut off when the short-lived session cookie lapses. getToken() returns
+  // a freshly-refreshed JWT the SDK keeps alive while the user is active.
+  async function terminalHeaders(): Promise<Record<string, string>> {
+    const token = await getToken();
+    return { "Content-Type": "application/json", ...(token ? { Authorization: `Bearer ${token}` } : {}) };
+  }
 
   function trackStudioEvent(event: string, detail?: string, durationMs?: number) {
     try {
@@ -1468,11 +1476,11 @@ export default function ResearchStudioPage() {
       term.onData((data: string) => {
         const id = termSessionRef.current;
         if (id) {
-          void fetch("/api/terminal/stdin", {
+          void terminalHeaders().then((headers) => fetch("/api/terminal/stdin", {
             method: "POST",
-            headers: { "Content-Type": "application/json" },
+            headers,
             body: JSON.stringify({ sessionId: id, data }),
-          }).catch(() => {});
+          })).catch(() => {});
         }
       });
       const onResize = () => { try { fit.fit(); } catch { /* ignore */ } };
@@ -1495,11 +1503,11 @@ export default function ResearchStudioPage() {
     return () => {
       const id = termSessionRef.current;
       if (id) {
-        void fetch("/api/terminal/kill", {
+        void terminalHeaders().then((headers) => fetch("/api/terminal/kill", {
           method: "POST",
-          headers: { "Content-Type": "application/json" },
+          headers,
           body: JSON.stringify({ sessionId: id }),
-        }).catch(() => {});
+        })).catch(() => {});
       }
     };
   }, []);
@@ -4176,11 +4184,11 @@ export default function ResearchStudioPage() {
     const id = termSessionRef.current;
     if (id) {
       termSessionRef.current = null;
-      void fetch("/api/terminal/kill", {
+      void terminalHeaders().then((headers) => fetch("/api/terminal/kill", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers,
         body: JSON.stringify({ sessionId: id }),
-      }).catch(() => {});
+      })).catch(() => {});
     }
     setTermSessionId(null);
     setTermRunning(false);
@@ -4195,7 +4203,7 @@ export default function ResearchStudioPage() {
     try {
       const res = await fetch("/api/terminal/poll", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: await terminalHeaders(),
         body: JSON.stringify({ sessionId }),
       });
       if (res.status === 401) {
@@ -5308,7 +5316,7 @@ export default function ResearchStudioPage() {
       // may have been started earlier, before these edits).
       await fetch("/api/terminal/files", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: await terminalHeaders(),
         body: JSON.stringify({
           sessionId,
           files: projectEntries.filter((e) => e.kind === "file").map((e) => ({ path: e.path, content: e.content })),
@@ -5318,7 +5326,7 @@ export default function ResearchStudioPage() {
 
       await fetch("/api/terminal/stdin", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: await terminalHeaders(),
         body: JSON.stringify({ sessionId, data: command + "\r" }),
       }).catch(() => {});
 
