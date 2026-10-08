@@ -4198,6 +4198,16 @@ export default function ResearchStudioPage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ sessionId }),
       });
+      if (res.status === 401) {
+        // The sign-in session expired mid-run. Stop polling and say it once
+        // instead of spamming "Sign in required" every poll.
+        termSessionRef.current = null;
+        termSeenRef.current = 0;
+        setTermSessionId(null);
+        setTermRunning(false);
+        writeToTerm("\r\nSession expired — reload the page to sign in again.\r\n");
+        return;
+      }
       const data = (await res.json().catch(() => null)) as { running?: boolean; exitCode?: number; stdout?: string; stderr?: string; error?: string } | null;
       if (!data || data.error) {
         if (data?.error && !String(data.error).includes("not found")) {
@@ -4245,6 +4255,10 @@ export default function ResearchStudioPage() {
             folders: projectEntries.filter((e) => e.kind === "folder").map((e) => e.path),
           }),
         });
+        if (res.status === 401) {
+          writeToTerm("\r\nSession expired — reload the page to sign in again.\r\n");
+          return null;
+        }
         const data = (await res.json().catch(() => null)) as { sessionId?: string; error?: string } | null;
         if (!data || data.error || !data.sessionId) {
           writeToTerm(`\r\n${data?.error || "Could not start the terminal."}\r\n`);
