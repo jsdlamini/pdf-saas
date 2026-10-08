@@ -51,7 +51,7 @@ function execWithStdin(command, args, { stdin = "", timeout = CODE_TIMEOUT_MS, m
 const PORT = Number(process.env.SANDBOX_PORT || 3100);
 const TIMEOUT_MS = 30_000;
 const CODE_TIMEOUT_MS = 15_000;
-const TERM_IDLE_TIMEOUT_MS = 5 * 60_000;
+const TERM_IDLE_TIMEOUT_MS = 30 * 60_000;
 const MAX_OUTPUT = 64 * 1024;
 
 // Interactive terminal sessions: a live process with an open stdin, polled for
@@ -78,7 +78,7 @@ function armTermIdle(id) {
   if (s.idleTimer) clearTimeout(s.idleTimer);
   s.idleTimer = setTimeout(() => {
     if (s.running) {
-      s.stderr += "\n[Terminal closed after 5 minutes of inactivity]\n";
+      s.stderr += "\n[Terminal closed after 30 minutes of inactivity]\n";
       killTree(s.child.pid);
     }
   }, TERM_IDLE_TIMEOUT_MS);
