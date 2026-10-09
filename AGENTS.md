@@ -54,6 +54,9 @@ PDF→Word (`app/api/pdf-to-word/route.ts`) tries `pdf2docx` first, then falls b
 - On a non-zero exit or `ENOENT` from that step it falls back to `libreoffice --headless --convert-to docx`.
 - Same injected-deps seam as OCR (`handlePdfToWordPost(request, dependencies)`); tests live in `app/api/pdf-to-word/route.test.ts`.
 
+### Auth & middleware
+Next.js 16 middleware convention is `proxy.ts` (the `middleware.ts` convention is deprecated — it warns, and having both files breaks the build). The repo's `proxy.ts` wraps `clerkMiddleware` and is the home for route auth/redirect rules: it currently lets `PUBLIC_PATHS` through and redirects logged-out visitors from `/` to `/research-studio`. When adding auth redirects or route protection, edit `proxy.ts`, not a new `middleware.ts`.
+
 ### Shared client/server contract
 `lib/ocr.ts` holds constants used by BOTH the browser and the API route: `MAX_OCR_UPLOAD_BYTES` (1 GB) and `OCR_LANGUAGE_OPTIONS` / `SUPPORTED_OCR_LANGUAGES`. The upload-size and language validations are enforced client-side (in `ToolWorkbench`) and re-checked server-side as a backstop. Adding an OCR language requires updating `OCR_LANGUAGE_OPTIONS` here AND installing the matching `tesseract-ocr-*` package in the `Dockerfile`.
 

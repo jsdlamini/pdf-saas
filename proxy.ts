@@ -11,6 +11,16 @@ const PUBLIC_PATHS = [
 
 export default clerkMiddleware(async (auth, req) => {
   const path = req.nextUrl.pathname;
+
+  // Logged-out visitors landing on the home page go straight to Research
+  // Studio; signed-in visitors keep the normal home page.
+  if (path === "/") {
+    const { userId } = await auth();
+    if (!userId) {
+      return NextResponse.redirect(new URL("/research-studio", req.url));
+    }
+  }
+
   if (PUBLIC_PATHS.some((p) => path === p || path.startsWith(p))) {
     return NextResponse.next();
   }
