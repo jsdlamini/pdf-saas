@@ -20,6 +20,25 @@ export type AssessItem = {
 
 export type AssessMark = { itemId: number; studentId: string; score: number | null };
 
+const KIND_BASE: Record<AssessKind, number> = {
+  practical: 1000,
+  test: 2000,
+  exam: 3000,
+};
+
+/** Whole-class views share columns across groups, so each column is addressed
+ *  by a deterministic virtual id (kind + sort_order) rather than a per-group
+ *  session id. Saving resolves these back to each student's own group's session. */
+export function encodeClassItemId(kind: AssessKind, order: number): number {
+  return KIND_BASE[kind] + order;
+}
+
+export function decodeClassItemId(id: number): { kind: AssessKind; order: number } {
+  if (id >= KIND_BASE.exam) return { kind: "exam", order: id - KIND_BASE.exam };
+  if (id >= KIND_BASE.test) return { kind: "test", order: id - KIND_BASE.test };
+  return { kind: "practical", order: id - KIND_BASE.practical };
+}
+
 async function ensureItems(groupId: string): Promise<void> {
   await ensureMigrated();
   const g = await db.query(
@@ -110,25 +129,155 @@ export async function getAssessment(groupId: string) {
   };
 }
 
+/** Whole-class assessment: every student across every group, ordered group →
+ *  surname → name, with shared columns whose virtual ids resolve per student. */
+export async function getAssessmentForClass() {
+  await ensureMigrated();
+
+  // Ensure every group has its session items so the shared columns line up.
+  const groups = await db.query(
+    `SELECT id FROM wiserfiles_groups ORDER BY sort_order ASC, id ASC`
+  );
+  for (const g of groups.rows) {
+    await ensureItems(g.id as string);
+  }
+
+  const members = await db.query(
+    `SELECT m.user_id, m.name, m.surname, m.student_id, m.programme, m.group_id, g.name AS group_name
+     FROM wiserfiles_group_members m
+     JOIN wiserfiles_groups g ON g.id = m.group_id
+     ORDER BY g.sort_order ASC, LOWER(m.surname) ASC, LOWER(m.name) ASC`
+  );
+
+  const cols = await db.query(
+    `SELECT kind, sort_order, MAX(title) AS title, MAX(max_marks) AS max_marks
+     FROM wiserfiles_group_sessions
+     GROUP BY kind, sort_order
+     ORDER BY CASE kind WHEN 'practical' THEN 0 WHEN 'test' THEN 1 ELSE 2 END ASC, sort_order ASC`
+  );
+  const columns = cols.rows.map((x) => ({
+    kind: x.kind as AssessKind,
+    order: x.sort_order as number,
+    title: x.title as string,
+    maxMarks: x.max_marks as number,
+  }));
+
+  const sessions = await db.query(
+    `SELECT group_id, kind, sort_order, id FROM wiserfiles_group_sessions`
+  );
+  const sessionMeta = new Map<number, { kind: AssessKind; order: number }>();
+  for (const x of sessions.rows) {
+    sessionMeta.set(x.id as number, { kind: x.kind as AssessKind, order: x.sort_order as number });
+  }
+
+  const marks = await db.query(
+    `SELECT student_id, session_id, score FROM wiserfiles_assessment_marks`
+  );
+  const marksOut: AssessMark[] = [];
+  for (const x of marks.rows) {
+    const meta = sessionMeta.get(x.session_id as number);
+    if (!meta) continue;
+    const score = x.score == null ? null : Number(x.score);
+    if (score == null) continue;
+    marksOut.push({
+      itemId: encodeClassItemId(meta.kind, meta.order),
+      studentId: x.student_id as string,
+      score,
+    });
+  }
+
+  const toItem = (c: { kind: AssessKind; order: number; title: string; maxMarks: number }) => ({
+    id: encodeClassItemId(c.kind, c.order),
+    title: c.title,
+    maxMarks: c.maxMarks,
+  });
+
+  return {
+    students: members.rows.map((x) => ({
+      userId: x.user_id as string,
+      name: x.name as string,
+      surname: x.surname as string,
+      studentId: x.student_id as string,
+      programme: x.programme as string,
+      group: x.group_name as string,
+      groupId: x.group_id as string,
+    })),
+    practicals: columns.filter((c) => c.kind === "practical").map(toItem),
+    tests: columns.filter((c) => c.kind === "test").map(toItem),
+    exams: columns.filter((c) => c.kind === "exam").map(toItem),
+    marks: marksOut,
+  };
+}
+
 export async function saveAssessment(
   groupId: string,
   marks: AssessMark[]
 ): Promise<void> {
   await ensureMigrated();
   for (const m of marks) {
-    if (m.score == null || Number.isNaN(m.score)) {
-      await db.query(
-        `DELETE FROM wiserfiles_assessment_marks WHERE session_id = $1 AND student_id = $2`,
-        [m.itemId, m.studentId]
-      );
-    } else {
-      await db.query(
-        `INSERT INTO wiserfiles_assessment_marks (session_id, student_id, score)
-         VALUES ($1, $2, $3)
-         ON CONFLICT (session_id, student_id) DO UPDATE SET score = $3`,
-        [m.itemId, m.studentId, m.score]
-      );
-    }
+    await upsertMark(m.itemId, m.studentId, m.score);
+  }
+}
+
+async function upsertMark(
+  sessionId: number,
+  studentId: string,
+  score: number | null
+): Promise<void> {
+  if (score == null || Number.isNaN(score)) {
+    await db.query(
+      `DELETE FROM wiserfiles_assessment_marks WHERE session_id = $1 AND student_id = $2`,
+      [sessionId, studentId]
+    );
+  } else {
+    await db.query(
+      `INSERT INTO wiserfiles_assessment_marks (session_id, student_id, score)
+       VALUES ($1, $2, $3)
+       ON CONFLICT (session_id, student_id) DO UPDATE SET score = $3`,
+      [sessionId, studentId, score]
+    );
+  }
+}
+
+/** Resolve whole-class virtual item ids to each student's own group's session. */
+export function resolveClassMarks(
+  marks: AssessMark[],
+  groupByStudent: Map<string, string>,
+  sessionByKey: Map<string, number>
+): { sessionId: number; studentId: string; score: number | null }[] {
+  const resolved: { sessionId: number; studentId: string; score: number | null }[] = [];
+  for (const m of marks) {
+    const { kind, order } = decodeClassItemId(m.itemId);
+    const groupId = groupByStudent.get(m.studentId);
+    if (!groupId) continue;
+    const sessionId = sessionByKey.get(`${groupId}:${kind}:${order}`);
+    if (sessionId == null) continue;
+    resolved.push({ sessionId, studentId: m.studentId, score: m.score });
+  }
+  return resolved;
+}
+
+export async function saveAssessmentForClass(marks: AssessMark[]): Promise<void> {
+  await ensureMigrated();
+
+  const members = await db.query(
+    `SELECT student_id, group_id FROM wiserfiles_group_members`
+  );
+  const groupByStudent = new Map<string, string>();
+  for (const x of members.rows) {
+    groupByStudent.set(x.student_id as string, x.group_id as string);
+  }
+
+  const sessions = await db.query(
+    `SELECT group_id, kind, sort_order, id FROM wiserfiles_group_sessions`
+  );
+  const sessionByKey = new Map<string, number>();
+  for (const x of sessions.rows) {
+    sessionByKey.set(`${x.group_id}:${x.kind}:${x.sort_order}`, x.id as number);
+  }
+
+  for (const m of resolveClassMarks(marks, groupByStudent, sessionByKey)) {
+    await upsertMark(m.sessionId, m.studentId, m.score);
   }
 }
 
