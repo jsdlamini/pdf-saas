@@ -130,7 +130,7 @@ export default async function RootLayout({
         >
           Skip to content
         </a>
-        <ClerkProvider>
+        <ClerkProvider afterSignOutUrl="/research-studio">
           <ToastContainer />
           <AnalyticsTracker />
           <Onboarding />
