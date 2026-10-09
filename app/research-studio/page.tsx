@@ -7828,11 +7828,10 @@ export default function ResearchStudioPage() {
                 const maxTotal = rows.reduce((a, s) => a + s.maxMarks, 0);
                 return (
                   <div className="space-y-4">
-                    <div className="studio-assess-scroll">
-                      <table className="studio-assess-table">
+                    <div className="studio-scores-scroll">
+                      <table className="studio-scores-table">
                         <thead>
                           <tr>
-                            <th>Type</th>
                             <th>Item</th>
                             <th style={{ textAlign: "right" }}>Score</th>
                           </tr>
@@ -7840,7 +7839,6 @@ export default function ResearchStudioPage() {
                         <tbody>
                           {rows.map((s) => (
                             <tr key={`${s.kind}-${s.id}`}>
-                              <td>{s.kind}</td>
                               <td>{s.title}</td>
                               <td style={{ textAlign: "right", fontVariantNumeric: "tabular-nums" }}>
                                 {s.score == null ? "—" : `${s.score} / ${s.maxMarks}`}
@@ -7849,14 +7847,14 @@ export default function ResearchStudioPage() {
                           ))}
                           {rows.length === 0 ? (
                             <tr>
-                              <td colSpan={3} className="studio-assess-student">No practicals or tests for this group yet.</td>
+                              <td colSpan={2}>No practicals or tests for this group yet.</td>
                             </tr>
                           ) : null}
                         </tbody>
                         {rows.length > 0 ? (
                           <tfoot>
                             <tr>
-                              <td colSpan={2} style={{ fontWeight: 700 }}>Total</td>
+                              <td style={{ fontWeight: 700 }}>Total</td>
                               <td style={{ textAlign: "right", fontWeight: 700, fontVariantNumeric: "tabular-nums" }}>
                                 {total} / {maxTotal}
                               </td>

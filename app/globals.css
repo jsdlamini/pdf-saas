@@ -2222,6 +2222,41 @@ body[data-studio-editor="true"] footer {
   background: #ffffff;
   box-shadow: 1px 0 0 #e5e7eb;
 }
+/* Student's own scores — compact, phone-readable list. */
+.studio-scores-scroll {
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}
+.studio-scores-table {
+  border-collapse: collapse;
+  width: 100%;
+  min-width: 240px;
+  font-size: 13px;
+}
+.studio-scores-table th,
+.studio-scores-table td {
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--border);
+  text-align: left;
+  white-space: nowrap;
+  color: var(--foreground);
+}
+.studio-scores-table th {
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--muted);
+}
+.studio-scores-table td:last-child,
+.studio-scores-table th:last-child {
+  text-align: right;
+}
+.studio-scores-table tfoot td {
+  border-top: 2px solid var(--border);
+  border-bottom: 0;
+  font-weight: 700;
+}
 .studio-assess-sid {
   display: block;
   font-size: 10px;
