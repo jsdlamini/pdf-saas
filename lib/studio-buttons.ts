@@ -1,6 +1,6 @@
 import { db, ensureMigrated } from "@/lib/db";
 
-export const BUTTON_KEYS = ["newProject", "template", "learn", "contests", "groups", "scores"] as const;
+export const BUTTON_KEYS = ["newProject", "template", "learn", "contests", "groups", "scores", "assessClass"] as const;
 export type ButtonKey = (typeof BUTTON_KEYS)[number];
 export type ButtonVisibility = Record<ButtonKey, boolean>;
 export type ButtonRole = "user" | "assistant" | "admin";
@@ -9,9 +9,9 @@ export type ButtonConfig = Record<ButtonRole, ButtonVisibility>;
 const KEY = "studio_button_visibility";
 
 export const DEFAULT_BUTTON_CONFIG: ButtonConfig = {
-  user: { newProject: true, template: true, learn: true, contests: true, groups: true, scores: true },
-  assistant: { newProject: false, template: false, learn: false, contests: false, groups: true, scores: false },
-  admin: { newProject: true, template: true, learn: true, contests: true, groups: true, scores: false },
+  user: { newProject: true, template: true, learn: true, contests: true, groups: true, scores: true, assessClass: false },
+  assistant: { newProject: false, template: false, learn: false, contests: false, groups: true, scores: false, assessClass: false },
+  admin: { newProject: true, template: true, learn: true, contests: true, groups: true, scores: false, assessClass: true },
 };
 
 export const BUTTON_LABELS: Record<ButtonKey, string> = {
@@ -21,6 +21,7 @@ export const BUTTON_LABELS: Record<ButtonKey, string> = {
   contests: "Contests",
   groups: "Practical Groups",
   scores: "View My Assessment Scores",
+  assessClass: "Assess whole class",
 };
 
 export async function getButtonConfig(): Promise<ButtonConfig> {

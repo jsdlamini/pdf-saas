@@ -13,6 +13,9 @@ export type StudyGroup = {
 };
 
 export const GROUP_CAPACITY = 50;
+
+/** Sentinel group id for the whole-class assessment view (all groups at once). */
+export const CLASS_ASSESS_GROUP = "__all__";
 export const DEFAULT_SESSION_COUNT = 4;
 export const DEFAULT_TEST_COUNT = 1;
 export const DEFAULT_EXAM_COUNT = 1;

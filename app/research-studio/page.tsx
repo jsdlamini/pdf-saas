@@ -20,7 +20,7 @@ import { vscodeFileIcon, vscodeFolderIcon } from "@/lib/file-icons";
 import { loadJson, persistJson, removeJson } from "@/lib/json-storage";
 import { mergeAssetContents, unrecoverableAssetPaths, isBinaryAssetPath } from "@/lib/project-assets";
 import { renderPdfFirstPagePreview } from "@/lib/transforms/rasterize";
-import { VALID_PROGRAMMES } from "@/lib/groups";
+import { CLASS_ASSESS_GROUP, VALID_PROGRAMMES } from "@/lib/groups";
 import { classifyUpload, joinUploadPath } from "@/lib/project-upload";
 import { Button } from "@/components/ui/button";
 import {
@@ -1538,7 +1538,7 @@ export default function ResearchStudioPage() {
   const [groupsIsAssistant, setGroupsIsAssistant] = useState(false);
   const [assessGroupOpen, setAssessGroupOpen] = useState<string | null>(null);
   const [assessData, setAssessData] = useState<{
-    students: { userId: string; name: string; surname: string; studentId: string; programme: string }[];
+    students: { userId: string; name: string; surname: string; studentId: string; programme: string; group?: string }[];
     practicals: { id: number; title: string; maxMarks: number }[];
     tests: { id: number; title: string; maxMarks: number }[];
     exams: { id: number; title: string; maxMarks: number }[];
@@ -7585,6 +7585,11 @@ export default function ResearchStudioPage() {
               </DialogHeader>
               {groupsIsAdmin ? (
                 <div style={{ display: "flex", justifyContent: "flex-end", gap: 8 }}>
+                  {!buttonVisibility || buttonVisibility.assessClass ? (
+                    <button type="button" onClick={() => void openAssess(CLASS_ASSESS_GROUP)} className="studio-btn studio-btn-ghost" style={{ height: 30, fontSize: 11, padding: "0 10px" }} title="Assess all students across every group">
+                      Assess whole class
+                    </button>
+                  ) : null}
                   <button type="button" onClick={openCreateGroup} className="studio-btn studio-btn-primary" style={{ height: 30, fontSize: 11, padding: "0 10px" }}>
                     <svg viewBox="0 0 20 20" style={{ width: 14, height: 14 }} fill="none" stroke="currentColor" strokeWidth="2">
                       <path d="M10 4v12M4 10h12" strokeLinecap="round" strokeLinejoin="round" />
@@ -7732,7 +7737,7 @@ export default function ResearchStudioPage() {
           <Dialog open onOpenChange={(open) => { if (!open) setAssessGroupOpen(null); }}>
             <DialogContent className="sm:max-w-5xl">
               <DialogHeader>
-                <DialogTitle>Assess {groups.find((g) => g.id === assessGroupOpen)?.name || "group"}</DialogTitle>
+                <DialogTitle>{assessGroupOpen === CLASS_ASSESS_GROUP ? "Assess whole class" : `Assess ${groups.find((g) => g.id === assessGroupOpen)?.name || "group"}`}</DialogTitle>
                 <DialogDescription>Enter marks per practical, test, and examination.</DialogDescription>
               </DialogHeader>
               {!assessData ? (
@@ -7769,7 +7774,7 @@ export default function ResearchStudioPage() {
                             <tr key={st.userId}>
                               <td className="studio-assess-student">
                                 <span>{st.name} {st.surname}</span>
-                                <span className="studio-assess-sid">{st.studentId}{st.programme ? ` · ${st.programme}` : ""}</span>
+                                <span className="studio-assess-sid">{st.group ? `${st.group} · ` : ""}{st.studentId}{st.programme ? ` · ${st.programme}` : ""}</span>
                               </td>
                               {allItems.map((s) => {
                                 const val = markMap.get(`${s.id}:${st.studentId}`);
@@ -7799,9 +7804,11 @@ export default function ResearchStudioPage() {
                     </div>
                     <DialogFooter>
                       {assessNotice ? <span style={{ fontSize: 11, color: "var(--text-muted, #64748b)" }}>{assessNotice}</span> : null}
-                      <a href={`/api/groups/assess/export?group=${assessGroupOpen}`} download className="studio-btn studio-btn-secondary" style={{ height: 30, fontSize: 11, padding: "0 10px", textDecoration: "none" }}>
-                        Export Excel
-                      </a>
+                      {assessGroupOpen !== CLASS_ASSESS_GROUP ? (
+                        <a href={`/api/groups/assess/export?group=${assessGroupOpen}`} download className="studio-btn studio-btn-secondary" style={{ height: 30, fontSize: 11, padding: "0 10px", textDecoration: "none" }}>
+                          Export Excel
+                        </a>
+                      ) : null}
                       <Button variant="outline" onClick={() => setAssessGroupOpen(null)}>Close</Button>
                     </DialogFooter>
                   </>

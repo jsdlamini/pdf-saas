@@ -1,6 +1,13 @@
 import { auth } from "@clerk/nextjs/server";
 import { getUserRole } from "@/lib/user-roles";
-import { getAssessment, saveAssessment, type AssessMark } from "@/lib/assess-store";
+import { CLASS_ASSESS_GROUP } from "@/lib/groups";
+import {
+  getAssessment,
+  getAssessmentForClass,
+  saveAssessment,
+  saveAssessmentForClass,
+  type AssessMark,
+} from "@/lib/assess-store";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -9,19 +16,24 @@ function jsonError(message: string, status: number) {
   return Response.json({ error: message }, { status });
 }
 
-async function resolveAssessor(): Promise<string | null> {
+async function resolveRole(): Promise<string | null> {
   const { userId } = await auth();
   if (!userId) return null;
-  const role = await getUserRole(userId);
-  return role === "admin" || role === "assistant" ? userId : null;
+  return await getUserRole(userId);
 }
 
 export async function GET(request: Request) {
-  const userId = await resolveAssessor();
-  if (!userId) return jsonError("Assessor access required.", 403);
+  const role = await resolveRole();
+  if (role !== "admin" && role !== "assistant") {
+    return jsonError("Assessor access required.", 403);
+  }
 
   const url = new URL(request.url);
   const groupId = url.searchParams.get("group") || "";
+  if (groupId === CLASS_ASSESS_GROUP) {
+    if (role !== "admin") return jsonError("Admin access required.", 403);
+    return Response.json(await getAssessmentForClass());
+  }
   if (!groupId) return jsonError("Group required.", 400);
 
   const data = await getAssessment(groupId);
@@ -29,8 +41,10 @@ export async function GET(request: Request) {
 }
 
 export async function POST(request: Request) {
-  const userId = await resolveAssessor();
-  if (!userId) return jsonError("Assessor access required.", 403);
+  const role = await resolveRole();
+  if (role !== "admin" && role !== "assistant") {
+    return jsonError("Assessor access required.", 403);
+  }
 
   const body = (await request.json().catch(() => null)) as {
     groupId?: string;
@@ -38,6 +52,11 @@ export async function POST(request: Request) {
   } | null;
   if (!body || typeof body.groupId !== "string") return jsonError("Invalid payload.", 400);
 
-  await saveAssessment(body.groupId, Array.isArray(body.marks) ? body.marks : []);
+  if (body.groupId === CLASS_ASSESS_GROUP) {
+    if (role !== "admin") return jsonError("Admin access required.", 403);
+    await saveAssessmentForClass(Array.isArray(body.marks) ? body.marks : []);
+  } else {
+    await saveAssessment(body.groupId, Array.isArray(body.marks) ? body.marks : []);
+  }
   return Response.json({ ok: true });
 }
