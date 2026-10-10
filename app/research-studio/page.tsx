@@ -7587,8 +7587,10 @@ export default function ResearchStudioPage() {
               </DialogHeader>
               {/* "Assess whole class" visibility follows the dashboard's Studio Button Visibility
                   config (single source of truth, default admin-only). The whole-class API itself stays
-                  admin-only in app/api/groups/assess/route.ts — this only controls button visibility. */}
-              {(groupsIsAdmin || Boolean(buttonVisibility && buttonVisibility.assessClass)) ? (
+                  admin-only in app/api/groups/assess/route.ts — this only controls button visibility.
+                  All admin-only actions here are additionally hidden when signed out, regardless of
+                  any role config that happens to include the public "user" role. */}
+              {isSignedIn && (groupsIsAdmin || Boolean(buttonVisibility && buttonVisibility.assessClass)) ? (
                 <div style={{ display: "flex", justifyContent: "flex-end", gap: 8 }}>
                   {(buttonVisibility ? buttonVisibility.assessClass : groupsIsAdmin) ? (
                     <button
