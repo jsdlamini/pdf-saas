@@ -1547,6 +1547,7 @@ export default function ResearchStudioPage() {
   const [assessBusy, setAssessBusy] = useState(false);
   const [assessNotice, setAssessNotice] = useState("");
   const [assessSearch, setAssessSearch] = useState("");
+  const [assessType, setAssessType] = useState<"all" | "practicals" | "tests" | "exams">("all");
   const [scoresGroupOpen, setScoresGroupOpen] = useState<string | null>(null);
   const [scoresData, setScoresData] = useState<{
     practicals: { id: number; title: string; maxMarks: number; score: number | null }[];
@@ -6705,6 +6706,7 @@ export default function ResearchStudioPage() {
     setAssessGroupOpen(groupId);
     setAssessData(null);
     setAssessNotice("");
+    setAssessType("all");
     try {
       const res = await fetch(`/api/groups/assess?group=${encodeURIComponent(groupId)}`);
       if (!res.ok) throw new Error();
@@ -7585,8 +7587,10 @@ export default function ResearchStudioPage() {
               </DialogHeader>
               {/* "Assess whole class" visibility follows the dashboard's Studio Button Visibility
                   config (single source of truth, default admin-only). The whole-class API itself stays
-                  admin-only in app/api/groups/assess/route.ts — this only controls button visibility. */}
-              {(groupsIsAdmin || Boolean(buttonVisibility && buttonVisibility.assessClass)) ? (
+                  admin-only in app/api/groups/assess/route.ts — this only controls button visibility.
+                  All admin-only actions here are additionally hidden when signed out, regardless of
+                  any role config that happens to include the public "user" role. */}
+              {isSignedIn && (groupsIsAdmin || Boolean(buttonVisibility && buttonVisibility.assessClass)) ? (
                 <div style={{ display: "flex", justifyContent: "flex-end", gap: 8 }}>
                   {(buttonVisibility ? buttonVisibility.assessClass : groupsIsAdmin) ? (
                     <button
@@ -7748,7 +7752,7 @@ export default function ResearchStudioPage() {
         ) : null}
         {assessGroupOpen ? (
           <Dialog open onOpenChange={(open) => { if (!open) setAssessGroupOpen(null); }}>
-            <DialogContent className="sm:max-w-5xl">
+            <DialogContent className="sm:max-w-screen-2xl sm:h-[88vh] flex flex-col overflow-hidden">
               <DialogHeader>
                 <DialogTitle>{assessGroupOpen === CLASS_ASSESS_GROUP ? "Assess whole class" : `Assess ${groups.find((g) => g.id === assessGroupOpen)?.name || "group"}`}</DialogTitle>
                 <DialogDescription>Enter marks per practical, test, and examination.</DialogDescription>
@@ -7756,7 +7760,14 @@ export default function ResearchStudioPage() {
               {!assessData ? (
                 <p style={{ fontSize: 12, color: "var(--text-muted, #64748b)" }}>{assessNotice || "Loading…"}</p>
               ) : (() => {
-                const allItems = [...assessData.practicals, ...assessData.tests, ...assessData.exams];
+                const columns =
+                  assessType === "practicals"
+                    ? assessData.practicals
+                    : assessType === "tests"
+                      ? assessData.tests
+                      : assessType === "exams"
+                        ? assessData.exams
+                        : [...assessData.practicals, ...assessData.tests, ...assessData.exams];
                 const markMap = new Map(assessData.marks.map((m) => [`${m.itemId}:${m.studentId}`, m.score]));
                 const q = assessSearch.trim().toLowerCase();
                 const filtered = q
@@ -7766,18 +7777,26 @@ export default function ResearchStudioPage() {
                   : assessData.students;
                 return (
                   <>
-                    <input
-                      value={assessSearch}
-                      onChange={(e) => setAssessSearch(e.target.value)}
-                      placeholder="Search students..."
-                      className="studio-assess-search"
-                    />
+                    <div className="studio-assess-toolbar">
+                      <input
+                        value={assessSearch}
+                        onChange={(e) => setAssessSearch(e.target.value)}
+                        placeholder="Search students..."
+                        className="studio-assess-search"
+                      />
+                      <div className="studio-assess-types">
+                        <Button type="button" variant={assessType === "all" ? "default" : "outline"} size="sm" onClick={() => setAssessType("all")}>All</Button>
+                        <Button type="button" variant={assessType === "practicals" ? "default" : "outline"} size="sm" onClick={() => setAssessType("practicals")}>Practicals</Button>
+                        <Button type="button" variant={assessType === "tests" ? "default" : "outline"} size="sm" onClick={() => setAssessType("tests")}>Tests</Button>
+                        <Button type="button" variant={assessType === "exams" ? "default" : "outline"} size="sm" onClick={() => setAssessType("exams")}>Examinations</Button>
+                      </div>
+                    </div>
                     <div className="studio-assess-scroll">
-                      <table className="studio-assess-table">
+                      <table className="studio-assess-table" style={columns.length < 4 ? { minWidth: 0, width: "auto" } : undefined}>
                         <thead>
                           <tr>
                             <th>Student</th>
-                            {allItems.map((s) => (
+                            {columns.map((s) => (
                               <th key={s.id} title={`Max ${s.maxMarks} marks`}>{s.title}</th>
                             ))}
                           </tr>
@@ -7789,7 +7808,7 @@ export default function ResearchStudioPage() {
                                 <span>{st.name} {st.surname}</span>
                                 <span className="studio-assess-sid">{st.group ? `${st.group} · ` : ""}{st.studentId}{st.programme ? ` · ${st.programme}` : ""}</span>
                               </td>
-                              {allItems.map((s) => {
+                              {columns.map((s) => {
                                 const val = markMap.get(`${s.id}:${st.studentId}`);
                                 return (
                                   <td key={s.id}>
@@ -7809,7 +7828,7 @@ export default function ResearchStudioPage() {
                           ))}
                           {filtered.length === 0 ? (
                             <tr>
-                              <td colSpan={allItems.length + 1} className="studio-assess-student">No students match.</td>
+                              <td colSpan={columns.length + 1} className="studio-assess-student">No students match.</td>
                             </tr>
                           ) : null}
                         </tbody>
