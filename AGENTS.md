@@ -60,6 +60,8 @@ Next.js 16 middleware convention is `proxy.ts` (the `middleware.ts` convention i
 ### Practical-group assessment
 `app/api/groups/assess/route.ts` + `lib/assess-store.ts` back the per-group "Assess" dialog. The route supports per-group (`?group=<id>`) and whole-class (`?group=__all__`, the `CLASS_ASSESS_GROUP` sentinel in `lib/groups.ts`) modes. Whole-class is admin-only (assistants are allowed per-group only, enforced server-side). Whole-class returns the same `assessData` shape (students/practicals/tests/exams/marks) but addresses columns by deterministic virtual ids (`encodeClassItemId`/`decodeClassItemId` in `lib/assess-store.ts`); `saveAssessmentForClass` resolves each student's virtual id to their own group's session before upserting.
 
+The "Assess whole class" button's visibility is controlled by the dashboard's Studio Button Visibility table (`lib/studio-buttons.ts` `assessClass` key, default admin-only) and is gated in `app/research-studio/page.tsx` by `buttonVisibility.assessClass` — no hard-coded role gate. The whole-class API stays admin-only regardless of that visibility config, so granting the button to non-admins only reveals it (the API still 403s them); do not silently open whole-class data to non-admins.
+
 ### Shared client/server contract
 `lib/ocr.ts` holds constants used by BOTH the browser and the API route: `MAX_OCR_UPLOAD_BYTES` (1 GB) and `OCR_LANGUAGE_OPTIONS` / `SUPPORTED_OCR_LANGUAGES`. The upload-size and language validations are enforced client-side (in `ToolWorkbench`) and re-checked server-side as a backstop. Adding an OCR language requires updating `OCR_LANGUAGE_OPTIONS` here AND installing the matching `tesseract-ocr-*` package in the `Dockerfile`.
 

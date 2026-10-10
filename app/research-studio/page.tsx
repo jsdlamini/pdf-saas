@@ -7583,28 +7583,41 @@ export default function ResearchStudioPage() {
                   Join a practical group — up to 50 students per group.
                 </DialogDescription>
               </DialogHeader>
-              {groupsIsAdmin ? (
+              {/* "Assess whole class" visibility follows the dashboard's Studio Button Visibility
+                  config (single source of truth, default admin-only). The whole-class API itself stays
+                  admin-only in app/api/groups/assess/route.ts — this only controls button visibility. */}
+              {(groupsIsAdmin || Boolean(buttonVisibility && buttonVisibility.assessClass)) ? (
                 <div style={{ display: "flex", justifyContent: "flex-end", gap: 8 }}>
-                  {!buttonVisibility || buttonVisibility.assessClass ? (
-                    <button type="button" onClick={() => void openAssess(CLASS_ASSESS_GROUP)} className="studio-btn studio-btn-ghost" style={{ height: 30, fontSize: 11, padding: "0 10px" }} title="Assess all students across every group">
+                  {(buttonVisibility ? buttonVisibility.assessClass : groupsIsAdmin) ? (
+                    <button
+                      type="button"
+                      onClick={() => void openAssess(CLASS_ASSESS_GROUP)}
+                      className="studio-btn"
+                      style={{ background: "linear-gradient(135deg,#9333ea,#d946ef)", color: "#fff", border: "none", fontWeight: 700, height: 30, fontSize: 11, padding: "0 10px" }}
+                      title="Assess all students across every group"
+                    >
                       Assess whole class
                     </button>
                   ) : null}
-                  <button type="button" onClick={openCreateGroup} className="studio-btn studio-btn-primary" style={{ height: 30, fontSize: 11, padding: "0 10px" }}>
-                    <svg viewBox="0 0 20 20" style={{ width: 14, height: 14 }} fill="none" stroke="currentColor" strokeWidth="2">
-                      <path d="M10 4v12M4 10h12" strokeLinecap="round" strokeLinejoin="round" />
-                    </svg>
-                    New group
-                  </button>
-                  <a href="/api/groups/pdf?group=all" download className="studio-btn studio-btn-ghost" style={{ height: 30, fontSize: 11, padding: "0 10px", textDecoration: "none" }} title="Download all students with marks (PDF)">
-                    <svg viewBox="0 0 20 20" style={{ width: 14, height: 14 }} fill="none" stroke="currentColor" strokeWidth="1.8">
-                      <path d="M10 3v9m0 0l-3-3m3 3l3-3M4 14v2h12v-2" strokeLinecap="round" strokeLinejoin="round" />
-                    </svg>
-                    All students (PDF)
-                  </a>
-                  <a href="/api/groups/excel?group=all" download className="studio-btn studio-btn-ghost" style={{ height: 30, fontSize: 11, padding: "0 10px", textDecoration: "none" }} title="Download all students with marks (Excel)">
-                    All students (Excel)
-                  </a>
+                  {groupsIsAdmin ? (
+                    <>
+                      <button type="button" onClick={openCreateGroup} className="studio-btn studio-btn-primary" style={{ height: 30, fontSize: 11, padding: "0 10px" }}>
+                        <svg viewBox="0 0 20 20" style={{ width: 14, height: 14 }} fill="none" stroke="currentColor" strokeWidth="2">
+                          <path d="M10 4v12M4 10h12" strokeLinecap="round" strokeLinejoin="round" />
+                        </svg>
+                        New group
+                      </button>
+                      <a href="/api/groups/pdf?group=all" download className="studio-btn studio-btn-ghost" style={{ height: 30, fontSize: 11, padding: "0 10px", textDecoration: "none" }} title="Download all students with marks (PDF)">
+                        <svg viewBox="0 0 20 20" style={{ width: 14, height: 14 }} fill="none" stroke="currentColor" strokeWidth="1.8">
+                          <path d="M10 3v9m0 0l-3-3m3 3l3-3M4 14v2h12v-2" strokeLinecap="round" strokeLinejoin="round" />
+                        </svg>
+                        All students (PDF)
+                      </a>
+                      <a href="/api/groups/excel?group=all" download className="studio-btn studio-btn-ghost" style={{ height: 30, fontSize: 11, padding: "0 10px", textDecoration: "none" }} title="Download all students with marks (Excel)">
+                        All students (Excel)
+                      </a>
+                    </>
+                  ) : null}
                 </div>
               ) : null}
               {!isSignedIn ? (
