@@ -1,6 +1,6 @@
 import { auth } from "@clerk/nextjs/server";
 import { getUserRole } from "@/lib/user-roles";
-import { listGroups, joinGroup, switchGroup, updateGroup, createGroup, deleteGroup } from "@/lib/groups-store";
+import { listGroups, joinGroup, switchGroup, updateGroup, createGroup, deleteGroup, updateGroupMember } from "@/lib/groups-store";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -43,6 +43,7 @@ export async function POST(request: Request) {
     action?: string;
     groupId?: string;
     toGroupId?: string;
+    memberUserId?: string;
     name?: string;
     surname?: string;
     programme?: string;
@@ -109,6 +110,21 @@ export async function POST(request: Request) {
     const result = await switchGroup(userId, body.groupId, body.toGroupId);
     if (!result.ok) return jsonError(result.error || "Could not switch groups.", 409);
     return Response.json({ ok: true, joined: true });
+  }
+
+  if (body.action === "update-member") {
+    const role = await getUserRole(userId);
+    if (role !== "admin") return jsonError("Admin access required.", 403);
+    if (typeof body.memberUserId !== "string") return jsonError("Invalid payload.", 400);
+    const result = await updateGroupMember(body.groupId, body.memberUserId, {
+      name: typeof body.name === "string" ? body.name : "",
+      surname: typeof body.surname === "string" ? body.surname : "",
+      programme: typeof body.programme === "string" ? body.programme : "",
+      studentId: typeof body.studentId === "string" ? body.studentId : "",
+    });
+    if (result.notFound) return jsonError(result.error || "Student not found.", 404);
+    if (!result.ok) return jsonError(result.error || "Could not update the student.", 400);
+    return Response.json({ ok: true });
   }
 
   return jsonError("Unknown action.", 400);

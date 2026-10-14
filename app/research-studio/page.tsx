@@ -1578,6 +1578,13 @@ export default function ResearchStudioPage() {
   const [editTestCount, setEditTestCount] = useState("1");
   const [editExamCount, setEditExamCount] = useState("1");
   const [editError, setEditError] = useState("");
+  const [editStudent, setEditStudent] = useState<{ groupId: string; userId: string } | null>(null);
+  const [editStudentName, setEditStudentName] = useState("");
+  const [editStudentSurname, setEditStudentSurname] = useState("");
+  const [editStudentId, setEditStudentId] = useState("");
+  const [editStudentProgramme, setEditStudentProgramme] = useState("");
+  const [editStudentError, setEditStudentError] = useState("");
+  const [editStudentBusy, setEditStudentBusy] = useState(false);
 
   // Auto-collapse the file tree and preview on narrow screens so the editor is
   // the single full-width focus. The CSS breakpoint (max-width: 1024px) turns
@@ -6773,6 +6780,73 @@ export default function ResearchStudioPage() {
     void saveSingleMark(itemId, studentId, score);
   }
 
+  function openEditStudent(st: { userId: string; name: string; surname: string; studentId: string; programme: string }) {
+    if (!assessGroupOpen || assessGroupOpen === CLASS_ASSESS_GROUP) return;
+    setEditStudent({ groupId: assessGroupOpen, userId: st.userId });
+    setEditStudentName(st.name);
+    setEditStudentSurname(st.surname);
+    setEditStudentId(st.studentId);
+    setEditStudentProgramme(st.programme);
+    setEditStudentError("");
+  }
+
+  async function reloadAssessData() {
+    if (!assessGroupOpen) return;
+    try {
+      const res = await fetch(`/api/groups/assess?group=${encodeURIComponent(assessGroupOpen)}`);
+      if (res.ok) setAssessData((await res.json()) as NonNullable<typeof assessData>);
+    } catch {
+      // Keep the current sheet if the refresh fails.
+    }
+  }
+
+  async function submitEditStudent() {
+    const target = editStudent;
+    if (!target) return;
+    const name = editStudentName.trim();
+    const surname = editStudentSurname.trim();
+    if (!name || !surname) {
+      setEditStudentError("Name and surname are required.");
+      return;
+    }
+    if (!/^\d{6}$|^\d{9}$/.test(editStudentId.trim())) {
+      setEditStudentError("Student ID must be 6 or 9 digits.");
+      return;
+    }
+    if (!editStudentProgramme) {
+      setEditStudentError("Choose a programme.");
+      return;
+    }
+    setEditStudentError("");
+    setEditStudentBusy(true);
+    try {
+      const res = await fetch("/api/groups", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "update-member",
+          groupId: target.groupId,
+          memberUserId: target.userId,
+          name,
+          surname,
+          programme: editStudentProgramme,
+          studentId: editStudentId.trim(),
+        }),
+      });
+      const data = (await res.json().catch(() => null)) as { error?: string } | null;
+      if (!res.ok) {
+        setEditStudentError(data?.error || "Could not update the student.");
+      } else {
+        setEditStudent(null);
+        await reloadAssessData();
+      }
+    } catch {
+      setEditStudentError("Could not update the student.");
+    } finally {
+      setEditStudentBusy(false);
+    }
+  }
+
   const challengesDialog = (
           <Dialog open={challengesOpen} onOpenChange={setChallengesOpen}>
             <DialogContent className="sm:max-w-lg">
@@ -7807,6 +7881,17 @@ export default function ResearchStudioPage() {
                               <td className="studio-assess-student">
                                 <span>{st.name} {st.surname}</span>
                                 <span className="studio-assess-sid">{st.group ? `${st.group} · ` : ""}{st.studentId}{st.programme ? ` · ${st.programme}` : ""}</span>
+                                {groupsIsAdmin && assessGroupOpen !== CLASS_ASSESS_GROUP ? (
+                                  <button
+                                    type="button"
+                                    onClick={() => openEditStudent(st)}
+                                    className="studio-btn studio-btn-ghost"
+                                    style={{ height: 22, fontSize: 10, padding: "0 8px", marginTop: 4 }}
+                                    title="Edit student details"
+                                  >
+                                    Edit
+                                  </button>
+                                ) : null}
                               </td>
                               {columns.map((s) => {
                                 const val = markMap.get(`${s.id}:${st.studentId}`);
@@ -7846,6 +7931,46 @@ export default function ResearchStudioPage() {
                   </>
                 );
               })()}
+            </DialogContent>
+          </Dialog>
+        ) : null}
+        {editStudent ? (
+          <Dialog open onOpenChange={(open) => { if (!open) setEditStudent(null); }}>
+            <DialogContent className="sm:max-w-md">
+              <DialogHeader>
+                <DialogTitle>Edit student</DialogTitle>
+                <DialogDescription>Update the name, student ID, and programme for this student.</DialogDescription>
+              </DialogHeader>
+              <div className="space-y-3">
+                <div className="space-y-1.5">
+                  <Label htmlFor="edit-student-name">Name</Label>
+                  <Input id="edit-student-name" value={editStudentName} onChange={(e) => setEditStudentName(e.target.value)} autoFocus />
+                </div>
+                <div className="space-y-1.5">
+                  <Label htmlFor="edit-student-surname">Surname</Label>
+                  <Input id="edit-student-surname" value={editStudentSurname} onChange={(e) => setEditStudentSurname(e.target.value)} />
+                </div>
+                <div className="space-y-1.5">
+                  <Label htmlFor="edit-student-id">Student ID</Label>
+                  <Input id="edit-student-id" value={editStudentId} onChange={(e) => setEditStudentId(e.target.value)} placeholder="6 or 9 digits" inputMode="numeric" />
+                </div>
+                <div className="space-y-1.5">
+                  <Label htmlFor="edit-student-programme">Programme</Label>
+                  <select id="edit-student-programme" value={editStudentProgramme} onChange={(e) => setEditStudentProgramme(e.target.value)} className="studio-sort-select" style={{ width: "100%" }}>
+                    <option value="">Select programme</option>
+                    {VALID_PROGRAMMES.map((p) => (
+                      <option key={p} value={p}>{p}</option>
+                    ))}
+                  </select>
+                </div>
+                {editStudentError ? (
+                  <p className="text-xs font-semibold text-[var(--danger)]">{editStudentError}</p>
+                ) : null}
+              </div>
+              <DialogFooter>
+                <Button variant="outline" onClick={() => setEditStudent(null)}>Cancel</Button>
+                <Button onClick={() => void submitEditStudent()} disabled={editStudentBusy}>Save</Button>
+              </DialogFooter>
             </DialogContent>
           </Dialog>
         ) : null}
