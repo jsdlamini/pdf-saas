@@ -1,6 +1,6 @@
 import { auth } from "@clerk/nextjs/server";
 import { getUserRole } from "@/lib/user-roles";
-import { listGroups, joinGroup, switchGroup, updateGroup, createGroup, deleteGroup, updateGroupMember } from "@/lib/groups-store";
+import { listGroups, joinGroup, switchGroup, updateGroup, createGroup, deleteGroup, updateGroupMember, deleteGroupMember } from "@/lib/groups-store";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -124,6 +124,16 @@ export async function POST(request: Request) {
     });
     if (result.notFound) return jsonError(result.error || "Student not found.", 404);
     if (!result.ok) return jsonError(result.error || "Could not update the student.", 400);
+    return Response.json({ ok: true });
+  }
+
+  if (body.action === "delete-member") {
+    const role = await getUserRole(userId);
+    if (role !== "admin") return jsonError("Admin access required.", 403);
+    if (typeof body.memberUserId !== "string") return jsonError("Invalid payload.", 400);
+    const result = await deleteGroupMember(body.groupId, body.memberUserId);
+    if (result.notFound) return jsonError(result.error || "Student not found.", 404);
+    if (!result.ok) return jsonError(result.error || "Could not delete the student.", 400);
     return Response.json({ ok: true });
   }
 
