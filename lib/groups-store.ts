@@ -241,6 +241,70 @@ export async function listGroupSwitches(): Promise<GroupSwitchRow[]> {
   }));
 }
 
+export type UpdateMemberDetails = {
+  name: string;
+  surname: string;
+  programme: string;
+  studentId: string;
+};
+
+/** Admin edit of a group member's personal details. Updates the existing
+ *  membership row in place (keyed by user_id + group_id) — it never creates a
+ *  membership or touches the Clerk account. Marks are keyed by the student
+ *  number, so when that number changes this group's marks move with it. */
+export async function updateGroupMember(
+  groupId: string,
+  memberUserId: string,
+  details: UpdateMemberDetails
+): Promise<{ ok: boolean; error?: string; notFound?: boolean }> {
+  await ensureMigrated();
+
+  const name = details.name.trim();
+  const surname = details.surname.trim();
+  const programme = details.programme.trim();
+  const studentId = details.studentId.trim();
+  if (!name || !surname) return { ok: false, error: "Name and surname are required." };
+  if (!isValidProgramme(programme)) return { ok: false, error: "Choose a valid programme." };
+  if (!isValidStudentId(studentId)) return { ok: false, error: "Student ID must be 6 or 9 digits." };
+
+  const existing = await db.query(
+    `SELECT student_id FROM wiserfiles_group_members WHERE user_id = $1 AND group_id = $2`,
+    [memberUserId, groupId]
+  );
+  if (existing.rows.length === 0) {
+    return { ok: false, notFound: true, error: "Student not found in this group." };
+  }
+  const oldStudentId = existing.rows[0].student_id as string;
+
+  // A student number is a unique personal identifier and the key for marks,
+  // so it must not be shared across accounts.
+  const usedByOther = await db.query(
+    `SELECT 1 FROM wiserfiles_group_members WHERE student_id = $1 AND user_id <> $2 LIMIT 1`,
+    [studentId, memberUserId]
+  );
+  if (usedByOther.rows.length > 0) {
+    return { ok: false, error: "This student number is already registered to another account." };
+  }
+
+  await db.query(
+    `UPDATE wiserfiles_group_members SET name = $3, surname = $4, programme = $5, student_id = $6
+     WHERE user_id = $1 AND group_id = $2`,
+    [memberUserId, groupId, name, surname, programme, studentId]
+  );
+
+  if (oldStudentId !== studentId) {
+    await db.query(
+      `UPDATE wiserfiles_assessment_marks m
+       SET student_id = $3
+       WHERE m.student_id = $2
+         AND m.session_id IN (SELECT id FROM wiserfiles_group_sessions WHERE group_id = $1)`,
+      [groupId, oldStudentId, studentId]
+    );
+  }
+
+  return { ok: true };
+}
+
 export async function updateGroup(
   groupId: string,
   fields: { name: string; schedule: string; capacity: number; sessionCount: number; testCount: number; examCount: number }

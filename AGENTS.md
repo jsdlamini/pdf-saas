@@ -62,6 +62,8 @@ Next.js 16 middleware convention is `proxy.ts` (the `middleware.ts` convention i
 
 The "Assess whole class" button's visibility is controlled by the dashboard's Studio Button Visibility table (`lib/studio-buttons.ts` `assessClass` key, default admin-only) and is gated in `app/research-studio/page.tsx` by `buttonVisibility.assessClass` — no hard-coded role gate. The whole-class API stays admin-only regardless of that visibility config, so granting the button to non-admins only reveals it (the API still 403s them); do not silently open whole-class data to non-admins.
 
+Admin student editing: `app/api/groups/route.ts` `POST { action: "update-member" }` (admin-only, 403 otherwise) updates a member's name/surname/student_id/programme via `updateGroupMember` in `lib/groups-store.ts`. It updates the existing `wiserfiles_group_members` row in place — never a new membership or Clerk change — and, when the student number changes, migrates that group's `wiserfiles_assessment_marks` rows (keyed by the student number) to the new number. The edit control is an "Edit" action per student in the per-group Assess dialog in `app/research-studio/page.tsx`, gated by `groupsIsAdmin`.
+
 ### Shared client/server contract
 `lib/ocr.ts` holds constants used by BOTH the browser and the API route: `MAX_OCR_UPLOAD_BYTES` (1 GB) and `OCR_LANGUAGE_OPTIONS` / `SUPPORTED_OCR_LANGUAGES`. The upload-size and language validations are enforced client-side (in `ToolWorkbench`) and re-checked server-side as a backstop. Adding an OCR language requires updating `OCR_LANGUAGE_OPTIONS` here AND installing the matching `tesseract-ocr-*` package in the `Dockerfile`.
 
