@@ -64,6 +64,8 @@ The "Assess whole class" button's visibility is controlled by the dashboard's St
 
 Admin student editing: `app/api/groups/route.ts` `POST { action: "update-member" }` (admin-only, 403 otherwise) updates a member's name/surname/student_id/programme via `updateGroupMember` in `lib/groups-store.ts`. It updates the existing `wiserfiles_group_members` row in place — never a new membership or Clerk change — and, when the student number changes, migrates that group's `wiserfiles_assessment_marks` rows (keyed by the student number) to the new number. The edit control is an "Edit" action per student in the per-group Assess dialog in `app/research-studio/page.tsx`, gated by `groupsIsAdmin`.
 
+Admin student deletion: same route/dialog, `action: "delete-member"` via `deleteGroupMember` in `lib/groups-store.ts` — deletes only the one `wiserfiles_group_members (user_id, group_id)` row, that group's `wiserfiles_assessment_marks` rows for the student number (sessions scoped by group), and the `wiserfiles_group_switch_log` rows for that user/student number. Never the Clerk account or other memberships sharing it. A "Delete" button (with confirm dialog) sits beside Edit.
+
 ### Shared client/server contract
 `lib/ocr.ts` holds constants used by BOTH the browser and the API route: `MAX_OCR_UPLOAD_BYTES` (1 GB) and `OCR_LANGUAGE_OPTIONS` / `SUPPORTED_OCR_LANGUAGES`. The upload-size and language validations are enforced client-side (in `ToolWorkbench`) and re-checked server-side as a backstop. Adding an OCR language requires updating `OCR_LANGUAGE_OPTIONS` here AND installing the matching `tesseract-ocr-*` package in the `Dockerfile`.
 
