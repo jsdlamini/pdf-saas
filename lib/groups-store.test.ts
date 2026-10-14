@@ -8,7 +8,7 @@ vi.mock("@/lib/db", () => ({
   ensureMigrated: ensureMigratedMock,
 }));
 
-import { updateGroupMember } from "./groups-store";
+import { deleteGroupMember, updateGroupMember } from "./groups-store";
 
 function memberRow(studentId = "123456") {
   return { rows: [{ student_id: studentId }], rowCount: 1 };
@@ -169,6 +169,43 @@ describe("updateGroupMember", () => {
       programme: "BSc IT",
       studentId: "654321",
     });
+
+    expect(result).toEqual({ ok: false, notFound: true, error: "Student not found in this group." });
+    expect(dbQueryMock).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe("deleteGroupMember", () => {
+  it("deletes the membership, this group's marks, and the switch log", async () => {
+    dbQueryMock
+      .mockResolvedValueOnce(memberRow("123456")) // existing member lookup
+      .mockResolvedValueOnce({ rows: [], rowCount: 1 }) // DELETE membership
+      .mockResolvedValueOnce({ rows: [], rowCount: 2 }) // DELETE marks
+      .mockResolvedValueOnce({ rows: [], rowCount: 1 }); // DELETE switch log
+
+    const result = await deleteGroupMember("group-a", "u1");
+
+    expect(result).toEqual({ ok: true });
+    expect(dbQueryMock).toHaveBeenCalledTimes(4);
+
+    const memberDelete = dbQueryMock.mock.calls[1];
+    expect(memberDelete[0]).toContain("DELETE FROM wiserfiles_group_members");
+    expect(memberDelete[1]).toEqual(["u1", "group-a"]);
+
+    const marksDelete = dbQueryMock.mock.calls[2];
+    expect(marksDelete[0]).toContain("DELETE FROM wiserfiles_assessment_marks");
+    expect(marksDelete[0]).toContain("wiserfiles_group_sessions");
+    expect(marksDelete[1]).toEqual(["123456", "group-a"]);
+
+    const switchDelete = dbQueryMock.mock.calls[3];
+    expect(switchDelete[0]).toContain("DELETE FROM wiserfiles_group_switch_log");
+    expect(switchDelete[1]).toEqual(["u1", "123456"]);
+  });
+
+  it("reports notFound when the member is not in the group", async () => {
+    dbQueryMock.mockResolvedValueOnce(empty());
+
+    const result = await deleteGroupMember("group-a", "missing-user");
 
     expect(result).toEqual({ ok: false, notFound: true, error: "Student not found in this group." });
     expect(dbQueryMock).toHaveBeenCalledTimes(1);

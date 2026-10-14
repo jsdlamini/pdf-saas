@@ -305,6 +305,43 @@ export async function updateGroupMember(
   return { ok: true };
 }
 
+/** Admin delete of a single group membership. Removes the membership row, the
+ *  student's marks in THIS group, and the switch-log rows for that
+ *  user/student number — never the Clerk account or other memberships that
+ *  share the same account. */
+export async function deleteGroupMember(
+  groupId: string,
+  memberUserId: string
+): Promise<{ ok: boolean; error?: string; notFound?: boolean }> {
+  await ensureMigrated();
+
+  const existing = await db.query(
+    `SELECT student_id FROM wiserfiles_group_members WHERE user_id = $1 AND group_id = $2`,
+    [memberUserId, groupId]
+  );
+  if (existing.rows.length === 0) {
+    return { ok: false, notFound: true, error: "Student not found in this group." };
+  }
+  const studentId = existing.rows[0].student_id as string;
+
+  await db.query(
+    `DELETE FROM wiserfiles_group_members WHERE user_id = $1 AND group_id = $2`,
+    [memberUserId, groupId]
+  );
+  await db.query(
+    `DELETE FROM wiserfiles_assessment_marks
+     WHERE student_id = $1
+       AND session_id IN (SELECT id FROM wiserfiles_group_sessions WHERE group_id = $2)`,
+    [studentId, groupId]
+  );
+  await db.query(
+    `DELETE FROM wiserfiles_group_switch_log WHERE user_id = $1 AND student_id = $2`,
+    [memberUserId, studentId]
+  );
+
+  return { ok: true };
+}
+
 export async function updateGroup(
   groupId: string,
   fields: { name: string; schedule: string; capacity: number; sessionCount: number; testCount: number; examCount: number }
