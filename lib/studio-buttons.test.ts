@@ -13,6 +13,22 @@ describe("studio button config", () => {
     expect(DEFAULT_BUTTON_CONFIG.user.assessClass).toBe(false);
   });
 
+  it("registers the student edit and delete buttons", () => {
+    expect(BUTTON_KEYS).toContain("editStudent");
+    expect(BUTTON_KEYS).toContain("deleteStudent");
+    expect(BUTTON_LABELS.editStudent).toBe("Edit student details");
+    expect(BUTTON_LABELS.deleteStudent).toBe("Delete student");
+  });
+
+  it("defaults editStudent and deleteStudent to admin-only", () => {
+    expect(DEFAULT_BUTTON_CONFIG.admin.editStudent).toBe(true);
+    expect(DEFAULT_BUTTON_CONFIG.admin.deleteStudent).toBe(true);
+    expect(DEFAULT_BUTTON_CONFIG.assistant.editStudent).toBe(false);
+    expect(DEFAULT_BUTTON_CONFIG.assistant.deleteStudent).toBe(false);
+    expect(DEFAULT_BUTTON_CONFIG.user.editStudent).toBe(false);
+    expect(DEFAULT_BUTTON_CONFIG.user.deleteStudent).toBe(false);
+  });
+
   it("every key has a label and a default for every role", () => {
     for (const key of BUTTON_KEYS) {
       expect(BUTTON_LABELS[key]).toBeTruthy();

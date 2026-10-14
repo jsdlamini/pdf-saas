@@ -7927,24 +7927,28 @@ export default function ResearchStudioPage() {
                                 <span className="studio-assess-sid">{st.group ? `${st.group} · ` : ""}{st.studentId}{st.programme ? ` · ${st.programme}` : ""}</span>
                                 {groupsIsAdmin && assessGroupOpen !== CLASS_ASSESS_GROUP ? (
                                   <span style={{ display: "inline-flex", gap: 4, marginTop: 4 }}>
-                                    <button
-                                      type="button"
-                                      onClick={() => openEditStudent(st)}
-                                      className="studio-btn studio-btn-ghost"
-                                      style={{ height: 22, fontSize: 10, padding: "0 8px" }}
-                                      title="Edit student details"
-                                    >
-                                      Edit
-                                    </button>
-                                    <button
-                                      type="button"
-                                      onClick={() => openDeleteStudent(st)}
-                                      className="studio-btn studio-btn-danger"
-                                      style={{ height: 22, fontSize: 10, padding: "0 8px" }}
-                                      title="Delete student"
-                                    >
-                                      Delete
-                                    </button>
+                                    {(!buttonVisibility || buttonVisibility.editStudent) ? (
+                                      <button
+                                        type="button"
+                                        onClick={() => openEditStudent(st)}
+                                        className="studio-btn studio-btn-ghost"
+                                        style={{ height: 22, fontSize: 10, padding: "0 8px" }}
+                                        title="Edit student details"
+                                      >
+                                        Edit
+                                      </button>
+                                    ) : null}
+                                    {(!buttonVisibility || buttonVisibility.deleteStudent) ? (
+                                      <button
+                                        type="button"
+                                        onClick={() => openDeleteStudent(st)}
+                                        className="studio-btn studio-btn-danger"
+                                        style={{ height: 22, fontSize: 10, padding: "0 8px" }}
+                                        title="Delete student"
+                                      >
+                                        Delete
+                                      </button>
+                                    ) : null}
                                   </span>
                                 ) : null}
                               </td>
