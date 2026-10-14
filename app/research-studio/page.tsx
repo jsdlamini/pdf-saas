@@ -1585,6 +1585,9 @@ export default function ResearchStudioPage() {
   const [editStudentProgramme, setEditStudentProgramme] = useState("");
   const [editStudentError, setEditStudentError] = useState("");
   const [editStudentBusy, setEditStudentBusy] = useState(false);
+  const [deleteStudent, setDeleteStudent] = useState<{ groupId: string; userId: string; name: string; surname: string; studentId: string } | null>(null);
+  const [deleteStudentBusy, setDeleteStudentBusy] = useState(false);
+  const [deleteStudentError, setDeleteStudentError] = useState("");
 
   // Auto-collapse the file tree and preview on narrow screens so the editor is
   // the single full-width focus. The CSS breakpoint (max-width: 1024px) turns
@@ -6847,6 +6850,47 @@ export default function ResearchStudioPage() {
     }
   }
 
+  function openDeleteStudent(st: { userId: string; name: string; surname: string; studentId: string; programme: string }) {
+    if (!assessGroupOpen || assessGroupOpen === CLASS_ASSESS_GROUP) return;
+    setDeleteStudent({
+      groupId: assessGroupOpen,
+      userId: st.userId,
+      name: st.name,
+      surname: st.surname,
+      studentId: st.studentId,
+    });
+    setDeleteStudentError("");
+  }
+
+  async function submitDeleteStudent() {
+    const target = deleteStudent;
+    if (!target) return;
+    setDeleteStudentError("");
+    setDeleteStudentBusy(true);
+    try {
+      const res = await fetch("/api/groups", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "delete-member",
+          groupId: target.groupId,
+          memberUserId: target.userId,
+        }),
+      });
+      const data = (await res.json().catch(() => null)) as { error?: string } | null;
+      if (!res.ok) {
+        setDeleteStudentError(data?.error || "Could not delete the student.");
+      } else {
+        setDeleteStudent(null);
+        await reloadAssessData();
+      }
+    } catch {
+      setDeleteStudentError("Could not delete the student.");
+    } finally {
+      setDeleteStudentBusy(false);
+    }
+  }
+
   const challengesDialog = (
           <Dialog open={challengesOpen} onOpenChange={setChallengesOpen}>
             <DialogContent className="sm:max-w-lg">
@@ -7882,15 +7926,26 @@ export default function ResearchStudioPage() {
                                 <span>{st.name} {st.surname}</span>
                                 <span className="studio-assess-sid">{st.group ? `${st.group} · ` : ""}{st.studentId}{st.programme ? ` · ${st.programme}` : ""}</span>
                                 {groupsIsAdmin && assessGroupOpen !== CLASS_ASSESS_GROUP ? (
-                                  <button
-                                    type="button"
-                                    onClick={() => openEditStudent(st)}
-                                    className="studio-btn studio-btn-ghost"
-                                    style={{ height: 22, fontSize: 10, padding: "0 8px", marginTop: 4 }}
-                                    title="Edit student details"
-                                  >
-                                    Edit
-                                  </button>
+                                  <span style={{ display: "inline-flex", gap: 4, marginTop: 4 }}>
+                                    <button
+                                      type="button"
+                                      onClick={() => openEditStudent(st)}
+                                      className="studio-btn studio-btn-ghost"
+                                      style={{ height: 22, fontSize: 10, padding: "0 8px" }}
+                                      title="Edit student details"
+                                    >
+                                      Edit
+                                    </button>
+                                    <button
+                                      type="button"
+                                      onClick={() => openDeleteStudent(st)}
+                                      className="studio-btn studio-btn-danger"
+                                      style={{ height: 22, fontSize: 10, padding: "0 8px" }}
+                                      title="Delete student"
+                                    >
+                                      Delete
+                                    </button>
+                                  </span>
                                 ) : null}
                               </td>
                               {columns.map((s) => {
@@ -7970,6 +8025,28 @@ export default function ResearchStudioPage() {
               <DialogFooter>
                 <Button variant="outline" onClick={() => setEditStudent(null)}>Cancel</Button>
                 <Button onClick={() => void submitEditStudent()} disabled={editStudentBusy}>Save</Button>
+              </DialogFooter>
+            </DialogContent>
+          </Dialog>
+        ) : null}
+        {deleteStudent ? (
+          <Dialog open onOpenChange={(open) => { if (!open) setDeleteStudent(null); }}>
+            <DialogContent className="sm:max-w-md">
+              <DialogHeader>
+                <DialogTitle>Delete student</DialogTitle>
+                <DialogDescription>
+                  Delete {deleteStudent.name} {deleteStudent.surname} ({deleteStudent.studentId}) from this group?
+                  This removes their marks and switch history for this group only — their account is not deleted.
+                </DialogDescription>
+              </DialogHeader>
+              {deleteStudentError ? (
+                <p className="text-xs font-semibold text-[var(--danger)]">{deleteStudentError}</p>
+              ) : null}
+              <DialogFooter>
+                <Button variant="outline" onClick={() => setDeleteStudent(null)}>Cancel</Button>
+                <Button variant="destructive" onClick={() => void submitDeleteStudent()} disabled={deleteStudentBusy}>
+                  {deleteStudentBusy ? "Deleting…" : "Delete"}
+                </Button>
               </DialogFooter>
             </DialogContent>
           </Dialog>
