@@ -1004,6 +1004,8 @@ const STUDIO_BUTTONS: Array<{ key: string; label: string }> = [
   { key: "groups", label: "Practical Groups" },
   { key: "scores", label: "View My Assessment Scores" },
   { key: "assessClass", label: "Assess whole class" },
+  { key: "editStudent", label: "Edit student details" },
+  { key: "deleteStudent", label: "Delete student" },
 ];
 const STUDIO_ROLES = ["user", "assistant", "admin"] as const;
 
