@@ -84,6 +84,7 @@ OCR requires `ocrmypdf`, `tesseract-ocr` (+ per-language packs), `ghostscript`, 
 - Syntax highlighting: `highlightPythonSource()` and `highlightCppSource()` are regex-based highlighters in `page.tsx`; their tokens (`.studio-token-keyword`, `.studio-token-string`, `.studio-token-function`, `.studio-token-number`, `.studio-token-preprocessor`, `.studio-token-decorator`) are styled in `globals.css`.
 - Code templates: `"python-script"` and `"cpp-program"` in `lib/research-templates.ts`, each with `main.py`/`main.cpp`, `data/`, and `output/` folders.
 - New files created via the file tree (".py" or ".cpp" extension) get language-appropriate templates from `nextTemplateFor()`.
+- Editor autocomplete has TWO LaTeX-only sources that must both stay gated to `latex`: the CodeMirror override in `lib/latex-completion.ts` (`latexCompletionSource`/`latexAutocompleteOverride`, wired via `autocompleteCompartment` in `app/components/latex-editor.tsx`) and the custom React dropdown in `app/research-studio/page.tsx` (`LATEX_INTELLISENSE_ITEMS` + `updateIntellisenseFromInput`, gated on `editorMode === "latex"`). Python/C++ keyword completions come from the base `autocompletion()`, so the override must not be installed for code modes.
 
 ## Maintaining this file
 

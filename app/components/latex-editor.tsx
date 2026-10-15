@@ -20,8 +20,13 @@ import {
   drawSelection,
   type DecorationSet,
 } from "@codemirror/view";
-import { closeBrackets, autocompletion, type CompletionContext, type CompletionResult } from "@codemirror/autocomplete";
+import { closeBrackets, autocompletion } from "@codemirror/autocomplete";
 import { loadSpellcheckExtension } from "@/lib/spellcheck";
+import {
+  latexAutocompleteOverride,
+  type EditorLanguage,
+  type EditorCompletionContext,
+} from "@/lib/latex-completion";
 import {
   defaultKeymap,
   history,
@@ -41,15 +46,9 @@ import { cpp } from "@codemirror/legacy-modes/mode/clike";
 import { tags } from "@lezer/highlight";
 import { selectNextOccurrence, selectSelectionMatches } from "@codemirror/search";
 
-export type EditorLanguage = "latex" | "python" | "cpp";
+export type { EditorLanguage, EditorCompletionContext };
 
 export type EditorFindRange = { from: number; to: number };
-
-export type EditorCompletionContext = {
-  bibKeys: string[];
-  labels: string[];
-  figures: string[];
-};
 
 export type LatexEditorProps = {
   value: string;
@@ -277,8 +276,17 @@ const findHighlightField = StateField.define<DecorationSet>({
 
 const readOnlyCompartment = new Compartment();
 const languageCompartment = new Compartment();
+const autocompleteCompartment = new Compartment();
 const themeCompartment = new Compartment();
 const spellcheckCompartment = new Compartment();
+
+function buildAutocompleteExtension(
+  language: EditorLanguage,
+  getData: () => EditorCompletionContext | undefined
+): Extension {
+  const override = latexAutocompleteOverride(language, getData);
+  return override ? autocompletion({ override: [override] }) : autocompletion();
+}
 
 // ── Font-size controls (buttons, Shift +/-, Shift/Ctrl/Cmd + wheel) ──────────
 const FONT_SIZE_MIN = 9;
@@ -387,31 +395,9 @@ export function LatexEditor({
         bracketMatching(),
         indentOnInput(),
         closeBrackets(),
-        autocompletion({
-          override: [
-            (context: CompletionContext): CompletionResult | null => {
-              const { state, pos } = context;
-              const line = state.doc.lineAt(pos);
-              const lineBefore = state.doc.sliceString(line.from, pos);
-              const m = /\\(cite|citep|citet|parencite|ref|eqref|includegraphics)\*?\{([^{}\n]*)$/.exec(lineBefore);
-              if (!m) return null;
-              const command = m[1];
-              const partial = m[2];
-              const data = completionContextRef.current;
-              let list: string[] = [];
-              if (command === "ref" || command === "eqref") list = data?.labels ?? [];
-              else if (command === "includegraphics") list = data?.figures ?? [];
-              else if (command === "cite" || command === "citep" || command === "citet" || command === "parencite") list = data?.bibKeys ?? [];
-              else return null;
-              if (!list.length) return null;
-              return {
-                from: pos - partial.length,
-                options: list.map((label) => ({ label, type: "text" })),
-                validFor: /^[^\s{},]*$/,
-              };
-            },
-          ],
-        }),
+        autocompleteCompartment.of(
+          buildAutocompleteExtension(language, () => completionContextRef.current)
+        ),
         EditorView.lineWrapping,
         readOnlyCompartment.of(EditorState.readOnly.of(readOnly)),
         spellcheckCompartment.of([]),
@@ -529,7 +515,12 @@ export function LatexEditor({
     const view = viewRef.current;
     if (!view) return;
     view.dispatch({
-      effects: languageCompartment.reconfigure(languages[language]),
+      effects: [
+        languageCompartment.reconfigure(languages[language]),
+        autocompleteCompartment.reconfigure(
+          buildAutocompleteExtension(language, () => completionContextRef.current)
+        ),
+      ],
     });
   }, [language]);
 
