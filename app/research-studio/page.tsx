@@ -2209,6 +2209,10 @@ export default function ResearchStudioPage() {
   }
 
   function updateIntellisenseFromInput(source: string, cursor: number) {
+    if (editorMode !== "latex") {
+      closeIntellisense();
+      return;
+    }
     // Check for \cite{ context
     const citePrefix = source.slice(0, Math.max(0, cursor)).match(/\\cite\{([^}]*)$/);
     if (citePrefix) {
