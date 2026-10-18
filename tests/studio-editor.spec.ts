@@ -7,10 +7,6 @@ import { test, expect } from "@playwright/test";
 // known string, homes the caret to offset 0, and asserts the next keystroke is
 // prepended — not dropped above/below/left/right.
 test("CodeMirror editor inserts text exactly at the caret", async ({ page }) => {
-  await page.addInitScript(() => {
-    localStorage.setItem("wiserfiles-onboarding-seen", "1");
-  });
-
   await page.goto("/research-studio", { waitUntil: "networkidle" });
 
   // Create a blank LaTeX project (the workspace starts on the projects screen).

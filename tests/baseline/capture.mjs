@@ -118,10 +118,6 @@ async function main() {
     // otherwise carry prior uploads into the next run).
     const context = await browser.newContext();
     const page = await context.newPage();
-    // Dismiss the onboarding modal on every page load.
-    await page.addInitScript(() => {
-      localStorage.setItem("wiserfiles-onboarding-seen", "1");
-    });
     try {
       const p = await captureOne(page, c);
       console.log(`OK   ${c.slug}/${c.name} -> ${p}`);

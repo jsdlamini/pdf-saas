@@ -14,10 +14,6 @@ test("redact-pdf paints a black redaction band and flattens text", async ({ page
     extractPdfText: (bytes: Uint8Array) => Promise<string>;
   };
 
-  await page.addInitScript(() => {
-    localStorage.setItem("wiserfiles-onboarding-seen", "1");
-  });
-
   await page.goto("/tools/redact-pdf", { waitUntil: "networkidle" });
   await page.setInputFiles('input[type="file"]', ["tests/baseline/fixtures/fixture-a.pdf"]);
 
