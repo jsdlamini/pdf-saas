@@ -28,11 +28,6 @@ test.beforeAll(async () => {
 });
 
 test("right-click upload lands a PNG at the correct path", async ({ page }) => {
-  // Skip the onboarding overlay so it doesn't intercept clicks.
-  await page.addInitScript(() => {
-    localStorage.setItem("wiserfiles-onboarding-seen", "1");
-  });
-
   // Sign in via a Clerk test ticket (email-based, no password).
   await page.goto("/");
   await clerk.signIn({ page, emailAddress: TEST_EMAIL });

@@ -15,7 +15,6 @@ import AccountControls from "./account-controls";
 import MobileToolNav from "./mobile-tool-nav";
 import SiteFooter from "./components/site-footer";
 import OfflineIndicator from "./components/offline-indicator";
-import Onboarding from "./components/onboarding";
 import AnalyticsTracker from "./components/analytics-client";
 import ThemeToggle from "./theme-toggle";
 import SiteHeader from "./site-header";
@@ -133,7 +132,6 @@ export default async function RootLayout({
         <ClerkProvider afterSignOutUrl="/research-studio">
           <ToastContainer />
           <AnalyticsTracker />
-          <Onboarding />
           <MobileToolNav />
 
           <SiteHeader userId={userId} />
