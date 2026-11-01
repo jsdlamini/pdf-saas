@@ -5157,6 +5157,10 @@ export default function ResearchStudioPage() {
     }
   }
 
+  function navigateCourses() {
+    document.getElementById("courses")?.scrollIntoView({ behavior: "smooth", block: "start" });
+  }
+
   function toggleProjectSwitcher() {
     setProjectSwitcherOpen((open) => !open);
   }
@@ -7390,6 +7394,17 @@ export default function ResearchStudioPage() {
                   Contests
                 </button>
               ) : null}
+              <button
+                type="button"
+                onClick={() => navigateCourses()}
+                className="studio-btn"
+                style={{ background: "linear-gradient(135deg,#f59e0b,#f97316)", color: "#fff", border: "none", fontWeight: 700 }}
+              >
+                <svg viewBox="0 0 20 20" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M3 4h6l2 2h6v10a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V4z" />
+                </svg>
+                Courses
+              </button>
 
               {isAdmin ? (
                 <a
@@ -7418,7 +7433,9 @@ export default function ResearchStudioPage() {
         </section>
 
         {/* My Courses — teaching + enrolled, with a course's projects nested */}
-        <CoursePanel />
+        <div id="courses" style={{ scrollMarginTop: 76 }}>
+          <CoursePanel />
+        </div>
 
         {/* Dashboard header */}
         <div className="studio-dashboard-header">

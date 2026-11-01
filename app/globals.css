@@ -88,6 +88,8 @@
   --accent-dim: rgba(96, 165, 250, 0.16);
   --danger-color: #ef4444;
   --warning-color: #f59e0b;
+  --course-accent: #f59e0b;
+  --course-accent-tint: rgba(245, 158, 11, 0.14);
 }
 
 /* Light mode overrides for the studio */
@@ -105,6 +107,8 @@ html[data-theme="light"] .studio-dark {
   --accent-dim: rgba(30, 64, 175, 0.08);
   --danger-color: #dc2626;
   --warning-color: #b45309;
+  --course-accent: #d97706;
+  --course-accent-tint: rgba(217, 119, 6, 0.10);
 }
 
 /* Button styling for light mode studio */
@@ -598,9 +602,37 @@ button:disabled,
   color: #f87171;
 }
 
+/* Warm yellow join-link action — stands out against the neutral/amber
+   course cards. Fixed amber values keep the button legible in both themes. */
+.studio-btn-yellow {
+  background: #f59e0b;
+  color: #211303;
+  border-color: #f59e0b;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.25), inset 0 1px 0 rgba(255, 255, 255, 0.22);
+}
+
+.studio-btn-yellow:hover:not(:disabled) {
+  background: #fbbf24;
+  border-color: #fbbf24;
+  color: #211303;
+  box-shadow: 0 3px 10px -2px rgba(245, 158, 11, 0.45);
+}
+
 .studio-btn-icon {
   width: 32px;
   padding: 0;
+}
+
+/* Course cards: a warm amber top accent + a faint accent-tinted wash so the
+   courses section reads as its own, on-brand color story in both themes. */
+.studio-course-card {
+  border: 1px solid var(--border-color, #334155);
+  border-top: 3px solid var(--course-accent, #f59e0b);
+  border-radius: 10px;
+  background:
+    linear-gradient(180deg, color-mix(in srgb, var(--course-accent, #f59e0b) 9%, transparent), transparent 42%),
+    var(--bg-primary, #0f1117);
+  padding: 12px;
 }
 
 /* ── Studio status bar (editor footer) ───── */

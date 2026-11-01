@@ -44,6 +44,19 @@ describe("MIGRATIONS regression guards", () => {
       expect(sql).not.toContain("DO UPDATE");
     }
   });
+
+  it("backfills assistant group-staff from course enrollments, idempotently", () => {
+    const backfill = MIGRATIONS.find(
+      (sql) =>
+        sql.includes("INSERT INTO wiserfiles_group_staff") &&
+        sql.includes("wiserfiles_enrollments"),
+    );
+    expect(backfill).toBeDefined();
+    expect(backfill).toContain("ON CONFLICT (group_id, user_id) DO NOTHING");
+    expect(backfill).toContain("e.role = 'assistant'");
+    expect(backfill).toContain("g.course_id = c.course_id");
+    expect(backfill).not.toContain("DO UPDATE");
+  });
 });
 
 // ── Idempotency (requires a live Postgres, e.g. the CI postgres service) ──
@@ -131,5 +144,41 @@ describe.runIf(process.env.DATABASE_URL)("MIGRATIONS idempotency (integration)",
 
     // Must not throw; duplicate conflict keys are skipped via DO NOTHING.
     await runAllMigrations();
+  });
+
+  it("assigns a seeded assistant to every group in their course", { timeout: 60_000 }, async () => {
+    await resetSchema();
+    await runAllMigrations();
+
+    // Add an assistant role, then re-run migrations so the CSC111 seed enrols
+    // them as a course assistant (the pre-Phase-3 path that left them without
+    // any wiserfiles_group_staff rows).
+    await db.query(
+      `INSERT INTO wiserfiles_user_roles (user_id, email, role)
+       VALUES ('assistant-1', 'assistant@example.com', 'assistant')`,
+    );
+    await runAllMigrations();
+
+    const course = await db.query(
+      `SELECT id FROM wiserfiles_courses WHERE code = 'CSC111' AND institution = 'UNESWA' LIMIT 1`,
+    );
+    const courseId = course.rows[0].id;
+
+    // Groups are seeded at runtime (ensureGroupsSeeded), not in MIGRATIONS,
+    // so create two groups for the course and re-run migrations to apply the
+    // assistant→group-staff backfill.
+    await db.query(
+      `INSERT INTO wiserfiles_groups (id, name, schedule, capacity, session_count, test_count, exam_count, sort_order, course_id)
+       VALUES ('g-a', 'Group A', '', 50, 4, 1, 1, 0, $1),
+              ('g-b', 'Group B', '', 50, 4, 1, 1, 1, $1)`,
+      [courseId],
+    );
+    await runAllMigrations();
+
+    const staff = await db.query(
+      `SELECT group_id, role FROM wiserfiles_group_staff WHERE user_id = 'assistant-1' ORDER BY group_id`,
+    );
+    expect(staff.rows.map((r) => r.group_id)).toEqual(["g-a", "g-b"]);
+    expect(staff.rows.every((r) => r.role === "assistant")).toBe(true);
   });
 });

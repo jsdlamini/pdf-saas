@@ -218,5 +218,53 @@ export async function POST(request: Request) {
     return Response.json({ ok: true });
   }
 
+  // ── Update a course (teacher/admin of that course only) ─────────
+  if (body.action === "update") {
+    const courseId = Number(body.courseId);
+    if (!courseId) return jsonError("courseId is required.", 400);
+
+    const code = String(body.code || "").trim();
+    const title = String(body.title || "").trim();
+    if (!code || !title) return jsonError("Course code and title are required.", 400);
+
+    const existing = await db.query(`SELECT id FROM wiserfiles_courses WHERE id = $1`, [courseId]);
+    if (!existing.rows.length) return jsonError("Course not found.", 404);
+
+    if (!(await isCourseTeacher(userId, courseId))) {
+      return jsonError("Teacher access required.", 403);
+    }
+
+    const institution = String(body.institution || "").trim();
+    const updated = await db.query(
+      `UPDATE wiserfiles_courses SET code = $2, title = $3, institution = $4 WHERE id = $1
+       RETURNING id, code, title, institution, owner_id, created_at`,
+      [courseId, code, title, institution]
+    );
+    return Response.json({ course: updated.rows[0] });
+  }
+
+  // ── Delete a course + its cohort/enrollments/group-staff (cascade) ──
+  // teacher/admin of that course only, with a server-side confirmation flag.
+  if (body.action === "delete") {
+    const courseId = Number(body.courseId);
+    if (!courseId) return jsonError("courseId is required.", 400);
+    if (body.confirm !== true) return jsonError("Confirmation required.", 400);
+
+    const existing = await db.query(`SELECT id FROM wiserfiles_courses WHERE id = $1`, [courseId]);
+    if (!existing.rows.length) return jsonError("Course not found.", 404);
+
+    if (!(await isCourseTeacher(userId, courseId))) {
+      return jsonError("Teacher access required.", 403);
+    }
+
+    // Delete the course's cohorts first: cohorts.course_id is ON DELETE SET
+    // NULL (not CASCADE), so an explicit delete is what removes enrollments
+    // (and roster/leaderboard/submission rows that cascade from the cohort).
+    // The course delete then cascades to groups → group_staff and problem sets.
+    await db.query(`DELETE FROM wiserfiles_cohorts WHERE course_id = $1`, [courseId]);
+    await db.query(`DELETE FROM wiserfiles_courses WHERE id = $1`, [courseId]);
+    return Response.json({ ok: true });
+  }
+
   return jsonError("Unknown action.", 400);
 }

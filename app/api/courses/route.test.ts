@@ -144,6 +144,103 @@ describe("courses route revoke-join", () => {
   });
 });
 
+describe("courses route update", () => {
+  it("updates code/title/institution for a course teacher", async () => {
+    dbQueryMock
+      .mockResolvedValueOnce({ rows: [{ id: 7 }] }) // existence check
+      .mockResolvedValueOnce({
+        rows: [{ id: 7, code: "CSC102", title: "New Title", institution: "UNESWA", owner_id: "teacher1" }],
+      }); // UPDATE
+
+    const res = await POST(
+      postRequest({ action: "update", courseId: 7, code: "CSC102", title: "New Title", institution: "UNESWA" })
+    );
+    const data = await res.json();
+
+    expect(res.status).toBe(200);
+    expect(data.course.code).toBe("CSC102");
+    expect(isCourseTeacherMock).toHaveBeenCalledWith("teacher1", 7);
+
+    const update = dbQueryMock.mock.calls.find((c) => c[0].includes("UPDATE wiserfiles_courses"));
+    expect(update).toBeTruthy();
+    expect(update![1]).toEqual([7, "CSC102", "New Title", "UNESWA"]);
+  });
+
+  it("rejects a non-teacher", async () => {
+    isCourseTeacherMock.mockResolvedValue(false);
+    dbQueryMock.mockResolvedValueOnce({ rows: [{ id: 7 }] }); // existence check
+
+    const res = await POST(postRequest({ action: "update", courseId: 7, code: "CSC102", title: "New Title" }));
+
+    expect(res.status).toBe(403);
+    expect(dbQueryMock.mock.calls.some((c) => c[0].includes("UPDATE wiserfiles_courses"))).toBe(false);
+  });
+
+  it("returns 404 for an unknown course", async () => {
+    dbQueryMock.mockResolvedValueOnce({ rows: [] });
+
+    const res = await POST(postRequest({ action: "update", courseId: 999, code: "CSC102", title: "New Title" }));
+
+    expect(res.status).toBe(404);
+  });
+
+  it("requires a code and a title", async () => {
+    const res = await POST(postRequest({ action: "update", courseId: 7, code: "  ", title: "" }));
+
+    expect(res.status).toBe(400);
+    expect(dbQueryMock).not.toHaveBeenCalled();
+  });
+});
+
+describe("courses route delete", () => {
+  it("deletes the cohort before the course, gated by confirmation", async () => {
+    dbQueryMock
+      .mockResolvedValueOnce({ rows: [{ id: 7 }] }) // existence check
+      .mockResolvedValueOnce({ rows: [], rowCount: 1 }) // DELETE cohorts
+      .mockResolvedValueOnce({ rows: [], rowCount: 1 }); // DELETE course
+
+    const res = await POST(postRequest({ action: "delete", courseId: 7, confirm: true }));
+    const data = await res.json();
+
+    expect(res.status).toBe(200);
+    expect(data.ok).toBe(true);
+    expect(isCourseTeacherMock).toHaveBeenCalledWith("teacher1", 7);
+
+    const sqls = dbQueryMock.mock.calls.map((c) => c[0]);
+    const cohortDelete = sqls.findIndex((s) => s.includes("DELETE FROM wiserfiles_cohorts"));
+    const courseDelete = sqls.findIndex((s) => s.includes("DELETE FROM wiserfiles_courses"));
+    expect(cohortDelete).toBeGreaterThanOrEqual(0);
+    expect(courseDelete).toBeGreaterThanOrEqual(0);
+    // Cohort (and its cascading enrollments) must go before the course itself.
+    expect(cohortDelete).toBeLessThan(courseDelete);
+  });
+
+  it("requires confirm: true", async () => {
+    const res = await POST(postRequest({ action: "delete", courseId: 7 }));
+
+    expect(res.status).toBe(400);
+    expect(dbQueryMock).not.toHaveBeenCalled();
+  });
+
+  it("rejects a non-teacher", async () => {
+    isCourseTeacherMock.mockResolvedValue(false);
+    dbQueryMock.mockResolvedValueOnce({ rows: [{ id: 7 }] }); // existence check
+
+    const res = await POST(postRequest({ action: "delete", courseId: 7, confirm: true }));
+
+    expect(res.status).toBe(403);
+    expect(dbQueryMock.mock.calls.some((c) => c[0].includes("DELETE FROM wiserfiles_courses"))).toBe(false);
+  });
+
+  it("returns 404 for an unknown course", async () => {
+    dbQueryMock.mockResolvedValueOnce({ rows: [] });
+
+    const res = await POST(postRequest({ action: "delete", courseId: 999, confirm: true }));
+
+    expect(res.status).toBe(404);
+  });
+});
+
 describe("courses route GET", () => {
   it("requires sign-in", async () => {
     authMock.mockResolvedValue({ userId: null });
