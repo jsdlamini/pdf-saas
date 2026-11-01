@@ -53,16 +53,42 @@ export async function getVerifiedEmail(userId: string): Promise<string> {
   }
 }
 
+export const LECTURER_EMAIL_DOMAINS_KEY = "lecturer_email_domains";
+export const LECTURER_EMAIL_DOMAINS_DEFAULT = "uneswa.ac.sz";
+
+// The configured lecturer email domains (comma-separated, lowercased). Falls
+// back to the default institution domain only when the setting has never been
+// written; an explicitly empty value means "domain gating is off".
+export async function getLecturerEmailDomains(): Promise<string> {
+  await ensureMigrated();
+  const r = await db.query(`SELECT value FROM wiserfiles_settings WHERE key = $1`, [LECTURER_EMAIL_DOMAINS_KEY]);
+  if (r.rows.length === 0) return LECTURER_EMAIL_DOMAINS_DEFAULT;
+  return r.rows[0]?.value ?? LECTURER_EMAIL_DOMAINS_DEFAULT;
+}
+
+export async function setLecturerEmailDomains(value: string): Promise<string> {
+  await ensureMigrated();
+  const normalized = value
+    .split(",")
+    .map((s) => s.trim().toLowerCase())
+    .filter(Boolean)
+    .join(",");
+  await db.query(
+    `INSERT INTO wiserfiles_settings (key, value) VALUES ($1, $2)
+     ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value`,
+    [LECTURER_EMAIL_DOMAINS_KEY, normalized]
+  );
+  return normalized;
+}
+
 // A lecturer is an admin, or someone whose verified email matches a configured
-// institutional domain (e.g. "uneswa.ac.sz" in wiserfiles_settings
-// 'lecturer_email_domains').
+// institutional domain (default "uneswa.ac.sz", admin-settable).
 export async function isLecturerOrAdmin(userId: string): Promise<boolean> {
   const role = await getUserRole(userId);
   if (role === "admin") return true;
   const email = await getVerifiedEmail(userId);
   if (!email) return false;
-  const r = await db.query(`SELECT value FROM wiserfiles_settings WHERE key = 'lecturer_email_domains'`);
-  const domains = (r.rows[0]?.value || "")
+  const domains = (await getLecturerEmailDomains())
     .split(",")
     .map((s: string) => s.trim().toLowerCase())
     .filter(Boolean);
@@ -81,6 +107,23 @@ export async function isCohortLecturer(userId: string, cohortId: number): Promis
   const enr = await db.query(
     `SELECT 1 FROM wiserfiles_enrollments WHERE cohort_id = $1 AND user_id = $2 AND role = 'lecturer'`,
     [cohortId, userId]
+  );
+  return enr.rows.length > 0;
+}
+
+// Per-course teacher: an admin/lecturer, the course owner, or someone enrolled
+// as a lecturer in one of the course's cohorts. Used to gate course management
+// (join-code regeneration/revocation). Assistants do NOT count — they assess
+// but never manage courses.
+export async function isCourseTeacher(userId: string, courseId: number): Promise<boolean> {
+  if (await isLecturerOrAdmin(userId)) return true;
+  const course = await db.query(`SELECT owner_id FROM wiserfiles_courses WHERE id = $1`, [courseId]);
+  if (course.rows[0]?.owner_id === userId) return true;
+  const enr = await db.query(
+    `SELECT 1 FROM wiserfiles_enrollments e
+     JOIN wiserfiles_cohorts c ON c.id = e.cohort_id
+     WHERE c.course_id = $1 AND e.user_id = $2 AND e.role = 'lecturer'`,
+    [courseId, userId]
   );
   return enr.rows.length > 0;
 }

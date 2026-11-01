@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const authMock = vi.hoisted(() => vi.fn());
 const getUserRoleMock = vi.hoisted(() => vi.fn());
+const isLecturerOrAdminMock = vi.hoisted(() => vi.fn());
 const listGroupsMock = vi.hoisted(() => vi.fn());
 const joinGroupMock = vi.hoisted(() => vi.fn());
 const switchGroupMock = vi.hoisted(() => vi.fn());
@@ -17,6 +18,7 @@ vi.mock("@clerk/nextjs/server", () => ({
 
 vi.mock("@/lib/user-roles", () => ({
   getUserRole: getUserRoleMock,
+  isLecturerOrAdmin: isLecturerOrAdminMock,
 }));
 
 vi.mock("@/lib/groups-store", () => ({
@@ -54,6 +56,7 @@ beforeEach(() => {
   vi.clearAllMocks();
   authMock.mockResolvedValue({ userId: "admin1" });
   getUserRoleMock.mockResolvedValue("admin");
+  isLecturerOrAdminMock.mockResolvedValue(true);
 });
 
 describe("groups route update-member", () => {
@@ -194,5 +197,75 @@ describe("groups route delete-member", () => {
     const res = await POST(postRequest(validDeleteBody));
 
     expect(res.status).toBe(400);
+  });
+});
+
+const validGroupBody = {
+  action: "create",
+  groupId: "group-a",
+  name: "Group A",
+  schedule: "",
+  capacity: 50,
+  sessionCount: 4,
+  testCount: 1,
+  examCount: 1,
+};
+
+describe("groups route create/update/delete gating", () => {
+  it("allows a lecturer (non-admin) to create a group", async () => {
+    isLecturerOrAdminMock.mockResolvedValue(true);
+    createGroupMock.mockResolvedValue({ ok: true, id: "group-a" });
+
+    const res = await POST(postRequest(validGroupBody));
+
+    expect(res.status).toBe(200);
+    expect(createGroupMock).toHaveBeenCalled();
+  });
+
+  it("rejects a plain student from creating a group", async () => {
+    isLecturerOrAdminMock.mockResolvedValue(false);
+
+    const res = await POST(postRequest(validGroupBody));
+
+    expect(res.status).toBe(403);
+    expect(createGroupMock).not.toHaveBeenCalled();
+  });
+
+  it("allows a lecturer (non-admin) to update a group", async () => {
+    isLecturerOrAdminMock.mockResolvedValue(true);
+    updateGroupMock.mockResolvedValue(true);
+
+    const res = await POST(postRequest({ ...validGroupBody, action: "update" }));
+
+    expect(res.status).toBe(200);
+    expect(updateGroupMock).toHaveBeenCalled();
+  });
+
+  it("rejects a plain student from updating a group", async () => {
+    isLecturerOrAdminMock.mockResolvedValue(false);
+
+    const res = await POST(postRequest({ ...validGroupBody, action: "update" }));
+
+    expect(res.status).toBe(403);
+    expect(updateGroupMock).not.toHaveBeenCalled();
+  });
+
+  it("allows a lecturer (non-admin) to delete a group", async () => {
+    isLecturerOrAdminMock.mockResolvedValue(true);
+    deleteGroupMock.mockResolvedValue(true);
+
+    const res = await POST(postRequest({ ...validGroupBody, action: "delete" }));
+
+    expect(res.status).toBe(200);
+    expect(deleteGroupMock).toHaveBeenCalled();
+  });
+
+  it("rejects a plain student from deleting a group", async () => {
+    isLecturerOrAdminMock.mockResolvedValue(false);
+
+    const res = await POST(postRequest({ ...validGroupBody, action: "delete" }));
+
+    expect(res.status).toBe(403);
+    expect(deleteGroupMock).not.toHaveBeenCalled();
   });
 });
