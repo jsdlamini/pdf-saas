@@ -5,7 +5,7 @@ import { join } from "node:path";
 import { promisify } from "node:util";
 import { auth } from "@clerk/nextjs/server";
 import { getUserRole } from "@/lib/user-roles";
-import { getGroupById } from "@/lib/groups";
+import { getGroupRecord } from "@/lib/groups-store";
 import { getRosterWithMarks } from "@/lib/assess-store";
 
 const execFileAsync = promisify(execFile);
@@ -24,18 +24,20 @@ export async function GET(request: Request) {
 
   const url = new URL(request.url);
   const groupId = url.searchParams.get("group") || "";
+  const courseIdRaw = url.searchParams.get("courseId");
+  const courseId = courseIdRaw ? Number(courseIdRaw) : null;
   const all = groupId === "all";
 
   let filename: string;
   if (all) {
     filename = "practical-groups-all-students.xlsx";
   } else {
-    const group = getGroupById(groupId);
+    const group = await getGroupRecord(groupId);
     if (!group) return Response.json({ error: "Unknown group." }, { status: 404 });
     filename = `${group.id}-roster.xlsx`;
   }
 
-  const data = await getRosterWithMarks(all ? null : groupId);
+  const data = await getRosterWithMarks(all ? null : groupId, all ? courseId : null);
   const dir = await mkdtemp(join(tmpdir(), "roster-export-"));
   const jsonPath = join(dir, "data.json");
   const xlsxPath = join(dir, "roster.xlsx");

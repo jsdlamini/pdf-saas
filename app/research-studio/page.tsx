@@ -6540,7 +6540,8 @@ export default function ResearchStudioPage() {
   }
 
   useEffect(() => {
-    void loadGroups();
+    // Practical groups now live inside each course (see CourseGroupsPanel in
+    // course-panel.tsx); only the hero-button visibility still loads here.
     void loadButtonVisibility();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isSignedIn]);
@@ -7389,19 +7390,7 @@ export default function ResearchStudioPage() {
                   Contests
                 </button>
               ) : null}
-              {(!buttonVisibility || buttonVisibility.groups) ? (
-                <button
-                  type="button"
-                  onClick={() => { setGroupsOpen(true); void loadGroups(); }}
-                  className="studio-btn"
-                  style={{ background: "linear-gradient(135deg,#f59e0b,#f97316)", color: "#fff", border: "none", fontWeight: 700 }}
-                >
-                  <svg viewBox="0 0 20 20" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-                    <path d="M8 9a3 3 0 1 0 0-6 3 3 0 0 0 0 6zM2 17v-1a5 5 0 0 1 5-5h2M12 5a3 3 0 1 1 0 6M13 14h6m-3-3v6" />
-                  </svg>
-                  Practical Groups
-                </button>
-              ) : null}
+
               {isAdmin ? (
                 <a
                   href="/dashboard"

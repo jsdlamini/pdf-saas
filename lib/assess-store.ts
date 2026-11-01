@@ -129,14 +129,17 @@ export async function getAssessment(groupId: string) {
   };
 }
 
-/** Whole-class assessment: every student across every group, ordered group →
- *  surname → name, with shared columns whose virtual ids resolve per student. */
-export async function getAssessmentForClass() {
+/** Whole-class assessment for one course: every student across the course's
+ *  groups, ordered group → surname → name, with shared columns whose virtual
+ *  ids resolve per student. */
+export async function getAssessmentForClass(courseId: number) {
   await ensureMigrated();
 
-  // Ensure every group has its session items so the shared columns line up.
+  // Ensure every group in the course has its session items so the shared
+  // columns line up.
   const groups = await db.query(
-    `SELECT id FROM wiserfiles_groups ORDER BY sort_order ASC, id ASC`
+    `SELECT id FROM wiserfiles_groups WHERE course_id = $1 ORDER BY sort_order ASC, id ASC`,
+    [courseId]
   );
   for (const g of groups.rows) {
     await ensureItems(g.id as string);
@@ -146,14 +149,19 @@ export async function getAssessmentForClass() {
     `SELECT m.user_id, m.name, m.surname, m.student_id, m.programme, m.group_id, g.name AS group_name
      FROM wiserfiles_group_members m
      JOIN wiserfiles_groups g ON g.id = m.group_id
-     ORDER BY g.sort_order ASC, LOWER(m.surname) ASC, LOWER(m.name) ASC`
+     WHERE g.course_id = $1
+     ORDER BY g.sort_order ASC, LOWER(m.surname) ASC, LOWER(m.name) ASC`,
+    [courseId]
   );
 
   const cols = await db.query(
-    `SELECT kind, sort_order, MAX(title) AS title, MAX(max_marks) AS max_marks
-     FROM wiserfiles_group_sessions
-     GROUP BY kind, sort_order
-     ORDER BY CASE kind WHEN 'practical' THEN 0 WHEN 'test' THEN 1 ELSE 2 END ASC, sort_order ASC`
+    `SELECT s.kind, s.sort_order, MAX(s.title) AS title, MAX(s.max_marks) AS max_marks
+     FROM wiserfiles_group_sessions s
+     JOIN wiserfiles_groups g ON g.id = s.group_id
+     WHERE g.course_id = $1
+     GROUP BY s.kind, s.sort_order
+     ORDER BY CASE s.kind WHEN 'practical' THEN 0 WHEN 'test' THEN 1 ELSE 2 END ASC, s.sort_order ASC`,
+    [courseId]
   );
   const columns = cols.rows.map((x) => ({
     kind: x.kind as AssessKind,
@@ -163,7 +171,11 @@ export async function getAssessmentForClass() {
   }));
 
   const sessions = await db.query(
-    `SELECT group_id, kind, sort_order, id FROM wiserfiles_group_sessions`
+    `SELECT s.group_id, s.kind, s.sort_order, s.id
+     FROM wiserfiles_group_sessions s
+     JOIN wiserfiles_groups g ON g.id = s.group_id
+     WHERE g.course_id = $1`,
+    [courseId]
   );
   const sessionMeta = new Map<number, { kind: AssessKind; order: number }>();
   for (const x of sessions.rows) {
@@ -257,11 +269,15 @@ export function resolveClassMarks(
   return resolved;
 }
 
-export async function saveAssessmentForClass(marks: AssessMark[]): Promise<void> {
+export async function saveAssessmentForClass(marks: AssessMark[], courseId: number): Promise<void> {
   await ensureMigrated();
 
   const members = await db.query(
-    `SELECT student_id, group_id FROM wiserfiles_group_members`
+    `SELECT m.student_id, m.group_id
+     FROM wiserfiles_group_members m
+     JOIN wiserfiles_groups g ON g.id = m.group_id
+     WHERE g.course_id = $1`,
+    [courseId]
   );
   const groupByStudent = new Map<string, string>();
   for (const x of members.rows) {
@@ -269,7 +285,11 @@ export async function saveAssessmentForClass(marks: AssessMark[]): Promise<void>
   }
 
   const sessions = await db.query(
-    `SELECT group_id, kind, sort_order, id FROM wiserfiles_group_sessions`
+    `SELECT s.group_id, s.kind, s.sort_order, s.id
+     FROM wiserfiles_group_sessions s
+     JOIN wiserfiles_groups g ON g.id = s.group_id
+     WHERE g.course_id = $1`,
+    [courseId]
   );
   const sessionByKey = new Map<string, number>();
   for (const x of sessions.rows) {
@@ -299,13 +319,15 @@ export type RosterMarkRow = {
   scores: (number | null)[];
 };
 
-/** Roster of group members with raw per-item marks (Practical 1, 2, …, Test 1, …). */
+/** Roster of group members with raw per-item marks (Practical 1, 2, …, Test 1, …).
+ *  When groupId is null the roster spans one course (courseId), not the world. */
 export async function getRosterWithMarks(
-  groupId: string | null
+  groupId: string | null,
+  courseId: number | null = null
 ): Promise<{ columns: RosterColumn[]; rows: RosterMarkRow[] }> {
   await ensureMigrated();
-  const where = groupId ? "WHERE group_id = $1" : "";
-  const params = groupId ? [groupId] : [];
+  const where = groupId ? "WHERE m.group_id = $1" : courseId != null ? "WHERE g.course_id = $1" : "";
+  const params = groupId ? [groupId] : courseId != null ? [courseId] : [];
 
   const members = await db.query(
     `SELECT m.user_id, m.name, m.surname, m.programme, m.student_id, m.group_id, g.name AS group_name
@@ -318,12 +340,16 @@ export async function getRosterWithMarks(
 
   // Distinct assessment columns across the selected groups, in practical,
   // test, exam order, then by position.
+  const colsFrom = groupId
+    ? "FROM wiserfiles_group_sessions s"
+    : "FROM wiserfiles_group_sessions s JOIN wiserfiles_groups g ON g.id = s.group_id";
+  const colsWhere = groupId ? "WHERE s.group_id = $1" : courseId != null ? "WHERE g.course_id = $1" : "";
   const cols = await db.query(
-    `SELECT kind, sort_order, MAX(title) AS title, MAX(max_marks) AS max_marks
-     FROM wiserfiles_group_sessions
-     ${groupId ? "WHERE group_id = $1" : ""}
-     GROUP BY kind, sort_order
-     ORDER BY CASE kind WHEN 'practical' THEN 0 WHEN 'test' THEN 1 ELSE 2 END ASC, sort_order ASC`,
+    `SELECT s.kind, s.sort_order, MAX(s.title) AS title, MAX(s.max_marks) AS max_marks
+     ${colsFrom}
+     ${colsWhere}
+     GROUP BY s.kind, s.sort_order
+     ORDER BY CASE s.kind WHEN 'practical' THEN 0 WHEN 'test' THEN 1 ELSE 2 END ASC, s.sort_order ASC`,
     params
   );
   const columns: RosterColumn[] = cols.rows.map((x) => ({
