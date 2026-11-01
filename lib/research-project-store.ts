@@ -20,6 +20,7 @@ export type StoredResearchProject = {
   lastCompileAt: string;
   updatedAt: string;
   revisions?: StoredRevision[];
+  courseId?: number | null;
 };
 
 const MAX_REVISIONS = 20;
@@ -84,6 +85,7 @@ export function parseStoredResearchProject(value: unknown): StoredResearchProjec
         ? candidate.updatedAt
         : new Date().toISOString(),
     revisions,
+    courseId: typeof candidate.courseId === "number" ? candidate.courseId : null,
   };
 }
 
@@ -95,6 +97,7 @@ function mapRow(row: {
   last_compile_at: string;
   updated_at: Date | string;
   revisions?: unknown;
+  course_id?: number | null;
 }): StoredResearchProject {
   return {
     id: row.id,
@@ -107,6 +110,7 @@ function mapRow(row: {
     revisions: Array.isArray(row.revisions)
       ? row.revisions.filter(isRevision).slice(0, MAX_REVISIONS)
       : [],
+    courseId: row.course_id ?? null,
   };
 }
 
@@ -115,7 +119,7 @@ export async function listResearchProjectsForUser(userId: string) {
   const pool = getPool();
   const result = await pool.query(
     `
-      SELECT id, name, entries, selected_path, last_compile_at, updated_at, revisions
+      SELECT id, name, entries, selected_path, last_compile_at, updated_at, revisions, course_id
       FROM wiserfiles_research_projects
       WHERE user_id = $1
       ORDER BY updated_at DESC
@@ -178,9 +182,10 @@ export async function upsertResearchProjectForUser(userId: string, project: Stor
         selected_path,
         last_compile_at,
         revisions,
-        updated_at
+        updated_at,
+        course_id
       )
-      VALUES ($1, $2, $3, $4::jsonb, $5, $6, $7::jsonb, $8::timestamptz)
+      VALUES ($1, $2, $3, $4::jsonb, $5, $6, $7::jsonb, $8::timestamptz, $9)
       ON CONFLICT (user_id, id)
       DO UPDATE SET
         name = EXCLUDED.name,
@@ -188,8 +193,9 @@ export async function upsertResearchProjectForUser(userId: string, project: Stor
         selected_path = EXCLUDED.selected_path,
         last_compile_at = EXCLUDED.last_compile_at,
         revisions = EXCLUDED.revisions,
-        updated_at = EXCLUDED.updated_at
-      RETURNING id, name, entries, selected_path, last_compile_at, updated_at, revisions
+        updated_at = EXCLUDED.updated_at,
+        course_id = EXCLUDED.course_id
+      RETURNING id, name, entries, selected_path, last_compile_at, updated_at, revisions, course_id
     `,
     [
       userId,
@@ -200,6 +206,7 @@ export async function upsertResearchProjectForUser(userId: string, project: Stor
       normalized.lastCompileAt,
       JSON.stringify(revisions),
       normalized.updatedAt,
+      normalized.courseId ?? null,
     ]
   );
 

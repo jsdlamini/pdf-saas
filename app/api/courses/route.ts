@@ -109,6 +109,7 @@ export async function GET(request: Request) {
   );
 
   return Response.json({
+    canCreate: isTeacher,
     courses: courses.rows.map((r) => {
       const canManage = isTeacher || r.owner_id === userId || r.my_role === "lecturer";
       return {

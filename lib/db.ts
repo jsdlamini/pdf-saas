@@ -276,6 +276,9 @@ const MIGRATIONS: string[] = [
     UNIQUE (code, institution)
   )`,
   `ALTER TABLE wiserfiles_cohorts ADD COLUMN IF NOT EXISTS course_id INTEGER REFERENCES wiserfiles_courses(id) ON DELETE SET NULL`,
+  // Research projects may be tagged to the course they belong to (nullable for
+  // existing projects). A course therefore reads like a project folder.
+  `ALTER TABLE wiserfiles_research_projects ADD COLUMN IF NOT EXISTS course_id INTEGER REFERENCES wiserfiles_courses(id) ON DELETE SET NULL`,
   `ALTER TABLE wiserfiles_cohorts ADD COLUMN IF NOT EXISTS join_code_expires_at TIMESTAMPTZ`,
   `ALTER TABLE wiserfiles_cohorts ADD COLUMN IF NOT EXISTS join_code_max_uses INTEGER`,
   `ALTER TABLE wiserfiles_cohorts ADD COLUMN IF NOT EXISTS join_code_uses INTEGER NOT NULL DEFAULT 0`,

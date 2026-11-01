@@ -5,6 +5,7 @@ import StudioAccount from "../components/studio-account";
 import StudioHeroCards from "../components/studio-hero-cards";
 import { showToast } from "../components/toast";
 import CommandPalette from "../components/command-palette";
+import CoursePanel from "../components/course-panel";
 import { trackEvent } from "../components/analytics";
 import JSZip from "jszip";
 import "katex/dist/katex.min.css";
@@ -116,6 +117,7 @@ type SavedProjectData = {
   coverDataUrl?: string;
   githubRepo?: string;
   githubPushed?: Record<string, string>;
+  courseId?: number | null;
 };
 
 type StoredRevision = {
@@ -3101,6 +3103,7 @@ export default function ResearchStudioPage() {
       : nextActive.entries?.some((e: ProjectEntry) => e.path.endsWith(".cpp")) ? "cpp"
       : "latex"
     ));
+    setProjectCourseId(nextActive.courseId ?? null);
     setCodeRunBusy(false);
     setCompileNotice(notice);
   });
@@ -3206,6 +3209,7 @@ export default function ResearchStudioPage() {
       coverDataUrl: overrides?.coverDataUrl ?? coverDataUrl,
       githubRepo: overrides?.githubRepo ?? githubRepo,
       githubPushed: overrides?.githubPushed ?? githubPushed,
+      courseId: overrides?.courseId ?? projectCourseId,
     };
   }
 
@@ -3541,6 +3545,23 @@ export default function ResearchStudioPage() {
   const [newProjectType, setNewProjectType] = useState<EditorMode>("python");
   const [newProjectTemplate, setNewProjectTemplate] = useState("");
   const [newProjectError, setNewProjectError] = useState("");
+  const [newProjectCourseId, setNewProjectCourseId] = useState<number | null>(null);
+  const [projectCourseId, setProjectCourseId] = useState<number | null>(null);
+  const [myCourses, setMyCourses] = useState<Array<{ id: number; code: string; title: string; institution: string }>>([]);
+
+  // Load the signed-in user's courses so a new project can be tagged to one.
+  useEffect(() => {
+    if (!userId || !newProjectOpen) return;
+    let cancelled = false;
+    fetch("/api/courses", { cache: "no-store" })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((json) => {
+        if (cancelled || !json) return;
+        setMyCourses(Array.isArray(json.courses) ? json.courses : []);
+      })
+      .catch(() => { /* best-effort; the select simply stays empty */ });
+    return () => { cancelled = true; };
+  }, [userId, newProjectOpen]);
 
   const [collaborateOpen, setCollaborateOpen] = useState(false);
   const [inviteEmail, setInviteEmail] = useState("");
@@ -4497,6 +4518,7 @@ export default function ResearchStudioPage() {
       : saved.entries?.some((e) => e.path.endsWith(".cpp")) ? "cpp"
       : "latex"
     ));
+    setProjectCourseId(saved.courseId ?? null);
     setCodeRunBusy(false);
     setCompileNotice(`Loaded project: ${saved.name}`);
     setWorkspaceScreen("editor");
@@ -4556,12 +4578,14 @@ export default function ResearchStudioPage() {
             : fallback.entries?.some((e) => e.path.endsWith(".cpp")) ? "cpp"
             : "latex"
           ));
+          setProjectCourseId(fallback.courseId ?? null);
         } else {
           setActiveProjectId("");
           setProjectName("");
           setProjectEntries([]);
           setSelectedPath("main.tex");
           setLastCompileAt("Not compiled yet");
+          setProjectCourseId(null);
           setWorkspaceScreen("projects");
         }
       }
@@ -4919,6 +4943,7 @@ export default function ResearchStudioPage() {
     setNewProjectType("python");
     setNewProjectTemplate("");
     setNewProjectError("");
+    setNewProjectCourseId(null);
     setNewProjectOpen(true);
   }
 
@@ -4952,6 +4977,7 @@ export default function ResearchStudioPage() {
       lastCompileAt: "Not compiled yet",
       updatedAt: createdAt,
       editorMode: type,
+      courseId: newProjectCourseId ?? null,
     };
 
     persistProjectSnapshot(snapshot);
@@ -4979,6 +5005,7 @@ export default function ResearchStudioPage() {
     setAiFixSuggestions([]);
     setLastCompileAt("Not compiled yet");
     setEditorMode(type);
+    setProjectCourseId(newProjectCourseId ?? null);
     setCodeRunBusy(false);
     setCompileNotice("New project created and saved. Add files and compile when ready.");
     trackStudioEvent("project-create", type);
@@ -5078,6 +5105,22 @@ export default function ResearchStudioPage() {
                   );
                 })}
               </div>
+            </div>
+
+            <div className="space-y-1.5">
+              <Label htmlFor="new-project-course">Course (optional)</Label>
+              <select
+                id="new-project-course"
+                value={newProjectCourseId ?? ""}
+                onChange={(e) => setNewProjectCourseId(e.target.value ? Number(e.target.value) : null)}
+                className="h-9 w-full rounded-md border bg-background px-2 text-sm"
+              >
+                <option value="">Unassigned</option>
+                {myCourses.map((c) => (
+                  <option key={c.id} value={c.id}>{c.code} · {c.title}</option>
+                ))}
+              </select>
+              <p className="text-xs text-muted-foreground">Tag this project to one of your courses.</p>
             </div>
           </div>
 
@@ -7384,6 +7427,9 @@ export default function ResearchStudioPage() {
             ) : null}
           </div>
         </section>
+
+        {/* My Courses — teaching + enrolled, with a course's projects nested */}
+        <CoursePanel />
 
         {/* Dashboard header */}
         <div className="studio-dashboard-header">
