@@ -1140,6 +1140,8 @@ export default function ResearchStudioPage() {
   const [activeProjectId, setActiveProjectId] = useState(() => {
     if (typeof window === "undefined") return initialState.activeProjectId;
     try {
+      const urlProject = new URLSearchParams(window.location.search).get("project");
+      if (urlProject) return urlProject;
       return localStorage.getItem("wiserfiles-active-project") || initialState.activeProjectId;
     } catch { return initialState.activeProjectId; }
   });
@@ -1178,6 +1180,9 @@ export default function ResearchStudioPage() {
   const shareId = searchParams.get("share");
   const githubResult = searchParams.get("github");
   const challengeParam = searchParams.get("challenge");
+  const projectParam = searchParams.get("project");
+  const newProjectParam = searchParams.get("newProject");
+  const newProjectCourseParam = searchParams.get("courseId");
   const [sharedProject, setSharedProject] = useState<any>(null);
   const [shareLoading, setShareLoading] = useState(!!shareId);
 
@@ -1330,6 +1335,16 @@ export default function ResearchStudioPage() {
       setWorkspaceScreen("projects");
       setGroupsOpen(true);
       void loadGroups();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Open a specific project straight into the editor (?project=<id>), used by
+  // the course starter-project "copy" and "open" actions.
+  useEffect(() => {
+    if (projectParam) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      setWorkspaceScreen("editor");
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -3548,6 +3563,22 @@ export default function ResearchStudioPage() {
   const [newProjectCourseId, setNewProjectCourseId] = useState<number | null>(null);
   const [projectCourseId, setProjectCourseId] = useState<number | null>(null);
   const [myCourses, setMyCourses] = useState<Array<{ id: number; code: string; title: string; institution: string }>>([]);
+
+  // Pre-tag a new project to a course and open the dialog when arriving via
+  // ?newProject=1&courseId=<id> (the course panel's "Add starter project").
+  useEffect(() => {
+    if (newProjectParam !== "1" && newProjectParam !== "open") return;
+    /* eslint-disable react-hooks/set-state-in-effect */
+    const courseId = newProjectCourseParam ? Number(newProjectCourseParam) : null;
+    if (courseId) setNewProjectCourseId(courseId);
+    setNewProjectName("");
+    setNewProjectType("python");
+    setNewProjectTemplate("");
+    setNewProjectError("");
+    setNewProjectOpen(true);
+    /* eslint-enable react-hooks/set-state-in-effect */
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // Load the signed-in user's courses so a new project can be tagged to one.
   useEffect(() => {

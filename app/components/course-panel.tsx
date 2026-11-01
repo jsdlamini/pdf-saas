@@ -17,6 +17,7 @@ import { Label } from "@/components/ui/label";
 import { showToast } from "@/app/components/toast";
 import CourseGroupsPanel from "@/app/components/course-groups-panel";
 import CourseMaterialsPanel from "@/app/components/course-materials-panel";
+import CourseStarterProjectsPanel from "@/app/components/course-starter-projects-panel";
 
 const QRCodeSVG = dynamic(() => import("qrcode.react").then((m) => m.QRCodeSVG), { ssr: false });
 
@@ -34,14 +35,6 @@ type Course = {
   join_code: string | null;
 };
 
-type CourseProject = {
-  id: string;
-  name: string;
-  updatedAt: string;
-  courseId: number | null;
-  editorMode?: string;
-};
-
 function siteOrigin() {
   return (process.env.NEXT_PUBLIC_SITE_URL || (typeof window !== "undefined" ? window.location.origin : "")).replace(/\/$/, "");
 }
@@ -54,7 +47,6 @@ export default function CoursePanel() {
   const { isLoaded, isSignedIn } = useAuth();
   const [courses, setCourses] = useState<Course[] | null>(null);
   const [canCreate, setCanCreate] = useState(false);
-  const [projects, setProjects] = useState<CourseProject[]>([]);
   const [error, setError] = useState("");
 
   const [createOpen, setCreateOpen] = useState(false);
@@ -81,10 +73,7 @@ export default function CoursePanel() {
 
   const load = useCallback(async () => {
     try {
-      const [cRes, pRes] = await Promise.all([
-        fetch("/api/courses", { cache: "no-store" }),
-        fetch("/api/research-projects", { cache: "no-store" }),
-      ]);
+      const cRes = await fetch("/api/courses", { cache: "no-store" });
       if (cRes.ok) {
         const json = await cRes.json();
         setCourses(Array.isArray(json.courses) ? json.courses : []);
@@ -93,21 +82,6 @@ export default function CoursePanel() {
       } else {
         setError("Could not load your courses.");
         return;
-      }
-      if (pRes.ok) {
-        const json = (await pRes.json()) as {
-          projects?: Array<{ id: string; name: string; updatedAt: string; courseId?: number | null; editorMode?: string }>;
-        };
-        const list = Array.isArray(json.projects) ? json.projects : [];
-        setProjects(
-          list.map((p) => ({
-            id: p.id,
-            name: p.name,
-            updatedAt: p.updatedAt,
-            courseId: typeof p.courseId === "number" ? p.courseId : null,
-            editorMode: p.editorMode,
-          }))
-        );
       }
     } catch {
       setError("Could not load your courses.");
@@ -364,7 +338,6 @@ export default function CoursePanel() {
           <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(280px, 1fr))", gap: 12 }}>
             {(courses || []).map((course) => {
               const isRevealed = revealed.has(course.id);
-              const courseProjects = projects.filter((p) => p.courseId === course.id);
               return (
                 <article key={course.id} className="studio-course-card" style={{ display: "flex", flexDirection: "column", gap: 8 }}>
                   <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 8 }}>
@@ -450,27 +423,11 @@ export default function CoursePanel() {
 
                   <CourseMaterialsPanel courseId={course.id} isTeacher={course.is_teacher} />
 
+                  <CourseStarterProjectsPanel courseId={course.id} isTeacher={course.is_teacher} />
+
                   {course.code === "CSC111" ? (
                     <div style={{ borderTop: "1px solid var(--border-color, #334155)", paddingTop: 8 }}>
                       <CourseGroupsPanel courseId={course.id} courseCode={course.code} />
-                    </div>
-                  ) : null}
-
-                  {courseProjects.length > 0 ? (
-                    <div style={{ borderTop: "1px solid var(--border-color, #334155)", paddingTop: 8 }}>
-                      <p style={{ fontSize: 10.5, fontWeight: 700, color: "var(--text-muted, #64748b)", margin: "0 0 6px", textTransform: "uppercase", letterSpacing: "0.04em" }}>
-                        Projects · {courseProjects.length}
-                      </p>
-                      <ul style={{ listStyle: "none", margin: 0, padding: 0, display: "flex", flexDirection: "column", gap: 4 }}>
-                        {courseProjects.map((p) => (
-                          <li key={p.id}>
-                            <a href="/research-studio" style={{ fontSize: 12, color: "var(--text-primary, #e2e8f0)", textDecoration: "none", display: "flex", justifyContent: "space-between", gap: 8 }}>
-                              <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{p.name}</span>
-                              <span style={{ flexShrink: 0, fontSize: 10.5, color: "var(--text-muted, #64748b)" }}>{new Date(p.updatedAt).toLocaleDateString()}</span>
-                            </a>
-                          </li>
-                        ))}
-                      </ul>
                     </div>
                   ) : null}
                 </article>

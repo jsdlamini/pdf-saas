@@ -1,3 +1,4 @@
+import { randomUUID } from "node:crypto";
 import { db, ensureMigrated } from "@/lib/db";
 
 type ProjectEntry = {
@@ -22,6 +23,8 @@ export type StoredResearchProject = {
   revisions?: StoredRevision[];
   courseId?: number | null;
 };
+
+export type StoredResearchProjectWithOwner = StoredResearchProject & { userId: string };
 
 const MAX_REVISIONS = 20;
 
@@ -207,6 +210,63 @@ export async function upsertResearchProjectForUser(userId: string, project: Stor
       JSON.stringify(revisions),
       normalized.updatedAt,
       normalized.courseId ?? null,
+    ]
+  );
+
+  return mapRow(result.rows[0]);
+}
+
+// List every project tagged to a course (teacher-owned starters AND student
+// forks). Callers filter down to teacher-owned starters using the owner id.
+export async function listResearchProjectsForCourse(courseId: number): Promise<StoredResearchProjectWithOwner[]> {
+  await ensureSchema();
+  const pool = getPool();
+  const result = await pool.query(
+    `
+      SELECT id, name, entries, selected_path, last_compile_at, updated_at, revisions, course_id, user_id
+      FROM wiserfiles_research_projects
+      WHERE course_id = $1
+      ORDER BY updated_at DESC
+      LIMIT 100
+    `,
+    [courseId]
+  );
+
+  return result.rows.map((row) => ({ ...mapRow(row), userId: row.user_id as string }));
+}
+
+// Duplicate a starter project into a student's (or teacher's) own workspace.
+// The copy gets a fresh id + owner, a "(copy)" suffix on the name, and keeps
+// the source entries/selected path/revisions/course so it opens as an
+// independent, editable project.
+export async function forkResearchProjectForUser(
+  userId: string,
+  source: StoredResearchProject
+): Promise<StoredResearchProject> {
+  await ensureSchema();
+  const pool = getPool();
+  const id = randomUUID();
+  const now = new Date().toISOString();
+  const name = `${source.name} (copy)`;
+
+  const result = await pool.query(
+    `
+      INSERT INTO wiserfiles_research_projects (
+        user_id, id, name, entries, selected_path, last_compile_at, revisions, updated_at, course_id
+      )
+      VALUES ($1, $2, $3, $4::jsonb, $5, $6, $7::jsonb, $8::timestamptz, $9)
+      RETURNING id, name, entries, selected_path, last_compile_at, updated_at, revisions, course_id
+    `,
+    [
+      userId,
+      id,
+      name,
+      JSON.stringify(source.entries),
+      source.selectedPath,
+      source.lastCompileAt,
+      JSON.stringify(source.revisions ?? []),
+      now,
+      source.courseId ?? null,
     ]
   );
 
