@@ -2,7 +2,7 @@ import { auth, currentUser } from "@clerk/nextjs/server";
 import { randomBytes } from "node:crypto";
 import { db, ensureMigrated } from "@/lib/db";
 import { activeSeasonId, resolveCohortId } from "@/lib/challenges";
-import { isCohortLecturer } from "@/lib/user-roles";
+import { isCohortLecturer, isLecturerOrAdmin } from "@/lib/user-roles";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -61,6 +61,7 @@ export async function POST(request: Request) {
   if (body.action === "create") {
     const name = String(body.name || "").trim();
     if (!name) return jsonError("A contest name is required.", 400);
+    if (!(await isLecturerOrAdmin(userId))) return jsonError("Only teachers can host contests.", 403);
 
     const seasonId = await activeSeasonId();
     const description = String(body.description || "").trim();

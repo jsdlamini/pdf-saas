@@ -456,6 +456,62 @@ const MIGRATIONS: string[] = [
   )`,
   `CREATE INDEX IF NOT EXISTS wiserfiles_group_switch_log_at_idx
    ON wiserfiles_group_switch_log (switched_at DESC)`,
+
+  // ── Courses: revocable join links ──────────────────────────────
+  // join_code becomes nullable so a course/contest can revoke its link while
+  // keeping existing enrollments (and their submissions) intact.
+  `ALTER TABLE wiserfiles_cohorts ALTER COLUMN join_code DROP NOT NULL`,
+
+  // Default lecturer email domains for teacher gating (admin-settable later).
+  `INSERT INTO wiserfiles_settings (key, value) VALUES ('lecturer_email_domains', 'uneswa.ac.sz')
+   ON CONFLICT (key) DO NOTHING`,
+
+  // ── CSC111 one-time seed ────────────────────────────────────────
+  // Creates the course + its cohort (membership container) and enrols every
+  // current practical-group member plus assistants. Idempotent: re-runs on
+  // each deploy and re-syncs membership without inventing Clerk user ids.
+  `INSERT INTO wiserfiles_courses (code, title, institution, owner_id)
+   VALUES ('CSC111', 'Introduction to Computer Science', 'UNESWA', 'system')
+   ON CONFLICT (code, institution) DO NOTHING`,
+
+  `INSERT INTO wiserfiles_cohorts (name, join_code, slug, course_id, created_by)
+   SELECT 'CSC111', NULL, 'csc111', c.id, 'system'
+   FROM wiserfiles_courses c
+   WHERE c.code = 'CSC111' AND c.institution = 'UNESWA'
+     AND NOT EXISTS (SELECT 1 FROM wiserfiles_cohorts WHERE slug = 'csc111')`,
+
+  // Map each group member's student number to their Clerk user id via the
+  // existing enrollment roster first, else fall back to the group member's own
+  // user id. Never invent an id.
+  `INSERT INTO wiserfiles_enrollments (user_id, cohort_id, role, status, student_id)
+   SELECT COALESCE(
+            (SELECT e.user_id FROM wiserfiles_enrollments e
+             WHERE e.student_id = gm.student_id AND e.student_id <> '' AND e.user_id <> ''
+             ORDER BY e.joined_at DESC LIMIT 1),
+            gm.user_id
+          ),
+          ch.id, 'student', 'active', gm.student_id
+   FROM wiserfiles_group_members gm
+   JOIN wiserfiles_cohorts ch ON ch.slug = 'csc111'
+   WHERE gm.user_id IS NOT NULL AND gm.user_id <> ''
+   ON CONFLICT (user_id, cohort_id) DO UPDATE SET status = 'active', student_id = EXCLUDED.student_id`,
+
+  // Enrol assistants as assessors (they assess but do not create/manage).
+  `INSERT INTO wiserfiles_enrollments (user_id, cohort_id, role, status)
+   SELECT ur.user_id, ch.id, 'assistant', 'active'
+   FROM wiserfiles_user_roles ur
+   JOIN wiserfiles_cohorts ch ON ch.slug = 'csc111'
+   WHERE ur.role = 'assistant'
+   ON CONFLICT (user_id, cohort_id) DO UPDATE SET role = 'assistant', status = 'active'`,
+
+  // Record group members whose student number has no matching Clerk user id
+  // so a later step can backfill them (do not invent user ids).
+  `INSERT INTO wiserfiles_roster (cohort_id, student_id)
+   SELECT ch.id, gm.student_id
+   FROM wiserfiles_group_members gm
+   JOIN wiserfiles_cohorts ch ON ch.slug = 'csc111'
+   WHERE (gm.user_id IS NULL OR gm.user_id = '') AND gm.student_id <> ''
+   ON CONFLICT (cohort_id, student_id) DO NOTHING`,
 ];
 
 let migrationPromise: Promise<void> | null = null;

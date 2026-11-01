@@ -1,5 +1,5 @@
 import { auth } from "@clerk/nextjs/server";
-import { getUserRole } from "@/lib/user-roles";
+import { getUserRole, isLecturerOrAdmin } from "@/lib/user-roles";
 import { listGroups, joinGroup, switchGroup, updateGroup, createGroup, deleteGroup, updateGroupMember, deleteGroupMember } from "@/lib/groups-store";
 
 export const runtime = "nodejs";
@@ -57,8 +57,7 @@ export async function POST(request: Request) {
   if (!body || typeof body.groupId !== "string") return jsonError("Invalid payload.", 400);
 
   if (body.action === "create") {
-    const role = await getUserRole(userId);
-    if (role !== "admin") return jsonError("Admin access required.", 403);
+    if (!(await isLecturerOrAdmin(userId))) return jsonError("Teacher access required.", 403);
     const result = await createGroup({
       name: typeof body.name === "string" ? body.name : "",
       schedule: typeof body.schedule === "string" ? body.schedule : "",
@@ -72,16 +71,14 @@ export async function POST(request: Request) {
   }
 
   if (body.action === "delete") {
-    const role = await getUserRole(userId);
-    if (role !== "admin") return jsonError("Admin access required.", 403);
+    if (!(await isLecturerOrAdmin(userId))) return jsonError("Teacher access required.", 403);
     const ok = await deleteGroup(body.groupId);
     if (!ok) return jsonError("Group not found.", 404);
     return Response.json({ ok: true });
   }
 
   if (body.action === "update") {
-    const role = await getUserRole(userId);
-    if (role !== "admin") return jsonError("Admin access required.", 403);
+    if (!(await isLecturerOrAdmin(userId))) return jsonError("Teacher access required.", 403);
     const ok = await updateGroup(body.groupId, {
       name: typeof body.name === "string" ? body.name : "",
       schedule: typeof body.schedule === "string" ? body.schedule : "",

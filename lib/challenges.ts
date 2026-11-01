@@ -213,8 +213,22 @@ const SANDBOX_URL = process.env.SANDBOX_URL || "http://sandbox:3100";
 // Resolve the user's current cohort id: their most recent active enrollment,
 // or the default "general" cohort. Enrollment is now a separate record from
 // leaderboard consent, so a user can hold multiple enrollments.
+//
+// A course's cohort must not silently become the submission target: prefer the
+// most recent active *contest* enrollment (a cohort with no course_id), then
+// any active enrollment, then the default "general" cohort. This keeps the
+// student-facing studio (contests/leaderboard) unchanged when a course also
+// enrols them.
 export async function resolveCohortId(userId: string): Promise<number> {
   await ensureMigrated();
+  const contest = await db.query(
+    `SELECT e.cohort_id FROM wiserfiles_enrollments e
+     JOIN wiserfiles_cohorts c ON c.id = e.cohort_id
+     WHERE e.user_id = $1 AND e.status = 'active' AND c.course_id IS NULL
+     ORDER BY e.joined_at DESC LIMIT 1`,
+    [userId]
+  );
+  if (contest.rows.length) return Number(contest.rows[0].cohort_id);
   const enrolled = await db.query(
     `SELECT cohort_id FROM wiserfiles_enrollments WHERE user_id = $1 AND status = 'active' ORDER BY joined_at DESC LIMIT 1`,
     [userId]

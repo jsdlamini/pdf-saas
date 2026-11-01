@@ -628,6 +628,9 @@ export default function DashboardPage() {
           {/* Studio Button Visibility */}
           <ButtonVisibilitySettings />
 
+          {/* Lecturer Email Domains */}
+          <LecturerEmailDomainsSettings />
+
           {/* AI Quota Settings */}
           <AiQuotaSettings />
 
@@ -1310,6 +1313,82 @@ function AiQuotaSettings() {
       <p className="mt-3 text-[11px] text-slate-400">
         Subscriptions are not enabled yet. When they are, subscriber tiers will get their own quota overrides here.
       </p>
+    </div>
+  );
+}
+
+function LecturerEmailDomainsSettings() {
+  const [value, setValue] = useState<string | null>(null);
+  const [saving, setSaving] = useState(false);
+  const [message, setMessage] = useState("");
+
+  useEffect(() => {
+    fetch("/api/admin-settings")
+      .then((r) => r.json())
+      .then((d) => { if (typeof d.lecturerEmailDomains === "string") setValue(d.lecturerEmailDomains); })
+      .catch(() => { /* best-effort */ });
+  }, []);
+
+  async function save() {
+    if (value === null) return;
+    setSaving(true);
+    setMessage("");
+    try {
+      const r = await fetch("/api/admin-settings", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ lecturerEmailDomains: value }),
+      });
+      const d = await r.json();
+      if (r.ok && typeof d.lecturerEmailDomains === "string") {
+        setValue(d.lecturerEmailDomains);
+        setMessage("Saved.");
+      } else {
+        setMessage(d.error || "Could not save.");
+      }
+    } catch {
+      setMessage("Could not save.");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <div className="rounded-2xl border border-slate-200/60 bg-white p-6 shadow-sm">
+      <div className="flex items-center justify-between mb-4">
+        <div>
+          <h2 className="text-base font-semibold text-slate-900">Lecturer Email Domains</h2>
+          <p className="text-xs text-slate-500 mt-0.5">
+            Verified emails on these domains can create courses, host contests, and manage groups (comma-separated).
+          </p>
+        </div>
+        <span className="rounded-full bg-emerald-100 px-2.5 py-0.5 text-[10px] font-bold text-emerald-800">
+          {value === null ? "Loading…" : "Configured"}
+        </span>
+      </div>
+
+      <label className="block">
+        <span className="text-xs font-semibold text-slate-700">Domains</span>
+        <input
+          type="text"
+          value={value ?? ""}
+          onChange={(e) => setValue(e.target.value)}
+          placeholder="uneswa.ac.sz"
+          className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm focus:border-cyan-500 focus:outline-none focus:ring-1 focus:ring-cyan-500"
+        />
+      </label>
+
+      <div className="mt-4 flex items-center gap-3">
+        <button
+          type="button"
+          onClick={save}
+          disabled={saving || value === null}
+          className="rounded-lg bg-slate-900 px-4 py-2 text-sm font-semibold text-white transition hover:bg-slate-700 disabled:opacity-50"
+        >
+          {saving ? "Saving…" : "Save domains"}
+        </button>
+        {message ? <span className="text-xs text-slate-500">{message}</span> : null}
+      </div>
     </div>
   );
 }
