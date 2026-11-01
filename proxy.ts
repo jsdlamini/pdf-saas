@@ -8,6 +8,7 @@ const PUBLIC_PATHS = [
   "/research-studio",
   "/history",
   "/online/",
+  "/join",
 ];
 
 export default clerkMiddleware(async (auth, req) => {
