@@ -16,6 +16,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { showToast } from "@/app/components/toast";
 import CourseGroupsPanel from "@/app/components/course-groups-panel";
+import CourseMaterialsPanel from "@/app/components/course-materials-panel";
 
 const QRCodeSVG = dynamic(() => import("qrcode.react").then((m) => m.QRCodeSVG), { ssr: false });
 
@@ -446,6 +447,8 @@ export default function CoursePanel() {
                       )}
                     </div>
                   ) : null}
+
+                  <CourseMaterialsPanel courseId={course.id} isTeacher={course.is_teacher} />
 
                   {course.code === "CSC111" ? (
                     <div style={{ borderTop: "1px solid var(--border-color, #334155)", paddingTop: 8 }}>

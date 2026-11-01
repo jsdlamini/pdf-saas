@@ -541,6 +541,22 @@ export const MIGRATIONS: string[] = [
   // course, so Phase-3 group-scoped assessment still works for assistants who
   // were seeded before wiserfiles_group_staff existed.
   ASSISTANT_GROUP_STAFF_BACKFILL,
+
+  // ── Course materials: lecture notes, links, and videos ──────────
+  // A teacher-authored material scoped to a course. `kind` is 'note' (markdown
+  // body), 'link', or 'video' (URL body). Students may read; teachers may write.
+  `CREATE TABLE IF NOT EXISTS wiserfiles_course_materials (
+    id SERIAL PRIMARY KEY,
+    course_id INTEGER NOT NULL REFERENCES wiserfiles_courses(id) ON DELETE CASCADE,
+    author_id TEXT NOT NULL,
+    kind TEXT NOT NULL DEFAULT 'note',
+    title TEXT NOT NULL,
+    body TEXT NOT NULL DEFAULT '',
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+  )`,
+  `CREATE INDEX IF NOT EXISTS wiserfiles_course_materials_course_created_idx
+   ON wiserfiles_course_materials (course_id, created_at DESC)`,
 ];
 
 let migrationPromise: Promise<void> | null = null;
