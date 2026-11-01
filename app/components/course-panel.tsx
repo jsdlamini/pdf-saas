@@ -58,6 +58,7 @@ export default function CoursePanel() {
 
   const [createOpen, setCreateOpen] = useState(false);
   const [joinOpen, setJoinOpen] = useState(false);
+  const [joinChoiceOpen, setJoinChoiceOpen] = useState(false);
   const [revealed, setRevealed] = useState<Set<number>>(new Set());
 
   const [formCode, setFormCode] = useState("");
@@ -248,8 +249,8 @@ export default function CoursePanel() {
           Create course
         </button>
       ) : null}
-      <button type="button" className="studio-btn studio-btn-secondary" onClick={() => { setJoinError(""); setJoinOpen(true); }}>
-        Join with a link
+      <button type="button" className="studio-btn studio-btn-secondary" onClick={() => { setJoinError(""); setJoinChoiceOpen(true); }}>
+        Join with a course
       </button>
     </div>
   );
@@ -380,6 +381,41 @@ export default function CoursePanel() {
           </div>
         )}
       </div>
+
+      {/* Join choice dialog */}
+      <Dialog open={joinChoiceOpen} onOpenChange={setJoinChoiceOpen}>
+        <DialogContent className="sm:max-w-sm">
+          <DialogHeader>
+            <DialogTitle>Join with a course</DialogTitle>
+            <DialogDescription>Choose how you want to continue.</DialogDescription>
+          </DialogHeader>
+          <div className="space-y-3">
+            <button
+              type="button"
+              className="studio-btn studio-btn-primary"
+              style={{ width: "100%", height: "auto", display: "flex", flexDirection: "column", alignItems: "flex-start", gap: 3, padding: "12px", whiteSpace: "normal", textAlign: "left" }}
+              onClick={() => { setJoinChoiceOpen(false); setJoinError(""); setJoinOpen(true); }}
+            >
+              <span style={{ fontSize: 13, fontWeight: 600 }}>Join as a student</span>
+              <span style={{ fontSize: 11.5, fontWeight: 400, opacity: 0.8 }}>Enter a join code from your teacher. You can join multiple courses.</span>
+            </button>
+            {canCreate ? (
+              <button
+                type="button"
+                className="studio-btn studio-btn-secondary"
+                style={{ width: "100%", height: "auto", display: "flex", flexDirection: "column", alignItems: "flex-start", gap: 3, padding: "12px", whiteSpace: "normal", textAlign: "left" }}
+                onClick={() => { setJoinChoiceOpen(false); setFormError(""); setCreateOpen(true); }}
+              >
+                <span style={{ fontSize: 13, fontWeight: 600 }}>I am a teacher</span>
+                <span style={{ fontSize: 11.5, fontWeight: 400, opacity: 0.8 }}>Create a course and generate its join link to share with students.</span>
+              </button>
+            ) : null}
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setJoinChoiceOpen(false)}>Cancel</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {/* Create course dialog */}
       <Dialog open={createOpen} onOpenChange={(open) => { setCreateOpen(open); if (!open) setFormError(""); }}>
