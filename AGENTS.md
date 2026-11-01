@@ -14,7 +14,7 @@ WiserFiles is a Next.js 16 (App Router) + React 19 + TypeScript app that exposes
 - Run a single test file: `npx vitest run app/api/ocr-pdf/route.test.ts`.
 - Watch a test while iterating: `npx vitest app/api/ocr-pdf/route.test.ts`.
 
-There is no separate typecheck script; `npm run build` performs type checking. Vitest uses the `node` environment and resolves the `@` alias to the repo root (mirrors `tsconfig.json`'s `@/*`).
+`npm run typecheck` runs `tsc --noEmit`; `npm run build` also performs type checking. Vitest uses the `node` environment and resolves the `@` alias to the repo root (mirrors `tsconfig.json`'s `@/*`).
 
 ## Architecture
 

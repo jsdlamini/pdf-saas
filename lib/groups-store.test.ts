@@ -6,9 +6,10 @@ const ensureMigratedMock = vi.hoisted(() => vi.fn());
 vi.mock("@/lib/db", () => ({
   db: { query: dbQueryMock },
   ensureMigrated: ensureMigratedMock,
+  ASSISTANT_GROUP_STAFF_BACKFILL: "ASSISTANT_GROUP_STAFF_BACKFILL",
 }));
 
-import { deleteGroupMember, updateGroupMember } from "./groups-store";
+import { deleteGroupMember, updateGroupMember, ensureAssistantGroupStaffBackfill } from "./groups-store";
 
 function memberRow(studentId = "123456") {
   return { rows: [{ student_id: studentId }], rowCount: 1 };
@@ -21,6 +22,15 @@ function empty() {
 beforeEach(() => {
   vi.clearAllMocks();
   ensureMigratedMock.mockResolvedValue(undefined);
+});
+
+describe("ensureAssistantGroupStaffBackfill", () => {
+  it("runs the idempotent assistant→group-staff backfill", async () => {
+    await ensureAssistantGroupStaffBackfill();
+
+    expect(ensureMigratedMock).toHaveBeenCalled();
+    expect(dbQueryMock).toHaveBeenCalledWith("ASSISTANT_GROUP_STAFF_BACKFILL");
+  });
 });
 
 describe("updateGroupMember", () => {

@@ -71,6 +71,13 @@ export default function CoursePanel() {
   const [joinError, setJoinError] = useState("");
   const [joinBusy, setJoinBusy] = useState(false);
 
+  const [editingCourse, setEditingCourse] = useState<Course | null>(null);
+  const [editCode, setEditCode] = useState("");
+  const [editTitle, setEditTitle] = useState("");
+  const [editInstitution, setEditInstitution] = useState("");
+  const [editError, setEditError] = useState("");
+  const [editBusy, setEditBusy] = useState(false);
+
   const load = useCallback(async () => {
     try {
       const [cRes, pRes] = await Promise.all([
@@ -216,6 +223,76 @@ export default function CoursePanel() {
     }
   }
 
+  function openEdit(course: Course) {
+    setEditingCourse(course);
+    setEditCode(course.code);
+    setEditTitle(course.title);
+    setEditInstitution(course.institution);
+    setEditError("");
+  }
+
+  async function updateCourse() {
+    if (!editingCourse) return;
+    const code = editCode.trim();
+    const title = editTitle.trim();
+    if (!code || !title) {
+      setEditError("Course code and title are required.");
+      return;
+    }
+    setEditBusy(true);
+    setEditError("");
+    try {
+      const res = await fetch("/api/courses", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "update",
+          courseId: editingCourse.id,
+          code,
+          title,
+          institution: editInstitution.trim(),
+        }),
+      });
+      const json = await res.json().catch(() => null);
+      if (!res.ok) {
+        setEditError(json?.error || "Could not update the course.");
+        return;
+      }
+      setEditingCourse(null);
+      showToast("Course updated", "success");
+      await load();
+    } catch {
+      setEditError("Could not update the course.");
+    } finally {
+      setEditBusy(false);
+    }
+  }
+
+  async function deleteCourse(course: Course) {
+    if (
+      !window.confirm(
+        `Delete "${course.title}"? This permanently removes the course, its join link, enrollments, and group-staff assignments.`
+      )
+    )
+      return;
+    try {
+      const res = await fetch("/api/courses", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "delete", courseId: course.id, confirm: true }),
+      });
+      const json = await res.json().catch(() => null);
+      if (!res.ok) {
+        showToast(json?.error || "Could not delete the course.", "error");
+        return;
+      }
+      showToast("Course deleted", "success");
+      await load();
+    } catch {
+      showToast("Could not delete the course.", "error");
+    }
+  }
+
   function toggleReveal(id: number) {
     setRevealed((prev) => {
       const next = new Set(prev);
@@ -257,7 +334,7 @@ export default function CoursePanel() {
 
   return (
     <section style={{ border: "1px solid var(--border-color, #334155)", borderRadius: 12, background: "var(--bg-secondary, #131620)", overflow: "hidden" }}>
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, padding: "14px 16px", borderBottom: "1px solid var(--border-color, #334155)", background: "linear-gradient(120deg, rgba(45,212,191,0.12), transparent)" }}>
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, padding: "14px 16px", borderBottom: "1px solid var(--border-color, #334155)", background: "linear-gradient(120deg, var(--course-accent-tint, rgba(245,158,11,0.14)), transparent)" }}>
         <div>
           <h2 style={{ fontSize: 15, fontWeight: 700, color: "var(--text-primary, #e2e8f0)", margin: 0 }}>My Courses</h2>
           <p style={{ fontSize: 11.5, color: "var(--text-muted, #64748b)", margin: "2px 0 0" }}>
@@ -288,7 +365,7 @@ export default function CoursePanel() {
               const isRevealed = revealed.has(course.id);
               const courseProjects = projects.filter((p) => p.courseId === course.id);
               return (
-                <article key={course.id} style={{ border: "1px solid var(--border-color, #334155)", borderRadius: 10, background: "var(--bg-primary, #0f1117)", padding: 12, display: "flex", flexDirection: "column", gap: 8 }}>
+                <article key={course.id} className="studio-course-card" style={{ display: "flex", flexDirection: "column", gap: 8 }}>
                   <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 8 }}>
                     <div style={{ minWidth: 0 }}>
                       <p style={{ fontSize: 13.5, fontWeight: 700, color: "var(--text-primary, #e2e8f0)", margin: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{course.title}</p>
@@ -296,11 +373,29 @@ export default function CoursePanel() {
                         {course.code}{course.institution ? ` · ${course.institution}` : ""}
                       </p>
                     </div>
-                    {course.is_teacher ? (
-                      <span style={{ flexShrink: 0, fontSize: 10, fontWeight: 700, padding: "2px 8px", borderRadius: 999, background: "rgba(45,212,191,0.15)", color: "#2dd4bf" }}>Teaching</span>
-                    ) : (
-                      <span style={{ flexShrink: 0, fontSize: 10, fontWeight: 700, padding: "2px 8px", borderRadius: 999, background: "rgba(129,140,248,0.15)", color: "#818cf8" }}>Enrolled</span>
-                    )}
+                    <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 6, flexShrink: 0 }}>
+                      {course.is_teacher ? (
+                        <span style={{ fontSize: 10, fontWeight: 700, padding: "2px 8px", borderRadius: 999, background: "var(--course-accent-tint, rgba(245,158,11,0.15))", color: "var(--course-accent, #f59e0b)" }}>Teaching</span>
+                      ) : (
+                        <span style={{ fontSize: 10, fontWeight: 700, padding: "2px 8px", borderRadius: 999, background: "rgba(129,140,248,0.15)", color: "#818cf8" }}>Enrolled</span>
+                      )}
+                      {course.is_teacher ? (
+                        <div style={{ display: "flex", gap: 4 }}>
+                          <button type="button" onClick={() => openEdit(course)} className="studio-btn studio-btn-ghost" style={{ height: "auto", padding: "4px 8px", fontSize: 11 }} title="Edit course">
+                            <svg viewBox="0 0 20 20" style={{ width: 12, height: 12 }} fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                              <path d="M4 13.5V16h2.5L16 6.5 13.5 4 4 13.5z" />
+                            </svg>
+                            Edit
+                          </button>
+                          <button type="button" onClick={() => deleteCourse(course)} className="studio-btn studio-btn-danger" style={{ height: "auto", padding: "4px 8px", fontSize: 11 }} title="Delete course">
+                            <svg viewBox="0 0 20 20" style={{ width: 12, height: 12 }} fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                              <path d="M3 6h14M8 6V4h4v2M6 6l1 12h6l1-12" />
+                            </svg>
+                            Delete
+                          </button>
+                        </div>
+                      ) : null}
+                    </div>
                   </div>
 
                   <p style={{ fontSize: 11, color: "var(--text-muted, #64748b)", margin: 0 }}>
@@ -316,7 +411,7 @@ export default function CoursePanel() {
                             <button
                               type="button"
                               onClick={() => toggleReveal(course.id)}
-                              className="studio-btn studio-btn-secondary"
+                              className="studio-btn studio-btn-yellow"
                               style={{ height: "auto", padding: "4px 10px", fontSize: 11 }}
                             >
                               {isRevealed ? "Hide link" : "Reveal link"}
@@ -325,7 +420,7 @@ export default function CoursePanel() {
                               <span style={{ fontFamily: "monospace", fontSize: 11.5, color: "var(--text-primary, #e2e8f0)" }}>{course.join_code}</span>
                             ) : null}
                             {isRevealed ? (
-                              <button type="button" onClick={() => copyLink(course.join_code!)} className="studio-btn studio-btn-secondary" style={{ height: "auto", padding: "4px 10px", fontSize: 11 }}>Copy</button>
+                              <button type="button" onClick={() => copyLink(course.join_code!)} className="studio-btn studio-btn-yellow" style={{ height: "auto", padding: "4px 10px", fontSize: 11 }}>Copy</button>
                             ) : null}
                           </div>
                           {isRevealed ? (
@@ -345,7 +440,7 @@ export default function CoursePanel() {
                         <div style={{ fontSize: 11, color: "var(--text-muted, #64748b)" }}>
                           Join link disabled.
                           <div style={{ marginTop: 6, display: "flex", gap: 6 }}>
-                            <button type="button" className="studio-btn studio-btn-secondary" style={{ height: "auto", padding: "3px 8px", fontSize: 11 }} onClick={() => regenerateLink(course)}>Generate link</button>
+                            <button type="button" className="studio-btn studio-btn-yellow" style={{ height: "auto", padding: "3px 8px", fontSize: 11 }} onClick={() => regenerateLink(course)}>Generate link</button>
                           </div>
                         </div>
                       )}
@@ -442,6 +537,35 @@ export default function CoursePanel() {
           <DialogFooter>
             <Button variant="outline" onClick={() => setCreateOpen(false)}>Cancel</Button>
             <Button onClick={createCourse} disabled={formBusy}>{formBusy ? "Creating…" : "Create course"}</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Edit course dialog */}
+      <Dialog open={editingCourse !== null} onOpenChange={(open) => { if (!open) { setEditingCourse(null); setEditError(""); } }}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Edit course</DialogTitle>
+            <DialogDescription>Update the code, title, and institution for this course.</DialogDescription>
+          </DialogHeader>
+          <div className="space-y-3">
+            <div className="space-y-1.5">
+              <Label htmlFor="edit-course-code">Course code</Label>
+              <Input id="edit-course-code" value={editCode} onChange={(e) => { setEditCode(e.target.value); setEditError(""); }} placeholder="e.g. CSC111" autoFocus />
+            </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="edit-course-title">Course title</Label>
+              <Input id="edit-course-title" value={editTitle} onChange={(e) => { setEditTitle(e.target.value); setEditError(""); }} placeholder="e.g. Introduction to Computer Science" />
+            </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="edit-course-institution">Institution (optional)</Label>
+              <Input id="edit-course-institution" value={editInstitution} onChange={(e) => setEditInstitution(e.target.value)} placeholder="e.g. UNESWA" />
+            </div>
+            {editError ? <p className="text-xs font-semibold text-[var(--danger,#ef4444)]">{editError}</p> : null}
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => { setEditingCourse(null); setEditError(""); }}>Cancel</Button>
+            <Button onClick={updateCourse} disabled={editBusy}>{editBusy ? "Saving…" : "Save changes"}</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

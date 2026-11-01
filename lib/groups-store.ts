@@ -1,4 +1,4 @@
-import { db, ensureMigrated } from "@/lib/db";
+import { db, ensureMigrated, ASSISTANT_GROUP_STAFF_BACKFILL } from "@/lib/db";
 import { STUDY_GROUPS, isValidProgramme, isValidStudentId } from "@/lib/groups";
 
 export type GroupView = {
@@ -46,6 +46,17 @@ async function ensureGroupsSeeded(): Promise<void> {
       [g.id, g.name, g.schedule, g.capacity, g.sessionCount, g.testCount, g.examCount, i, courseId]
     );
   }
+  // Keep assistant group-staff assignments in sync every time groups are
+  // seeded (the migration-only backfill can run before the groups exist on a
+  // fresh database).
+  await ensureAssistantGroupStaffBackfill();
+}
+
+// Assign every assistant enrolled in a course cohort to every group in that
+// course. Idempotent; re-runnable on every seed.
+export async function ensureAssistantGroupStaffBackfill(): Promise<void> {
+  await ensureMigrated();
+  await db.query(ASSISTANT_GROUP_STAFF_BACKFILL);
 }
 
 // List a course's practical groups (or every group when courseId is null, used

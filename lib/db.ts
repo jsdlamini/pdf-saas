@@ -85,6 +85,21 @@ export const db = {
   },
 };
 
+// Backfill assistant group-staff assignments: every user enrolled with
+// role = 'assistant' in a course cohort is assigned to every practical group
+// in that course, so pre-Phase-3 assistants (who predate the group_staff
+// table) can still assess. Idempotent + duplicate-safe. Also run at seed time
+// (see ensureGroupsSeeded) so fresh databases get the same backfill once the
+// groups are created.
+export const ASSISTANT_GROUP_STAFF_BACKFILL = `
+  INSERT INTO wiserfiles_group_staff (group_id, user_id, role)
+  SELECT g.id, e.user_id, 'assistant'
+  FROM wiserfiles_enrollments e
+  JOIN wiserfiles_cohorts c ON c.id = e.cohort_id
+  JOIN wiserfiles_groups g ON g.course_id = c.course_id
+  WHERE e.role = 'assistant' AND e.status = 'active'
+  ON CONFLICT (group_id, user_id) DO NOTHING`;
+
 export const MIGRATIONS: string[] = [
   `CREATE TABLE IF NOT EXISTS wiserfiles_research_projects (
     user_id TEXT NOT NULL,
@@ -521,6 +536,11 @@ export const MIGRATIONS: string[] = [
   `UPDATE wiserfiles_groups
    SET course_id = (SELECT id FROM wiserfiles_courses WHERE code = 'CSC111' AND institution = 'UNESWA' LIMIT 1)
    WHERE course_id IS NULL`,
+
+  // Enrol any assistant-enrolled-in-a-course-cohort into every group of that
+  // course, so Phase-3 group-scoped assessment still works for assistants who
+  // were seeded before wiserfiles_group_staff existed.
+  ASSISTANT_GROUP_STAFF_BACKFILL,
 ];
 
 let migrationPromise: Promise<void> | null = null;
