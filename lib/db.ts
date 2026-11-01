@@ -85,7 +85,7 @@ export const db = {
   },
 };
 
-const MIGRATIONS: string[] = [
+export const MIGRATIONS: string[] = [
   `CREATE TABLE IF NOT EXISTS wiserfiles_research_projects (
     user_id TEXT NOT NULL,
     id TEXT NOT NULL,
@@ -255,12 +255,10 @@ const MIGRATIONS: string[] = [
   `CREATE TABLE IF NOT EXISTS wiserfiles_leaderboard_opt_in (
     user_id TEXT NOT NULL,
     cohort_id INTEGER NOT NULL REFERENCES wiserfiles_cohorts(id) ON DELETE CASCADE,
-    season_id INTEGER REFERENCES wiserfiles_seasons(id) ON DELETE SET NULL,
     display_name TEXT NOT NULL,
     opted_in BOOLEAN NOT NULL DEFAULT TRUE,
     PRIMARY KEY (user_id, cohort_id)
   )`,
-  `ALTER TABLE wiserfiles_leaderboard_opt_in ADD COLUMN IF NOT EXISTS student_id TEXT`,
 
   // ── Courses + enrollment split ───────────────────────────────────
   // A course is a subject (persists across years); a cohort is course ×
@@ -291,20 +289,6 @@ const MIGRATIONS: string[] = [
     student_id TEXT,
     PRIMARY KEY (user_id, cohort_id)
   )`,
-  // One-time migration: carry existing opt-in rows (which doubled as
-  // enrollment) into enrollments. Guarded so a second run after the column is
-  // dropped is a no-op.
-  `DO $$
-  BEGIN
-    IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'wiserfiles_leaderboard_opt_in' AND column_name = 'student_id') THEN
-      INSERT INTO wiserfiles_enrollments (user_id, cohort_id, role, status, joined_at, student_id)
-      SELECT user_id, cohort_id, 'student', 'active', NOW(), student_id
-      FROM wiserfiles_leaderboard_opt_in
-      ON CONFLICT (user_id, cohort_id) DO NOTHING;
-    END IF;
-  END $$;`,
-  `ALTER TABLE wiserfiles_leaderboard_opt_in DROP COLUMN IF EXISTS student_id`,
-  `ALTER TABLE wiserfiles_leaderboard_opt_in DROP COLUMN IF EXISTS season_id`,
 
   // ── Roster (institutional student IDs) ──────────────────────────
   `CREATE TABLE IF NOT EXISTS wiserfiles_roster (
@@ -471,8 +455,9 @@ const MIGRATIONS: string[] = [
 
   // ── CSC111 one-time seed ────────────────────────────────────────
   // Creates the course + its cohort (membership container) and enrols every
-  // current practical-group member plus assistants. Idempotent: re-runs on
-  // each deploy and re-syncs membership without inventing Clerk user ids.
+  // current practical-group member plus assistants. Idempotent and
+  // duplicate-safe: re-runs on each deploy and inserts any missing members
+  // without overwriting existing enrollments or inventing Clerk user ids.
   `INSERT INTO wiserfiles_courses (code, title, institution, owner_id)
    VALUES ('CSC111', 'Introduction to Computer Science', 'UNESWA', 'system')
    ON CONFLICT (code, institution) DO NOTHING`,
@@ -497,7 +482,7 @@ const MIGRATIONS: string[] = [
    FROM wiserfiles_group_members gm
    JOIN wiserfiles_cohorts ch ON ch.slug = 'csc111'
    WHERE gm.user_id IS NOT NULL AND gm.user_id <> ''
-   ON CONFLICT (user_id, cohort_id) DO UPDATE SET status = 'active', student_id = EXCLUDED.student_id`,
+   ON CONFLICT (user_id, cohort_id) DO NOTHING`,
 
   // Enrol assistants as assessors (they assess but do not create/manage).
   `INSERT INTO wiserfiles_enrollments (user_id, cohort_id, role, status)
@@ -505,7 +490,7 @@ const MIGRATIONS: string[] = [
    FROM wiserfiles_user_roles ur
    JOIN wiserfiles_cohorts ch ON ch.slug = 'csc111'
    WHERE ur.role = 'assistant'
-   ON CONFLICT (user_id, cohort_id) DO UPDATE SET role = 'assistant', status = 'active'`,
+   ON CONFLICT (user_id, cohort_id) DO NOTHING`,
 
   // Record group members whose student number has no matching Clerk user id
   // so a later step can backfill them (do not invent user ids).
