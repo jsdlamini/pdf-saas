@@ -500,6 +500,27 @@ export const MIGRATIONS: string[] = [
    JOIN wiserfiles_cohorts ch ON ch.slug = 'csc111'
    WHERE (gm.user_id IS NULL OR gm.user_id = '') AND gm.student_id <> ''
    ON CONFLICT (cohort_id, student_id) DO NOTHING`,
+
+  // ── Phase 3: practical groups are sub-groupings within a course ──
+  // A group belongs to exactly one course (nullable only for pre-migration
+  // rows, which are backfilled below).
+  `ALTER TABLE wiserfiles_groups ADD COLUMN IF NOT EXISTS course_id INTEGER REFERENCES wiserfiles_courses(id) ON DELETE CASCADE`,
+
+  // Staff assignment: an assistant or lecturer is assigned to one or more
+  // groups to teach/assess. Admin bypasses this (assesses everything).
+  `CREATE TABLE IF NOT EXISTS wiserfiles_group_staff (
+    group_id TEXT NOT NULL REFERENCES wiserfiles_groups(id) ON DELETE CASCADE,
+    user_id TEXT NOT NULL,
+    role TEXT NOT NULL DEFAULT 'assistant',
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    PRIMARY KEY (group_id, user_id)
+  )`,
+
+  // Backfill the existing (previously global) practical groups under CSC111,
+  // resolved by code so the course id can differ between environments.
+  `UPDATE wiserfiles_groups
+   SET course_id = (SELECT id FROM wiserfiles_courses WHERE code = 'CSC111' AND institution = 'UNESWA' LIMIT 1)
+   WHERE course_id IS NULL`,
 ];
 
 let migrationPromise: Promise<void> | null = null;

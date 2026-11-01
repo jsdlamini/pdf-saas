@@ -1,6 +1,6 @@
 import { auth } from "@clerk/nextjs/server";
 import { getUserRole } from "@/lib/user-roles";
-import { getGroupById } from "@/lib/groups";
+import { getGroupRecord } from "@/lib/groups-store";
 import { getRosterWithMarks, type RosterColumn, type RosterMarkRow } from "@/lib/assess-store";
 import { PDFDocument, StandardFonts, rgb } from "pdf-lib";
 
@@ -20,6 +20,8 @@ export async function GET(request: Request) {
 
   const url = new URL(request.url);
   const groupId = url.searchParams.get("group") || "";
+  const courseIdRaw = url.searchParams.get("courseId");
+  const courseId = courseIdRaw ? Number(courseIdRaw) : null;
   const all = groupId === "all";
 
   let title: string;
@@ -29,14 +31,14 @@ export async function GET(request: Request) {
   let showGroup: boolean;
 
   if (all) {
-    data = await getRosterWithMarks(null);
+    data = await getRosterWithMarks(null, courseId);
     const groupCount = new Set(data.rows.map((r) => r.group)).size;
     title = "Practical Groups — All Students with Marks";
     subtitle = `${data.rows.length} student${data.rows.length !== 1 ? "s" : ""} across ${groupCount} group${groupCount !== 1 ? "s" : ""}`;
     filename = "practical-groups-all-students.pdf";
     showGroup = true;
   } else {
-    const group = getGroupById(groupId);
+    const group = await getGroupRecord(groupId);
     if (!group) return Response.json({ error: "Unknown group." }, { status: 404 });
     data = await getRosterWithMarks(groupId);
     title = "Practical Group Roster with Marks";

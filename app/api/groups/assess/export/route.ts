@@ -5,7 +5,7 @@ import { join } from "node:path";
 import { promisify } from "node:util";
 import { auth } from "@clerk/nextjs/server";
 import { getUserRole } from "@/lib/user-roles";
-import { getGroupById } from "@/lib/groups";
+import { getGroupRecord, listAssignedStaffGroupIds } from "@/lib/groups-store";
 import { getAssessment } from "@/lib/assess-store";
 
 const execFileAsync = promisify(execFile);
@@ -17,14 +17,20 @@ export async function GET(request: Request) {
   const { userId } = await auth();
   if (!userId) return Response.json({ error: "Sign in required." }, { status: 401 });
 
-  const role = await getUserRole(userId);
-  if (role !== "admin" && role !== "assistant") {
-    return Response.json({ error: "Assessor access required." }, { status: 403 });
-  }
-
   const url = new URL(request.url);
   const groupId = url.searchParams.get("group") || "";
-  const group = getGroupById(groupId);
+
+  const role = await getUserRole(userId);
+  // Admin assesses everything; an assistant/lecturer may export only groups
+  // they are assigned to teach/assess.
+  if (role !== "admin") {
+    const assigned = await listAssignedStaffGroupIds(userId);
+    if (!assigned.has(groupId)) {
+      return Response.json({ error: "Assessor access required." }, { status: 403 });
+    }
+  }
+
+  const group = await getGroupRecord(groupId);
   if (!group) return Response.json({ error: "Unknown group." }, { status: 404 });
 
   const data = await getAssessment(groupId);

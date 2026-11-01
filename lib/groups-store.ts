@@ -11,6 +11,7 @@ export type GroupView = {
   examCount: number;
   members: number;
   joined: boolean;
+  courseId: number | null;
 };
 
 export type GroupMember = {
@@ -30,21 +31,33 @@ export type JoinDetails = {
 
 async function ensureGroupsSeeded(): Promise<void> {
   await ensureMigrated();
+  // The six seeded groups belong to the CSC111 course. Resolve by code (not a
+  // hard-coded id) so the seed is stable across environments.
+  const course = await db.query(
+    `SELECT id FROM wiserfiles_courses WHERE code = 'CSC111' AND institution = 'UNESWA' LIMIT 1`
+  );
+  const courseId = course.rows[0]?.id ?? null;
   for (let i = 0; i < STUDY_GROUPS.length; i++) {
     const g = STUDY_GROUPS[i];
     await db.query(
-      `INSERT INTO wiserfiles_groups (id, name, schedule, capacity, session_count, test_count, exam_count, sort_order)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+      `INSERT INTO wiserfiles_groups (id, name, schedule, capacity, session_count, test_count, exam_count, sort_order, course_id)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
        ON CONFLICT (id) DO NOTHING`,
-      [g.id, g.name, g.schedule, g.capacity, g.sessionCount, g.testCount, g.examCount, i]
+      [g.id, g.name, g.schedule, g.capacity, g.sessionCount, g.testCount, g.examCount, i, courseId]
     );
   }
 }
 
-export async function listGroups(userId: string | null): Promise<GroupView[]> {
+// List a course's practical groups (or every group when courseId is null, used
+// only as a compatibility fallback). `joined` is scoped to the caller.
+export async function listGroups(userId: string | null, courseId: number | null = null): Promise<GroupView[]> {
   await ensureGroupsSeeded();
   const groups = await db.query(
-    `SELECT id, name, schedule, capacity, session_count, test_count, exam_count FROM wiserfiles_groups ORDER BY sort_order ASC, id ASC`
+    `SELECT id, name, schedule, capacity, session_count, test_count, exam_count, course_id
+     FROM wiserfiles_groups
+     ${courseId != null ? "WHERE course_id = $1" : ""}
+     ORDER BY sort_order ASC, id ASC`,
+    courseId != null ? [courseId] : []
   );
   const counts = await db.query(
     `SELECT group_id, COUNT(*)::int AS n FROM wiserfiles_group_members GROUP BY group_id`
@@ -67,17 +80,91 @@ export async function listGroups(userId: string | null): Promise<GroupView[]> {
     examCount: g.exam_count as number,
     members: countMap.get(g.id) ?? 0,
     joined: mine.has(g.id),
+    courseId: g.course_id == null ? null : Number(g.course_id),
   }));
+}
+
+export type GroupRecord = {
+  id: string;
+  name: string;
+  schedule: string;
+  capacity: number;
+  courseId: number | null;
+};
+
+/** DB-backed group lookup (the static STUDY_GROUPS list predates courses). */
+export async function getGroupRecord(groupId: string): Promise<GroupRecord | null> {
+  await ensureMigrated();
+  const r = await db.query(
+    `SELECT id, name, schedule, capacity, course_id FROM wiserfiles_groups WHERE id = $1`,
+    [groupId]
+  );
+  if (!r.rows.length) return null;
+  const x = r.rows[0];
+  return {
+    id: x.id as string,
+    name: x.name as string,
+    schedule: x.schedule as string,
+    capacity: x.capacity as number,
+    courseId: x.course_id == null ? null : Number(x.course_id),
+  };
+}
+
+export async function getGroupCourseId(groupId: string): Promise<number | null> {
+  const g = await getGroupRecord(groupId);
+  return g?.courseId ?? null;
+}
+
+/** Group ids the caller is assigned to teach/assess (staff table). */
+export async function listAssignedStaffGroupIds(userId: string): Promise<Set<string>> {
+  await ensureMigrated();
+  const r = await db.query(`SELECT group_id FROM wiserfiles_group_staff WHERE user_id = $1`, [userId]);
+  return new Set(r.rows.map((x) => x.group_id as string));
+}
+
+export type StaffAssignment = { userId: string; role: string };
+
+export async function listGroupStaff(groupId: string): Promise<StaffAssignment[]> {
+  await ensureMigrated();
+  const r = await db.query(
+    `SELECT user_id, role FROM wiserfiles_group_staff WHERE group_id = $1 ORDER BY role ASC, user_id ASC`,
+    [groupId]
+  );
+  return r.rows.map((x) => ({ userId: x.user_id as string, role: x.role as string }));
+}
+
+export async function assignStaff(groupId: string, userId: string, role: "teacher" | "assistant"): Promise<boolean> {
+  await ensureMigrated();
+  const r = await db.query(
+    `INSERT INTO wiserfiles_group_staff (group_id, user_id, role)
+     VALUES ($1, $2, $3)
+     ON CONFLICT (group_id, user_id) DO UPDATE SET role = EXCLUDED.role`,
+    [groupId, userId, role]
+  );
+  return (r.rowCount ?? 0) > 0;
+}
+
+export async function unassignStaff(groupId: string, userId: string): Promise<boolean> {
+  await ensureMigrated();
+  const r = await db.query(
+    `DELETE FROM wiserfiles_group_staff WHERE group_id = $1 AND user_id = $2`,
+    [groupId, userId]
+  );
+  return (r.rowCount ?? 0) > 0;
 }
 
 export async function joinGroup(
   userId: string,
   groupId: string,
+  courseId: number | null,
   details: JoinDetails
 ): Promise<{ ok: boolean; error?: string; members?: number }> {
   await ensureGroupsSeeded();
-  const group = await db.query(`SELECT id, capacity FROM wiserfiles_groups WHERE id = $1`, [groupId]);
+  const group = await db.query(`SELECT id, capacity, course_id FROM wiserfiles_groups WHERE id = $1`, [groupId]);
   if (group.rows.length === 0) return { ok: false, error: "Unknown group." };
+  if (courseId != null && (group.rows[0].course_id == null || Number(group.rows[0].course_id) !== courseId)) {
+    return { ok: false, error: "Unknown group." };
+  }
   const capacity = group.rows[0].capacity as number;
 
   const name = details.name.trim();
@@ -164,21 +251,30 @@ async function migrateMarksBetweenGroups(studentNumber: string, fromGroupId: str
 export async function switchGroup(
   userId: string,
   fromGroupId: string,
-  toGroupId: string
+  toGroupId: string,
+  courseId: number | null = null
 ): Promise<{ ok: boolean; error?: string }> {
   await ensureGroupsSeeded();
   if (fromGroupId === toGroupId) return { ok: false, error: "You are already in that group." };
 
   const from = await db.query(
-    `SELECT name, surname, programme, student_id FROM wiserfiles_group_members
-     WHERE user_id = $1 AND group_id = $2`,
+    `SELECT m.name, m.surname, m.programme, m.student_id, g.course_id
+     FROM wiserfiles_group_members m
+     JOIN wiserfiles_groups g ON g.id = m.group_id
+     WHERE m.user_id = $1 AND m.group_id = $2`,
     [userId, fromGroupId]
   );
   if (from.rows.length === 0) return { ok: false, error: "You are not a member of that group." };
+  if (courseId != null && (from.rows[0].course_id == null || Number(from.rows[0].course_id) !== courseId)) {
+    return { ok: false, error: "You are not a member of that group." };
+  }
   const member = from.rows[0];
 
-  const to = await db.query(`SELECT capacity FROM wiserfiles_groups WHERE id = $1`, [toGroupId]);
+  const to = await db.query(`SELECT capacity, course_id FROM wiserfiles_groups WHERE id = $1`, [toGroupId]);
   if (to.rows.length === 0) return { ok: false, error: "Unknown target group." };
+  if (courseId != null && (to.rows[0].course_id == null || Number(to.rows[0].course_id) !== courseId)) {
+    return { ok: false, error: "Unknown target group." };
+  }
   const toCount = await countMembers(toGroupId);
   if (toCount >= (to.rows[0].capacity as number)) return { ok: false, error: "That group is full." };
 
@@ -365,6 +461,7 @@ export async function createGroup(fields: {
   sessionCount: number;
   testCount: number;
   examCount: number;
+  courseId: number;
 }): Promise<{ ok: boolean; id?: string; error?: string }> {
   await ensureMigrated();
   const name = fields.name.trim();
@@ -375,11 +472,14 @@ export async function createGroup(fields: {
   const sessionCount = Math.max(0, Math.min(50, Math.round(fields.sessionCount) || 0));
   const testCount = Math.max(0, Math.min(20, Math.round(fields.testCount) || 0));
   const examCount = Math.max(0, Math.min(20, Math.round(fields.examCount) || 0));
-  const sort = await db.query(`SELECT COALESCE(MAX(sort_order), -1)::int + 1 AS n FROM wiserfiles_groups`);
+  const sort = await db.query(
+    `SELECT COALESCE(MAX(sort_order), -1)::int + 1 AS n FROM wiserfiles_groups WHERE course_id = $1`,
+    [fields.courseId]
+  );
   await db.query(
-    `INSERT INTO wiserfiles_groups (id, name, schedule, capacity, session_count, test_count, exam_count, sort_order)
-     VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
-    [id, name, fields.schedule.trim(), capacity, sessionCount, testCount, examCount, sort.rows[0]?.n ?? 0]
+    `INSERT INTO wiserfiles_groups (id, name, schedule, capacity, session_count, test_count, exam_count, sort_order, course_id)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
+    [id, name, fields.schedule.trim(), capacity, sessionCount, testCount, examCount, sort.rows[0]?.n ?? 0, fields.courseId]
   );
   return { ok: true, id };
 }

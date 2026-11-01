@@ -1,5 +1,6 @@
 import { db, ensureMigrated } from "@/lib/db";
 import { clerkClient } from "@clerk/nextjs/server";
+import { createClerkClient } from "@clerk/backend";
 
 export async function ensureUserRolesTable() {
   await ensureMigrated();
@@ -109,6 +110,33 @@ export async function isCohortLecturer(userId: string, cohortId: number): Promis
     [cohortId, userId]
   );
   return enr.rows.length > 0;
+}
+
+/** Resolve a Clerk user id from a verified-agnostic email address. Used by the
+ *  group staff assignment flow so teachers can add staff by email, not by a
+ *  raw Clerk id. Returns null when no user matches or the lookup fails. */
+export async function resolveUserIdByEmail(email: string): Promise<string | null> {
+  try {
+    const client = createClerkClient({ secretKey: process.env.CLERK_SECRET_KEY || "" });
+    const res = await client.users.getUserList({ emailAddress: [email.trim().toLowerCase()] });
+    const list = Array.isArray(res) ? res : res?.data;
+    if (!Array.isArray(list) || list.length === 0) return null;
+    return list[0].id;
+  } catch {
+    return null;
+  }
+}
+
+/** Best-effort email for a Clerk user id, falling back to the raw id so staff
+ *  listings never blank out when Clerk is unreachable. */
+export async function getEmailForUser(userId: string): Promise<string> {
+  try {
+    const client = createClerkClient({ secretKey: process.env.CLERK_SECRET_KEY || "" });
+    const user = await client.users.getUser(userId);
+    return user.emailAddresses[0]?.emailAddress || userId;
+  } catch {
+    return userId;
+  }
 }
 
 // Per-course teacher: an admin/lecturer, the course owner, or someone enrolled
