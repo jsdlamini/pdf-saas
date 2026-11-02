@@ -4,6 +4,14 @@ import { useCallback, useEffect, useState } from "react";
 import { useAuth } from "@clerk/nextjs";
 import dynamic from "next/dynamic";
 import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
 import {
   Dialog,
   DialogContent,
@@ -53,6 +61,7 @@ export default function CoursePanel() {
   const [joinOpen, setJoinOpen] = useState(false);
   const [joinChoiceOpen, setJoinChoiceOpen] = useState(false);
   const [revealed, setRevealed] = useState<Set<number>>(new Set());
+  const [dashboardCourse, setDashboardCourse] = useState<Course | null>(null);
 
   const [formCode, setFormCode] = useState("");
   const [formTitle, setFormTitle] = useState("");
@@ -288,154 +297,184 @@ export default function CoursePanel() {
 
   if (!isLoaded) {
     return (
-      <section style={{ border: "1px solid var(--border-color, #334155)", borderRadius: 12, background: "var(--bg-secondary, #131620)", padding: 16 }}>
-        <p style={{ fontSize: 13, color: "var(--text-muted, #64748b)" }}>Loading courses…</p>
-      </section>
+      <Card className="p-4">
+        <p className="text-sm text-muted-foreground">Loading courses…</p>
+      </Card>
     );
   }
 
   const headerActions = (
-    <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+    <div className="flex flex-wrap items-center gap-2">
       {canCreate ? (
-        <button type="button" className="studio-btn studio-btn-primary" onClick={() => { setFormError(""); setCreateOpen(true); }}>
+        <Button onClick={() => { setFormError(""); setCreateOpen(true); }}>
           Create course
-        </button>
+        </Button>
       ) : null}
-      <button type="button" className="studio-btn studio-btn-secondary" onClick={() => { setJoinError(""); setJoinChoiceOpen(true); }}>
+      <Button variant="outline" onClick={() => { setJoinError(""); setJoinChoiceOpen(true); }}>
         Join with a course
-      </button>
+      </Button>
     </div>
   );
 
   return (
-    <section style={{ border: "1px solid var(--border-color, #334155)", borderRadius: 12, background: "var(--bg-secondary, #131620)", overflow: "hidden" }}>
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, padding: "14px 16px", borderBottom: "1px solid var(--border-color, #334155)", background: "linear-gradient(120deg, var(--course-accent-tint, rgba(245,158,11,0.14)), transparent)" }}>
+    <Card className="overflow-hidden">
+      <CardHeader className="flex-row items-center justify-between gap-3 border-b border-input px-4 py-3">
         <div>
-          <h2 style={{ fontSize: 15, fontWeight: 700, color: "var(--text-primary, #e2e8f0)", margin: 0 }}>My Courses</h2>
-          <p style={{ fontSize: 11.5, color: "var(--text-muted, #64748b)", margin: "2px 0 0" }}>
+          <CardTitle>My Courses</CardTitle>
+          <CardDescription className="mt-1 text-xs">
             {courses === null ? "" : `${courses.length} course${courses.length === 1 ? "" : "s"}${canCreate ? " · teaching" : ""}`}
-          </p>
+          </CardDescription>
         </div>
         {isSignedIn ? headerActions : null}
-      </div>
+      </CardHeader>
 
-      <div style={{ padding: 12 }}>
+      <CardContent className="p-3">
         {!isSignedIn ? (
-          <p style={{ fontSize: 12.5, color: "var(--text-muted, #64748b)", padding: "8px 4px" }}>Sign in to see your courses.</p>
+          <p className="px-1 py-2 text-xs text-muted-foreground">Sign in to see your courses.</p>
         ) : error ? (
-          <p style={{ fontSize: 12.5, color: "var(--danger, #f87171)", padding: "8px 4px" }}>{error}</p>
+          <p className="px-1 py-2 text-xs font-semibold text-destructive">{error}</p>
         ) : courses === null ? (
-          <p style={{ fontSize: 12.5, color: "var(--text-muted, #64748b)", padding: "8px 4px" }}>Loading courses…</p>
+          <p className="px-1 py-2 text-xs text-muted-foreground">Loading courses…</p>
         ) : courses && courses.length === 0 ? (
-          <div style={{ textAlign: "center", padding: "20px 12px" }}>
-            <p style={{ fontSize: 13, fontWeight: 600, color: "var(--text-primary, #e2e8f0)", marginBottom: 4 }}>No courses yet</p>
-            <p style={{ fontSize: 12, color: "var(--text-muted, #64748b)", marginBottom: 12 }}>
+          <div className="flex flex-col items-center px-3 py-5 text-center">
+            <p className="text-sm font-semibold">No courses yet</p>
+            <p className="mt-1 mb-3 text-xs text-muted-foreground">
               {canCreate ? "Create a course and share its join link, or join one with a code." : "Join a course with the link or code your teacher shared."}
             </p>
-            <div style={{ display: "flex", justifyContent: "center", gap: 8 }}>{headerActions}</div>
+            {headerActions}
           </div>
         ) : (
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(280px, 1fr))", gap: 12 }}>
+          <div className="grid grid-cols-[repeat(auto-fill,minmax(280px,1fr))] gap-3">
             {(courses || []).map((course) => {
               const isRevealed = revealed.has(course.id);
               return (
-                <article key={course.id} className="studio-course-card" style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-                  <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 8 }}>
-                    <div style={{ minWidth: 0 }}>
-                      <p style={{ fontSize: 13.5, fontWeight: 700, color: "var(--text-primary, #e2e8f0)", margin: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{course.title}</p>
-                      <p style={{ fontSize: 11.5, color: "var(--text-muted, #64748b)", margin: "2px 0 0" }}>
-                        {course.code}{course.institution ? ` · ${course.institution}` : ""}
-                      </p>
+                <Card key={course.id} className="justify-between gap-3">
+                  <CardHeader>
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="min-w-0">
+                        <CardTitle className="truncate">{course.title}</CardTitle>
+                        <CardDescription className="mt-1 truncate text-xs">
+                          {course.code}{course.institution ? ` · ${course.institution}` : ""}
+                        </CardDescription>
+                      </div>
+                      <Badge variant={course.is_teacher ? "secondary" : "outline"} className="shrink-0">
+                        {course.is_teacher ? "Teaching" : "Enrolled"}
+                      </Badge>
                     </div>
-                    <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 6, flexShrink: 0 }}>
-                      {course.is_teacher ? (
-                        <span style={{ fontSize: 10, fontWeight: 700, padding: "2px 8px", borderRadius: 999, background: "var(--course-accent-tint, rgba(245,158,11,0.15))", color: "var(--course-accent, #f59e0b)" }}>Teaching</span>
-                      ) : (
-                        <span style={{ fontSize: 10, fontWeight: 700, padding: "2px 8px", borderRadius: 999, background: "rgba(129,140,248,0.15)", color: "#818cf8" }}>Enrolled</span>
-                      )}
-                      {course.is_teacher ? (
-                        <div style={{ display: "flex", gap: 4 }}>
-                          <button type="button" onClick={() => openEdit(course)} className="studio-btn studio-btn-ghost" style={{ height: "auto", padding: "4px 8px", fontSize: 11 }} title="Edit course">
-                            <svg viewBox="0 0 20 20" style={{ width: 12, height: 12 }} fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-                              <path d="M4 13.5V16h2.5L16 6.5 13.5 4 4 13.5z" />
-                            </svg>
-                            Edit
-                          </button>
-                          <button type="button" onClick={() => deleteCourse(course)} className="studio-btn studio-btn-danger" style={{ height: "auto", padding: "4px 8px", fontSize: 11 }} title="Delete course">
-                            <svg viewBox="0 0 20 20" style={{ width: 12, height: 12 }} fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-                              <path d="M3 6h14M8 6V4h4v2M6 6l1 12h6l1-12" />
-                            </svg>
-                            Delete
-                          </button>
-                        </div>
-                      ) : null}
-                    </div>
-                  </div>
+                  </CardHeader>
 
-                  <p style={{ fontSize: 11, color: "var(--text-muted, #64748b)", margin: 0 }}>
-                    {course.member_count} member{course.member_count === 1 ? "" : "s"}
-                    {course.my_role === "lecturer" ? " · lecturer" : course.my_role === "assistant" ? " · assistant" : ""}
-                  </p>
+                  <CardContent className="space-y-4">
+                    <p className="text-xs text-muted-foreground">
+                      {course.member_count} member{course.member_count === 1 ? "" : "s"}
+                      {course.my_role === "lecturer" ? " · lecturer" : course.my_role === "assistant" ? " · assistant" : ""}
+                    </p>
 
-                  {course.is_teacher ? (
-                    <div style={{ borderTop: "1px solid var(--border-color, #334155)", paddingTop: 8, display: "flex", flexDirection: "column", gap: 6 }}>
-                      {course.join_code ? (
-                        <>
-                          <div style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
-                            <button
-                              type="button"
-                              onClick={() => toggleReveal(course.id)}
-                              className="studio-btn studio-btn-yellow"
-                              style={{ height: "auto", padding: "4px 10px", fontSize: 11 }}
-                            >
-                              {isRevealed ? "Hide link" : "Reveal link"}
-                            </button>
+                    {course.is_teacher ? (
+                      <div className="space-y-2 border-t border-input pt-3">
+                        {course.join_code ? (
+                          <>
+                            <div className="flex flex-wrap items-center gap-2">
+                              <Button
+                                variant="warning"
+                                size="sm"
+                                onClick={() => toggleReveal(course.id)}
+                              >
+                                {isRevealed ? "Hide link" : "Reveal link"}
+                              </Button>
+                              {isRevealed ? (
+                                <code className="text-xs font-semibold">{course.join_code}</code>
+                              ) : null}
+                              {isRevealed ? (
+                                <Button variant="warning" size="sm" onClick={() => copyLink(course.join_code!)}>
+                                  Copy
+                                </Button>
+                              ) : null}
+                            </div>
                             {isRevealed ? (
-                              <span style={{ fontFamily: "monospace", fontSize: 11.5, color: "var(--text-primary, #e2e8f0)" }}>{course.join_code}</span>
-                            ) : null}
-                            {isRevealed ? (
-                              <button type="button" onClick={() => copyLink(course.join_code!)} className="studio-btn studio-btn-yellow" style={{ height: "auto", padding: "4px 10px", fontSize: 11 }}>Copy</button>
-                            ) : null}
-                          </div>
-                          {isRevealed ? (
-                            <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                              <QRCodeSVG value={joinUrl(course.join_code!)} size={76} bgColor="#ffffff" fgColor="#000000" title="Scan to join" />
-                              <div style={{ fontSize: 10.5, color: "var(--text-muted, #64748b)", lineHeight: 1.5 }}>
-                                Scan or share the link to enrol students.
-                                <div style={{ marginTop: 4, display: "flex", gap: 6 }}>
-                                  <button type="button" className="studio-btn studio-btn-secondary" style={{ height: "auto", padding: "3px 8px", fontSize: 11 }} onClick={() => regenerateLink(course)}>Regenerate link</button>
-                                  <button type="button" className="studio-btn studio-btn-secondary" style={{ height: "auto", padding: "3px 8px", fontSize: 11 }} onClick={() => disableLink(course)}>Disable link</button>
+                              <div className="flex items-center gap-3">
+                                <QRCodeSVG value={joinUrl(course.join_code!)} size={76} bgColor="#ffffff" fgColor="#000000" title="Scan to join" className="shrink-0 rounded border border-input" />
+                                <div className="space-y-2 text-xs text-muted-foreground">
+                                  <p className="leading-relaxed">Scan or share the link to enrol students.</p>
+                                  <div className="flex gap-2">
+                                    <Button variant="outline" size="sm" onClick={() => regenerateLink(course)}>
+                                      Regenerate link
+                                    </Button>
+                                    <Button variant="outline" size="sm" onClick={() => disableLink(course)}>
+                                      Disable link
+                                    </Button>
+                                  </div>
                                 </div>
                               </div>
-                            </div>
-                          ) : null}
-                        </>
-                      ) : (
-                        <div style={{ fontSize: 11, color: "var(--text-muted, #64748b)" }}>
-                          Join link disabled.
-                          <div style={{ marginTop: 6, display: "flex", gap: 6 }}>
-                            <button type="button" className="studio-btn studio-btn-yellow" style={{ height: "auto", padding: "3px 8px", fontSize: 11 }} onClick={() => regenerateLink(course)}>Generate link</button>
+                            ) : null}
+                          </>
+                        ) : (
+                          <div className="space-y-2 text-xs text-muted-foreground">
+                            <p>Join link disabled.</p>
+                            <Button variant="warning" size="sm" onClick={() => regenerateLink(course)}>
+                              Generate link
+                            </Button>
                           </div>
-                        </div>
-                      )}
+                        )}
+                      </div>
+                    ) : null}
+
+                    <div className="flex flex-wrap items-center gap-2 border-t border-input pt-3">
+                      <Button variant="outline" size="sm" onClick={() => setDashboardCourse(course)}>
+                        Open course
+                      </Button>
+                      {course.is_teacher ? (
+                        <>
+                          <Button variant="ghost" size="sm" onClick={() => openEdit(course)}>
+                            Edit
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="text-destructive hover:bg-destructive/10"
+                            onClick={() => deleteCourse(course)}
+                          >
+                            Delete
+                          </Button>
+                        </>
+                      ) : null}
                     </div>
-                  ) : null}
-
-                  <CourseMaterialsPanel courseId={course.id} isTeacher={course.is_teacher} />
-
-                  <CourseStarterProjectsPanel courseId={course.id} isTeacher={course.is_teacher} />
-
-                  {course.code === "CSC111" ? (
-                    <div style={{ borderTop: "1px solid var(--border-color, #334155)", paddingTop: 8 }}>
-                      <CourseGroupsPanel courseId={course.id} courseCode={course.code} />
-                    </div>
-                  ) : null}
-                </article>
+                  </CardContent>
+                </Card>
               );
             })}
           </div>
         )}
-      </div>
+      </CardContent>
+
+      {/* Course dashboard */}
+      <Dialog open={dashboardCourse !== null} onOpenChange={(open) => { if (!open) setDashboardCourse(null); }}>
+        <DialogContent className="studio-dark max-h-[85vh] overflow-y-auto sm:max-w-2xl">
+          <DialogHeader>
+            <DialogTitle>{dashboardCourse?.title}</DialogTitle>
+            <DialogDescription>
+              {dashboardCourse ? (
+                <>
+                  {dashboardCourse.code}{dashboardCourse.institution ? ` · ${dashboardCourse.institution}` : ""}
+                  {" · "}
+                  {dashboardCourse.member_count} member{dashboardCourse.member_count === 1 ? "" : "s"}
+                </>
+              ) : null}
+            </DialogDescription>
+          </DialogHeader>
+          {dashboardCourse ? (
+            <div className="space-y-6">
+              <CourseMaterialsPanel courseId={dashboardCourse.id} isTeacher={dashboardCourse.is_teacher} />
+              <CourseStarterProjectsPanel courseId={dashboardCourse.id} isTeacher={dashboardCourse.is_teacher} />
+              {dashboardCourse.code === "CSC111" ? (
+                <CourseGroupsPanel courseId={dashboardCourse.id} courseCode={dashboardCourse.code} />
+              ) : null}
+            </div>
+          ) : null}
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setDashboardCourse(null)}>Close</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {/* Join choice dialog */}
       <Dialog open={joinChoiceOpen} onOpenChange={setJoinChoiceOpen}>
@@ -447,22 +486,20 @@ export default function CoursePanel() {
           <div className="space-y-3">
             <button
               type="button"
-              className="studio-btn studio-btn-primary"
-              style={{ width: "100%", height: "auto", display: "flex", flexDirection: "column", alignItems: "flex-start", gap: 3, padding: "12px", whiteSpace: "normal", textAlign: "left" }}
+              className="flex w-full flex-col items-start gap-1 rounded-lg border border-input bg-card p-3 text-left text-sm font-medium transition-colors hover:bg-muted"
               onClick={() => { setJoinChoiceOpen(false); setJoinError(""); setJoinOpen(true); }}
             >
-              <span style={{ fontSize: 13, fontWeight: 600 }}>Join as a student</span>
-              <span style={{ fontSize: 11.5, fontWeight: 400, opacity: 0.8 }}>Enter a join code from your teacher. You can join multiple courses.</span>
+              <span className="text-sm font-semibold">Join as a student</span>
+              <span className="text-xs font-normal text-muted-foreground">Enter a join code from your teacher. You can join multiple courses.</span>
             </button>
             {canCreate ? (
               <button
                 type="button"
-                className="studio-btn studio-btn-secondary"
-                style={{ width: "100%", height: "auto", display: "flex", flexDirection: "column", alignItems: "flex-start", gap: 3, padding: "12px", whiteSpace: "normal", textAlign: "left" }}
+                className="flex w-full flex-col items-start gap-1 rounded-lg border border-input bg-card p-3 text-left text-sm font-medium transition-colors hover:bg-muted"
                 onClick={() => { setJoinChoiceOpen(false); setFormError(""); setCreateOpen(true); }}
               >
-                <span style={{ fontSize: 13, fontWeight: 600 }}>I am a teacher</span>
-                <span style={{ fontSize: 11.5, fontWeight: 400, opacity: 0.8 }}>Create a course and generate its join link to share with students.</span>
+                <span className="text-sm font-semibold">I am a teacher</span>
+                <span className="text-xs font-normal text-muted-foreground">Create a course and generate its join link to share with students.</span>
               </button>
             ) : null}
           </div>
@@ -492,7 +529,7 @@ export default function CoursePanel() {
               <Label htmlFor="course-institution">Institution (optional)</Label>
               <Input id="course-institution" value={formInstitution} onChange={(e) => setFormInstitution(e.target.value)} placeholder="e.g. UNESWA" />
             </div>
-            {formError ? <p className="text-xs font-semibold text-[var(--danger,#ef4444)]">{formError}</p> : null}
+            {formError ? <p className="text-xs font-semibold text-destructive">{formError}</p> : null}
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setCreateOpen(false)}>Cancel</Button>
@@ -521,7 +558,7 @@ export default function CoursePanel() {
               <Label htmlFor="edit-course-institution">Institution (optional)</Label>
               <Input id="edit-course-institution" value={editInstitution} onChange={(e) => setEditInstitution(e.target.value)} placeholder="e.g. UNESWA" />
             </div>
-            {editError ? <p className="text-xs font-semibold text-[var(--danger,#ef4444)]">{editError}</p> : null}
+            {editError ? <p className="text-xs font-semibold text-destructive">{editError}</p> : null}
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => { setEditingCourse(null); setEditError(""); }}>Cancel</Button>
@@ -542,7 +579,7 @@ export default function CoursePanel() {
               <Label htmlFor="join-code">Join code</Label>
               <Input id="join-code" value={joinCodeInput} onChange={(e) => { setJoinCodeInput(e.target.value); setJoinError(""); }} placeholder="e.g. A1B2C3D4" className="uppercase" autoFocus />
             </div>
-            {joinError ? <p className="text-xs font-semibold text-[var(--danger,#ef4444)]">{joinError}</p> : null}
+            {joinError ? <p className="text-xs font-semibold text-destructive">{joinError}</p> : null}
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setJoinOpen(false)}>Cancel</Button>
@@ -550,6 +587,6 @@ export default function CoursePanel() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
-    </section>
+    </Card>
   );
 }

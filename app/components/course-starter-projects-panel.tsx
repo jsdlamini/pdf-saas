@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import { Button } from "@/components/ui/button";
 import { showToast } from "@/app/components/toast";
 
 type StarterProject = {
@@ -78,60 +79,54 @@ export default function CourseStarterProjectsPanel({
   }
 
   return (
-    <div style={{ borderTop: "1px solid var(--border-color, #334155)", paddingTop: 8, display: "flex", flexDirection: "column", gap: 6 }}>
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8 }}>
-        <p style={{ fontSize: 10.5, fontWeight: 700, color: "var(--text-muted, #64748b)", margin: 0, textTransform: "uppercase", letterSpacing: "0.04em" }}>
+    <div className="space-y-3">
+      <div className="flex items-center justify-between gap-3">
+        <p className="text-xs font-bold tracking-wide text-muted-foreground uppercase">
           Starter projects{projects ? ` · ${projects.length}` : ""}
         </p>
         {isTeacher ? (
-          <button type="button" className="studio-btn studio-btn-yellow" style={{ height: "auto", padding: "4px 10px", fontSize: 11 }} onClick={addStarter}>
+          <Button size="sm" onClick={addStarter}>
             Add starter project
-          </button>
+          </Button>
         ) : null}
       </div>
 
       {error ? (
-        <p style={{ fontSize: 11.5, color: "var(--danger, #f87171)", margin: 0 }}>{error}</p>
+        <p className="text-xs text-destructive">{error}</p>
       ) : projects === null ? (
-        <p style={{ fontSize: 11.5, color: "var(--text-muted, #64748b)", margin: 0 }}>Loading…</p>
+        <p className="text-xs text-muted-foreground">Loading…</p>
       ) : projects.length === 0 ? (
-        <p style={{ fontSize: 11.5, color: "var(--text-muted, #64748b)", margin: 0 }}>
+        <p className="text-xs text-muted-foreground">
           {isTeacher ? "No starter projects yet — add one for your students." : "No starter projects yet."}
         </p>
       ) : (
-        <ul style={{ listStyle: "none", margin: 0, padding: 0, display: "flex", flexDirection: "column", gap: 4 }}>
+        <ul className="flex flex-col gap-2">
           {projects.map((p) => (
-            <li key={p.id} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8 }}>
+            <li key={p.id} className="flex items-center justify-between gap-3 rounded-lg border border-input bg-card px-3 py-2">
               {isTeacher && p.isOwner ? (
                 <a
                   href={`/research-studio?project=${encodeURIComponent(p.id)}`}
                   onClick={(e) => { e.preventDefault(); openProject(p.id); }}
-                  style={{ fontSize: 12, color: "var(--text-primary, #e2e8f0)", textDecoration: "none", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}
+                  className="truncate text-sm text-foreground hover:underline"
                   title={p.name}
                 >
                   {p.name}
                 </a>
               ) : (
-                <span style={{ fontSize: 12, color: "var(--text-primary, #e2e8f0)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }} title={p.name}>
+                <span className="truncate text-sm text-foreground" title={p.name}>
                   {p.name}
                 </span>
               )}
-              <span style={{ flexShrink: 0, display: "flex", alignItems: "center", gap: 6 }}>
-                <span style={{ fontSize: 10.5, color: "var(--text-muted, #64748b)" }}>{new Date(p.updatedAt).toLocaleDateString()}</span>
+              <span className="flex shrink-0 items-center gap-2">
+                <span className="text-xs text-muted-foreground">{new Date(p.updatedAt).toLocaleDateString()}</span>
                 {isTeacher && p.isOwner ? (
-                  <button type="button" className="studio-btn studio-btn-ghost" style={{ height: "auto", padding: "3px 8px", fontSize: 11 }} onClick={() => openProject(p.id)}>
+                  <Button variant="outline" size="sm" onClick={() => openProject(p.id)}>
                     Open
-                  </button>
+                  </Button>
                 ) : (
-                  <button
-                    type="button"
-                    className="studio-btn studio-btn-primary"
-                    style={{ height: "auto", padding: "3px 8px", fontSize: 11 }}
-                    onClick={() => void forkProject(p)}
-                    disabled={forkBusyId === p.id}
-                  >
+                  <Button size="sm" onClick={() => void forkProject(p)} disabled={forkBusyId === p.id}>
                     {forkBusyId === p.id ? "Copying…" : "Copy to my projects"}
-                  </button>
+                  </Button>
                 )}
               </span>
             </li>

@@ -2,6 +2,10 @@
 
 import { useCallback, useEffect, useState } from "react";
 import dynamic from "next/dynamic";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Badge } from "@/components/ui/badge";
 import { showToast } from "@/app/components/toast";
 
 const ReactMarkdown = dynamic(() => import("react-markdown"), { ssr: false });
@@ -177,82 +181,93 @@ export default function CourseMaterialsPanel({
   }
 
   return (
-    <div style={{ borderTop: "1px solid var(--border-color, #334155)", paddingTop: 8, display: "flex", flexDirection: "column", gap: 8 }}>
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8 }}>
-        <p style={{ fontSize: 10.5, fontWeight: 700, color: "var(--text-muted, #64748b)", margin: 0, textTransform: "uppercase", letterSpacing: "0.04em" }}>
+    <div className="space-y-3">
+      <div className="flex items-center justify-between gap-3">
+        <p className="text-xs font-bold tracking-wide text-muted-foreground uppercase">
           Materials · {materials === null ? "…" : materials.length}
         </p>
         {isTeacher ? (
-          <button
-            type="button"
-            className="studio-btn studio-btn-yellow"
-            style={{ height: "auto", padding: "3px 8px", fontSize: 11 }}
+          <Button
+            variant={formOpen ? "outline" : "default"}
+            size="sm"
             onClick={() => (formOpen ? closeForm() : openAdd())}
           >
             {formOpen ? "Cancel" : "+ Add material"}
-          </button>
+          </Button>
         ) : null}
       </div>
 
       {formOpen && isTeacher ? (
-        <div style={{ border: "1px solid var(--border-color, #334155)", borderRadius: 8, padding: 10, display: "flex", flexDirection: "column", gap: 8, background: "var(--bg-primary, #0f172a)" }}>
-          <div style={{ display: "flex", gap: 6 }}>
+        <div className="space-y-3 rounded-lg border border-input bg-muted/40 p-3">
+          <div className="flex gap-2">
             {KINDS.map((kind) => (
-              <button
+              <Button
                 key={kind}
                 type="button"
+                variant={draftKind === kind ? "default" : "outline"}
+                size="sm"
                 onClick={() => setDraftKind(kind)}
-                className={draftKind === kind ? "studio-btn studio-btn-yellow" : "studio-btn studio-btn-secondary"}
-                style={{ height: "auto", padding: "3px 10px", fontSize: 11 }}
               >
                 {KIND_LABELS[kind]}
-              </button>
+              </Button>
             ))}
           </div>
-          <input
-            value={draftTitle}
-            onChange={(e) => setDraftTitle(e.target.value)}
-            placeholder={draftKind === "note" ? "Title" : draftKind === "link" ? "Link title" : "Video title"}
-            style={{ background: "var(--bg-secondary, #131620)", border: "1px solid var(--border-color, #334155)", borderRadius: 6, color: "var(--text-primary, #e2e8f0)", padding: "6px 8px", fontSize: 12, width: "100%" }}
-          />
+          <div className="space-y-1.5">
+            <Label htmlFor={`material-title-${courseId}`}>
+              {draftKind === "note" ? "Title" : draftKind === "link" ? "Link title" : "Video title"}
+            </Label>
+            <Input
+              id={`material-title-${courseId}`}
+              value={draftTitle}
+              onChange={(e) => setDraftTitle(e.target.value)}
+              placeholder={draftKind === "note" ? "e.g. Week 1 reading notes" : draftKind === "link" ? "e.g. Course handbook" : "e.g. Intro lecture"}
+            />
+          </div>
           {draftKind === "note" ? (
-            <textarea
-              value={draftBody}
-              onChange={(e) => setDraftBody(e.target.value)}
-              placeholder="Write the note in markdown…"
-              rows={4}
-              style={{ background: "var(--bg-secondary, #131620)", border: "1px solid var(--border-color, #334155)", borderRadius: 6, color: "var(--text-primary, #e2e8f0)", padding: "6px 8px", fontSize: 12, width: "100%", resize: "vertical" }}
-            />
+            <div className="space-y-1.5">
+              <Label htmlFor={`material-body-${courseId}`}>Note (markdown)</Label>
+              <textarea
+                id={`material-body-${courseId}`}
+                value={draftBody}
+                onChange={(e) => setDraftBody(e.target.value)}
+                placeholder="Write the note in markdown…"
+                rows={4}
+                className="w-full min-h-24 rounded-lg border border-input bg-transparent px-2.5 py-2 text-sm transition-colors outline-none placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 disabled:pointer-events-none disabled:opacity-50 md:text-sm dark:bg-input/30"
+              />
+            </div>
           ) : (
-            <input
-              value={draftBody}
-              onChange={(e) => setDraftBody(e.target.value)}
-              placeholder={draftKind === "link" ? "https://…" : "YouTube or Vimeo URL (https://…)"}
-              style={{ background: "var(--bg-secondary, #131620)", border: "1px solid var(--border-color, #334155)", borderRadius: 6, color: "var(--text-primary, #e2e8f0)", padding: "6px 8px", fontSize: 12, width: "100%" }}
-            />
+            <div className="space-y-1.5">
+              <Label htmlFor={`material-url-${courseId}`}>URL</Label>
+              <Input
+                id={`material-url-${courseId}`}
+                value={draftBody}
+                onChange={(e) => setDraftBody(e.target.value)}
+                placeholder={draftKind === "link" ? "https://…" : "YouTube or Vimeo URL (https://…)"}
+              />
+            </div>
           )}
-          {formError ? <p style={{ fontSize: 11, fontWeight: 600, color: "var(--danger, #ef4444)", margin: 0 }}>{formError}</p> : null}
-          <div style={{ display: "flex", gap: 6 }}>
-            <button type="button" className="studio-btn studio-btn-primary" style={{ height: "auto", padding: "4px 10px", fontSize: 11 }} onClick={save} disabled={formBusy}>
+          {formError ? <p className="text-xs font-semibold text-destructive">{formError}</p> : null}
+          <div className="flex gap-2">
+            <Button size="sm" onClick={save} disabled={formBusy}>
               {formBusy ? "Saving…" : editingId === null ? "Add material" : "Save changes"}
-            </button>
-            <button type="button" className="studio-btn studio-btn-secondary" style={{ height: "auto", padding: "4px 10px", fontSize: 11 }} onClick={closeForm}>
+            </Button>
+            <Button variant="outline" size="sm" onClick={closeForm}>
               Cancel
-            </button>
+            </Button>
           </div>
         </div>
       ) : null}
 
       {error ? (
-        <p style={{ fontSize: 12, color: "var(--danger, #f87171)", margin: 0 }}>{error}</p>
+        <p className="text-xs text-destructive">{error}</p>
       ) : materials === null ? (
-        <p style={{ fontSize: 12, color: "var(--text-muted, #64748b)", margin: 0 }}>Loading materials…</p>
+        <p className="text-xs text-muted-foreground">Loading materials…</p>
       ) : materials.length === 0 ? (
-        <p style={{ fontSize: 12, color: "var(--text-muted, #64748b)", margin: 0 }}>
+        <p className="text-xs text-muted-foreground">
           {isTeacher ? "No materials yet. Add a note, link, or video for your students." : "No materials yet."}
         </p>
       ) : (
-        <ul style={{ listStyle: "none", margin: 0, padding: 0, display: "flex", flexDirection: "column", gap: 8 }}>
+        <ul className="flex flex-col gap-3">
           {materials.map((material) => (
             <MaterialCard key={material.id} material={material} isTeacher={isTeacher} onEdit={() => openEdit(material)} onDelete={() => remove(material)} />
           ))}
@@ -276,35 +291,31 @@ function MaterialCard({
   const embed = material.kind === "video" ? videoEmbed(material.body) : null;
 
   return (
-    <li style={{ border: "1px solid var(--border-color, #334155)", borderRadius: 8, padding: 10, background: "var(--bg-primary, #0f172a)", display: "flex", flexDirection: "column", gap: 6 }}>
-      <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 8 }}>
-        <div style={{ minWidth: 0 }}>
-          <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-            <span style={{ fontSize: 9.5, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.04em", padding: "1px 6px", borderRadius: 999, background: "rgba(129,140,248,0.15)", color: "#818cf8" }}>
-              {KIND_LABELS[material.kind]}
-            </span>
+    <li className="flex flex-col gap-2 rounded-lg border border-input bg-card p-3">
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0">
+          <div className="flex items-center gap-2">
+            <Badge variant="outline">{KIND_LABELS[material.kind]}</Badge>
             {material.kind === "note" ? (
-              <span style={{ fontSize: 10, color: "var(--text-muted, #64748b)" }}>{new Date(material.updated_at).toLocaleDateString()}</span>
+              <span className="text-xs text-muted-foreground">{new Date(material.updated_at).toLocaleDateString()}</span>
             ) : null}
           </div>
-          <p style={{ fontSize: 12.5, fontWeight: 700, color: "var(--text-primary, #e2e8f0)", margin: "4px 0 0", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-            {material.title}
-          </p>
+          <p className="mt-1.5 truncate text-sm font-semibold">{material.title}</p>
         </div>
         {isTeacher ? (
-          <div style={{ display: "flex", gap: 4, flexShrink: 0 }}>
-            <button type="button" onClick={onEdit} className="studio-btn studio-btn-ghost" style={{ height: "auto", padding: "3px 8px", fontSize: 11 }} title="Edit material">
+          <div className="flex shrink-0 gap-1">
+            <Button variant="ghost" size="sm" onClick={onEdit}>
               Edit
-            </button>
-            <button type="button" onClick={onDelete} className="studio-btn studio-btn-danger" style={{ height: "auto", padding: "3px 8px", fontSize: 11 }} title="Delete material">
+            </Button>
+            <Button variant="ghost" size="sm" className="text-destructive hover:bg-destructive/10" onClick={onDelete}>
               Delete
-            </button>
+            </Button>
           </div>
         ) : null}
       </div>
 
       {material.kind === "note" ? (
-        <div className="challenge-markdown" style={{ fontSize: 12, lineHeight: 1.55, color: "var(--text-primary, #e2e8f0)" }}>
+        <div className="challenge-markdown text-sm leading-relaxed">
           <ReactMarkdown>{material.body || "_No content._"}</ReactMarkdown>
         </div>
       ) : material.kind === "link" ? (
@@ -312,28 +323,28 @@ function MaterialCard({
           href={material.body}
           target="_blank"
           rel="noreferrer"
-          style={{ fontSize: 12, color: "#818cf8", textDecoration: "none", display: "inline-flex", alignItems: "center", gap: 4, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}
+          className="inline-flex items-center gap-1.5 truncate text-sm text-primary hover:underline"
         >
-          <svg viewBox="0 0 20 20" style={{ width: 12, height: 12, flexShrink: 0 }} fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+          <svg viewBox="0 0 20 20" className="size-3.5 shrink-0" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
             <path d="M11 3h6v6M9 11L17 3M14 10v6H4V6h6" />
           </svg>
-          <span>{material.body}</span>
+          <span className="truncate">{material.body}</span>
         </a>
       ) : embed ? (
-        <div style={{ borderRadius: 8, overflow: "hidden", background: "#000", aspectRatio: "16 / 9" }}>
-          <iframe src={embed.src} title={material.title} style={{ width: "100%", height: "100%", border: 0 }} allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowFullScreen />
+        <div className="aspect-video overflow-hidden rounded-lg bg-black">
+          <iframe src={embed.src} title={material.title} className="h-full w-full border-0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowFullScreen />
         </div>
       ) : (
         <a
           href={material.body}
           target="_blank"
           rel="noreferrer"
-          style={{ fontSize: 12, color: "#818cf8", textDecoration: "none", display: "inline-flex", alignItems: "center", gap: 4, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}
+          className="inline-flex items-center gap-1.5 truncate text-sm text-primary hover:underline"
         >
-          <svg viewBox="0 0 20 20" style={{ width: 12, height: 12, flexShrink: 0 }} fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+          <svg viewBox="0 0 20 20" className="size-3.5 shrink-0" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
             <path d="M11 3h6v6M9 11L17 3M14 10v6H4V6h6" />
           </svg>
-          <span>Watch video · {material.body}</span>
+          <span className="truncate">Watch video · {material.body}</span>
         </a>
       )}
     </li>
