@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
+import { PlusIcon, ExternalLinkIcon, CopyIcon } from "lucide-react";
 import { showToast } from "@/app/components/toast";
 
 type StarterProject = {
@@ -86,6 +87,7 @@ export default function CourseStarterProjectsPanel({
         </p>
         {isTeacher ? (
           <Button size="sm" onClick={addStarter}>
+            <PlusIcon aria-hidden="true" />
             Add starter project
           </Button>
         ) : null}
@@ -121,10 +123,12 @@ export default function CourseStarterProjectsPanel({
                 <span className="text-xs text-muted-foreground">{new Date(p.updatedAt).toLocaleDateString()}</span>
                 {isTeacher && p.isOwner ? (
                   <Button variant="outline" size="sm" onClick={() => openProject(p.id)}>
+                    <ExternalLinkIcon aria-hidden="true" />
                     Open
                   </Button>
                 ) : (
                   <Button size="sm" onClick={() => void forkProject(p)} disabled={forkBusyId === p.id}>
+                    <CopyIcon aria-hidden="true" />
                     {forkBusyId === p.id ? "Copying…" : "Copy to my projects"}
                   </Button>
                 )}

@@ -6,6 +6,15 @@ import { useAuth } from "@clerk/nextjs";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import {
+  PlusIcon,
+  LogInIcon,
+  ExternalLinkIcon,
+  PencilIcon,
+  Trash2Icon,
+  UsersIcon,
+  CheckIcon,
+} from "lucide-react";
+import {
   Card,
   CardContent,
   CardDescription,
@@ -38,6 +47,30 @@ type Course = {
   is_teacher: boolean;
   join_code: string | null;
 };
+
+// Course thumbnail palette — derived from the clean "Online Courses Platform"
+// aesthetic: a vivid blue primary plus complementary 500-level accents that stay
+// legible as a card thumbnail strip in both light and dark themes.
+// Reference: https://dribbble.com/shots/15122028-Online-Courses-Platform
+const COURSE_BAND_COLORS = [
+  "#2050f8",
+  "#7c3aed",
+  "#0d9488",
+  "#d97706",
+  "#e11d48",
+  "#0891b2",
+  "#4f46e5",
+  "#ca8a04",
+];
+
+function courseBandColor(course: Course): string {
+  const source = `${course.code}-${course.id}`;
+  let hash = 0;
+  for (let i = 0; i < source.length; i += 1) {
+    hash = (hash * 31 + source.charCodeAt(i)) >>> 0;
+  }
+  return COURSE_BAND_COLORS[hash % COURSE_BAND_COLORS.length];
+}
 
 export default function CoursePanel() {
   const { isLoaded, isSignedIn } = useAuth();
@@ -235,11 +268,13 @@ export default function CoursePanel() {
     <div className="flex flex-wrap items-center gap-2">
       {canCreate ? (
         <Button onClick={() => { setFormError(""); setCreateOpen(true); }}>
+          <PlusIcon aria-hidden="true" />
           Create course
         </Button>
       ) : null}
       <Button variant="outline" onClick={() => { setJoinError(""); setJoinChoiceOpen(true); }}>
-        Join with a course
+        <LogInIcon aria-hidden="true" />
+        Join a course
       </Button>
     </div>
   );
@@ -274,15 +309,32 @@ export default function CoursePanel() {
         ) : (
           <div className="grid grid-cols-[repeat(auto-fill,minmax(280px,1fr))] gap-3">
             {(courses || []).map((course) => {
+              const band = courseBandColor(course);
               return (
-                <Card key={course.id} className="justify-between gap-3">
-                  <CardHeader>
+                <Card key={course.id} className="group justify-between gap-0 overflow-hidden transition-all hover:-translate-y-0.5 hover:shadow-md">
+                  <div
+                    aria-hidden="true"
+                    className="relative h-16 w-full shrink-0 overflow-hidden"
+                    style={{
+                      background: `linear-gradient(120deg, ${band} 0%, color-mix(in srgb, ${band} 55%, #0f172a) 100%)`,
+                    }}
+                  >
+                    <span className="pointer-events-none absolute top-1/2 right-3 -translate-y-1/2 text-4xl font-bold tracking-tight text-white/15">
+                      {course.code.charAt(0).toUpperCase()}
+                    </span>
+                    <span className="absolute bottom-2 left-3 text-[0.65rem] font-bold tracking-[0.18em] text-white/90 uppercase">
+                      {course.code}
+                    </span>
+                  </div>
+                  <CardHeader className="pb-3">
                     <div className="flex items-start justify-between gap-3">
                       <div className="min-w-0">
-                        <CardTitle className="truncate">{course.title}</CardTitle>
-                        <CardDescription className="mt-1 truncate text-xs">
-                          {course.code}{course.institution ? ` · ${course.institution}` : ""}
-                        </CardDescription>
+                        <CardTitle className="truncate leading-snug">{course.title}</CardTitle>
+                        {course.institution ? (
+                          <CardDescription className="mt-1 truncate text-xs">
+                            {course.institution}
+                          </CardDescription>
+                        ) : null}
                       </div>
                       <Badge variant={course.is_teacher ? "secondary" : "outline"} className="shrink-0">
                         {course.is_teacher ? "Teaching" : "Enrolled"}
@@ -290,22 +342,27 @@ export default function CoursePanel() {
                     </div>
                   </CardHeader>
 
-                  <CardContent className="space-y-4">
-                    <p className="text-xs text-muted-foreground">
-                      {course.member_count} member{course.member_count === 1 ? "" : "s"}
-                      {course.my_role === "lecturer" ? " · lecturer" : course.my_role === "assistant" ? " · assistant" : ""}
+                  <CardContent className="flex flex-1 flex-col gap-4 pt-0">
+                    <p className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                      <UsersIcon className="size-3.5" aria-hidden="true" />
+                      <span>
+                        {course.member_count} member{course.member_count === 1 ? "" : "s"}
+                        {course.my_role === "lecturer" ? " · lecturer" : course.my_role === "assistant" ? " · assistant" : ""}
+                      </span>
                     </p>
 
-                    <div className="flex flex-wrap items-center gap-2 border-t border-input pt-3">
+                    <div className="mt-auto flex flex-wrap items-center gap-2 border-t border-input pt-3">
                       <Link
                         href={`/course/${course.id}`}
-                        className={cn(buttonVariants({ variant: "outline", size: "sm" }))}
+                        className={cn(buttonVariants({ variant: "default", size: "sm" }))}
                       >
+                        <ExternalLinkIcon aria-hidden="true" />
                         Open course
                       </Link>
                       {course.is_teacher ? (
                         <>
                           <Button variant="ghost" size="sm" onClick={() => openEdit(course)}>
+                            <PencilIcon aria-hidden="true" />
                             Edit
                           </Button>
                           <Button
@@ -314,6 +371,7 @@ export default function CoursePanel() {
                             className="text-destructive hover:bg-destructive/10"
                             onClick={() => deleteCourse(course)}
                           >
+                            <Trash2Icon aria-hidden="true" />
                             Delete
                           </Button>
                         </>
@@ -331,7 +389,7 @@ export default function CoursePanel() {
       <Dialog open={joinChoiceOpen} onOpenChange={setJoinChoiceOpen}>
         <DialogContent className="sm:max-w-sm">
           <DialogHeader>
-            <DialogTitle>Join with a course</DialogTitle>
+            <DialogTitle>Join a course</DialogTitle>
             <DialogDescription>Choose how you want to continue.</DialogDescription>
           </DialogHeader>
           <div className="space-y-3">
@@ -384,7 +442,10 @@ export default function CoursePanel() {
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setCreateOpen(false)}>Cancel</Button>
-            <Button onClick={createCourse} disabled={formBusy}>{formBusy ? "Creating…" : "Create course"}</Button>
+            <Button onClick={createCourse} disabled={formBusy}>
+              <PlusIcon aria-hidden="true" />
+              {formBusy ? "Creating…" : "Create course"}
+            </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
@@ -413,7 +474,10 @@ export default function CoursePanel() {
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => { setEditingCourse(null); setEditError(""); }}>Cancel</Button>
-            <Button onClick={updateCourse} disabled={editBusy}>{editBusy ? "Saving…" : "Save changes"}</Button>
+            <Button onClick={updateCourse} disabled={editBusy}>
+              <CheckIcon aria-hidden="true" />
+              {editBusy ? "Saving…" : "Save changes"}
+            </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
@@ -434,7 +498,10 @@ export default function CoursePanel() {
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setJoinOpen(false)}>Cancel</Button>
-            <Button onClick={joinCourse} disabled={joinBusy}>{joinBusy ? "Joining…" : "Join course"}</Button>
+            <Button onClick={joinCourse} disabled={joinBusy}>
+              <CheckIcon aria-hidden="true" />
+              {joinBusy ? "Joining…" : "Join course"}
+            </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
