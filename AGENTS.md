@@ -18,6 +18,9 @@ WiserFiles is a Next.js 16 (App Router) + React 19 + TypeScript app that exposes
 
 ## Architecture
 
+### UI component seam (shadcn-style, Base UI preset)
+`components/ui/` is a shadcn-style seam built on `@base-ui/react` (not Radix): `button.tsx`, `dialog.tsx`, `input.tsx`, `label.tsx`, `card.tsx`, `badge.tsx` — all compose via `cn` from `@/lib/utils`. Design tokens map to Tailwind utilities through `@theme inline` in `app/globals.css` (`--color-card: var(--surface)`, `--color-muted: var(--surface-soft)`, etc.). Use `bg-card`/`text-muted-foreground`/`border-input`; there is deliberately **no** `--color-border`, so `border-border` is a no-op — use `border-input` or `border-foreground/10`. `Button` has a `warning` variant (amber) reserved for the course join-link action. The Research Studio wraps its chrome in `.studio-dark` (a variable-scope class, not a colour scheme); dialogs portal to `<body>`, so portal content that relies on `.studio-dark` variables (e.g. `course-groups-panel`) must be re-scoped with a `studio-dark` class inside the dialog.
+
 ### Tool registry is the single source of truth
 `lib/tools.ts` defines `TOOL_ITEMS`, an array of `{ slug, name, description, category, runtime }`. Everything is slug-driven and derived from this list:
 - `app/page.tsx` renders the directory grid.
