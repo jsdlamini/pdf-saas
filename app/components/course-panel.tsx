@@ -1,9 +1,9 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import Link from "next/link";
 import { useAuth } from "@clerk/nextjs";
-import dynamic from "next/dynamic";
-import { Button } from "@/components/ui/button";
+import { Button, buttonVariants } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import {
   Card,
@@ -22,12 +22,8 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { cn } from "@/lib/utils";
 import { showToast } from "@/app/components/toast";
-import CourseGroupsPanel from "@/app/components/course-groups-panel";
-import CourseMaterialsPanel from "@/app/components/course-materials-panel";
-import CourseStarterProjectsPanel from "@/app/components/course-starter-projects-panel";
-
-const QRCodeSVG = dynamic(() => import("qrcode.react").then((m) => m.QRCodeSVG), { ssr: false });
 
 type Course = {
   id: number;
@@ -43,14 +39,6 @@ type Course = {
   join_code: string | null;
 };
 
-function siteOrigin() {
-  return (process.env.NEXT_PUBLIC_SITE_URL || (typeof window !== "undefined" ? window.location.origin : "")).replace(/\/$/, "");
-}
-
-function joinUrl(code: string) {
-  return `${siteOrigin()}/join?code=${encodeURIComponent(code)}`;
-}
-
 export default function CoursePanel() {
   const { isLoaded, isSignedIn } = useAuth();
   const [courses, setCourses] = useState<Course[] | null>(null);
@@ -60,8 +48,6 @@ export default function CoursePanel() {
   const [createOpen, setCreateOpen] = useState(false);
   const [joinOpen, setJoinOpen] = useState(false);
   const [joinChoiceOpen, setJoinChoiceOpen] = useState(false);
-  const [revealed, setRevealed] = useState<Set<number>>(new Set());
-  const [dashboardCourse, setDashboardCourse] = useState<Course | null>(null);
 
   const [formCode, setFormCode] = useState("");
   const [formTitle, setFormTitle] = useState("");
@@ -167,46 +153,6 @@ export default function CoursePanel() {
     }
   }
 
-  async function regenerateLink(course: Course) {
-    if (!window.confirm(`Regenerate the join link for "${course.title}"? The old link will stop working, but existing members stay enrolled.`)) return;
-    try {
-      const res = await fetch("/api/courses", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ action: "regenerate-join-code", courseId: course.id }),
-      });
-      const json = await res.json().catch(() => null);
-      if (!res.ok) {
-        showToast(json?.error || "Could not regenerate the link.", "error");
-        return;
-      }
-      showToast("Join link regenerated", "success");
-      await load();
-    } catch {
-      showToast("Could not regenerate the link.", "error");
-    }
-  }
-
-  async function disableLink(course: Course) {
-    if (!window.confirm(`Disable the join link for "${course.title}"? No one new will be able to join until you regenerate it.`)) return;
-    try {
-      const res = await fetch("/api/courses", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ action: "revoke-join", courseId: course.id }),
-      });
-      const json = await res.json().catch(() => null);
-      if (!res.ok) {
-        showToast(json?.error || "Could not disable the link.", "error");
-        return;
-      }
-      showToast("Join link disabled", "success");
-      await load();
-    } catch {
-      showToast("Could not disable the link.", "error");
-    }
-  }
-
   function openEdit(course: Course) {
     setEditingCourse(course);
     setEditCode(course.code);
@@ -277,24 +223,6 @@ export default function CoursePanel() {
     }
   }
 
-  function toggleReveal(id: number) {
-    setRevealed((prev) => {
-      const next = new Set(prev);
-      if (next.has(id)) next.delete(id);
-      else next.add(id);
-      return next;
-    });
-  }
-
-  async function copyLink(code: string) {
-    try {
-      await navigator.clipboard.writeText(joinUrl(code));
-      showToast("Join link copied", "success");
-    } catch {
-      showToast("Could not copy the link.", "error");
-    }
-  }
-
   if (!isLoaded) {
     return (
       <Card className="p-4">
@@ -346,7 +274,6 @@ export default function CoursePanel() {
         ) : (
           <div className="grid grid-cols-[repeat(auto-fill,minmax(280px,1fr))] gap-3">
             {(courses || []).map((course) => {
-              const isRevealed = revealed.has(course.id);
               return (
                 <Card key={course.id} className="justify-between gap-3">
                   <CardHeader>
@@ -369,59 +296,13 @@ export default function CoursePanel() {
                       {course.my_role === "lecturer" ? " · lecturer" : course.my_role === "assistant" ? " · assistant" : ""}
                     </p>
 
-                    {course.is_teacher ? (
-                      <div className="space-y-2 border-t border-input pt-3">
-                        {course.join_code ? (
-                          <>
-                            <div className="flex flex-wrap items-center gap-2">
-                              <Button
-                                variant="warning"
-                                size="sm"
-                                onClick={() => toggleReveal(course.id)}
-                              >
-                                {isRevealed ? "Hide link" : "Reveal link"}
-                              </Button>
-                              {isRevealed ? (
-                                <code className="text-xs font-semibold">{course.join_code}</code>
-                              ) : null}
-                              {isRevealed ? (
-                                <Button variant="warning" size="sm" onClick={() => copyLink(course.join_code!)}>
-                                  Copy
-                                </Button>
-                              ) : null}
-                            </div>
-                            {isRevealed ? (
-                              <div className="flex items-center gap-3">
-                                <QRCodeSVG value={joinUrl(course.join_code!)} size={76} bgColor="#ffffff" fgColor="#000000" title="Scan to join" className="shrink-0 rounded border border-input" />
-                                <div className="space-y-2 text-xs text-muted-foreground">
-                                  <p className="leading-relaxed">Scan or share the link to enrol students.</p>
-                                  <div className="flex gap-2">
-                                    <Button variant="outline" size="sm" onClick={() => regenerateLink(course)}>
-                                      Regenerate link
-                                    </Button>
-                                    <Button variant="outline" size="sm" onClick={() => disableLink(course)}>
-                                      Disable link
-                                    </Button>
-                                  </div>
-                                </div>
-                              </div>
-                            ) : null}
-                          </>
-                        ) : (
-                          <div className="space-y-2 text-xs text-muted-foreground">
-                            <p>Join link disabled.</p>
-                            <Button variant="warning" size="sm" onClick={() => regenerateLink(course)}>
-                              Generate link
-                            </Button>
-                          </div>
-                        )}
-                      </div>
-                    ) : null}
-
                     <div className="flex flex-wrap items-center gap-2 border-t border-input pt-3">
-                      <Button variant="outline" size="sm" onClick={() => setDashboardCourse(course)}>
+                      <Link
+                        href={`/course/${course.id}`}
+                        className={cn(buttonVariants({ variant: "outline", size: "sm" }))}
+                      >
                         Open course
-                      </Button>
+                      </Link>
                       {course.is_teacher ? (
                         <>
                           <Button variant="ghost" size="sm" onClick={() => openEdit(course)}>
@@ -445,36 +326,6 @@ export default function CoursePanel() {
           </div>
         )}
       </CardContent>
-
-      {/* Course dashboard */}
-      <Dialog open={dashboardCourse !== null} onOpenChange={(open) => { if (!open) setDashboardCourse(null); }}>
-        <DialogContent className="studio-dark max-h-[85vh] overflow-y-auto sm:max-w-2xl">
-          <DialogHeader>
-            <DialogTitle>{dashboardCourse?.title}</DialogTitle>
-            <DialogDescription>
-              {dashboardCourse ? (
-                <>
-                  {dashboardCourse.code}{dashboardCourse.institution ? ` · ${dashboardCourse.institution}` : ""}
-                  {" · "}
-                  {dashboardCourse.member_count} member{dashboardCourse.member_count === 1 ? "" : "s"}
-                </>
-              ) : null}
-            </DialogDescription>
-          </DialogHeader>
-          {dashboardCourse ? (
-            <div className="space-y-6">
-              <CourseMaterialsPanel courseId={dashboardCourse.id} isTeacher={dashboardCourse.is_teacher} />
-              <CourseStarterProjectsPanel courseId={dashboardCourse.id} isTeacher={dashboardCourse.is_teacher} />
-              {dashboardCourse.code === "CSC111" ? (
-                <CourseGroupsPanel courseId={dashboardCourse.id} courseCode={dashboardCourse.code} />
-              ) : null}
-            </div>
-          ) : null}
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setDashboardCourse(null)}>Close</Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
 
       {/* Join choice dialog */}
       <Dialog open={joinChoiceOpen} onOpenChange={setJoinChoiceOpen}>
