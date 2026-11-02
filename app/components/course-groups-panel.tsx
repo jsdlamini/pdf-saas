@@ -14,6 +14,22 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { showToast } from "@/app/components/toast";
+import {
+  UsersIcon,
+  ClipboardListIcon,
+  FileTextIcon,
+  FileSpreadsheetIcon,
+  PencilIcon,
+  Trash2Icon,
+  XIcon,
+  LogInIcon,
+  RefreshCwIcon,
+  BarChart3Icon,
+  ArrowRightLeftIcon,
+  CheckIcon,
+  UserPlusIcon,
+  PlusIcon,
+} from "lucide-react";
 import { CLASS_ASSESS_GROUP, VALID_PROGRAMMES } from "@/lib/groups";
 
 type GroupItem = {
@@ -583,6 +599,7 @@ export default function CourseGroupsPanel({ courseId, courseCode }: { courseId: 
         style={{ height: "auto", padding: "4px 10px", fontSize: 11 }}
         title={`Practical groups for ${courseCode}`}
       >
+        <UsersIcon size={14} aria-hidden="true" />
         Practical groups
       </button>
 
@@ -606,6 +623,7 @@ export default function CourseGroupsPanel({ courseId, courseCode }: { courseId: 
                     style={{ background: "linear-gradient(135deg,#9333ea,#d946ef)", color: "#fff", border: "none", fontWeight: 700, height: 30, fontSize: 11, padding: "0 10px" }}
                     title="Assess all students across every group in this course"
                   >
+                    <ClipboardListIcon size={14} aria-hidden="true" />
                     Assess whole class
                   </button>
                 ) : null}
@@ -620,9 +638,11 @@ export default function CourseGroupsPanel({ courseId, courseCode }: { courseId: 
                 {isAdmin ? (
                   <>
                     <a href={`/api/groups/pdf?group=all&courseId=${courseId}`} download className="studio-btn studio-btn-ghost" style={{ height: 30, fontSize: 11, padding: "0 10px", textDecoration: "none" }} title="Download all students with marks (PDF)">
+                      <FileTextIcon size={14} aria-hidden="true" />
                       All students (PDF)
                     </a>
                     <a href={`/api/groups/excel?group=all&courseId=${courseId}`} download className="studio-btn studio-btn-ghost" style={{ height: 30, fontSize: 11, padding: "0 10px", textDecoration: "none" }} title="Download all students with marks (Excel)">
+                      <FileSpreadsheetIcon size={14} aria-hidden="true" />
                       All students (Excel)
                     </a>
                   </>
@@ -644,6 +664,7 @@ export default function CourseGroupsPanel({ courseId, courseCode }: { courseId: 
               <div className="studio-groups-lock">
                 <span>{error}</span>
                 <button type="button" onClick={() => void loadGroups()} className="studio-btn studio-btn-secondary" style={{ height: 28, fontSize: 11, padding: "0 10px" }}>
+                  <RefreshCwIcon size={14} aria-hidden="true" />
                   Retry
                 </button>
               </div>
@@ -670,29 +691,35 @@ export default function CourseGroupsPanel({ courseId, courseCode }: { courseId: 
                       <div className="studio-group-actions">
                         {g.joined ? (
                           <button type="button" onClick={() => openSwitchGroup(g.id)} className="studio-btn studio-btn-ghost" style={{ height: 30, fontSize: 11, padding: "0 12px" }} title="Switch to another group">
+                            <ArrowRightLeftIcon size={14} aria-hidden="true" />
                             Switch
                           </button>
                         ) : !inAnyGroup ? (
                           <button type="button" onClick={() => openJoinGroup(g)} disabled={full || busy === g.id} className="studio-btn studio-btn-primary" style={{ height: 30, fontSize: 11, padding: "0 12px" }}>
+                            <LogInIcon size={14} aria-hidden="true" />
                             {full ? "Full" : busy === g.id ? "Joining…" : "Join group"}
                           </button>
                         ) : null}
                         {g.joined && (!buttons || buttons.scores) ? (
                           <button type="button" onClick={() => void openScores(g.id)} className="studio-btn studio-btn-ghost" style={{ height: 30, fontSize: 11, padding: "0 10px" }} title="View my practical and test scores">
+                            <BarChart3Icon size={14} aria-hidden="true" />
                             My scores
                           </button>
                         ) : null}
                         {g.canAssess ? (
                           <button type="button" onClick={() => void openAssess(g.id)} className="studio-btn studio-btn-ghost" style={{ height: 30, fontSize: 11, padding: "0 10px" }} title="Assess students">
+                            <ClipboardListIcon size={14} aria-hidden="true" />
                             Assess
                           </button>
                         ) : null}
                         {isCourseTeacher ? (
                           <>
                             <button type="button" onClick={() => openStaff(g.id)} className="studio-btn studio-btn-ghost" style={{ height: 30, fontSize: 11, padding: "0 10px" }} title="Assign staff to teach/assess this group">
+                              <UsersIcon size={14} aria-hidden="true" />
                               Staff
                             </button>
                             <button type="button" onClick={() => openEditGroup(g)} className="studio-btn studio-btn-ghost" style={{ height: 30, fontSize: 11, padding: "0 10px" }} title="Edit group">
+                              <PencilIcon size={14} aria-hidden="true" />
                               Edit
                             </button>
                           </>
@@ -700,12 +727,15 @@ export default function CourseGroupsPanel({ courseId, courseCode }: { courseId: 
                         {isAdmin ? (
                           <>
                             <a href={`/api/groups/pdf?group=${g.id}`} download className="studio-btn studio-btn-ghost" style={{ height: 30, fontSize: 11, padding: "0 10px", textDecoration: "none" }} title="Download roster PDF (with marks)">
+                              <FileTextIcon size={14} aria-hidden="true" />
                               PDF
                             </a>
                             <a href={`/api/groups/excel?group=${g.id}`} download className="studio-btn studio-btn-ghost" style={{ height: 30, fontSize: 11, padding: "0 10px", textDecoration: "none" }} title="Download roster Excel (with marks)">
+                              <FileSpreadsheetIcon size={14} aria-hidden="true" />
                               Excel
                             </a>
                             <button type="button" onClick={() => void handleDeleteGroup(g.id)} disabled={busy === g.id} className="studio-btn studio-btn-danger" style={{ height: 30, fontSize: 11, padding: "0 10px" }} title="Delete group">
+                              <Trash2Icon size={14} aria-hidden="true" />
                               {busy === g.id ? "…" : "Delete"}
                             </button>
                           </>
@@ -755,6 +785,7 @@ export default function CourseGroupsPanel({ courseId, courseCode }: { courseId: 
             <DialogFooter>
               <Button variant="outline" onClick={() => setJoinGroupId(null)}>Cancel</Button>
               <Button onClick={() => void submitJoinGroup()} disabled={busy === joinGroupId}>
+                <LogInIcon aria-hidden="true" />
                 {busy === joinGroupId ? "Joining…" : "Join group"}
               </Button>
             </DialogFooter>
@@ -932,6 +963,7 @@ export default function CourseGroupsPanel({ courseId, courseCode }: { courseId: 
                                       style={{ height: 22, fontSize: 10, padding: "0 8px" }}
                                       title="Edit student details"
                                     >
+                                      <PencilIcon size={12} aria-hidden="true" />
                                       Edit
                                     </button>
                                   ) : null}
@@ -943,6 +975,7 @@ export default function CourseGroupsPanel({ courseId, courseCode }: { courseId: 
                                       style={{ height: 22, fontSize: 10, padding: "0 8px" }}
                                       title="Delete student"
                                     >
+                                      <Trash2Icon size={12} aria-hidden="true" />
                                       Delete
                                     </button>
                                   ) : null}
@@ -979,6 +1012,7 @@ export default function CourseGroupsPanel({ courseId, courseCode }: { courseId: 
                     {assessNotice ? <span style={{ fontSize: 11, color: "var(--text-muted, #64748b)" }}>{assessNotice}</span> : null}
                     {assessGroupId !== CLASS_ASSESS_GROUP ? (
                       <a href={`/api/groups/assess/export?group=${assessGroupId}`} download className="studio-btn studio-btn-secondary" style={{ height: 30, fontSize: 11, padding: "0 10px", textDecoration: "none" }}>
+                        <FileSpreadsheetIcon size={14} aria-hidden="true" />
                         Export Excel
                       </a>
                     ) : null}
@@ -1028,7 +1062,10 @@ export default function CourseGroupsPanel({ courseId, courseCode }: { courseId: 
             </div>
             <DialogFooter>
               <Button variant="outline" onClick={() => setEditGroupId(null)}>Cancel</Button>
-              <Button onClick={() => void submitEditGroup()} disabled={busy === editGroupId}>Save</Button>
+              <Button onClick={() => void submitEditGroup()} disabled={busy === editGroupId}>
+                <CheckIcon aria-hidden="true" />
+                Save
+              </Button>
             </DialogFooter>
           </DialogContent>
         </Dialog>
@@ -1071,7 +1108,10 @@ export default function CourseGroupsPanel({ courseId, courseCode }: { courseId: 
             </div>
             <DialogFooter>
               <Button variant="outline" onClick={() => setCreateOpen(false)}>Cancel</Button>
-              <Button onClick={() => void submitCreateGroup()} disabled={busy === "__create__"}>Create</Button>
+              <Button onClick={() => void submitCreateGroup()} disabled={busy === "__create__"}>
+                <PlusIcon aria-hidden="true" />
+                Create
+              </Button>
             </DialogFooter>
           </DialogContent>
         </Dialog>
@@ -1111,7 +1151,10 @@ export default function CourseGroupsPanel({ courseId, courseCode }: { courseId: 
             </div>
             <DialogFooter>
               <Button variant="outline" onClick={() => setEditStudent(null)}>Cancel</Button>
-              <Button onClick={() => void submitEditStudent()} disabled={editStudentBusy}>Save</Button>
+              <Button onClick={() => void submitEditStudent()} disabled={editStudentBusy}>
+                <CheckIcon aria-hidden="true" />
+                Save
+              </Button>
             </DialogFooter>
           </DialogContent>
         </Dialog>
@@ -1132,6 +1175,7 @@ export default function CourseGroupsPanel({ courseId, courseCode }: { courseId: 
             <DialogFooter>
               <Button variant="outline" onClick={() => setDeleteStudent(null)}>Cancel</Button>
               <Button variant="destructive" onClick={() => void submitDeleteStudent()} disabled={deleteStudentBusy}>
+                <Trash2Icon aria-hidden="true" />
                 {deleteStudentBusy ? "Deleting…" : "Delete"}
               </Button>
             </DialogFooter>
@@ -1162,7 +1206,10 @@ export default function CourseGroupsPanel({ courseId, courseCode }: { courseId: 
                           {s.email}
                           <span style={{ marginLeft: 8, fontSize: 10, fontWeight: 700, color: "var(--text-muted, #64748b)" }}>{s.role}</span>
                         </span>
-                        <Button variant="outline" size="sm" onClick={() => void removeStaff(staffGroupId, s.userId)}>Remove</Button>
+                        <Button variant="outline" size="sm" onClick={() => void removeStaff(staffGroupId, s.userId)}>
+                          <XIcon aria-hidden="true" />
+                          Remove
+                        </Button>
                       </li>
                     ))}
                   </ul>
@@ -1183,6 +1230,7 @@ export default function CourseGroupsPanel({ courseId, courseCode }: { courseId: 
             <DialogFooter>
               <Button variant="outline" onClick={() => setStaffGroupId(null)}>Close</Button>
               <Button onClick={() => void submitAssignStaff()} disabled={staffBusy || staffLoading}>
+                <UserPlusIcon aria-hidden="true" />
                 {staffBusy ? "Adding…" : "Add staff"}
               </Button>
             </DialogFooter>

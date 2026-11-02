@@ -6,6 +6,23 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import {
+  PlusIcon,
+  PencilIcon,
+  Trash2Icon,
+  FileTextIcon,
+  LinkIcon,
+  VideoIcon,
+  CheckIcon,
+} from "lucide-react";
 import { showToast } from "@/app/components/toast";
 
 const ReactMarkdown = dynamic(() => import("react-markdown"), { ssr: false });
@@ -29,6 +46,18 @@ const KIND_LABELS: Record<MaterialKind, string> = {
   note: "Note",
   link: "Link",
   video: "Video",
+};
+
+const KIND_ICONS: Record<MaterialKind, typeof FileTextIcon> = {
+  note: FileTextIcon,
+  link: LinkIcon,
+  video: VideoIcon,
+};
+
+const KIND_DESCRIPTIONS: Record<MaterialKind, string> = {
+  note: "Write rich text or markdown notes for your students.",
+  link: "Share a URL to an external website or document.",
+  video: "Embed a YouTube or Vimeo video.",
 };
 
 // Convert a YouTube/Vimeo watch URL into an embeddable iframe src. Returns
@@ -68,6 +97,7 @@ export default function CourseMaterialsPanel({
   const [error, setError] = useState("");
 
   const [formOpen, setFormOpen] = useState(false);
+  const [chooserOpen, setChooserOpen] = useState(false);
   const [editingId, setEditingId] = useState<number | null>(null);
   const [draftKind, setDraftKind] = useState<MaterialKind>("note");
   const [draftTitle, setDraftTitle] = useState("");
@@ -98,13 +128,18 @@ export default function CourseMaterialsPanel({
     void load();
   }, [load]);
 
-  function openAdd() {
+  function openAdd(kind: MaterialKind = "note") {
     setEditingId(null);
-    setDraftKind("note");
+    setDraftKind(kind);
     setDraftTitle("");
     setDraftBody("");
     setFormError("");
     setFormOpen(true);
+  }
+
+  function chooseKind(kind: MaterialKind) {
+    setChooserOpen(false);
+    openAdd(kind);
   }
 
   function openEdit(material: Material) {
@@ -187,12 +222,9 @@ export default function CourseMaterialsPanel({
           Materials · {materials === null ? "…" : materials.length}
         </p>
         {isTeacher ? (
-          <Button
-            variant={formOpen ? "outline" : "default"}
-            size="sm"
-            onClick={() => (formOpen ? closeForm() : openAdd())}
-          >
-            {formOpen ? "Cancel" : "+ Add material"}
+          <Button size="sm" onClick={() => setChooserOpen(true)}>
+            <PlusIcon aria-hidden="true" />
+            Add material
           </Button>
         ) : null}
       </div>
@@ -200,17 +232,21 @@ export default function CourseMaterialsPanel({
       {formOpen && isTeacher ? (
         <div className="space-y-3 rounded-lg border border-input bg-muted/40 p-3">
           <div className="flex gap-2">
-            {KINDS.map((kind) => (
-              <Button
-                key={kind}
-                type="button"
-                variant={draftKind === kind ? "default" : "outline"}
-                size="sm"
-                onClick={() => setDraftKind(kind)}
-              >
-                {KIND_LABELS[kind]}
-              </Button>
-            ))}
+            {KINDS.map((kind) => {
+              const Icon = KIND_ICONS[kind];
+              return (
+                <Button
+                  key={kind}
+                  type="button"
+                  variant={draftKind === kind ? "default" : "outline"}
+                  size="sm"
+                  onClick={() => setDraftKind(kind)}
+                >
+                  <Icon className="size-3.5" aria-hidden="true" />
+                  {KIND_LABELS[kind]}
+                </Button>
+              );
+            })}
           </div>
           <div className="space-y-1.5">
             <Label htmlFor={`material-title-${courseId}`}>
@@ -249,6 +285,7 @@ export default function CourseMaterialsPanel({
           {formError ? <p className="text-xs font-semibold text-destructive">{formError}</p> : null}
           <div className="flex gap-2">
             <Button size="sm" onClick={save} disabled={formBusy}>
+              {editingId === null ? <PlusIcon aria-hidden="true" /> : <CheckIcon aria-hidden="true" />}
               {formBusy ? "Saving…" : editingId === null ? "Add material" : "Save changes"}
             </Button>
             <Button variant="outline" size="sm" onClick={closeForm}>
@@ -273,6 +310,39 @@ export default function CourseMaterialsPanel({
           ))}
         </ul>
       )}
+
+      <Dialog open={chooserOpen} onOpenChange={setChooserOpen}>
+        <DialogContent className="sm:max-w-lg">
+          <DialogHeader>
+            <DialogTitle>Add an activity or resource</DialogTitle>
+            <DialogDescription>Choose a resource type to add to the course.</DialogDescription>
+          </DialogHeader>
+          <div className="grid gap-2 sm:grid-cols-3">
+            {KINDS.map((kind) => {
+              const Icon = KIND_ICONS[kind];
+              return (
+                <button
+                  key={kind}
+                  type="button"
+                  onClick={() => chooseKind(kind)}
+                  className="flex flex-col items-start gap-2 rounded-lg border border-input bg-card p-3 text-left transition-colors hover:bg-muted"
+                >
+                  <span className="flex size-8 items-center justify-center rounded-md bg-primary/10 text-primary">
+                    <Icon className="size-4" aria-hidden="true" />
+                  </span>
+                  <span className="text-sm font-semibold">{KIND_LABELS[kind]}</span>
+                  <span className="text-xs font-normal text-muted-foreground">
+                    {KIND_DESCRIPTIONS[kind]}
+                  </span>
+                </button>
+              );
+            })}
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setChooserOpen(false)}>Cancel</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
@@ -305,9 +375,11 @@ function MaterialCard({
         {isTeacher ? (
           <div className="flex shrink-0 gap-1">
             <Button variant="ghost" size="sm" onClick={onEdit}>
+              <PencilIcon aria-hidden="true" />
               Edit
             </Button>
             <Button variant="ghost" size="sm" className="text-destructive hover:bg-destructive/10" onClick={onDelete}>
+              <Trash2Icon aria-hidden="true" />
               Delete
             </Button>
           </div>
